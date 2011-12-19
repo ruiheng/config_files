@@ -1,0 +1,16 @@
+[color]
+	ui = always
+[diff]
+	tool = bc3
+[difftool "bc3"]
+	path = d:/program files (x86)/beyond compare 3/bcomp.exe
+[merge]
+	tool = bc3
+[mergetool "bc3"]
+	path = d:/program files (x86)/beyond compare 3/bcomp.exe
+[core]
+	excludesfile = ~/.gitignore
+	# when use vim, always edit log file as utf-8
+	# for windows
+	editor = 'C:/Program Files (x86)/Vim/vim73/gvim.exe' --nofork -c 'e ++enc=utf-8 "%*"'
+# vi: set ft=gitconfig noet :
