@@ -1,0 +1,4 @@
+caption always "%w"
+startup_message off
+defscrollback 5000
+
