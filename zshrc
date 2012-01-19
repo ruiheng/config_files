@@ -15,3 +15,10 @@ function zle-line-init zle-keymap-select {
 preexec () { print -rn -- $terminfo[el]; }
 
 set -o vi
+
+autoload -U compinit
+compinit
+
+# for GIT
+source ~/config_files/git-completion.sh
+#PS1='[%n@%m %c$(__git_ps1 " (%s)")]\$ '

@@ -1,0 +1,26 @@
+[user]
+	name = Gilbert Fine
+	email = gilbert.fine@gmail.com
+
+[color]
+	ui = always
+
+[diff]
+	tool = vimdiff
+
+[difftool "vimdiff"]
+	path = vimdiff
+
+# http://www.toofishes.net/blog/three-way-merging-git-using-vim/
+[merge]
+	tool = vimdiff3
+
+[mergetool "vimdiff3"]
+	path = vim -f -d -c "wincmd J" "$MERGED" "$LOCAL" "$BASE" "$REMOTE"
+
+[core]
+	excludesfile = ~/.gitignore
+	# when use vim, always edit log file as utf-8
+	editor = vim --nofork -c 'e ++enc=utf-8 "%*"'
+
+# vi: set ft=gitconfig noet :
