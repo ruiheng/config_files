@@ -21,6 +21,16 @@
 [core]
 	excludesfile = ~/.gitignore
 	# when use vim, always edit log file as utf-8
-	editor = vim --nofork -c 'e ++enc=utf-8 "%*"'
+	editor = nvim -c 'e ++enc=utf-8 "%*"'
+	autocrlf = input
+	eol = lf
+	quotepath = false
 
+[push]
+	default = simple
+[http]
+	#proxy = socks5://172.16.245.1:1080
+	#proxy = socks5://192.168.222.1:2080
+	#proxy = http://127.0.0.1:7777
+	proxy = http://192.168.0.205:7777
 # vi: set ft=gitconfig noet :
