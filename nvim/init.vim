@@ -144,7 +144,7 @@ au VimEnter * call s:init_easy_align()
 " ============= vim-session ==========
 let g:session_autoload = 'no'
 
-autocmd FileType haskell setlocal expandtab | call MySetLocalTabStop(4) | set cul
+autocmd FileType haskell setlocal expandtab | call MySetLocalTabStop(4)
 autocmd FileType elm setlocal expandtab | call MySetLocalTabStop(2)
 autocmd FileType html setlocal noexpandtab si | call MySetLocalTabStop(4)
 autocmd BufEnter *.hamlet setlocal expandtab si | call MySetLocalTabStop(4)
