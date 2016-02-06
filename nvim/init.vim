@@ -81,6 +81,9 @@ cabbrev lvim
       \ <Bar> lw
       \ <C-Left><C-Left><C-Left>
 
+set titlestring=nvim\ %f\ [%{substitute(getcwd(),$HOME,\'~\',\'\')}]
+set title
+
 " =============== toggle cursorline and cursorcolumn ===========
 nnoremap <F5> :set cuc! cul!<CR>
 imap <F5> <C-O><F5>
