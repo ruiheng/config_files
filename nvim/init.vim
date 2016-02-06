@@ -68,7 +68,7 @@ nmap <leader>t4 :call MySetLocalTabStop(4)<CR>
 nmap <leader>t8 :call MySetLocalTabStop(8)<CR>
 
 function MySetWigForHaskell ()
-    set wig+=*.o,*.hi,*.dyn_hi,*.dyn_o,*/dist/*,cabal.sandbox.config
+    set wig+=*.o,*.hi,*.dyn_hi,*.dyn_o,*/dist/*,cabal.sandbox.config,*.keter
 endfunction
 
 if filereadable(expand('*.cabal'))
