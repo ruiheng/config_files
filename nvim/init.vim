@@ -172,3 +172,54 @@ endfunction
 
 " this line cause fugitive malfunction
 " au WinEnter * call s:common_buf_enter()
+
+function RandomChooseFavoriteColorScheme ()
+    let lst_len = len(g:favorite_color_schemes)
+    if !lst_len
+        return
+    endif
+    let idx = localtime() % lst_len
+    exec "colorscheme" g:favorite_color_schemes[idx][0]
+    exec "set" g:favorite_color_schemes[idx][1]
+    return idx
+endfunction
+
+function NextFavoriteColorScheme()
+    if !exists("g:picked_favorite_color_scheme")
+        return
+    endif
+    let lst_len = len(g:favorite_color_schemes)
+    if !lst_len
+        return
+    endif
+    let g:picked_favorite_color_scheme = (g:picked_favorite_color_scheme + 1) % lst_len
+    let idx = g:picked_favorite_color_scheme
+    exec "colorscheme" g:favorite_color_schemes[idx][0]
+    exec "set" g:favorite_color_schemes[idx][1]
+endfunction
+
+nnoremap <F3> :call NextFavoriteColorScheme()<CR>
+
+" a list of color scheme to be picked randomly.
+let g:favorite_color_schemes = [
+        \ [ "darkblue", "bg=dark" ],
+        \ [ "solarized", "bg=dark" ],
+        \ [ "solarized", "bg=light" ],
+        \ [ "base16-flat", "bg=dark" ],
+        \ [ "base16-apathy", "bg=dark" ],
+        \ [ "base16-apathy", "bg=light" ],
+        \ [ "base16-codeschool", "bg=dark" ],
+        \ [ "base16-codeschool", "bg=light" ],
+        \ [ "base16-ocean", "bg=dark" ],
+        \ [ "base16-ocean", "bg=light" ],
+        \ [ "base16-eighties", "bg=dark" ],
+        \ [ "base16-eighties", "bg=light" ],
+        \ [ "base16-mocha", "bg=dark" ],
+        \ [ "base16-mocha", "bg=light" ],
+        \ [ "base16-harmonic16", "bg=dark" ],
+        \ [ "base16-harmonic16", "bg=light" ],
+        \ ]
+
+if !exists("g:picked_favorite_color_scheme")
+    let g:picked_favorite_color_scheme = RandomChooseFavoriteColorScheme()
+endif
