@@ -35,6 +35,8 @@ Plug 'thinca/vim-visualstar'
 Plug 'rking/ag.vim'
 Plug 'xolox/vim-misc' | Plug 'xolox/vim-session'
 
+Plug 'milkypostman/vim-togglelist'
+
 Plug 'tpope/vim-obsession'
 Plug 'tpope/vim-sensible'
 

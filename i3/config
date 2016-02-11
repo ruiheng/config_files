@@ -190,3 +190,5 @@ bindsym $mod+Control+m exec i3-input -F 'mark %s' -P 'Mark name: '
 bindsym $mod+Shift+m exec i3-input -F '[con_mark=%s] focus' -P 'Goto mark: '
 
 show_marks yes
+
+bindsym $mod+Control+s exec gnome-system-monitor
