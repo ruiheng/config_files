@@ -4,6 +4,8 @@ Plug 'tpope/vim-repeat'
 Plug 'visualrepeat'
 Plug 'tpope/vim-surround'
 Plug 'jeffkreeftmeijer/vim-numbertoggle'
+
+Plug 'benekastah/neomake'
 " Plug 'KabbAmine/zeavim.vim'
 " Plug 'ruiheng/vim-haskell-cabal'
 " Plug 'raichoo/haskell-vim'
