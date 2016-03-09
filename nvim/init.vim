@@ -10,6 +10,8 @@ Plug 'benekastah/neomake'
 " Plug 'ruiheng/vim-haskell-cabal'
 " Plug 'raichoo/haskell-vim'
 Plug 'neovimhaskell/haskell-vim'
+"Plug 'nbouscal/vim-stylish-haskell'
+
 Plug 'altercation/vim-colors-solarized'
 Plug 'pbrisbin/vim-syntax-shakespeare'
 Plug 'easymotion/vim-easymotion'
@@ -22,11 +24,13 @@ Plug 'vim-airline/vim-airline-themes'
 Plug 'majutsushi/tagbar'
 Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
 Plug 'bitc/vim-hdevtools'
-" Plug 'eagletmt/ghcmod-vim'
+Plug 'eagletmt/ghcmod-vim'
+Plug 'eagletmt/neco-ghc'
 " Plug 'godlygeek/tabular'
 Plug 'junegunn/vim-easy-align'
 Plug 'kshenoy/vim-signature'
 " Plug 'Shougo/neocomplete.vim'
+Plug 'Shougo/deoplete.nvim'
 Plug 'blueyed/vim-diminactive'
 " Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim'
@@ -44,8 +48,10 @@ Plug 'tpope/vim-sensible'
 
 Plug 'freeo/vim-kalisi'
 Plug 'cazador481/fakeclip.neovim'
-Plug 'benekastah/neomake'
 Plug 'Floobits/floobits-neovim'
+
+Plug 'Shougo/neosnippet'
+Plug 'Shougo/neosnippet-snippets'
 
 " Add plugins to &runtimepath
 call plug#end()
@@ -153,11 +159,11 @@ au VimEnter * call s:init_easy_align()
 " ============= vim-session ==========
 let g:session_autoload = 'no'
 
-autocmd FileType haskell setlocal expandtab | call MySetLocalTabStop(4)
+autocmd FileType haskell setlocal expandtab | call MySetLocalTabStop(2)
 autocmd FileType elm setlocal expandtab | call MySetLocalTabStop(2)
-autocmd FileType html setlocal noexpandtab si | call MySetLocalTabStop(4)
-autocmd BufEnter *.hamlet setlocal expandtab si | call MySetLocalTabStop(4)
-autocmd BufFilePost *.hamlet setlocal expandtab si | call MySetLocalTabStop(4)
+autocmd FileType html setlocal noexpandtab si | call MySetLocalTabStop(2)
+autocmd BufEnter *.hamlet setlocal expandtab si | call MySetLocalTabStop(2)
+autocmd BufFilePost *.hamlet setlocal expandtab si | call MySetLocalTabStop(2)
 
 " ======= quickfix window =======
 " au TextChanged quickfix normal G " not working
@@ -174,8 +180,38 @@ function s:common_buf_enter()
     endif
 endfunction
 
+
+" ============ neosnippet =========
+imap <C-k>     <Plug>(neosnippet_expand_or_jump)
+smap <C-k>     <Plug>(neosnippet_expand_or_jump)
+xmap <C-k>     <Plug>(neosnippet_expand_target)
+
+
+" =================== neco-ghc =================
+" Disable haskell-vim omnifunc
+let g:haskellmode_completion_ghc = 0
+autocmd FileType haskell setlocal omnifunc=necoghc#omnifunc
+
+" ================ call stylish-haskell command ==========
+function RunStylishHaskell ()
+    if &filetype == 'haskell'
+        echo "running"
+        %!stylish-haskell
+    endif
+endfunction
+
+nnoremap <leader>hs call RunStylishHaskell()<CR>
+
+
 " this line cause fugitive malfunction
 " au WinEnter * call s:common_buf_enter()
+
+" In this env, shada cause nvim error, disable it.
+set shada=
+
+
+let g:session_autosave = 'no'
+
 
 function RandomChooseFavoriteColorScheme ()
     let lst_len = len(g:favorite_color_schemes)
