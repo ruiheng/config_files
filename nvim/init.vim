@@ -11,6 +11,7 @@ Plug 'benekastah/neomake'
 " Plug 'raichoo/haskell-vim'
 Plug 'neovimhaskell/haskell-vim'
 "Plug 'nbouscal/vim-stylish-haskell'
+Plug 'itchyny/vim-haskell-indent'
 
 Plug 'altercation/vim-colors-solarized'
 Plug 'pbrisbin/vim-syntax-shakespeare'
@@ -272,3 +273,33 @@ let g:favorite_color_schemes = [
 if !exists("g:picked_favorite_color_scheme")
     let g:picked_favorite_color_scheme = RandomChooseFavoriteColorScheme()
 endif
+
+" ---------------------------------------------
+" copied from:
+" https://github.com/neovim/neovim/issues/2127
+"
+augroup AutoSwap
+        autocmd!
+        autocmd SwapExists *  call AS_HandleSwapfile(expand('<afile>:p'), v:swapname)
+augroup END
+
+function! AS_HandleSwapfile (filename, swapname)
+        " if swapfile is older than file itself, just get rid of it
+        if getftime(v:swapname) < getftime(a:filename)
+                call delete(v:swapname)
+                let v:swapchoice = 'e'
+        endif
+endfunction
+
+autocmd CursorHold,BufWritePost,BufReadPost,BufLeave *
+  \ if isdirectory(expand("<amatch>:h")) | let &swapfile = &modified | endif
+
+augroup checktime
+    au!
+    if !has("gui_running")
+        "silent! necessary otherwise throws errors when using command
+        "line window.
+        autocmd BufEnter,CursorHold,CursorHoldI,CursorMoved,CursorMovedI,FocusGained,BufEnter,FocusLost,WinLeave * checktime
+    endif
+augroup END
+" ---------------------------------------------
