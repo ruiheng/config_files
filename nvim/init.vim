@@ -304,12 +304,21 @@ endfunction
 autocmd CursorHold,BufWritePost,BufReadPost,BufLeave *
   \ if isdirectory(expand("<amatch>:h")) | let &swapfile = &modified | endif
 
+function! s:run_checktime()
+  let special_filetypes_list = [ 'qf', 'gitcommit' ]
+
+  if index(special_filetypes_list, &filetype) < 0
+        checktime
+  endif
+endfunction
+
 augroup checktime
     au!
     if !has("gui_running")
         "silent! necessary otherwise throws errors when using command
         "line window.
-        autocmd BufEnter,CursorHold,CursorHoldI,CursorMoved,CursorMovedI,FocusGained,BufEnter,FocusLost,WinLeave * checktime
-    endif
+        autocmd BufEnter,CursorHold,CursorHoldI,FocusGained,BufEnter,FocusLost,WinLeave *
+                \ call s:run_checktime()
+   endif
 augroup END
 " ---------------------------------------------
