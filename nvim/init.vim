@@ -95,6 +95,16 @@ cabbrev lvim
 set titlestring=nvim\ %f\ [%{substitute(getcwd(),$HOME,\'~\',\'\')}]
 set title
 
+cabbrev ag
+      \ Ag -w <C-R><C-W>
+      \ **/*<C-R>=(expand("%:e")=="" ? "" : ".".expand("%:e"))<CR>
+      \ <C-Left><C-Left><C-Left>
+
+cabbrev lag
+      \ LAg -w <C-R><C-W>
+      \ **/*<C-R>=(expand("%:e")=="" ? "" : ".".expand("%:e"))<CR>
+      \ <C-Left><C-Left><C-Left>
+
 " =============== toggle cursorline and cursorcolumn ===========
 nnoremap <F5> :set cuc! cul!<CR>
 imap <F5> <C-O><F5>
