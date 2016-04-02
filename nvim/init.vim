@@ -193,7 +193,7 @@ au FileType gitcommit setlocal cul | syn on
 
 
 function s:common_buf_enter()
-    let filetypes_list = [ 'qt', 'gitcommit' ]
+    let filetypes_list = [ 'qf', 'gitcommit' ]
     if index(filetypes_list, &filetype) >= 0
         setlocal cul
         syn on
