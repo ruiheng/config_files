@@ -29,8 +29,11 @@ Plug 'kien/ctrlp.vim'
 Plug 'tpope/vim-fugitive'
 Plug 'spf13/vim-colors'
 Plug 'nathanaelkane/vim-indent-guides'
-Plug 'vim-airline/vim-airline'
-Plug 'vim-airline/vim-airline-themes'
+
+"Plug 'vim-airline/vim-airline'
+"Plug 'vim-airline/vim-airline-themes'
+Plug 'zefei/vim-wintabs'
+
 Plug 'majutsushi/tagbar'
 Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
 Plug 'bitc/vim-hdevtools'
@@ -328,3 +331,15 @@ augroup checktime
    endif
 augroup END
 " ---------------------------------------------
+
+
+map gb <Plug>(wintabs_next)
+map gB <Plug>(wintabs_previous)
+map <C-T>c <Plug>(wintabs_close)
+map <C-T>o <Plug>(wintabs_only)
+map <C-W>c <Plug>(wintabs_close_window)
+map <C-W>o <Plug>(wintabs_only_window)
+command! Tabc WintabsCloseVimtab
+command! Tabo WintabsOnlyVimtab
+let g:wintabs_autoclose_vimtab = 1
+let g:wintabs_display = 'statusline'
