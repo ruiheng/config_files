@@ -107,6 +107,10 @@ cabbrev lvim
 set titlestring=nvim\ %f\ [%{substitute(getcwd(),$HOME,\'~\',\'\')}]
 set title
 
+
+" =============== ag =====================
+let g:ag_prg="ag --vimgrep --smart-case"
+
 cabbrev ag
       \ Ag -w <C-R><C-W>
       \ **/*<C-R>=(expand("%:e")=="" ? "" : ".".expand("%:e"))<CR>
