@@ -1,3 +1,12 @@
+"============= ctrlspace ===============
+if executable("ag")
+    let g:CtrlSpaceGlobCommand = 'ag -l --nocolor -g ""'
+endif
+let g:CtrlSpaceSetDefaultMapping = 1
+let g:CtrlSpaceDefaultMappingKey = "<leader><space>"
+" let g:airline_exclude_preview = 1
+
+
 call plug#begin('~/.vim/plugged')
 
 Plug 'tpope/vim-repeat'
@@ -36,7 +45,7 @@ Plug 'blueyed/vim-diminactive'
 " Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim'
 Plug 'chriskempson/base16-vim'
-Plug 'vim-ctrlspace/vim-ctrlspace'
+"Plug 'vim-ctrlspace/vim-ctrlspace'
 Plug 't9md/vim-choosewin'
 Plug 'thinca/vim-visualstar'
 Plug 'rking/ag.vim'
