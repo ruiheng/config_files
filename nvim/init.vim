@@ -115,9 +115,6 @@ imap <F8> <C-O><F8>
 
 let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
 
-nnoremap <F9> :wa \| Neomake! stack<CR>
-imap <F9> <C-O><F9>
-
 let g:neomake_stack_maker = {
         \ 'exe': 'stack',
         \ 'args': ['build'],
