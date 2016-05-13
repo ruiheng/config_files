@@ -166,19 +166,6 @@ endfunction
 
 au VimEnter * call s:init_fugitive()
 
-"============= ctrlspace ===============
-function s:init_ctrlspace ()
-    if exists("g:CtrlSpaceLoaded")
-        if executable("ag")
-            let g:CtrlSpaceGlobCommand = 'ag -l --nocolor -g ""'
-        endif
-        let g:CtrlSpaceDefaultMappingKey = "<leader><space>"
-        let g:airline_exclude_preview = 1
-    endif
-endfunction
-
-au VimEnter * call s:init_ctrlspace()
-
 "=========== easy-align ================
 function s:init_easy_align ()
     if exists("g:loaded_easy_align_plugin")
