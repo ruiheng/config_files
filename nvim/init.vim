@@ -388,3 +388,5 @@ if has('python3')
       return deoplete#mappings#close_popup() . "\<CR>"
     endfunction
 endif
+
+set termguicolors
