@@ -255,6 +255,7 @@ function NextFavoriteColorScheme()
     let idx = g:picked_favorite_color_scheme
     exec "colorscheme" g:favorite_color_schemes[idx][0]
     exec "set" g:favorite_color_schemes[idx][1]
+    redraw
 endfunction
 
 nnoremap <F3> :call NextFavoriteColorScheme()<CR>
