@@ -263,8 +263,8 @@ nnoremap <F3> :call NextFavoriteColorScheme()<CR>
 " a list of color scheme to be picked randomly.
 let g:favorite_color_schemes = [
         \ [ "darkblue", "bg=dark" ],
-        \ [ "solarized", "bg=dark" ],
-        \ [ "solarized", "bg=light" ],
+        \ [ "base16-solarized-dark", "bg=dark" ],
+        \ [ "base16-solarized-light", "bg=light" ],
         \ [ "base16-flat", "bg=dark" ],
         \ [ "base16-apathy", "bg=dark" ],
         \ [ "base16-apathy", "bg=light" ],
