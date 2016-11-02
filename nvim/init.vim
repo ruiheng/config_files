@@ -166,6 +166,10 @@ endfunction
 
 au VimEnter * call s:init_fugitive()
 
+"=========== easymotion ================
+nmap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
+
+
 "=========== easy-align ================
 function s:init_easy_align ()
     if exists("g:loaded_easy_align_plugin")
