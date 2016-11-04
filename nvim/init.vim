@@ -242,8 +242,9 @@ function RandomChooseFavoriteColorScheme ()
         return
     endif
     let idx = localtime() % lst_len
-    exec "colorscheme" g:favorite_color_schemes[idx][0]
     exec "set" g:favorite_color_schemes[idx][1]
+    exec "colorscheme" g:favorite_color_schemes[idx][0]
+    redraw
     return idx
 endfunction
 
@@ -257,8 +258,8 @@ function NextFavoriteColorScheme()
     endif
     let g:picked_favorite_color_scheme = (g:picked_favorite_color_scheme + 1) % lst_len
     let idx = g:picked_favorite_color_scheme
-    exec "colorscheme" g:favorite_color_schemes[idx][0]
     exec "set" g:favorite_color_schemes[idx][1]
+    exec "colorscheme" g:favorite_color_schemes[idx][0]
     redraw
 endfunction
 
