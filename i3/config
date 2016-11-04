@@ -192,3 +192,5 @@ bindsym $mod+Shift+m exec i3-input -F '[con_mark=%s] focus' -P 'Goto mark: '
 show_marks yes
 
 bindsym $mod+Control+s exec gnome-system-monitor
+
+exec vmware-user-suid-wrapper
