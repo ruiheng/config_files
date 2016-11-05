@@ -135,51 +135,59 @@ let g:neomake_stack_maker = {
         \ 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
         \ }
 
-"============= ctrlp =============
-let g:ctrlp_open_new_file = 'r'
-let g:ctrlp_map = '<leader>p'
 
-function s:init_ctrlp ()
-    if ( exists('g:loaded_ctrlp') && g:loaded_ctrlp )
-        " nmap <leader>p :CtrlP<cr>
-        " Easy bindings for its various modes
-        nmap <leader>bb :CtrlPBuffer<cr>
-        nmap <leader>bm :CtrlPMixed<cr>
-        nmap <leader>bs :CtrlPMRU<cr>
-    endif
-endfunction
+if has_key(g:plugs, 'ctrlp.vim')
+    let g:ctrlp_open_new_file = 'r'
+    let g:ctrlp_map = '<leader>p'
 
-au VimEnter * call s:init_ctrlp()
+    function s:init_ctrlp ()
+        if ( exists('g:loaded_ctrlp') && g:loaded_ctrlp )
+            " nmap <leader>p :CtrlP<cr>
+            " Easy bindings for its various modes
+            nmap <leader>bb :CtrlPBuffer<cr>
+            nmap <leader>bm :CtrlPMixed<cr>
+            nmap <leader>bs :CtrlPMRU<cr>
+        endif
+    endfunction
 
-"============= fugitive ================
-function s:init_fugitive ()
-    if exists('g:loaded_fugitive') || &cp
-        nmap <leader>gs :Gstatus<CR>
-        nmap <leader>gd :Gdiff<CR>
-        nmap <leader>gc :Gcommit<CR>
-        nmap <leader>gl :Glog<CR>
-        nmap <leader>gp :Git push<CR>
-    endif
-endfunction
-
-au VimEnter * call s:init_fugitive()
-
-"=========== easymotion ================
-nmap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
+    au VimEnter * call s:init_ctrlp()
+endif
 
 
-"=========== easy-align ================
-function s:init_easy_align ()
-    if exists("g:loaded_easy_align_plugin")
+if has_key(g:plugs, 'vim-fugitive')
+    function s:init_fugitive ()
+        if exists('g:loaded_fugitive') || &cp
+            nmap <leader>gs :Gstatus<CR>
+            nmap <leader>gd :Gdiff<CR>
+            nmap <leader>gc :Gcommit<CR>
+            nmap <leader>gl :Glog<CR>
+            nmap <leader>gp :Git push<CR>
+        endif
+    endfunction
+
+    au VimEnter * call s:init_fugitive()
+endif
+
+
+if has_key(g:plugs, 'vim-easymotion')
+    nmap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
+endif
+
+
+if has_key(g:plugs, 'vim-easy-align')
+    function s:init_easy_align ()
         vmap <Enter> <Plug>(EasyAlign)
         nmap ga <Plug>(EasyAlign)
-    endif
-endfunction
+    endfunction
 
-au VimEnter * call s:init_easy_align()
+    au VimEnter * call s:init_easy_align()
+endif
 
-" ============= vim-session ==========
-let g:session_autoload = 'no'
+
+if has_key(g:plugs, 'vim-session')
+    let g:session_autoload = 'no'
+endif
+
 
 autocmd FileType haskell setlocal expandtab | call MySetLocalTabStop(2)
 autocmd FileType elm setlocal expandtab | call MySetLocalTabStop(2)
@@ -202,16 +210,20 @@ function s:common_buf_enter()
     endif
 endfunction
 
-" ============ neosnippet =========
-imap <C-k>     <Plug>(neosnippet_expand_or_jump)
-smap <C-k>     <Plug>(neosnippet_expand_or_jump)
-xmap <C-k>     <Plug>(neosnippet_expand_target)
+
+if has_key(g:plugs, 'neosnippet')
+    imap <C-k>     <Plug>(neosnippet_expand_or_jump)
+    smap <C-k>     <Plug>(neosnippet_expand_or_jump)
+    xmap <C-k>     <Plug>(neosnippet_expand_target)
+endif
 
 
-" =================== neco-ghc =================
-" Disable haskell-vim omnifunc
-let g:haskellmode_completion_ghc = 0
-autocmd FileType haskell setlocal omnifunc=necoghc#omnifunc
+if has_key(g:plugs, 'neco-ghc')
+    " Disable haskell-vim omnifunc
+    let g:haskellmode_completion_ghc = 0
+    autocmd FileType haskell setlocal omnifunc=necoghc#omnifunc
+endif
+
 
 " ================ call stylish-haskell command ==========
 function RunStylishHaskell ()
@@ -325,70 +337,78 @@ augroup END
 " ---------------------------------------------
 
 
-let g:tagbar_type_haskell = {
-    \ 'ctagsbin'  : 'hasktags',
-    \ 'ctagsargs' : '-x -c -o-',
-    \ 'kinds'     : [
-        \  'm:modules:0:1',
-        \  'd:data: 0:1',
-        \  'd_gadt: data gadt:0:1',
-        \  't:type names:0:1',
-        \  'nt:new types:0:1',
-        \  'c:classes:0:1',
-        \  'cons:constructors:1:1',
-        \  'c_gadt:constructor gadt:1:1',
-        \  'c_a:constructor accessors:1:1',
-        \  'ft:function types:1:1',
-        \  'fi:function implementations:0:1',
-        \  'o:others:0:1'
-    \ ],
-    \ 'sro'        : '.',
-    \ 'kind2scope' : {
-        \ 'm' : 'module',
-        \ 'c' : 'class',
-        \ 'd' : 'data',
-        \ 't' : 'type'
-    \ },
-    \ 'scope2kind' : {
-        \ 'module' : 'm',
-        \ 'class'  : 'c',
-        \ 'data'   : 'd',
-        \ 'type'   : 't'
+if has_key(g:plugs, 'tagbar')
+    let g:tagbar_type_haskell = {
+        \ 'ctagsbin'  : 'hasktags',
+        \ 'ctagsargs' : '-x -c -o-',
+        \ 'kinds'     : [
+            \  'm:modules:0:1',
+            \  'd:data: 0:1',
+            \  'd_gadt: data gadt:0:1',
+            \  't:type names:0:1',
+            \  'nt:new types:0:1',
+            \  'c:classes:0:1',
+            \  'cons:constructors:1:1',
+            \  'c_gadt:constructor gadt:1:1',
+            \  'c_a:constructor accessors:1:1',
+            \  'ft:function types:1:1',
+            \  'fi:function implementations:0:1',
+            \  'o:others:0:1'
+        \ ],
+        \ 'sro'        : '.',
+        \ 'kind2scope' : {
+            \ 'm' : 'module',
+            \ 'c' : 'class',
+            \ 'd' : 'data',
+            \ 't' : 'type'
+        \ },
+        \ 'scope2kind' : {
+            \ 'module' : 'm',
+            \ 'class'  : 'c',
+            \ 'data'   : 'd',
+            \ 'type'   : 't'
+        \ }
     \ }
-\ }
 
-
-nnoremap <F9> :TagbarToggle<CR>
-imap <F9> <C-O><F9>
-
-
-map gb <Plug>(wintabs_next)
-map gB <Plug>(wintabs_previous)
-map <C-T>c <Plug>(wintabs_close)
-map <C-T>o <Plug>(wintabs_only)
-map <C-W>c <Plug>(wintabs_close_window)
-map <C-W>o <Plug>(wintabs_only_window)
-command! Tabc WintabsCloseVimtab
-command! Tabo WintabsOnlyVimtab
-let g:wintabs_autoclose_vimtab = 1
-let g:wintabs_display = 'statusline'
-
-
-if has('python3')
-    " Use deoplete.
-    let g:deoplete#enable_at_startup = 1
-    " Use smartcase.
-    let g:deoplete#enable_smart_case = 1
-
-    " <C-h>, <BS>: close popup and delete backword char.
-    inoremap <expr><C-h> deoplete#mappings#smart_close_popup()."\<C-h>"
-    inoremap <expr><BS>  deoplete#mappings#smart_close_popup()."\<C-h>"
-
-    " <CR>: close popup and save indent.
-    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-    function! s:my_cr_function() abort
-      return deoplete#mappings#close_popup() . "\<CR>"
-    endfunction
+    nnoremap <F9> :TagbarToggle<CR>
+    imap <F9> <C-O><F9>
 endif
+
+
+if has_key(g:plugs, 'vim-wintabs')
+    map gb <Plug>(wintabs_next)
+    map gB <Plug>(wintabs_previous)
+    map <C-T>c <Plug>(wintabs_close)
+    map <C-T>o <Plug>(wintabs_only)
+    map <C-W>c <Plug>(wintabs_close_window)
+    map <C-W>o <Plug>(wintabs_only_window)
+    command! Tabc WintabsCloseVimtab
+    command! Tabo WintabsOnlyVimtab
+    let g:wintabs_autoclose_vimtab = 1
+    let g:wintabs_display = 'statusline'
+endif
+
+
+if has_key(g:plugs, 'deoplete.nvim')
+    if has('python3')
+        " Use deoplete.
+        let g:deoplete#enable_at_startup = 1
+        " Use smartcase.
+        let g:deoplete#enable_smart_case = 1
+
+        " <C-h>, <BS>: close popup and delete backword char.
+        inoremap <expr><C-h> deoplete#mappings#smart_close_popup()."\<C-h>"
+        inoremap <expr><BS>  deoplete#mappings#smart_close_popup()."\<C-h>"
+
+        " <CR>: close popup and save indent.
+        inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+        function! s:my_cr_function() abort
+          return deoplete#mappings#close_popup() . "\<CR>"
+        endfunction
+    endif
+
+
+endif
+
 
 set termguicolors
