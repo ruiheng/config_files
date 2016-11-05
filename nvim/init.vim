@@ -291,6 +291,7 @@ let g:favorite_color_schemes = [
         \ [ "base16-eighties", "bg=light" ],
         \ [ "base16-mocha", "bg=dark" ],
         \ [ "base16-mocha", "bg=light" ],
+        \ [ "base16-atelier-estuary", "bg=light" ],
         \ ]
 
 if !exists("g:picked_favorite_color_scheme")
