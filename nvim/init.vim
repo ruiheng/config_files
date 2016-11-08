@@ -17,9 +17,12 @@ Plug 'easymotion/vim-easymotion'
 
 Plug 'benekastah/neomake'
 
+" ==== color schemes ====
 Plug 'altercation/vim-colors-solarized'
 Plug 'spf13/vim-colors'
 Plug 'chriskempson/base16-vim'
+Plug 'freeo/vim-kalisi'
+Plug 'tomasr/molokai'
 
 " Plug 'KabbAmine/zeavim.vim'
 " Plug 'ruiheng/vim-haskell-cabal'
@@ -58,7 +61,6 @@ Plug 'milkypostman/vim-togglelist'
 
 Plug 'tpope/vim-obsession'
 
-Plug 'freeo/vim-kalisi'
 Plug 'cazador481/fakeclip.neovim'
 
 Plug 'Shougo/neosnippet'
@@ -292,6 +294,8 @@ let g:favorite_color_schemes = [
         \ [ "base16-mocha", "bg=dark" ],
         \ [ "base16-mocha", "bg=light" ],
         \ [ "base16-atelier-estuary", "bg=light" ],
+        \ [ "kalisi", "bg=light" ],
+        \ [ "kalisi", "bg=dark" ],
         \ ]
 
 if !exists("g:picked_favorite_color_scheme")
