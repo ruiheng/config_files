@@ -417,3 +417,6 @@ endif
 
 
 set termguicolors
+
+" I don't need matchparen
+let loaded_matchparen = 1
