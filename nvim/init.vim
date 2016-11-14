@@ -36,6 +36,7 @@ Plug 'eagletmt/neco-ghc'
 
 Plug 'kien/ctrlp.vim'
 Plug 'tpope/vim-fugitive'
+Plug 'mhinz/vim-signify'
 Plug 'nathanaelkane/vim-indent-guides'
 
 "Plug 'vim-airline/vim-airline'
