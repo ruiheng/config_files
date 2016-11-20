@@ -4,7 +4,7 @@ if executable("ag")
 endif
 let g:CtrlSpaceSetDefaultMapping = 1
 let g:CtrlSpaceDefaultMappingKey = "<leader><space>"
-" let g:airline_exclude_preview = 1
+let g:airline_exclude_preview = 1
 
 
 call plug#begin('~/.vim/plugged')
@@ -39,8 +39,7 @@ Plug 'tpope/vim-fugitive'
 Plug 'mhinz/vim-signify'
 Plug 'nathanaelkane/vim-indent-guides'
 
-"Plug 'vim-airline/vim-airline'
-"Plug 'vim-airline/vim-airline-themes'
+Plug 'vim-airline/vim-airline' | Plug 'vim-airline/vim-airline-themes'
 Plug 'zefei/vim-wintabs'
 
 Plug 'majutsushi/tagbar'
@@ -138,6 +137,9 @@ let g:neomake_stack_maker = {
         \ 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
         \ }
 
+if has_key(g:plugs, 'vim-airline')
+    let g:airline_powerline_fonts = 1
+endif
 
 if has_key(g:plugs, 'ctrlp.vim')
     let g:ctrlp_open_new_file = 'r'
