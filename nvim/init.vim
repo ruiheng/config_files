@@ -384,6 +384,18 @@ endif
 
 
 if has_key(g:plugs, 'vim-wintabs')
+
+    nmap <leader>1 :WintabsGo 1<CR>
+    nmap <leader>2 :WintabsGo 2<CR>
+    nmap <leader>3 :WintabsGo 3<CR>
+    nmap <leader>4 :WintabsGo 4<CR>
+    nmap <leader>5 :WintabsGo 5<CR>
+    nmap <leader>6 :WintabsGo 6<CR>
+    nmap <leader>7 :WintabsGo 7<CR>
+    nmap <leader>8 :WintabsGo 8<CR>
+    nmap <leader>9 :WintabsGo 9<CR>
+    nmap <leader>$ :WintabsLast<CR>
+
     map gb <Plug>(wintabs_next)
     map gB <Plug>(wintabs_previous)
     map <C-T>c <Plug>(wintabs_close)
@@ -393,7 +405,7 @@ if has_key(g:plugs, 'vim-wintabs')
     command! Tabc WintabsCloseVimtab
     command! Tabo WintabsOnlyVimtab
     let g:wintabs_autoclose_vimtab = 1
-    let g:wintabs_display = 'statusline'
+    let g:wintabs_display = 'tabline'
 endif
 
 
