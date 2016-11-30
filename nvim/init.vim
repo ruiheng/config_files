@@ -14,6 +14,7 @@ Plug 'visualrepeat'
 Plug 'tpope/vim-surround'
 Plug 'jeffkreeftmeijer/vim-numbertoggle'
 Plug 'easymotion/vim-easymotion'
+Plug 'tpope/vim-abolish'
 
 Plug 'benekastah/neomake'
 
