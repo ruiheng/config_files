@@ -139,16 +139,17 @@ nnoremap <F5> :set cuc! cul!<CR>
 imap <F5> <C-O><F5>
 
 " ================ cabal commands ==========
+" let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
 nnoremap <F8> :wa \| Neomake! cabal<CR>
 imap <F8> <C-O><F8>
 
-let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
 
-let g:neomake_stack_maker = {
-        \ 'exe': 'stack',
-        \ 'args': ['build'],
-        \ 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
-        \ }
+" let g:neomake_stack_maker = {
+"         \ 'exe': 'stack',
+"         \ 'args': ['build'],
+"         \ 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
+"         \ }
+
 
 if has_key(g:plugs, 'vim-airline')
     let g:airline_powerline_fonts = 1
