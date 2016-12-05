@@ -108,6 +108,10 @@ cabbrev lvim
 set titlestring=nvim\ %f\ [%{substitute(getcwd(),$HOME,\'~\',\'\')}]
 set title
 
+if v:version >= 700
+  au BufLeave * let b:winview = winsaveview()
+  au BufEnter * if(exists('b:winview')) | call winrestview(b:winview) | endif
+endif
 
 " =============== ag =====================
 let g:ag_prg="ag --vimgrep --smart-case"
