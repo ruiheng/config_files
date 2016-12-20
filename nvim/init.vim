@@ -72,6 +72,7 @@ call plug#end()
 set hidden
 let mapleader = "\<space>"
 set et
+set showcmd
 
 let $NVIM_TUI_ENABLE_CURSOR_SHAPE=1
 
