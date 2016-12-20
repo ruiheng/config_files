@@ -6,15 +6,6 @@ let g:CtrlSpaceSetDefaultMapping = 1
 let g:CtrlSpaceDefaultMappingKey = "<leader><space>"
 let g:airline_exclude_preview = 1
 
-nnoremap ,1 :tabn 1<CR>
-nnoremap ,2 :tabn 2<CR>
-nnoremap ,3 :tabn 3<CR>
-nnoremap ,4 :tabn 4<CR>
-nnoremap ,6 :tabn 6<CR>
-nnoremap ,7 :tabn 7<CR>
-nnoremap ,8 :tabn 8<CR>
-nnoremap ,9 :tabn 9<CR>
-
 call plug#begin('~/.vim/plugged')
 
 Plug 'tpope/vim-repeat'
@@ -83,6 +74,15 @@ let mapleader = "\<space>"
 set et
 
 let $NVIM_TUI_ENABLE_CURSOR_SHAPE=1
+
+nnoremap ,1 :tabn 1<CR>
+nnoremap ,2 :tabn 2<CR>
+nnoremap ,3 :tabn 3<CR>
+nnoremap ,4 :tabn 4<CR>
+nnoremap ,6 :tabn 6<CR>
+nnoremap ,7 :tabn 7<CR>
+nnoremap ,8 :tabn 8<CR>
+nnoremap ,9 :tabn 9<CR>
 
 vmap <F2> "0p
 nmap <F2> viw"0p
