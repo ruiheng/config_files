@@ -73,6 +73,7 @@ set hidden
 let mapleader = "\<space>"
 set et
 set showcmd
+set sessionoptions+=globals
 
 let $NVIM_TUI_ENABLE_CURSOR_SHAPE=1
 
