@@ -24,6 +24,7 @@ Plug 'chriskempson/base16-vim'
 Plug 'freeo/vim-kalisi'
 Plug 'tomasr/molokai'
 
+" ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
 " Plug 'ruiheng/vim-haskell-cabal'
 " Plug 'raichoo/haskell-vim'
@@ -33,6 +34,9 @@ Plug 'pbrisbin/vim-syntax-shakespeare'
 " Plug 'bitc/vim-hdevtools'
 " Plug 'eagletmt/ghcmod-vim'
 Plug 'eagletmt/neco-ghc'
+
+" ==== web ====
+Plug 'posva/vim-vue'
 
 Plug 'kien/ctrlp.vim'
 Plug 'tpope/vim-fugitive'
