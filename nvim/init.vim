@@ -23,6 +23,7 @@ Plug 'spf13/vim-colors'
 Plug 'chriskempson/base16-vim'
 Plug 'freeo/vim-kalisi'
 Plug 'tomasr/molokai'
+Plug 'junegunn/seoul256.vim'
 
 " ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
@@ -37,10 +38,19 @@ Plug 'eagletmt/neco-ghc'
 
 " ==== web ====
 Plug 'posva/vim-vue'
+Plug 'digitaltoad/vim-pug'
 
-Plug 'kien/ctrlp.vim'
+" ==== git ====
 Plug 'tpope/vim-fugitive'
+Plug 'junegunn/gv.vim'
 Plug 'mhinz/vim-signify'
+
+" ==== session ====
+" Plug 'xolox/vim-misc' | Plug 'xolox/vim-session'
+" Plug 'tpope/vim-obsession'
+
+Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+Plug 'kien/ctrlp.vim'
 Plug 'nathanaelkane/vim-indent-guides'
 
 Plug 'vim-airline/vim-airline' | Plug 'vim-airline/vim-airline-themes'
@@ -56,19 +66,24 @@ Plug 'Shougo/deoplete.nvim'
 Plug 'blueyed/vim-diminactive'
 " Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim'
+" Plug 'Shougo/denite.nvim' | Plug 'Shougo/neomru.nvim'
 "Plug 'vim-ctrlspace/vim-ctrlspace'
-Plug 'thinca/vim-visualstar'
+" Plug 'thinca/vim-visualstar'
 Plug 'rking/ag.vim'
-Plug 'xolox/vim-misc' | Plug 'xolox/vim-session'
 
 Plug 'milkypostman/vim-togglelist'
 
-Plug 'tpope/vim-obsession'
-
-Plug 'cazador481/fakeclip.neovim'
+"Plug 'cazador481/fakeclip.neovim'
 
 Plug 'Shougo/neosnippet'
 Plug 'Shougo/neosnippet-snippets'
+
+" === experiment ==
+Plug 'junegunn/vim-peekaboo'
+Plug 'junegunn/vim-slash'
+Plug 'junegunn/limelight.vim'
+Plug 'takac/vim-hardtime'
+
 
 " Add plugins to &runtimepath
 call plug#end()
@@ -81,6 +96,11 @@ set sessionoptions+=globals
 
 let $NVIM_TUI_ENABLE_CURSOR_SHAPE=1
 
+set termguicolors
+
+" I don't need matchparen
+let loaded_matchparen = 1
+
 nnoremap ,1 :tabn 1<CR>
 nnoremap ,2 :tabn 2<CR>
 nnoremap ,3 :tabn 3<CR>
@@ -90,8 +110,8 @@ nnoremap ,7 :tabn 7<CR>
 nnoremap ,8 :tabn 8<CR>
 nnoremap ,9 :tabn 9<CR>
 
-vmap <F2> "0p
-nmap <F2> viw"0p
+vnoremap <F2> "0p
+nnoremap <F2> viw"0p
 
 " see
 " http://vim.wikia.com/wiki/Selecting_your_pasted_text
@@ -101,9 +121,9 @@ function MySetLocalTabStop (n)
         exec 'setlocal ts=' . a:n . ' sts=' . a:n . ' sw=' . a:n
 endfunction
 
-nmap <leader>t2 :call MySetLocalTabStop(2)<CR>
-nmap <leader>t4 :call MySetLocalTabStop(4)<CR>
-nmap <leader>t8 :call MySetLocalTabStop(8)<CR>
+nnoremap <leader>t2 :call MySetLocalTabStop(2)<CR>
+nnoremap <leader>t4 :call MySetLocalTabStop(4)<CR>
+nnoremap <leader>t8 :call MySetLocalTabStop(8)<CR>
 
 function MySetWigForHaskell ()
     set wig+=*.o,*.hi,*.dyn_hi,*.dyn_o,*/dist/*,cabal.sandbox.config,*.keter
@@ -142,12 +162,12 @@ cabbrev lag
 
 " =============== toggle cursorline and cursorcolumn ===========
 nnoremap <F5> :set cuc! cul!<CR>
-imap <F5> <C-O><F5>
+inoremap <F5> <C-O><F5>
 
 " ================ cabal commands ==========
 " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
 nnoremap <F8> :wa \| Neomake! cabal<CR>
-imap <F8> <C-O><F8>
+inoremap <F8> <C-O><F8>
 
 
 " let g:neomake_stack_maker = {
@@ -161,6 +181,10 @@ if has_key(g:plugs, 'vim-airline')
     let g:airline_powerline_fonts = 1
 endif
 
+if has_key(g:plugs, 'fzf')
+    nnoremap <leader>f :FZF<CR>
+endif
+
 if has_key(g:plugs, 'ctrlp.vim')
     let g:ctrlp_open_new_file = 'r'
     let g:ctrlp_map = '<leader>p'
@@ -169,9 +193,9 @@ if has_key(g:plugs, 'ctrlp.vim')
         if ( exists('g:loaded_ctrlp') && g:loaded_ctrlp )
             " nmap <leader>p :CtrlP<cr>
             " Easy bindings for its various modes
-            nmap <leader>bb :CtrlPBuffer<cr>
-            nmap <leader>bm :CtrlPMixed<cr>
-            nmap <leader>bs :CtrlPMRU<cr>
+            nnoremap <leader>bb :CtrlPBuffer<cr>
+            nnoremap <leader>bm :CtrlPMixed<cr>
+            nnoremap <leader>bs :CtrlPMRU<cr>
         endif
     endfunction
 
@@ -182,11 +206,11 @@ endif
 if has_key(g:plugs, 'vim-fugitive')
     function s:init_fugitive ()
         if exists('g:loaded_fugitive') || &cp
-            nmap <leader>gs :Gstatus<CR>
-            nmap <leader>gd :Gdiff<CR>
-            nmap <leader>gc :Gcommit<CR>
-            nmap <leader>gl :Glog<CR>
-            nmap <leader>gp :Git push<CR>
+            nnoremap <leader>gs :Gstatus<CR>
+            nnoremap <leader>gd :Gdiff<CR>
+            nnoremap <leader>gc :Gcommit<CR>
+            nnoremap <leader>gl :Glog<CR>
+            nnoremap <leader>gp :Git push<CR>
         endif
     endfunction
 
@@ -195,14 +219,14 @@ endif
 
 
 if has_key(g:plugs, 'vim-easymotion')
-    nmap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
+    nnoremap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
 endif
 
 
 if has_key(g:plugs, 'vim-easy-align')
     function s:init_easy_align ()
-        vmap <Enter> <Plug>(EasyAlign)
-        nmap ga <Plug>(EasyAlign)
+        vnoremap <Enter> <Plug>(EasyAlign)
+        nnoremap ga <Plug>(EasyAlign)
     endfunction
 
     au VimEnter * call s:init_easy_align()
@@ -237,9 +261,9 @@ endfunction
 
 
 if has_key(g:plugs, 'neosnippet')
-    imap <C-k>     <Plug>(neosnippet_expand_or_jump)
-    smap <C-k>     <Plug>(neosnippet_expand_or_jump)
-    xmap <C-k>     <Plug>(neosnippet_expand_target)
+    inoremap <C-k>     <Plug>(neosnippet_expand_or_jump)
+    snoremap <C-k>     <Plug>(neosnippet_expand_or_jump)
+    xnoremap <C-k>     <Plug>(neosnippet_expand_target)
 endif
 
 
@@ -405,23 +429,23 @@ endif
 
 if has_key(g:plugs, 'vim-wintabs')
 
-    nmap <leader>1 :WintabsGo 1<CR>
-    nmap <leader>2 :WintabsGo 2<CR>
-    nmap <leader>3 :WintabsGo 3<CR>
-    nmap <leader>4 :WintabsGo 4<CR>
-    nmap <leader>5 :WintabsGo 5<CR>
-    nmap <leader>6 :WintabsGo 6<CR>
-    nmap <leader>7 :WintabsGo 7<CR>
-    nmap <leader>8 :WintabsGo 8<CR>
-    nmap <leader>9 :WintabsGo 9<CR>
-    nmap <leader>$ :WintabsLast<CR>
+    nnoremap <leader>1 :WintabsGo 1<CR>
+    nnoremap <leader>2 :WintabsGo 2<CR>
+    nnoremap <leader>3 :WintabsGo 3<CR>
+    nnoremap <leader>4 :WintabsGo 4<CR>
+    nnoremap <leader>5 :WintabsGo 5<CR>
+    nnoremap <leader>6 :WintabsGo 6<CR>
+    nnoremap <leader>7 :WintabsGo 7<CR>
+    nnoremap <leader>8 :WintabsGo 8<CR>
+    nnoremap <leader>9 :WintabsGo 9<CR>
+    nnoremap <leader>$ :WintabsLast<CR>
 
-    map gb <Plug>(wintabs_next)
-    map gB <Plug>(wintabs_previous)
-    map <C-T>c <Plug>(wintabs_close)
-    map <C-T>o <Plug>(wintabs_only)
-    map <C-W>c <Plug>(wintabs_close_window)
-    map <C-W>o <Plug>(wintabs_only_window)
+    nmap gb <Plug>(wintabs_next)
+    nmap gB <Plug>(wintabs_previous)
+    nmap <C-T>c <Plug>(wintabs_close)
+    nmap <C-T>o <Plug>(wintabs_only)
+    nmap <C-W>c <Plug>(wintabs_close_window)
+    nmap <C-W>o <Plug>(wintabs_only_window)
     command! Tabc WintabsCloseVimtab
     command! Tabo WintabsOnlyVimtab
     let g:wintabs_autoclose_vimtab = 1
@@ -446,12 +470,16 @@ if has_key(g:plugs, 'deoplete.nvim')
           return deoplete#mappings#close_popup() . "\<CR>"
         endfunction
     endif
-
-
 endif
 
 
-set termguicolors
+if has_key(g:plugs, 'denite')
+    nnoremap <C-P>    :Denite -buffer-name=files file_rec<cr>
+    nnoremap <space>/ :Denite -no-empty grep<cr>
+    nnoremap <space>s :Denite buffer<cr>
+endif
 
-" I don't need matchparen
-let loaded_matchparen = 1
+
+if has_key(g:plugs, 'vim-peekaboo')
+    let g:peekaboo_delay = 750
+endif
