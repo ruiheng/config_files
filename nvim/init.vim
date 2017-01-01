@@ -219,14 +219,14 @@ endif
 
 
 if has_key(g:plugs, 'vim-easymotion')
-    nnoremap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
+    nmap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
 endif
 
 
 if has_key(g:plugs, 'vim-easy-align')
     function s:init_easy_align ()
-        vnoremap <Enter> <Plug>(EasyAlign)
-        nnoremap ga <Plug>(EasyAlign)
+        vmap <Enter> <Plug>(EasyAlign)
+        nmap ga <Plug>(EasyAlign)
     endfunction
 
     au VimEnter * call s:init_easy_align()
@@ -261,9 +261,9 @@ endfunction
 
 
 if has_key(g:plugs, 'neosnippet')
-    inoremap <C-k>     <Plug>(neosnippet_expand_or_jump)
-    snoremap <C-k>     <Plug>(neosnippet_expand_or_jump)
-    xnoremap <C-k>     <Plug>(neosnippet_expand_target)
+    imap <C-k>     <Plug>(neosnippet_expand_or_jump)
+    smap <C-k>     <Plug>(neosnippet_expand_or_jump)
+    xmap <C-k>     <Plug>(neosnippet_expand_target)
 endif
 
 
