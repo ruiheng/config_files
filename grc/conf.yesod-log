@@ -1,16 +1,16 @@
-regexp=\[Error\]
+regexp=\[Error(#.+)?\]
 colours=red
 count=more
 -
-regexp=\[Debug\]
+regexp=\[Debug(#.+)?\]
 colours=green
 count=more
 -
-regexp=\[Info\]
+regexp=\[Info(#.+)?\]
 colours=blue
 count=more
 -
-regexp=\[Warn\]
+regexp=\[Warn(#.+)?\]
 colours=yellow
 count=more
 
