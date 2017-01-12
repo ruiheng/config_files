@@ -16,7 +16,7 @@ count=more
 
 # 11/Jan/2017:12:33:20 +0800
 -
-regexp=\d/\w+/\d{4}:\d{2}:\d{2}:\d{2} \+\d{4}
+regexp=\d{1,2}/\w+/\d{4}:\d{2}:\d{2}:\d{2} \+\d{4}
 colours=bold
 count=more
 
