@@ -37,8 +37,8 @@ Plug 'pbrisbin/vim-syntax-shakespeare'
 Plug 'eagletmt/neco-ghc'
 
 " ==== web ====
-Plug 'posva/vim-vue'
-Plug 'digitaltoad/vim-pug'
+" Plug 'posva/vim-vue'
+" Plug 'digitaltoad/vim-pug'
 
 " ==== git ====
 Plug 'tpope/vim-fugitive'
