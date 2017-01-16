@@ -35,6 +35,8 @@ Plug 'pbrisbin/vim-syntax-shakespeare'
 " Plug 'bitc/vim-hdevtools'
 " Plug 'eagletmt/ghcmod-vim'
 Plug 'eagletmt/neco-ghc'
+" Plug 'kana/vim-textobj-user' | Plug 'gilligan/vim-textobj-haskell'
+" Plug 'parsonsmatt/intero-neovim'
 
 " ==== web ====
 " Plug 'posva/vim-vue'
