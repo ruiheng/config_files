@@ -96,8 +96,6 @@ set et
 set showcmd
 set sessionoptions+=globals
 
-let $NVIM_TUI_ENABLE_CURSOR_SHAPE=1
-
 set termguicolors
 
 " I don't need matchparen
@@ -291,7 +289,9 @@ nnoremap <leader>hs call RunStylishHaskell()<CR>
 " au WinEnter * call s:common_buf_enter()
 
 " In this env, shada cause nvim error, disable it.
-set shada=
+if has('nvim')
+    " set shada=
+endif
 
 
 let g:session_autosave = 'no'
