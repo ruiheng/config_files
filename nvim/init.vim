@@ -147,6 +147,13 @@ if v:version >= 700
   au BufEnter * if(exists('b:winview')) | call winrestview(b:winview) | endif
 endif
 
+
+" switch to last activated tab
+let g:lasttab = 1
+nmap <Leader>tt :exe "tabn ".g:lasttab<CR>
+au TabLeave * let g:lasttab = tabpagenr()
+
+
 " =============== ag =====================
 let g:ag_prg="ag --vimgrep --smart-case"
 
