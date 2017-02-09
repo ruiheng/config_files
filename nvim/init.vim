@@ -173,7 +173,7 @@ inoremap <F5> <C-O><F5>
 
 " ================ cabal commands ==========
 " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
-nnoremap <F8> :wa \| Neomake! cabal<CR>
+nnoremap <F8> :wa \| cexpr [] \| Neomake! cabal<CR>
 inoremap <F8> <C-O><F8>
 
 
