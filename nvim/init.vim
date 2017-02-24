@@ -155,6 +155,9 @@ nmap <Leader>tt :exe "tabn ".g:lasttab<CR>
 au TabLeave * let g:lasttab = tabpagenr()
 
 
+" do not highlight current item in quickfix window
+highlight! link QuickFixLine Normal
+
 " =============== ag =====================
 let g:ag_prg="ag --vimgrep --smart-case"
 
