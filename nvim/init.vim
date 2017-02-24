@@ -31,7 +31,7 @@ Plug 'junegunn/seoul256.vim'
 " Plug 'raichoo/haskell-vim'
 Plug 'neovimhaskell/haskell-vim'
 "Plug 'nbouscal/vim-stylish-haskell'
-Plug 'pbrisbin/vim-syntax-shakespeare'
+Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius' ] }
 " Plug 'bitc/vim-hdevtools'
 " Plug 'eagletmt/ghcmod-vim'
 Plug 'eagletmt/neco-ghc'
