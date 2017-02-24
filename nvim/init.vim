@@ -300,6 +300,11 @@ endfunction
 nnoremap <leader>hs call RunStylishHaskell()<CR>
 
 
+if has_key(g:plugs, 'haskell-vim')
+    let g:haskell_indent_disable=0
+    nmap <leader>hi :let g:haskell_indent_disable=!g:haskell_indent_disable \| echo g:haskell_indent_disable<CR>
+endif
+
 " this line cause fugitive malfunction
 " au WinEnter * call s:common_buf_enter()
 
