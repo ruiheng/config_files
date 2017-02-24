@@ -175,6 +175,10 @@ cabbrev lag
 nnoremap <F5> :set cuc! cul!<CR>
 inoremap <F5> <C-O><F5>
 
+" =============== toggle paste mode ===========
+nnoremap <F6> :set paste!<CR>
+inoremap <F6> <C-O><F6>
+
 " ================ cabal commands ==========
 " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
 nnoremap <F8> :wa \| cexpr [] \| Neomake! cabal<CR>
