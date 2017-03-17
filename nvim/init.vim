@@ -27,7 +27,6 @@ Plug 'junegunn/seoul256.vim'
 
 " ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
-" Plug 'ruiheng/vim-haskell-cabal'
 " Plug 'raichoo/haskell-vim'
 Plug 'neovimhaskell/haskell-vim'
 "Plug 'nbouscal/vim-stylish-haskell'
@@ -36,7 +35,13 @@ Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius'
 " Plug 'eagletmt/ghcmod-vim'
 Plug 'eagletmt/neco-ghc'
 " Plug 'kana/vim-textobj-user' | Plug 'gilligan/vim-textobj-haskell'
-" Plug 'parsonsmatt/intero-neovim'
+
+"if has('nvim')
+"    Plug 'myfreeweb/intero.nvim'
+"else
+"    Plug 'parsonsmatt/intero-neovim'
+"endif
+
 Plug 'enomsg/vim-haskellConcealPlus'
 
 " ==== web ====
@@ -86,6 +91,7 @@ Plug 'junegunn/vim-peekaboo'
 Plug 'junegunn/vim-slash'
 Plug 'junegunn/limelight.vim'
 Plug 'takac/vim-hardtime'
+Plug 'yssl/QFEnter'
 
 
 " Add plugins to &runtimepath
