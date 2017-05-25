@@ -9,7 +9,7 @@ let g:airline_exclude_preview = 1
 call plug#begin('~/.vim/plugged')
 
 Plug 'tpope/vim-repeat'
-Plug 'visualrepeat'
+Plug 'vim-scripts/visualrepeat'
 Plug 'tpope/vim-surround'
 Plug 'jeffkreeftmeijer/vim-numbertoggle'
 Plug 'easymotion/vim-easymotion'
