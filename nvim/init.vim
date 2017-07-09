@@ -205,6 +205,9 @@ endif
 
 if has_key(g:plugs, 'fzf')
     nnoremap <leader>f :FZF<CR>
+    if executable('ag')
+        let $FZF_DEFAULT_COMMAND = 'ag -l -g ""'
+    endif
 endif
 
 if has_key(g:plugs, 'ctrlp.vim')
