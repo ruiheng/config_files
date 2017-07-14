@@ -24,6 +24,8 @@ Plug 'chriskempson/base16-vim'
 Plug 'freeo/vim-kalisi'
 Plug 'tomasr/molokai'
 Plug 'junegunn/seoul256.vim'
+Plug 'icymind/NeoSolarized'
+Plug 'joshdick/OneDark.vim'
 
 " ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
@@ -374,6 +376,15 @@ let g:favorite_color_schemes = [
         \ [ "kalisi", "bg=light" ],
         \ [ "kalisi", "bg=dark" ],
         \ ]
+
+if has_key(g:plugs, 'OneDark.vim')
+    let g:onedark_terminal_italics = 1
+    let g:favorite_color_schemes += [ [ 'onedark', 'bg=dark' ], [ 'onedark', 'bg=light' ] ]
+endif
+
+if has_key(g:plugs, 'NeoSolarized')
+    let g:favorite_color_schemes += [ [ 'NeoSolarized', 'bg=dark' ], [ 'NeoSolarized', 'bg=light' ] ]
+endif
 
 if !exists("g:picked_favorite_color_scheme")
     let g:picked_favorite_color_scheme = RandomChooseFavoriteColorScheme()
