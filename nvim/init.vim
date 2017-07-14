@@ -104,7 +104,9 @@ set showcmd
 set sessionoptions+=globals
 set mouse=a
 
-set termguicolors
+if has('termguicolors')
+    set termguicolors
+endif
 
 " I don't need matchparen
 let loaded_matchparen = 1
