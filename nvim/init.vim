@@ -72,7 +72,11 @@ Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
 Plug 'junegunn/vim-easy-align'
 Plug 'kshenoy/vim-signature'
 " Plug 'Shougo/neocomplete.vim'
-Plug 'Shougo/deoplete.nvim'
+
+if has('nvim')
+   Plug 'Shougo/deoplete.nvim'
+endif
+
 Plug 'blueyed/vim-diminactive'
 " Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim'
