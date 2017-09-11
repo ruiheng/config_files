@@ -189,6 +189,7 @@ cabbrev lag
 " =============== toggle cursorline and cursorcolumn ===========
 nnoremap <F5> :set cuc! cul!<CR>
 inoremap <F5> <C-O><F5>
+nnoremap <leader>cc :set cuc! cul!<CR>
 
 " =============== toggle paste mode ===========
 nnoremap <F6> :set paste!<CR>
@@ -198,6 +199,7 @@ inoremap <F6> <C-O><F6>
 " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
 nnoremap <F8> :wa \| cexpr [] \| Neomake! cabal<CR>
 inoremap <F8> <C-O><F8>
+nnoremap <leader>ca :wa \| cexpr [] \| Neomake! cabal<CR>
 
 
 " let g:neomake_stack_maker = {
