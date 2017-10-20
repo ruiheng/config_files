@@ -3,7 +3,7 @@
 	email = gilbert.fine@gmail.com
 
 [color]
-	ui = always
+	ui = auto
 
 [diff]
 	tool = vimdiff
