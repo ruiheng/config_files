@@ -500,6 +500,7 @@ if has_key(g:plugs, 'vim-wintabs')
     let g:wintabs_ui_show_vimtab_name = 2
     let g:wintabs_display = 'tabline'
     let g:wintabs_ui_sep_spaceline = 'GT，'
+    let g:wintabs_ui_buffer_name_format = '%o%t'
 endif
 
 
