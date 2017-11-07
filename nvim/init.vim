@@ -45,7 +45,7 @@ Plug 'eagletmt/neco-ghc'
 "    Plug 'parsonsmatt/intero-neovim'
 "endif
 
-Plug 'enomsg/vim-haskellConcealPlus'
+" Plug 'enomsg/vim-haskellConcealPlus'
 
 " ==== web ====
 " Plug 'posva/vim-vue'
