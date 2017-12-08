@@ -486,6 +486,7 @@ if has_key(g:plugs, 'vim-wintabs')
     nnoremap <leader>7 :WintabsGo 7<CR>
     nnoremap <leader>8 :WintabsGo 8<CR>
     nnoremap <leader>9 :WintabsGo 9<CR>
+    nnoremap <leader>0 :WintabsGo 10<CR>
     nnoremap <leader>$ :WintabsLast<CR>
 
     nmap gb <Plug>(wintabs_next)
