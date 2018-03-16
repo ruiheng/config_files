@@ -6,7 +6,7 @@
 	ui = auto
 
 [diff]
-	tool = vimdiff
+	tool = meld
 
 [difftool "vimdiff"]
 	path = vimdiff
@@ -21,7 +21,7 @@
 [core]
 	excludesfile = ~/.gitignore
 	# when use vim, always edit log file as utf-8
-	editor = nvim -c 'e ++enc=utf-8 "%*"'
+	editor = nvim -c 'e ++enc=utf-8'
 	autocrlf = input
 	eol = lf
 	quotepath = false
