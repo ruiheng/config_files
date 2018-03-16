@@ -15,6 +15,7 @@ Plug 'jeffkreeftmeijer/vim-numbertoggle'
 Plug 'easymotion/vim-easymotion'
 Plug 'tpope/vim-abolish'
 Plug 'yuttie/comfortable-motion.vim'
+Plug 'equalsraf/neovim-gui-shim'
 
 Plug 'benekastah/neomake'
 
@@ -27,25 +28,27 @@ Plug 'tomasr/molokai'
 Plug 'junegunn/seoul256.vim'
 Plug 'icymind/NeoSolarized'
 Plug 'joshdick/OneDark.vim'
+Plug 'rakr/vim-one'
 
 " ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
 " Plug 'raichoo/haskell-vim'
-Plug 'neovimhaskell/haskell-vim'
+" Plug 'neovimhaskell/haskell-vim'
 "Plug 'nbouscal/vim-stylish-haskell'
 Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius' ] }
 " Plug 'bitc/vim-hdevtools'
 " Plug 'eagletmt/ghcmod-vim'
-Plug 'eagletmt/neco-ghc'
+" Plug 'eagletmt/neco-ghc'
 " Plug 'kana/vim-textobj-user' | Plug 'gilligan/vim-textobj-haskell'
 
-"if has('nvim')
-"    Plug 'myfreeweb/intero.nvim'
-"else
-"    Plug 'parsonsmatt/intero-neovim'
-"endif
+" Plug 'parsonsmatt/intero-neovim'
 
 " Plug 'enomsg/vim-haskellConcealPlus'
+
+Plug 'autozimu/LanguageClient-neovim', {
+  \ 'branch': 'next',
+  \ 'do': './install.sh'
+  \ }
 
 " ==== web ====
 " Plug 'posva/vim-vue'
@@ -259,6 +262,12 @@ if has_key(g:plugs, 'vim-easymotion')
 endif
 
 
+if has_key(g:plugs, 'comfortable-motion.vim')
+    let g:comfortable_motion_friction = 0.0
+    let g:comfortable_motion_air_drag = 5.0
+endif
+
+
 if has_key(g:plugs, 'vim-easy-align')
     function s:init_easy_align ()
         vmap <Enter> <Plug>(EasyAlign)
@@ -300,6 +309,7 @@ if has_key(g:plugs, 'neosnippet')
     imap <C-k>     <Plug>(neosnippet_expand_or_jump)
     smap <C-k>     <Plug>(neosnippet_expand_or_jump)
     xmap <C-k>     <Plug>(neosnippet_expand_target)
+    let g:neosnippet#snippets_directory = g:neosnippet#snippets_directory . ',' . expand('<sfile>:p') . '/snippets'
 endif
 
 
@@ -309,6 +319,16 @@ if has_key(g:plugs, 'neco-ghc')
     autocmd FileType haskell setlocal omnifunc=necoghc#omnifunc
 endif
 
+
+if has_key(g:plugs, 'intero-neovim')
+    map <silent> <leader>T <Plug>InteroGenericType
+endif
+
+if has_key(g:plugs, 'LanguageClient-neovim')
+    let g:LanguageClient_serverCommands = {
+            \ 'haskell': [ 'hie', '--lsp' ],
+            \ }
+endif
 
 " ================ call stylish-haskell command ==========
 function RunStylishHaskell ()
