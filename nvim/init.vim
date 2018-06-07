@@ -47,7 +47,7 @@ Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius'
 
 Plug 'autozimu/LanguageClient-neovim', {
   \ 'branch': 'next',
-  \ 'do': './install.sh'
+  \ 'do': 'bash ./install.sh'
   \ }
 
 " ==== web ====
@@ -78,7 +78,7 @@ Plug 'kshenoy/vim-signature'
 " Plug 'Shougo/neocomplete.vim'
 
 if has('nvim')
-   Plug 'Shougo/deoplete.nvim'
+   Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
 endif
 
 Plug 'blueyed/vim-diminactive'
