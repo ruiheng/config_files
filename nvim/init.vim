@@ -112,6 +112,7 @@ let mapleader = "\<space>"
 set et
 set showcmd
 set sessionoptions+=globals
+set sessionoptions+=options
 set mouse=a
 
 if has('termguicolors')
