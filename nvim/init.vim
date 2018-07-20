@@ -70,7 +70,7 @@ Plug 'nathanaelkane/vim-indent-guides'
 Plug 'vim-airline/vim-airline' | Plug 'vim-airline/vim-airline-themes'
 Plug 'zefei/vim-wintabs'
 
-Plug 'majutsushi/tagbar'
+" Plug 'majutsushi/tagbar'
 Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
 " Plug 'godlygeek/tabular'
 Plug 'junegunn/vim-easy-align'
