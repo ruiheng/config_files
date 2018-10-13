@@ -197,6 +197,7 @@ cabbrev lag
 nnoremap <F5> :set cuc! cul!<CR>
 inoremap <F5> <C-O><F5>
 nnoremap <leader>cc :set cuc! cul!<CR>
+nnoremap <C-F5> :set nu! rnu!<CR>
 
 " =============== toggle paste mode ===========
 nnoremap <F6> :set paste!<CR>
