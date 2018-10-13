@@ -19,6 +19,8 @@ Plug 'equalsraf/neovim-gui-shim'
 
 Plug 'benekastah/neomake'
 
+Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
+
 " ==== color schemes ====
 Plug 'altercation/vim-colors-solarized'
 Plug 'spf13/vim-colors'
