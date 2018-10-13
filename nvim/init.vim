@@ -35,7 +35,7 @@ Plug 'rakr/vim-one'
 " ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
 " Plug 'raichoo/haskell-vim'
-" Plug 'neovimhaskell/haskell-vim'
+Plug 'neovimhaskell/haskell-vim'
 "Plug 'nbouscal/vim-stylish-haskell'
 Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius' ] }
 " Plug 'bitc/vim-hdevtools'
