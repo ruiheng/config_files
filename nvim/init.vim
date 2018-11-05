@@ -31,6 +31,7 @@ Plug 'junegunn/seoul256.vim'
 Plug 'icymind/NeoSolarized'
 Plug 'joshdick/OneDark.vim'
 Plug 'rakr/vim-one'
+Plug 'cormacrelf/vim-colors-github'
 
 " ==== haskell ====
 " Plug 'KabbAmine/zeavim.vim'
