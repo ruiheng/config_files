@@ -291,6 +291,13 @@ if has_key(g:plugs, 'vim-session')
 endif
 
 
+if has_key(g:plugs, 'vim-togglelist')
+    let g:toggle_list_no_mappings = 1
+    nmap <script> <silent> <leader>lo :call ToggleLocationList()<CR>
+    nmap <script> <silent> <leader>q :call ToggleQuickfixList()<CR>
+endif
+
+
 autocmd FileType haskell setlocal expandtab | call MySetLocalTabStop(2)
 autocmd FileType elm setlocal expandtab | call MySetLocalTabStop(2)
 autocmd FileType html setlocal noexpandtab si | call MySetLocalTabStop(2)
