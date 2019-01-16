@@ -57,6 +57,9 @@ Plug 'autozimu/LanguageClient-neovim', {
 " Plug 'posva/vim-vue'
 " Plug 'digitaltoad/vim-pug'
 
+" ==== JavaScript JS ====
+Plug 'pangloss/vim-javascript'
+
 " ==== git ====
 Plug 'tpope/vim-fugitive'
 Plug 'junegunn/gv.vim'
@@ -569,4 +572,11 @@ endif
 
 if has_key(g:plugs, 'vim-peekaboo')
     let g:peekaboo_delay = 750
+endif
+
+if has_key(g:plugs, 'vim-javascript')
+    augroup javascript_folding
+        au!
+        au FileType javascript setlocal foldmethod=syntax
+    augroup END
 endif
