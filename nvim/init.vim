@@ -117,8 +117,9 @@ set hidden
 let mapleader = "\<space>"
 set et
 set showcmd
+" wintabs needs globals in sessionoptions to support sessions
 set sessionoptions+=globals
-set sessionoptions+=options
+"set sessionoptions+=options
 set mouse=a
 
 if has('termguicolors')
