@@ -210,18 +210,38 @@ inoremap <F6> <C-O><F6>
 
 " ================ cabal commands ==========
 if has_key(g:plugs, 'neomake')
-    nnoremap <F8> :wa \| cexpr [] \| Neomake! cabal<CR>
+    nnoremap <F8> :wa \| cexpr [] \| Neomake! stack<CR>
     inoremap <F8> <C-O><F8>
-    nnoremap <leader>ca :wa \| cexpr [] \| Neomake! cabal<CR>
+    nnoremap <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
 
     " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
-    let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
+    " let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
 
-    " let g:neomake_stack_maker = {
-    "         \ 'exe': 'stack',
-    "         \ 'args': ['build'],
-    "         \ 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
-    "         \ }
+    " 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
+                " \ '%-GInstalling library in %.%#',
+                " \ '%-GRegistering library for %.%#',
+    let g:neomake_stack_maker = {
+            \ 'exe': 'stack',
+            \ 'args': ['build', '--fast', '.' ],
+            \ 'errorformat': join([
+                \ '%E%f:%l:%c: error:%m',
+                \ '%E%f:%l:%c: error:',
+                \ '%W%f:%l:%c: warning:%m',
+                \ '%W%f:%l:%c: warning:',
+                \ '%-C %[ ]%#|',
+                \ '%-C %[ %\\d]%#|%.%#',
+                \ '%C %[ ]%#%m',
+                \ '%-Z',
+                \ '%-G%.%#: unregistering %.%#',
+                \ '%-G%.%#: build %.%#',
+                \ '%-G%.%#: copy/register',
+                \ '%-GPreprocessing library for %.%#',
+                \ '%-GBuilding library for %.%#',
+                \ ], ',')
+            \ }
+
+endif
+
 
 endif
 
