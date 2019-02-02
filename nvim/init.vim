@@ -236,7 +236,9 @@ if has_key(g:plugs, 'neomake')
                 \ '%-G%.%#: build %.%#',
                 \ '%-G%.%#: copy/register',
                 \ '%-GPreprocessing library for %.%#',
+                \ '%-GPreprocessing executable %.%#',
                 \ '%-GBuilding library for %.%#',
+                \ '%-GBuilding executable %.%#',
                 \ ], ',')
             \ }
 
