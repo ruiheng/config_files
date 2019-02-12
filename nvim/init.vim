@@ -220,9 +220,22 @@ if has_key(g:plugs, 'neomake')
     " 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
                 " \ '%-GInstalling library in %.%#',
                 " \ '%-GRegistering library for %.%#',
+
+    let g:neomake_stack_flags_file = "stack-build-flags.txt"
+    let g:neomake_stack_flags = []
+
+    if filereadable(g:neomake_stack_flags_file)
+        let g:neomake_stack_flags = readfile(g:neomake_stack_flags_file)
+    endif
+
+    let g:neomake_stack_args = ['build', '--fast', '.' ]
+    if len(g:neomake_stack_flags) > 0
+        let g:neomake_stack_args = ['build'] + g:neomake_stack_flags
+    endif
+
     let g:neomake_stack_maker = {
             \ 'exe': 'stack',
-            \ 'args': ['build', '--fast', '.' ],
+            \ 'args': g:neomake_stack_args,
             \ 'errorformat': join([
                 \ '%E%f:%l:%c: error:%m',
                 \ '%E%f:%l:%c: error:',
