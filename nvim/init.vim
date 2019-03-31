@@ -122,6 +122,10 @@ set sessionoptions+=globals
 "set sessionoptions+=options
 set mouse=a
 
+if has('nvim')
+    set wop=pum
+endif
+
 if has('termguicolors')
     set termguicolors
 endif
