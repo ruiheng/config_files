@@ -121,6 +121,7 @@ set showcmd
 set sessionoptions+=globals
 "set sessionoptions+=options
 set mouse=a
+set shortmess+=c
 
 if has('nvim')
     set wop=pum
