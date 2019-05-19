@@ -18,8 +18,18 @@ Plug 'yuttie/comfortable-motion.vim'
 Plug 'equalsraf/neovim-gui-shim'
 
 Plug 'benekastah/neomake'
+"Plug 'w0rp/ale'
 
 Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
+
+" ==== general language plugins ====
+
+" Plug 'autozimu/LanguageClient-neovim', {
+"   \ 'branch': 'next',
+"   \ 'do': 'bash ./install.sh'
+"   \ }
+
+Plug 'neoclide/coc.nvim', {'tag': '*', 'do': './install.sh'}
 
 " ==== color schemes ====
 Plug 'altercation/vim-colors-solarized'
@@ -48,17 +58,22 @@ Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius'
 
 " Plug 'enomsg/vim-haskellConcealPlus'
 
-Plug 'autozimu/LanguageClient-neovim', {
-  \ 'branch': 'next',
-  \ 'do': 'bash ./install.sh'
-  \ }
-
 " ==== web ====
 " Plug 'posva/vim-vue'
 " Plug 'digitaltoad/vim-pug'
 
 " ==== JavaScript JS ====
 Plug 'pangloss/vim-javascript'
+
+" ==== TypeScript ====
+Plug 'Quramy/tsuquyomi'
+Plug 'HerringtonDarkholme/yats.vim'
+
+" ==== HTML CSS ====
+Plug 'mattn/emmet-vim'
+
+" ==== VUE ====
+Plug 'posva/vim-vue'
 
 " ==== git ====
 Plug 'tpope/vim-fugitive'
@@ -99,8 +114,8 @@ Plug 'milkypostman/vim-togglelist'
 
 "Plug 'cazador481/fakeclip.neovim'
 
-Plug 'Shougo/neosnippet'
-Plug 'Shougo/neosnippet-snippets'
+" Plug 'Shougo/neosnippet'
+" Plug 'Shougo/neosnippet-snippets'
 
 " === experiment ==
 Plug 'junegunn/vim-peekaboo'
@@ -266,6 +281,11 @@ if has_key(g:plugs, 'neomake')
 endif
 
 
+if has_key(g:plugs, 'ale')
+    if !exists('g:ale_fixers')
+        let g:ale_fixers = {}
+    endif
+    let g:ale_fixers['haskell'] = [ 'cabal-ghc' ]
 endif
 
 if has_key(g:plugs, 'vim-airline')
@@ -386,9 +406,10 @@ if has_key(g:plugs, 'intero-neovim')
     map <silent> <leader>T <Plug>InteroGenericType
 endif
 
+            " 'haskell': [ 'hie-wrapper', '--lsp' ],
 if has_key(g:plugs, 'LanguageClient-neovim')
     let g:LanguageClient_serverCommands = {
-            \ 'haskell': [ 'hie-wrapper', '-r', '..' ],
+            \ 'haskell': [ 'hie-wrapper', '+RTS', '-c', '-M1500M', '-K1G', '-A16M', '-RTS', '--lsp' ],
             \ }
 
     nnoremap <F7> :call LanguageClient_contextMenu()<CR>
