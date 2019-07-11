@@ -29,7 +29,7 @@ Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
 "   \ 'do': 'bash ./install.sh'
 "   \ }
 
-Plug 'neoclide/coc.nvim', {'tag': '*', 'do': './install.sh'}
+Plug 'neoclide/coc.nvim', {'tag': '*'}
 
 " ==== color schemes ====
 Plug 'altercation/vim-colors-solarized'
