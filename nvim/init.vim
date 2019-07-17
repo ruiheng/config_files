@@ -634,13 +634,13 @@ if has_key(g:plugs, 'deoplete.nvim')
         let g:deoplete#enable_smart_case = 1
 
         " <C-h>, <BS>: close popup and delete backword char.
-        inoremap <expr><C-h> deoplete#mappings#smart_close_popup()."\<C-h>"
-        inoremap <expr><BS>  deoplete#mappings#smart_close_popup()."\<C-h>"
+        inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
+        inoremap <expr><BS>  deoplete#smart_close_popup()."\<C-h>"
 
         " <CR>: close popup and save indent.
         inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
         function! s:my_cr_function() abort
-          return deoplete#mappings#close_popup() . "\<CR>"
+          return deoplete#close_popup() . "\<CR>"
         endfunction
     endif
 endif
