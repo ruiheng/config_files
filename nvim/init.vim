@@ -119,6 +119,9 @@ Plug 'milkypostman/vim-togglelist'
 " Plug 'Shougo/neosnippet'
 " Plug 'Shougo/neosnippet-snippets'
 
+" === SQL ==
+Plug 'lifepillar/pgsql.vim'
+
 " === experiment ==
 Plug 'junegunn/vim-peekaboo'
 Plug 'junegunn/vim-slash'
