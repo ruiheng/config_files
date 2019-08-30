@@ -47,12 +47,14 @@ Plug 'cormacrelf/vim-colors-github'
 " Plug 'KabbAmine/zeavim.vim'
 " Plug 'raichoo/haskell-vim'
 Plug 'neovimhaskell/haskell-vim'
+"Plug 'alx741/vim-stylishask'
 "Plug 'nbouscal/vim-stylish-haskell'
 Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius' ] }
 " Plug 'bitc/vim-hdevtools'
 " Plug 'eagletmt/ghcmod-vim'
 " Plug 'eagletmt/neco-ghc'
 " Plug 'kana/vim-textobj-user' | Plug 'gilligan/vim-textobj-haskell'
+" Plug 'ndmitchell/ghcid', { 'rtp': 'plugins/nvim' }
 
 " Plug 'parsonsmatt/intero-neovim'
 
