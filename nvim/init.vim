@@ -154,6 +154,12 @@ endif
 " I don't need matchparen
 let loaded_matchparen = 1
 
+if executable('rg')
+  set gp=rg\ --vimgrep
+elseif executable('ag')
+  set gp=ag\ --vimgrep
+endif
+
 nnoremap ,1 :tabn 1<CR>
 nnoremap ,2 :tabn 2<CR>
 nnoremap ,3 :tabn 3<CR>
@@ -299,7 +305,9 @@ endif
 
 if has_key(g:plugs, 'fzf')
     nnoremap <leader>f :FZF<CR>
-    if executable('ag')
+    if executable('rg')
+        let $FZF_DEFAULT_COMMAND = 'rg --files --hidden --follow --glob "!.git/*"'
+    elseif executable('ag')
         let $FZF_DEFAULT_COMMAND = 'ag -l -g ""'
     endif
 endif
