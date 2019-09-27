@@ -87,6 +87,8 @@ Plug 'mhinz/vim-signify'
 " Plug 'tpope/vim-obsession'
 
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+Plug 'junegunn/fzf.vim'
+
 Plug 'kien/ctrlp.vim'
 Plug 'nathanaelkane/vim-indent-guides'
 
@@ -303,13 +305,8 @@ if has_key(g:plugs, 'vim-airline')
     let g:airline_powerline_fonts = 1
 endif
 
-if has_key(g:plugs, 'fzf')
-    nnoremap <leader>f :FZF<CR>
-    if executable('rg')
-        let $FZF_DEFAULT_COMMAND = 'rg --files --hidden --follow --glob "!.git/*"'
-    elseif executable('ag')
-        let $FZF_DEFAULT_COMMAND = 'ag -l -g ""'
-    endif
+if has_key(g:plugs, 'fzf.vim')
+    nnoremap <leader>f :Files<CR>
 endif
 
 if has_key(g:plugs, 'ctrlp.vim')
