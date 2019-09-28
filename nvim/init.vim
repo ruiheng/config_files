@@ -273,6 +273,7 @@ if has_key(g:plugs, 'neomake')
     let g:neomake_stack_maker = {
             \ 'exe': 'stack',
             \ 'args': g:neomake_stack_args,
+            \ 'buffer_output': 0,
             \ 'errorformat': join([
                 \ '%E%f:%l:%c: error:%m',
                 \ '%E%f:%l:%c: error:',
@@ -291,7 +292,6 @@ if has_key(g:plugs, 'neomake')
                 \ '%-GBuilding executable %.%#',
                 \ ], ',')
             \ }
-
 endif
 
 
