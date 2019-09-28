@@ -94,6 +94,7 @@ Plug 'nathanaelkane/vim-indent-guides'
 
 Plug 'vim-airline/vim-airline' | Plug 'vim-airline/vim-airline-themes'
 Plug 'zefei/vim-wintabs'
+Plug 'zefei/vim-wintabs-powerline'
 
 " Plug 'majutsushi/tagbar'
 Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
@@ -112,7 +113,7 @@ Plug 'Shougo/vimproc.vim'
 " Plug 'Shougo/denite.nvim' | Plug 'Shougo/neomru.nvim'
 "Plug 'vim-ctrlspace/vim-ctrlspace'
 " Plug 'thinca/vim-visualstar'
-Plug 'rking/ag.vim'
+" Plug 'rking/ag.vim'
 
 Plug 'milkypostman/vim-togglelist'
 
