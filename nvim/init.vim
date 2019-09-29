@@ -1,3 +1,7 @@
+if !exists('quick_mode')
+    let quick_mode = 0
+endif
+
 "============= ctrlspace ===============
 if executable("ag")
     let g:CtrlSpaceGlobCommand = 'ag -l --nocolor -g ""'
@@ -17,7 +21,10 @@ Plug 'tpope/vim-abolish'
 Plug 'yuttie/comfortable-motion.vim'
 Plug 'equalsraf/neovim-gui-shim'
 
-Plug 'benekastah/neomake'
+if !quick_mode
+    Plug 'benekastah/neomake'
+endif
+
 "Plug 'w0rp/ale'
 
 Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
@@ -89,15 +96,23 @@ Plug 'mhinz/vim-signify'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
 Plug 'junegunn/fzf.vim'
 
-Plug 'kien/ctrlp.vim'
+if !quick_mode
+    Plug 'kien/ctrlp.vim'
+endif
+
 Plug 'nathanaelkane/vim-indent-guides'
 
-Plug 'vim-airline/vim-airline' | Plug 'vim-airline/vim-airline-themes'
-Plug 'zefei/vim-wintabs'
-Plug 'zefei/vim-wintabs-powerline'
+if !quick_mode
+    Plug 'vim-airline/vim-airline' | Plug 'vim-airline/vim-airline-themes'
+    Plug 'zefei/vim-wintabs'
+    Plug 'zefei/vim-wintabs-powerline'
+endif
 
 " Plug 'majutsushi/tagbar'
-Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
+if !quick_mode
+    Plug 'scrooloose/syntastic', { 'on': 'SyntasticToggleMode' }
+endif
+
 " Plug 'godlygeek/tabular'
 Plug 'junegunn/vim-easy-align'
 Plug 'kshenoy/vim-signature'
@@ -245,36 +260,9 @@ nnoremap <leader>n :set nu! rnu!<CR>
 nnoremap <F6> :set paste!<CR>
 inoremap <F6> <C-O><F6>
 
-" ================ cabal commands ==========
-if has_key(g:plugs, 'neomake')
-    nnoremap <F8> :wa \| cexpr [] \| Neomake! stack<CR>
-    inoremap <F8> <C-O><F8>
-    nnoremap <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
+" ================ stack build commands ==========
 
-    " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
-    " let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
-
-    " 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
-                " \ '%-GInstalling library in %.%#',
-                " \ '%-GRegistering library for %.%#',
-
-    let g:neomake_stack_flags_file = "stack-build-flags.txt"
-    let g:neomake_stack_flags = []
-
-    if filereadable(g:neomake_stack_flags_file)
-        let g:neomake_stack_flags = readfile(g:neomake_stack_flags_file)
-    endif
-
-    let g:neomake_stack_args = ['build', '--fast', '.' ]
-    if len(g:neomake_stack_flags) > 0
-        let g:neomake_stack_args = ['build'] + g:neomake_stack_flags
-    endif
-
-    let g:neomake_stack_maker = {
-            \ 'exe': 'stack',
-            \ 'args': g:neomake_stack_args,
-            \ 'buffer_output': 0,
-            \ 'errorformat': join([
+let g:ghc_error_format = join([
                 \ '%E%f:%l:%c: error:%m',
                 \ '%E%f:%l:%c: error:',
                 \ '%W%f:%l:%c: warning:%m',
@@ -291,7 +279,58 @@ if has_key(g:plugs, 'neomake')
                 \ '%-GBuilding library for %.%#',
                 \ '%-GBuilding executable %.%#',
                 \ ], ',')
+
+if has_key(g:plugs, 'neomake')
+    nnoremap <F8> :wa \| cexpr [] \| Neomake! stack<CR>
+    inoremap <F8> <C-O><F8>
+    nnoremap <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
+
+    " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
+    " let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
+
+    " 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
+                " \ '%-GInstalling library in %.%#',
+                " \ '%-GRegistering library for %.%#',
+
+    let haskell_stack_build_flags_file = "stack-build-flags.txt"
+    let haskell_stack_build_flags = []
+
+    if filereadable(haskell_stack_build_flags_file)
+        let haskell_stack_build_flags = readfile(haskell_stack_build_flags_file)
+    endif
+
+    let haskell_stack_build_args = ['build', '--fast', '.' ]
+    if len(haskell_stack_build_flags) > 0
+        let haskell_stack_build_args = ['build'] + neomake_stack_flags
+    endif
+
+    let g:neomake_stack_maker = {
+            \ 'exe': 'stack',
+            \ 'args': haskell_stack_build_args,
+            \ 'buffer_output': 0,
+            \ 'errorformat': g:ghc_error_format
             \ }
+
+    let ghc_compile_flags_file = "ghc-compile-flags.txt"
+    let ghc_compile_flags = []
+
+    if filereadable(ghc_compile_flags_file)
+        let ghc_compile_flags = readfile(ghc_compile_flags_file)
+        let ghc_compile_output_dir = trim(system('stack path --dist-dir')) . '/build'
+        let ghc_compile_args = ['ghc', '--', '-odir', ghc_compile_output_dir, '-hidir', ghc_compile_output_dir, '-c']
+        if len(ghc_compile_flags) > 0
+            let ghc_compile_args = ghc_compile_args + ghc_compile_flags
+        endif
+
+        let g:neomake_haskell_ghc_maker = {
+                \ 'exe': 'stack',
+                \ 'args': ghc_compile_args,
+                \ 'buffer_output': 0,
+                \ 'errorformat': g:ghc_error_format
+                \ }
+        let g:neomake_haskell_enabled_makers = [ 'ghc' ]
+    endif
+
 endif
 
 
@@ -526,7 +565,12 @@ if has_key(g:plugs, 'NeoSolarized')
 endif
 
 if !exists("g:picked_favorite_color_scheme")
-    let g:picked_favorite_color_scheme = RandomChooseFavoriteColorScheme()
+    if quick_mode
+        set bg=dark
+        colorscheme NeoSolarized
+    else
+        let g:picked_favorite_color_scheme = RandomChooseFavoriteColorScheme()
+    endif
 endif
 
 " ---------------------------------------------

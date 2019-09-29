@@ -9,19 +9,20 @@
 	tool = meld
 
 [difftool "vimdiff"]
-	path = vimdiff
+	#path = vimdiff
+	path = nvim -d
 
 # http://www.toofishes.net/blog/three-way-merging-git-using-vim/
 [merge]
 	tool = vimdiff3
 
 [mergetool "vimdiff3"]
-	path = vim -f -d -c "wincmd J" "$MERGED" "$LOCAL" "$BASE" "$REMOTE"
+	path = nvim -f -d -c "wincmd J" "$MERGED" "$LOCAL" "$BASE" "$REMOTE"
 
 [core]
 	excludesfile = ~/.gitignore
 	# when use vim, always edit log file as utf-8
-	editor = nvim -c 'e ++enc=utf-8'
+	editor = nvim -c 'e ++enc=utf-8' --cmd 'let quick_mode=1'
 	autocrlf = input
 	eol = lf
 	quotepath = false
