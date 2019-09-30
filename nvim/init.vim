@@ -301,7 +301,7 @@ if has_key(g:plugs, 'neomake')
 
     let haskell_stack_build_args = ['build', '--fast', '.' ]
     if len(haskell_stack_build_flags) > 0
-        let haskell_stack_build_args = ['build'] + neomake_stack_flags
+        let haskell_stack_build_args = ['build'] + haskell_stack_build_flags
     endif
 
     let g:neomake_stack_maker = {
