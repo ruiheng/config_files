@@ -97,7 +97,7 @@ Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
 Plug 'junegunn/fzf.vim'
 
 if !quick_mode
-    Plug 'kien/ctrlp.vim'
+    "Plug 'kien/ctrlp.vim'
 endif
 
 Plug 'nathanaelkane/vim-indent-guides'
