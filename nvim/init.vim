@@ -594,7 +594,7 @@ autocmd CursorHold,BufWritePost,BufReadPost,BufLeave *
   \ if isdirectory(expand("<amatch>:h")) | let &swapfile = &modified | endif
 
 function! s:run_checktime()
-  let special_filetypes_list = [ 'vim', 'qf', 'gitcommit' ]
+  let special_filetypes_list = [ '', 'vim', 'qf', 'gitcommit' ]
 
   if index(special_filetypes_list, &filetype) < 0
         checktime
