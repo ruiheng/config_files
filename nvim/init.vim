@@ -20,6 +20,7 @@ Plug 'easymotion/vim-easymotion'
 Plug 'tpope/vim-abolish'
 Plug 'yuttie/comfortable-motion.vim'
 Plug 'equalsraf/neovim-gui-shim'
+Plug 'machakann/vim-highlightedyank'
 
 if !quick_mode
     Plug 'benekastah/neomake'
