@@ -30,6 +30,9 @@ endif
 
 Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
 
+Plug 'chrisbra/unicode.vim'
+
+
 " ==== general language plugins ====
 
 " Plug 'autozimu/LanguageClient-neovim', {
@@ -193,7 +196,7 @@ nnoremap <F2> viw"0p
 
 " see
 " http://vim.wikia.com/wiki/Selecting_your_pasted_text
-nnoremap <expr> <F4> '`[' . strpart(getregtype(), 0, 1) . '`]'
+nnoremap <expr> <leader>v '`[' . strpart(getregtype(), 0, 1) . '`]'
 
 function MySetLocalTabStop (n)
         exec 'setlocal ts=' . a:n . ' sts=' . a:n . ' sw=' . a:n
@@ -235,6 +238,12 @@ au TabLeave * let g:lasttab = tabpagenr()
 " do not highlight current item in quickfix window
 highlight! link QuickFixLine Normal
 
+
+if has_key(g:plugs, 'unicode.vim')
+    " vmap <leader>dg <Plug>(MakeDigraph)
+    " nmap <leader>dg <Plug>(MakeDigraph)
+endif
+
 " =============== ag =====================
 let g:ag_prg="ag --vimgrep --smart-case"
 
@@ -249,17 +258,13 @@ cabbrev lag
       \ <C-Left><C-Left><C-Left>
 
 " =============== toggle cursorline and cursorcolumn ===========
-nnoremap <F5> :set cuc! cul!<CR>
-inoremap <F5> <C-O><F5>
 nnoremap <leader>cc :set cuc! cul!<CR>
-nnoremap <C-F5> :set nu! rnu!<CR>
 
 " =============== toggle number display ===========
 nnoremap <leader>n :set nu! rnu!<CR>
 
 " =============== toggle paste mode ===========
-nnoremap <F6> :set paste!<CR>
-inoremap <F6> <C-O><F6>
+nnoremap <leader>p :set paste!<CR>
 
 " ================ stack build commands ==========
 
@@ -282,8 +287,6 @@ let g:ghc_error_format = join([
                 \ ], ',')
 
 if has_key(g:plugs, 'neomake')
-    nnoremap <F8> :wa \| cexpr [] \| Neomake! stack<CR>
-    inoremap <F8> <C-O><F8>
     nnoremap <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
 
     " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
@@ -348,6 +351,8 @@ endif
 
 if has_key(g:plugs, 'fzf.vim')
     nnoremap <leader>f :Files<CR>
+    nnoremap <leader>B :Buffers<CR>
+    nnoremap <leader>T :Tags<CR>
 endif
 
 if has_key(g:plugs, 'ctrlp.vim')
