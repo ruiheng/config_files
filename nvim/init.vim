@@ -79,8 +79,10 @@ Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius'
 Plug 'pangloss/vim-javascript'
 
 " ==== TypeScript ====
-Plug 'Quramy/tsuquyomi'
-Plug 'HerringtonDarkholme/yats.vim'
+if !quick_mode
+    Plug 'Quramy/tsuquyomi'
+    Plug 'HerringtonDarkholme/yats.vim'
+endif
 
 " ==== HTML CSS ====
 Plug 'mattn/emmet-vim'
@@ -723,4 +725,11 @@ if has_key(g:plugs, 'vim-javascript')
         au!
         au FileType javascript setlocal foldmethod=syntax
     augroup END
+endif
+
+if has_key(g:plugs, 'tsuquyomi')
+    if has_key(g:plugs, 'syntastic')
+        let g:tsuquyomi_disable_quickfix = 1
+        let g:syntastic_typescript_checkers = ['tsuquyomi']
+    endif
 endif
