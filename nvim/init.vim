@@ -40,55 +40,66 @@ Plug 'chrisbra/unicode.vim'
 "   \ 'do': 'bash ./install.sh'
 "   \ }
 
-Plug 'neoclide/coc.nvim', {'tag': 'release'}
+if !quick_mode
+    Plug 'neoclide/coc.nvim', {'tag': 'release'}
+endif
 
 " ==== color schemes ====
 Plug 'altercation/vim-colors-solarized'
-Plug 'spf13/vim-colors'
-Plug 'chriskempson/base16-vim'
-Plug 'freeo/vim-kalisi'
-Plug 'tomasr/molokai'
-Plug 'junegunn/seoul256.vim'
-Plug 'icymind/NeoSolarized'
-Plug 'joshdick/OneDark.vim'
-Plug 'rakr/vim-one'
-Plug 'cormacrelf/vim-colors-github'
+
+if !quick_mode
+    Plug 'spf13/vim-colors'
+    Plug 'chriskempson/base16-vim'
+    Plug 'freeo/vim-kalisi'
+    Plug 'tomasr/molokai'
+    Plug 'junegunn/seoul256.vim'
+    Plug 'icymind/NeoSolarized'
+    Plug 'joshdick/OneDark.vim'
+    Plug 'rakr/vim-one'
+    Plug 'cormacrelf/vim-colors-github'
+endif
 
 " ==== haskell ====
-" Plug 'KabbAmine/zeavim.vim'
-" Plug 'raichoo/haskell-vim'
-Plug 'neovimhaskell/haskell-vim'
-"Plug 'alx741/vim-stylishask'
-"Plug 'nbouscal/vim-stylish-haskell'
-Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius' ] }
-" Plug 'bitc/vim-hdevtools'
-" Plug 'eagletmt/ghcmod-vim'
-" Plug 'eagletmt/neco-ghc'
-" Plug 'kana/vim-textobj-user' | Plug 'gilligan/vim-textobj-haskell'
-" Plug 'ndmitchell/ghcid', { 'rtp': 'plugins/nvim' }
+if !quick_mode
+    " Plug 'KabbAmine/zeavim.vim'
+    " Plug 'raichoo/haskell-vim'
+    Plug 'neovimhaskell/haskell-vim'
+    "Plug 'alx741/vim-stylishask'
+    "Plug 'nbouscal/vim-stylish-haskell'
+    Plug 'pbrisbin/vim-syntax-shakespeare', { 'for': [ 'hamlet', 'cassius', 'julius' ] }
+    " Plug 'bitc/vim-hdevtools'
+    " Plug 'eagletmt/ghcmod-vim'
+    " Plug 'eagletmt/neco-ghc'
+    " Plug 'kana/vim-textobj-user' | Plug 'gilligan/vim-textobj-haskell'
+    " Plug 'ndmitchell/ghcid', { 'rtp': 'plugins/nvim' }
 
-" Plug 'parsonsmatt/intero-neovim'
+    " Plug 'parsonsmatt/intero-neovim'
 
-" Plug 'enomsg/vim-haskellConcealPlus'
-
-" ==== web ====
-" Plug 'posva/vim-vue'
-" Plug 'digitaltoad/vim-pug'
+    " Plug 'enomsg/vim-haskellConcealPlus'
+endif
 
 " ==== JavaScript JS ====
-Plug 'pangloss/vim-javascript'
+if !quick_mode
+    Plug 'pangloss/vim-javascript'
+endif
 
 " ==== TypeScript ====
 if !quick_mode
-    Plug 'Quramy/tsuquyomi'
+    " conflicts with <c-^>
+    " Plug 'Quramy/tsuquyomi'
+
     Plug 'HerringtonDarkholme/yats.vim'
 endif
 
 " ==== HTML CSS ====
-Plug 'mattn/emmet-vim'
+if !quick_mode
+    Plug 'mattn/emmet-vim'
+endif
 
 " ==== VUE ====
-Plug 'posva/vim-vue'
+if !quick_mode
+    Plug 'posva/vim-vue'
+endif
 
 " ==== git ====
 Plug 'tpope/vim-fugitive'
@@ -144,7 +155,9 @@ Plug 'milkypostman/vim-togglelist'
 " Plug 'Shougo/neosnippet-snippets'
 
 " === SQL ==
-Plug 'lifepillar/pgsql.vim'
+if !quick_mode
+    Plug 'lifepillar/pgsql.vim'
+endif
 
 " === experiment ==
 Plug 'junegunn/vim-peekaboo'
@@ -572,7 +585,7 @@ if has_key(g:plugs, 'NeoSolarized')
     let g:favorite_color_schemes += [ [ 'NeoSolarized', 'bg=dark' ], [ 'NeoSolarized', 'bg=light' ] ]
 endif
 
-if !exists("g:picked_favorite_color_scheme")
+if !quick_mode && !exists("g:picked_favorite_color_scheme")
     if quick_mode
         set bg=dark
         colorscheme NeoSolarized
