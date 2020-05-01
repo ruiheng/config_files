@@ -46,6 +46,7 @@ endif
 
 " ==== color schemes ====
 Plug 'altercation/vim-colors-solarized'
+Plug 'icymind/NeoSolarized'
 
 if !quick_mode
     Plug 'spf13/vim-colors'
@@ -53,7 +54,6 @@ if !quick_mode
     Plug 'freeo/vim-kalisi'
     Plug 'tomasr/molokai'
     Plug 'junegunn/seoul256.vim'
-    Plug 'icymind/NeoSolarized'
     Plug 'joshdick/OneDark.vim'
     Plug 'rakr/vim-one'
     Plug 'cormacrelf/vim-colors-github'
@@ -585,13 +585,13 @@ if has_key(g:plugs, 'NeoSolarized')
     let g:favorite_color_schemes += [ [ 'NeoSolarized', 'bg=dark' ], [ 'NeoSolarized', 'bg=light' ] ]
 endif
 
-if !quick_mode && !exists("g:picked_favorite_color_scheme")
-    if quick_mode
-        set bg=dark
-        colorscheme NeoSolarized
-    else
+if !quick_mode
+    if !exists("g:picked_favorite_color_scheme")
         let g:picked_favorite_color_scheme = RandomChooseFavoriteColorScheme()
     endif
+else
+    set bg=dark
+    colorscheme NeoSolarized
 endif
 
 " ---------------------------------------------
