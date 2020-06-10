@@ -41,7 +41,7 @@ Plug 'chrisbra/unicode.vim'
 "   \ }
 
 if !quick_mode
-    Plug 'neoclide/coc.nvim', {'tag': 'release'}
+    " Plug 'neoclide/coc.nvim', {'tag': 'release'}
 endif
 
 " ==== color schemes ====
@@ -136,7 +136,7 @@ Plug 'kshenoy/vim-signature'
 " Plug 'Shougo/neocomplete.vim'
 
 if has('nvim')
-   " Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' } | Plug 'tbodt/deoplete-tabnine', { 'do': './install.sh' }
+   Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' } | Plug 'tbodt/deoplete-tabnine', { 'do': './install.sh' }
 endif
 
 Plug 'blueyed/vim-diminactive'
@@ -705,9 +705,10 @@ endif
 if has_key(g:plugs, 'deoplete.nvim')
     if has('python3')
         " Use deoplete.
-        let g:deoplete#enable_at_startup = 1
-        " Use smartcase.
-        let g:deoplete#enable_smart_case = 1
+        call deoplete#custom#option({
+          \ 'enable_at_startup': 1,
+          \ 'enable_smart_case': 1,
+          \ })
 
         " <C-h>, <BS>: close popup and delete backword char.
         inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
