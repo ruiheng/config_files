@@ -42,7 +42,11 @@ Plug 'chrisbra/unicode.vim'
 "   \ }
 
 if !quick_mode
-    " Plug 'neoclide/coc.nvim', {'tag': 'release'}
+    Plug 'neoclide/coc.nvim', {'tag': 'release'}
+endif
+
+if !quick_mode
+    " Plug 'bfrg/vim-qf-tooltip'        " syntax error ?
 endif
 
 " ==== color schemes ====
@@ -137,7 +141,7 @@ Plug 'kshenoy/vim-signature'
 " Plug 'Shougo/neocomplete.vim'
 
 if has('nvim')
-   Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' } | Plug 'tbodt/deoplete-tabnine', { 'do': './install.sh' }
+   " Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' } | Plug 'tbodt/deoplete-tabnine', { 'do': './install.sh' }
 endif
 
 Plug 'blueyed/vim-diminactive'
