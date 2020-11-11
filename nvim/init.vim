@@ -42,7 +42,7 @@ Plug 'chrisbra/unicode.vim'
 "   \ }
 
 if !quick_mode
-    Plug 'neoclide/coc.nvim', {'tag': 'release'}
+    Plug 'neoclide/coc.nvim', {'branch': 'release'}
 endif
 
 if !quick_mode
