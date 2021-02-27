@@ -310,6 +310,7 @@ let g:ghc_error_format = join([
                 \ '%-GBuilding executable %.%#',
                 \ ], ',')
 
+
 if has_key(g:plugs, 'neomake')
     nnoremap <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
 
@@ -327,7 +328,7 @@ if has_key(g:plugs, 'neomake')
         let haskell_stack_build_flags = readfile(haskell_stack_build_flags_file)
     endif
 
-    let haskell_stack_build_args = ['build', '--fast', '.' ]
+    let haskell_stack_build_args = ['build', '--no-terminal', '--fast', '.' ]
     if len(haskell_stack_build_flags) > 0
         let haskell_stack_build_args = ['build'] + haskell_stack_build_flags
     endif
