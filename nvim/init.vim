@@ -42,7 +42,8 @@ Plug 'chrisbra/unicode.vim'
 "   \ }
 
 if !quick_mode
-    Plug 'neoclide/coc.nvim', {'branch': 'release'}
+    " Plug 'neoclide/coc.nvim', {'branch': 'release'}
+    Plug 'codota/tabnine-vim'
 endif
 
 if !quick_mode
@@ -258,6 +259,9 @@ au TabLeave * let g:lasttab = tabpagenr()
 " do not highlight current item in quickfix window
 highlight! link QuickFixLine Normal
 
+if has_key(g:plugs, 'tabnine-vim') || has_key(g:plugs, 'YouCompleteMe')
+    let g:ycm_key_list_select_completion = ['<Down>']
+endif
 
 if has_key(g:plugs, 'unicode.vim')
     " vmap <leader>dg <Plug>(MakeDigraph)
