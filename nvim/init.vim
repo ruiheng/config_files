@@ -14,7 +14,8 @@ call plug#begin('~/.vim/plugged')
 
 Plug 'tpope/vim-repeat'
 Plug 'vim-scripts/visualrepeat'
-Plug 'tpope/vim-surround'
+" Plug 'tpope/vim-surround'
+Plug 'machakann/vim-sandwich'
 Plug 'jeffkreeftmeijer/vim-numbertoggle'
 Plug 'easymotion/vim-easymotion'
 Plug 'unblevable/quick-scope'
