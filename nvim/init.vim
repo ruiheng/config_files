@@ -64,6 +64,7 @@ if !quick_mode
     Plug 'joshdick/OneDark.vim'
     Plug 'rakr/vim-one'
     Plug 'cormacrelf/vim-colors-github'
+    Plug 'Luxed/ayu-vim'
 endif
 
 " ==== haskell ====
@@ -572,7 +573,6 @@ nnoremap <F3> :call NextFavoriteColorScheme()<CR>
 
 " a list of color scheme to be picked randomly.
 let g:favorite_color_schemes = [
-        \ [ "darkblue", "bg=dark" ],
         \ [ "base16-solarized-dark", "bg=dark" ],
         \ [ "base16-solarized-light", "bg=light" ],
         \ [ "base16-flat", "bg=dark" ],
@@ -580,11 +580,10 @@ let g:favorite_color_schemes = [
         \ [ "base16-ocean", "bg=light" ],
         \ [ "base16-eighties", "bg=dark" ],
         \ [ "base16-eighties", "bg=light" ],
-        \ [ "base16-mocha", "bg=dark" ],
-        \ [ "base16-mocha", "bg=light" ],
-        \ [ "base16-atelier-estuary", "bg=light" ],
         \ [ "kalisi", "bg=light" ],
         \ [ "kalisi", "bg=dark" ],
+        \ [ "ayu", "bg=light" ],
+        \ [ "ayu", "bg=dark" ],
         \ ]
 
 if has_key(g:plugs, 'OneDark.vim')
