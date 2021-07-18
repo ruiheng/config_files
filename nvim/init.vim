@@ -377,7 +377,7 @@ if has_key(g:plugs, 'vim-airline')
 endif
 
 if has_key(g:plugs, 'fzf.vim')
-    nnoremap <leader>f :Files<CR>
+    nnoremap <leader>f :GFiles<CR>
     nnoremap <leader>B :Buffers<CR>
     nnoremap <leader>T :Tags<CR>
 endif
