@@ -23,6 +23,8 @@ Plug 'tpope/vim-abolish'
 Plug 'yuttie/comfortable-motion.vim'
 Plug 'equalsraf/neovim-gui-shim'
 Plug 'machakann/vim-highlightedyank'
+Plug 't9md/vim-choosewin'
+Plug 'szw/vim-maximizer'
 
 if !quick_mode
     Plug 'benekastah/neomake'
@@ -364,6 +366,11 @@ if has_key(g:plugs, 'neomake')
 
 endif
 
+
+if has_key(g:plugs, 'vim-choosewin')
+    nmap  -  <Plug>(choosewin)
+    let g:choosewin_overlay_enable = 1
+endif
 
 if has_key(g:plugs, 'ale')
     if !exists('g:ale_fixers')
