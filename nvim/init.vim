@@ -569,7 +569,7 @@ function NextFavoriteColorScheme()
     redraw
 endfunction
 
-nnoremap <F3> :call NextFavoriteColorScheme()<CR>
+nnoremap <leader>cs :call NextFavoriteColorScheme()<CR>
 
 " a list of color scheme to be picked randomly.
 let g:favorite_color_schemes = [
