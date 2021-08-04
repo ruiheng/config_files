@@ -44,6 +44,14 @@ Plug 'chrisbra/unicode.vim'
 "   \ 'do': 'bash ./install.sh'
 "   \ }
 
+if !quick_mode && has('nvim')
+    Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
+endif
+
+if !quick_mode && has('nvim')
+    Plug 'kevinhwang91/nvim-bqf'
+endif
+
 if !quick_mode
     " Plug 'neoclide/coc.nvim', {'branch': 'release'}
     Plug 'codota/tabnine-vim'
