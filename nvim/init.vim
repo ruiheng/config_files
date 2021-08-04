@@ -149,7 +149,7 @@ if has('nvim')
    " Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' } | Plug 'tbodt/deoplete-tabnine', { 'do': './install.sh' }
 endif
 
-Plug 'blueyed/vim-diminactive'
+" Plug 'blueyed/vim-diminactive'
 " Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim'
 " Plug 'Shougo/denite.nvim' | Plug 'Shougo/neomru.nvim'
