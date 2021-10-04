@@ -49,7 +49,7 @@ if !quick_mode && has('nvim')
 endif
 
 if !quick_mode && has('nvim')
-    Plug 'kevinhwang91/nvim-bqf'
+    " Plug 'kevinhwang91/nvim-bqf'
 endif
 
 if !quick_mode
