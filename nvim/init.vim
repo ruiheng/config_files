@@ -54,7 +54,8 @@ endif
 
 if !quick_mode
     " Plug 'neoclide/coc.nvim', {'branch': 'release'}
-    Plug 'codota/tabnine-vim'
+    " Plug 'codota/tabnine-vim'
+    Plug 'tabnine/YouCompleteMe', {'do': 'python3 ./install.py --all'}
 endif
 
 if !quick_mode
