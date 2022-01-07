@@ -25,6 +25,7 @@ Plug 'equalsraf/neovim-gui-shim'
 Plug 'machakann/vim-highlightedyank'
 Plug 't9md/vim-choosewin'
 Plug 'szw/vim-maximizer'
+Plug 'azabiong/vim-highlighter'
 
 if !quick_mode
     Plug 'benekastah/neomake'
@@ -60,6 +61,27 @@ endif
 
 if !quick_mode
     " Plug 'bfrg/vim-qf-tooltip'        " syntax error ?
+endif
+
+if !quick_mode && has('nvim')
+   " Plug 'kyazdani42/nvim-web-devicons'
+   " Plug 'folke/trouble.nvim'
+endif
+
+
+if !quick_mode
+   " support vim only, not nvim
+   if !has('nvim')
+      Plug 'bfrg/vim-qf-diagnostics'
+   endif
+   " if has('nvim')
+   "    Plug 'nvim-lua/plenary.nvim'
+   "    Plug 'nvim-lua/popup.nvim'
+   " endif
+endif
+
+if !quick_mode
+   Plug 'AndrewRadev/sideways.vim'
 endif
 
 " ==== color schemes ====
@@ -772,4 +794,20 @@ if has_key(g:plugs, 'tsuquyomi')
         let g:tsuquyomi_disable_quickfix = 1
         let g:syntastic_typescript_checkers = ['tsuquyomi']
     endif
+endif
+
+if has_key(g:plugs, 'trouble.nvim')
+    nnoremap <leader>tq <cmd>TroubleToggle quickfix<cr>
+    nnoremap <leader>tl <cmd>TroubleToggle loclist<cr>
+endif
+
+if has_key(g:plugs, 'vim-qf-diagnostics')
+    nmap gh <plug>(qf-diagnostics-popup-quickfix)
+    nmap gH <plug>(qf-diagnostics-popup-loclist)
+endif
+
+
+if has_key(g:plugs, 'sideways.vim')
+    nnoremap <leader>xh :SidewaysLeft<cr>
+    nnoremap <leader>xl :SidewaysRight<cr>
 endif
