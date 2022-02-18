@@ -37,6 +37,16 @@ Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
 
 Plug 'chrisbra/unicode.vim'
 
+if !quick_mode && has('nvim')
+    " Plug 'lukas-reineke/indent-blankline.nvim'
+endif
+
+if !quick_mode && has('nvim')
+    let g:minisurround_disable=v:true
+    let g:minicompletion_disable=v:true
+    let g:ministarter_disable=v:true
+    Plug 'echasnovski/mini.nvim'
+endif
 
 " ==== general language plugins ====
 
@@ -810,4 +820,23 @@ endif
 if has_key(g:plugs, 'sideways.vim')
     nnoremap <leader>xh :SidewaysLeft<cr>
     nnoremap <leader>xl :SidewaysRight<cr>
+endif
+
+if has_key(g:plugs, 'indent-blankline.nvim')
+lua <<EOF
+    require("indent_blankline").setup {
+        -- for example, context is off by default, use this to turn it on
+        show_current_context = true,
+        show_current_context_start = true,
+        use_treesitter = true,
+    }
+EOF
+endif
+
+
+if has_key(g:plugs, 'mini.nvim')
+lua <<EOF
+    require("mini.indentscope").setup {
+    }
+EOF
 endif
