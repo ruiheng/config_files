@@ -161,8 +161,13 @@ Plug 'mhinz/vim-signify'
 " Plug 'xolox/vim-misc' | Plug 'xolox/vim-session'
 " Plug 'tpope/vim-obsession'
 
-Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
-Plug 'junegunn/fzf.vim'
+if has('nvim')
+    Plug 'nvim-lua/plenary.nvim'
+    Plug 'nvim-telescope/telescope.nvim'
+else
+    Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+    Plug 'junegunn/fzf.vim'
+endif
 
 if !quick_mode
     "Plug 'kien/ctrlp.vim'
@@ -430,6 +435,13 @@ if has_key(g:plugs, 'fzf.vim')
     nnoremap <leader>T :Tags<CR>
 endif
 
+if has_key(g:plugs, 'telescope.nvim')
+    nnoremap <leader>f <cmd>Telescope find_files<cr>
+    nnoremap <leader>L <cmd>Telescope live_grep<cr>
+    nnoremap <leader>B <cmd>Telescope buffers<cr>
+    nnoremap <leader>H <cmd>Telescope help_tags<cr>
+    nnoremap <leader>T <cmd>Telescope tags<cr>
+endif
 if has_key(g:plugs, 'ctrlp.vim')
     let g:ctrlp_open_new_file = 'r'
     let g:ctrlp_map = '<leader>p'
