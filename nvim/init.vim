@@ -38,6 +38,10 @@ Plug 'kana/vim-textobj-user' | Plug 'machakann/vim-textobj-delimited'
 Plug 'chrisbra/unicode.vim'
 
 if !quick_mode && has('nvim')
+    " Plug 'github/copilot.vim'
+endif
+
+if !quick_mode && has('nvim')
     " Plug 'lukas-reineke/indent-blankline.nvim'
 endif
 
@@ -443,6 +447,7 @@ if has_key(g:plugs, 'telescope.nvim')
     nnoremap <leader>H <cmd>Telescope help_tags<cr>
     nnoremap <leader>T <cmd>Telescope tags<cr>
 endif
+
 if has_key(g:plugs, 'ctrlp.vim')
     let g:ctrlp_open_new_file = 'r'
     let g:ctrlp_map = '<leader>p'
