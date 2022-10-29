@@ -17,7 +17,6 @@ Plug 'vim-scripts/visualrepeat'
 " Plug 'tpope/vim-surround'
 Plug 'machakann/vim-sandwich'
 Plug 'jeffkreeftmeijer/vim-numbertoggle'
-Plug 'easymotion/vim-easymotion'
 Plug 'unblevable/quick-scope'
 Plug 'tpope/vim-abolish'
 Plug 'yuttie/comfortable-motion.vim'
@@ -26,6 +25,12 @@ Plug 'machakann/vim-highlightedyank'
 Plug 't9md/vim-choosewin'
 Plug 'szw/vim-maximizer'
 Plug 'azabiong/vim-highlighter'
+
+if has('nvim')
+    Plug 'ggandor/leap.nvim'
+else
+    Plug 'easymotion/vim-easymotion'
+endif
 
 if !quick_mode
     Plug 'benekastah/neomake'
@@ -46,6 +51,11 @@ if !quick_mode && has('nvim')
 endif
 
 if !quick_mode && has('nvim')
+    Plug 'MunifTanjim/nui.nvim' | Plug 'rcarriga/nvim-notify'
+    Plug 'folke/noice.nvim', { 'on': 'VimEnter' }
+endif
+
+if !quick_mode && has('nvim')
     let g:minisurround_disable=v:true
     let g:minicompletion_disable=v:true
     let g:ministarter_disable=v:true
@@ -61,6 +71,7 @@ endif
 
 if !quick_mode && has('nvim')
     Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
+    Plug 'nvim-treesitter/nvim-treesitter-textobjects'
 endif
 
 if !quick_mode && has('nvim')
@@ -485,6 +496,10 @@ if has_key(g:plugs, 'vim-easymotion')
     nmap <Plug>(easymotion-prefix)S <Plug>(easymotion-overwin-f)
 endif
 
+if has_key(g:plugs, 'leap.nvim')
+    lua require('leap').add_default_mappings()
+endif
+
 
 if has_key(g:plugs, 'comfortable-motion.vim')
     let g:comfortable_motion_friction = 0.0
@@ -708,6 +723,59 @@ augroup checktime
    endif
 augroup END
 " ---------------------------------------------
+
+if has_key(g:plugs, 'noice.nvim')
+lua <<EOF
+    require 'noice'.setup {
+        messages = { enabled = false }
+    }
+EOF
+endif
+
+
+if has_key(g:plugs, 'nvim-treesitter')
+lua <<EOF
+require 'nvim-treesitter.configs'.setup {
+        textobjects = {
+            select = {
+                enable = true,
+                lookahead = true,
+                keymaps = {
+                    ["af"] = "@function.outer",
+                    ["if"] = "@function.inner",
+                    ["ac"] = "@class.outer",
+                    ["ic"] = "@class.inner"
+                }
+            },
+            move = {
+                enable = true,
+                set_jumps = true,
+                goto_next_start = {
+                    [']m'] = '@function.outer',
+                    [']['] = '@class.outer',
+                },
+                goto_next_end = {
+                    [']M'] = '@function.outer',
+                    [']]'] = '@class.outer',
+                },
+                goto_previous_start = {
+                    ['[m'] = '@function.outer',
+                    ['[['] = '@class.outer',
+                },
+                goto_previous_end = {
+                    ['[M'] = '@function.outer',
+                    ['[]'] = '@class.outer',
+                },
+            },
+            swap = {
+                enable = true,
+                swap_next = { ['<leader>xp'] = '@parameter.inner'},
+                swap_previous = { ['<leader>xP'] = '@parameter.inner'},
+            }
+        }
+}
+EOF
+endif
 
 
 if has_key(g:plugs, 'tagbar')
