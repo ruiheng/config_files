@@ -337,10 +337,10 @@ cabbrev lag
       \ <C-Left><C-Left><C-Left>
 
 " =============== toggle cursorline and cursorcolumn ===========
-nnoremap <leader>cc :set cuc! cul!<CR>
+nnoremap <silent> <leader>cc :set cuc! cul!<CR>
 
 " =============== toggle number display ===========
-nnoremap <leader>n :set nu! rnu!<CR>
+nnoremap <silent> <leader>n :set nu! rnu!<CR>
 
 " =============== toggle paste mode ===========
 nnoremap <leader>p :set paste!<CR>
@@ -367,7 +367,7 @@ let g:ghc_error_format = join([
 
 
 if has_key(g:plugs, 'neomake')
-    nnoremap <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
+    nnoremap <silent> <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
 
     " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
     " let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
@@ -635,7 +635,7 @@ function NextFavoriteColorScheme()
     redraw
 endfunction
 
-nnoremap <leader>cs :call NextFavoriteColorScheme()<CR>
+nnoremap <silent> <leader>cs :call NextFavoriteColorScheme()<CR>
 
 " a list of color scheme to be picked randomly.
 let g:favorite_color_schemes = [
@@ -750,17 +750,17 @@ endif
 
 if has_key(g:plugs, 'vim-wintabs')
 
-    nnoremap <leader>1 :WintabsGo 1<CR>
-    nnoremap <leader>2 :WintabsGo 2<CR>
-    nnoremap <leader>3 :WintabsGo 3<CR>
-    nnoremap <leader>4 :WintabsGo 4<CR>
-    nnoremap <leader>5 :WintabsGo 5<CR>
-    nnoremap <leader>6 :WintabsGo 6<CR>
-    nnoremap <leader>7 :WintabsGo 7<CR>
-    nnoremap <leader>8 :WintabsGo 8<CR>
-    nnoremap <leader>9 :WintabsGo 9<CR>
-    nnoremap <leader>0 :WintabsGo 10<CR>
-    nnoremap <leader>$ :WintabsLast<CR>
+    nnoremap <silent> <leader>1 :WintabsGo 1<CR>
+    nnoremap <silent> <leader>2 :WintabsGo 2<CR>
+    nnoremap <silent> <leader>3 :WintabsGo 3<CR>
+    nnoremap <silent> <leader>4 :WintabsGo 4<CR>
+    nnoremap <silent> <leader>5 :WintabsGo 5<CR>
+    nnoremap <silent> <leader>6 :WintabsGo 6<CR>
+    nnoremap <silent> <leader>7 :WintabsGo 7<CR>
+    nnoremap <silent> <leader>8 :WintabsGo 8<CR>
+    nnoremap <silent> <leader>9 :WintabsGo 9<CR>
+    nnoremap <silent> <leader>0 :WintabsGo 10<CR>
+    nnoremap <silent> <leader>$ :WintabsLast<CR>
 
     nmap gb <Plug>(wintabs_next)
     nmap gB <Plug>(wintabs_previous)
