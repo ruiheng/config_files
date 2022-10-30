@@ -269,14 +269,14 @@ elseif executable('ag')
   set gp=ag\ --vimgrep
 endif
 
-nnoremap ,1 :tabn 1<CR>
-nnoremap ,2 :tabn 2<CR>
-nnoremap ,3 :tabn 3<CR>
-nnoremap ,4 :tabn 4<CR>
-nnoremap ,6 :tabn 6<CR>
-nnoremap ,7 :tabn 7<CR>
-nnoremap ,8 :tabn 8<CR>
-nnoremap ,9 :tabn 9<CR>
+nnoremap <silent> ,1 :tabn 1<CR>
+nnoremap <silent> ,2 :tabn 2<CR>
+nnoremap <silent> ,3 :tabn 3<CR>
+nnoremap <silent> ,4 :tabn 4<CR>
+nnoremap <silent> ,6 :tabn 6<CR>
+nnoremap <silent> ,7 :tabn 7<CR>
+nnoremap <silent> ,8 :tabn 8<CR>
+nnoremap <silent> ,9 :tabn 9<CR>
 
 vnoremap <F2> "0p
 nnoremap <F2> viw"0p
