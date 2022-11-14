@@ -51,8 +51,8 @@ if !quick_mode && has('nvim')
 endif
 
 if !quick_mode && has('nvim')
-    Plug 'MunifTanjim/nui.nvim' | Plug 'rcarriga/nvim-notify'
-    Plug 'folke/noice.nvim', { 'on': 'VimEnter' }
+    " Plug 'MunifTanjim/nui.nvim' | Plug 'rcarriga/nvim-notify'
+    " Plug 'folke/noice.nvim', { 'on': 'VimEnter' }
 endif
 
 if !quick_mode && has('nvim')
