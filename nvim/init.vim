@@ -2,6 +2,30 @@ if !exists('quick_mode')
     let quick_mode = 0
 endif
 
+if !exists('haskell_mode')
+    let haskell_mode = 0
+
+    if !quick_mode
+        if filereadable(expand('*.cabal')) || filereadable(expand('*.hs'))
+            let haskell_mode = 1
+        endif
+    endif
+endif
+
+if !exists('rust_mode')
+    let rust_mode = 0
+
+    if !quick_mode
+        if filereadable('Cargo.toml') || filereadable(expand('*.rs'))
+            let rust_mode = 1
+        endif
+    endif
+endif
+
+if !exists('enable_lsp')
+    let enable_lsp = haskell_mode || rust_mode
+endif
+
 "============= ctrlspace ===============
 if executable("ag")
     let g:CtrlSpaceGlobCommand = 'ag -l --nocolor -g ""'
@@ -125,8 +149,21 @@ if !quick_mode
     Plug 'Luxed/ayu-vim'
 endif
 
+
+if enable_lsp && has('nvim')
+    Plug 'neovim/nvim-lspconfig'
+endif
+
+
+if rust_mode && has('nvim')
+    Plug 'williamboman/mason.nvim'
+    Plug 'williamboman/mason-lspconfig.nvim'
+    Plug 'simrat39/rust-tools.nvim'
+endif
+
+
 " ==== haskell ====
-if !quick_mode
+if haskell_mode
     " Plug 'KabbAmine/zeavim.vim'
     " Plug 'raichoo/haskell-vim'
     Plug 'neovimhaskell/haskell-vim'
@@ -297,7 +334,7 @@ function MySetWigForHaskell ()
     set wig+=*.o,*.hi,*.dyn_hi,*.dyn_o,*/dist/*,cabal.sandbox.config,*.keter
 endfunction
 
-if filereadable(expand('*.cabal'))
+if haskell_mode
     call MySetWigForHaskell()
 endif
 
@@ -358,74 +395,75 @@ nnoremap <leader>p :set paste!<CR>
 
 " ================ stack build commands ==========
 
-let g:ghc_error_format = join([
-                \ '%E%f:%l:%c: error:%m',
-                \ '%E%f:%l:%c: error:',
-                \ '%W%f:%l:%c: warning:%m',
-                \ '%W%f:%l:%c: warning:',
-                \ '%-C %[ ]%#|',
-                \ '%-C %[ %\\d]%#|%.%#',
-                \ '%C %[ ]%#%m',
-                \ '%-Z',
-                \ '%-G%.%#: unregistering %.%#',
-                \ '%-G%.%#: build %.%#',
-                \ '%-G%.%#: copy/register',
-                \ '%-GPreprocessing library for %.%#',
-                \ '%-GPreprocessing executable %.%#',
-                \ '%-GBuilding library for %.%#',
-                \ '%-GBuilding executable %.%#',
-                \ ], ',')
+if haskell_mode
+    let g:ghc_error_format = join([
+                    \ '%E%f:%l:%c: error:%m',
+                    \ '%E%f:%l:%c: error:',
+                    \ '%W%f:%l:%c: warning:%m',
+                    \ '%W%f:%l:%c: warning:',
+                    \ '%-C %[ ]%#|',
+                    \ '%-C %[ %\\d]%#|%.%#',
+                    \ '%C %[ ]%#%m',
+                    \ '%-Z',
+                    \ '%-G%.%#: unregistering %.%#',
+                    \ '%-G%.%#: build %.%#',
+                    \ '%-G%.%#: copy/register',
+                    \ '%-GPreprocessing library for %.%#',
+                    \ '%-GPreprocessing executable %.%#',
+                    \ '%-GBuilding library for %.%#',
+                    \ '%-GBuilding executable %.%#',
+                    \ ], ',')
 
 
-if has_key(g:plugs, 'neomake')
-    nnoremap <silent> <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
+    if has_key(g:plugs, 'neomake')
+        nnoremap <silent> <leader>ca :wa \| cexpr [] \| Neomake! stack<CR>
 
-    " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
-    " let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
+        " let g:neomake_cabal_errorformat = "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m"
+        " let g:neomake_cabal_maker = neomake#makers#cabal#cabal()
 
-    " 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
-                " \ '%-GInstalling library in %.%#',
-                " \ '%-GRegistering library for %.%#',
+        " 'errorformat': "%+C    %m,%W%f:%l:%c: Warning:,%E%f:%l:%c:,%f:%l:%c: %m,%f:%l:%c: Warning: %m,%+G%m",
+                    " \ '%-GInstalling library in %.%#',
+                    " \ '%-GRegistering library for %.%#',
 
-    let haskell_stack_build_flags_file = "stack-build-flags.txt"
-    let haskell_stack_build_flags = []
+        let haskell_stack_build_flags_file = "stack-build-flags.txt"
+        let haskell_stack_build_flags = []
 
-    if filereadable(haskell_stack_build_flags_file)
-        let haskell_stack_build_flags = readfile(haskell_stack_build_flags_file)
-    endif
-
-    let haskell_stack_build_args = ['build', '--no-terminal', '--fast', '.' ]
-    if len(haskell_stack_build_flags) > 0
-        let haskell_stack_build_args = ['build'] + haskell_stack_build_flags
-    endif
-
-    let g:neomake_stack_maker = {
-            \ 'exe': 'stack',
-            \ 'args': haskell_stack_build_args,
-            \ 'buffer_output': 0,
-            \ 'errorformat': g:ghc_error_format
-            \ }
-
-    let ghc_compile_flags_file = "ghc-compile-flags.txt"
-    let ghc_compile_flags = []
-
-    if filereadable(ghc_compile_flags_file)
-        let ghc_compile_flags = readfile(ghc_compile_flags_file)
-        let ghc_compile_output_dir = trim(system('stack path --dist-dir')) . '/build'
-        let ghc_compile_args = ['ghc', '--', '-odir', ghc_compile_output_dir, '-hidir', ghc_compile_output_dir, '-c']
-        if len(ghc_compile_flags) > 0
-            let ghc_compile_args = ghc_compile_args + ghc_compile_flags
+        if filereadable(haskell_stack_build_flags_file)
+            let haskell_stack_build_flags = readfile(haskell_stack_build_flags_file)
         endif
 
-        let g:neomake_haskell_ghc_maker = {
+        let haskell_stack_build_args = ['build', '--no-terminal', '--fast', '.' ]
+        if len(haskell_stack_build_flags) > 0
+            let haskell_stack_build_args = ['build'] + haskell_stack_build_flags
+        endif
+
+        let g:neomake_stack_maker = {
                 \ 'exe': 'stack',
-                \ 'args': ghc_compile_args,
+                \ 'args': haskell_stack_build_args,
                 \ 'buffer_output': 0,
                 \ 'errorformat': g:ghc_error_format
                 \ }
-        let g:neomake_haskell_enabled_makers = [ 'ghc' ]
-    endif
 
+        let ghc_compile_flags_file = "ghc-compile-flags.txt"
+        let ghc_compile_flags = []
+
+        if filereadable(ghc_compile_flags_file)
+            let ghc_compile_flags = readfile(ghc_compile_flags_file)
+            let ghc_compile_output_dir = trim(system('stack path --dist-dir')) . '/build'
+            let ghc_compile_args = ['ghc', '--', '-odir', ghc_compile_output_dir, '-hidir', ghc_compile_output_dir, '-c']
+            if len(ghc_compile_flags) > 0
+                let ghc_compile_args = ghc_compile_args + ghc_compile_flags
+            endif
+
+            let g:neomake_haskell_ghc_maker = {
+                    \ 'exe': 'stack',
+                    \ 'args': ghc_compile_args,
+                    \ 'buffer_output': 0,
+                    \ 'errorformat': g:ghc_error_format
+                    \ }
+            let g:neomake_haskell_enabled_makers = [ 'ghc' ]
+        endif
+    endif
 endif
 
 
@@ -596,15 +634,16 @@ if has_key(g:plugs, 'LanguageClient-neovim')
 endif
 
 " ================ call stylish-haskell command ==========
-function RunStylishHaskell ()
-    if &filetype == 'haskell'
-        echo "running"
-        %!stylish-haskell
-    endif
-endfunction
+if haskell_mode
+    function RunStylishHaskell ()
+        if &filetype == 'haskell'
+            echo "running"
+            %!stylish-haskell
+        endif
+    endfunction
 
-nnoremap <leader>hs call RunStylishHaskell()<CR>
-
+    nnoremap <leader>hs call RunStylishHaskell()<CR>
+endif
 
 if has_key(g:plugs, 'haskell-vim')
     let g:haskell_indent_disable=0
@@ -923,6 +962,32 @@ endif
 if has_key(g:plugs, 'mini.nvim')
 lua <<EOF
     require("mini.indentscope").setup {
+    }
+EOF
+endif
+
+
+if has_key(g:plugs, 'mason.nvim')
+lua <<EOF
+    require("mason").setup {
+    }
+EOF
+endif
+
+
+if has_key(g:plugs, 'rust-tools.nvim')
+lua <<EOF
+    local rt = require("rust-tools")
+
+    rt.setup {
+        server = {
+            on_attach = function(_, bufnr)
+                    -- Hover actions
+                    vim.keymap.set("n", "<C-space>", rt.hover_actions.hover_actions, { buffer = bufnr })
+                    -- code action groups
+                    vim.keymap.set("n", "<leader>a", rt.code_action_group.code_action_group, { buffer = bufnr })
+                end,
+        },
     }
 EOF
 endif
