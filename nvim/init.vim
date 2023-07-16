@@ -58,6 +58,7 @@ endif
 
 if !quick_mode
     Plug 'benekastah/neomake'
+    Plug 'sbdchd/neoformat'
 endif
 
 "Plug 'w0rp/ale'
@@ -392,6 +393,19 @@ nnoremap <silent> <leader>n :set nu! rnu!<CR>
 
 " =============== toggle paste mode ===========
 nnoremap <leader>p :set paste!<CR>
+
+if has_key(g:plugs, 'neoformat')
+    " let g:neoformat_verbose = 1
+    if haskell_mode
+        " let g:ormolu_ghc_opt = [ "TypeApplications", "RankNTypes" ]
+        let g:neoformat_haskell_fourmolu = {
+                    \ 'exe': 'fourmolu',
+                    \ 'args': ['--no-cabal'],
+                    \ 'stdin': 1,
+                    \ }
+        let g:neoformat_enabled_haskell = ['fourmolu']
+    endif
+endif
 
 " ================ stack build commands ==========
 
