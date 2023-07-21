@@ -1,13 +1,3 @@
 {
-  "languageserver": {
-          /*
-    "haskell": {
-      "command": "hie-wrapper",
-      "args": [ "+RTS", "-c", "-M1500M", "-K1G", "-A16M", "-RTS", "--lsp" ],
-      "rootPatterns": [ "stack.yaml", ".stack.yaml", "cabal.config", "package.yaml"],
-      "filetypes": ["hs", "lhs", "haskell"],
-      "initializationOptions": {}
-    }
-    */
-  }
+  "http.proxy": "http://vm-host:10809"
 }
