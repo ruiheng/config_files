@@ -1,3 +1,4 @@
+--[[
 local ht = require('haskell-tools')
 local def_opts = { noremap = true, silent = true, }
 ht.start_or_attach {
@@ -12,7 +13,6 @@ ht.start_or_attach {
     end,
   },
 }
-
 -- Suggested keymaps that do not depend on haskell-language-server:
 local bufnr = vim.api.nvim_get_current_buf()
 -- set buffer = bufnr in ftplugin/haskell.lua
@@ -25,6 +25,7 @@ vim.keymap.set('n', '<leader>rf', function()
   ht.repl.toggle(vim.api.nvim_buf_get_name(0))
 end, def_opts)
 vim.keymap.set('n', '<leader>rq', ht.repl.quit, opts)
+--]]
 
 -- Detect nvim-dap launch configurations
 -- (requires nvim-dap and haskell-debug-adapter)

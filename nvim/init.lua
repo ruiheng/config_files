@@ -55,12 +55,12 @@ for i = 1, 9 do
     vim.api.nvim_set_keymap('n', ','..i, ':tabn '..i..'<CR>', {noremap = true, silent = true})
 end
 
+-- about selecting and pasting text
 vim.api.nvim_set_keymap('v', '<F2>', '"0p', {noremap = true})
 vim.api.nvim_set_keymap('n', '<F2>', 'viw"0p', {noremap = true})
 
 -- see: http://vim.wikia.com/wiki/Selecting_your_pasted_text
-vim.api.nvim_set_keymap('n', '<leader>v', [[`]] .. vim.fn.strpart(vim.fn.getregtype(), 0, 1) .. [[`]], {noremap = true, expr = true})
-
+vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'")
 
 function my_set_local_tab_stop(n)
   vim.opt_local.tabstop = n
@@ -92,7 +92,7 @@ vim.api.nvim_set_keymap('n', '<leader>cc', ':set cuc! cul!<CR>', {noremap = true
 vim.api.nvim_set_keymap('n', '<leader>n', ':set nu! rnu!<CR>', {noremap = true, silent = true})
 
 -- Toggle paste mode
-vim.api.nvim_set_keymap('n', '<leader>p', ':set paste!<CR>', {noremap = true})
+-- vim.api.nvim_set_keymap('n', '<leader>pa', ':set paste!<CR>', {noremap = true})
 
 
 ---------------- lazy.nvim plugins -------------
@@ -113,15 +113,18 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
+    -- general behavior ---
     "tpope/vim-repeat",
     "vim-scripts/visualrepeat",
     "machakann/vim-sandwich",
     "jeffkreeftmeijer/vim-numbertoggle",
     "unblevable/quick-scope",
     "tpope/vim-abolish",
-    "yuttie/comfortable-motion.vim",
     "equalsraf/neovim-gui-shim",
     "machakann/vim-highlightedyank",
+
+    -- toggl, display and navigate marks
+    { 'kshenoy/vim-signature' },
 
     { "t9md/vim-choosewin",
       config = function ()
@@ -166,6 +169,7 @@ require("lazy").setup({
     },
 
     -- git --
+
     { 'tpope/vim-fugitive',
       config = function ()
         vim.api.nvim_set_keymap('n', '<leader>gs', ':Gstatus<CR>', {noremap = true, })
@@ -178,6 +182,31 @@ require("lazy").setup({
     'junegunn/gv.vim',
     'mhinz/vim-signify',
 
+    -- overall nvim behavior ---
+
+    { 'akinsho/bufferline.nvim',
+      dependencies =
+        { 'nvim-tree/nvim-web-devicons', -- optional
+        },
+      version = '*',
+
+      enabled = true,
+
+      config = require('plugin_setup.bufferline').config,
+    },
+
+    { 'tiagovla/scope.nvim',
+      enabled = true,
+      config = require('plugin_setup.scope').config,
+    },
+
+    { 'backdround/tabscope.nvim',
+      -- with tabscope, session could not be restored with all tabs and their buffers
+      -- only the 'active' buffer of each vim tab can be restored.
+      enabled = false,
+    },
+
+
     -- general programming ---
 
     { "neomake/neomake",
@@ -185,7 +214,7 @@ require("lazy").setup({
       end
     },
 
-    { "sbdchd/neoformat", lazy = true },
+    { "sbdchd/neoformat" },
 
     { "nvim-treesitter/nvim-treesitter",
       build = ':TSUpdate', -- We recommend updating the parsers on update
@@ -246,20 +275,30 @@ require("lazy").setup({
         local lspconfig = require('lspconfig')
         lspconfig.pyright.setup {}
         lspconfig.tsserver.setup {}
+
+        -- use either this or haskell-tools
+        -- lspconfig.hls.setup {}
       end
     },
 
-    {
-      "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
+    { "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
       config = function()
         local lsp_lines = require("lsp_lines")
         lsp_lines.setup()
 
         -- either use lsp_lines or nvim builtin virtual_text
         local function my_toggle()
-          local enabled = lsp_lines.toggle()
+          local old_value = vim.diagnostic.config().virtual_lines
+          local new_value
+          if old_value then
+            new_value = false
+          else
+            new_value = { only_current_line = true }
+          end
+
           vim.diagnostic.config({
-            virtual_text = not enabled,
+            virtual_text = not new_value,
+            virtual_lines = new_value,
           })
         end
 
@@ -274,12 +313,66 @@ require("lazy").setup({
       dependencies =  "nvim-treesitter/nvim-treesitter",
     },
 
+    { 'machakann/vim-textobj-delimited',
+      dependencies = 'kana/vim-textobj-user',
+    },
+
     "Exafunction/codeium.vim",
 
     { 'neoclide/coc.nvim', branch = 'release' },
 
+    {'kevinhwang91/nvim-ufo', dependencies = 'kevinhwang91/promise-async',
+      config = function()
+        vim.o.fillchars = [[eob: ,fold: ,foldopen:,foldsep: ,foldclose:]]
+        vim.o.foldcolumn = '1' -- '0' is not bad
+        vim.o.foldlevel = 99 -- Using ufo provider need a large value, feel free to decrease the value
+        vim.o.foldlevelstart = 99
+        vim.o.foldenable = true
+
+        -- Using ufo provider need remap `zR` and `zM`. If Neovim is 0.6.1, remap yourself
+        vim.keymap.set('n', 'zR', require('ufo').openAllFolds)
+        vim.keymap.set('n', 'zM', require('ufo').closeAllFolds)
+
+        -- Option 3: treesitter as a main provider instead
+        -- Only depend on `nvim-treesitter/queries/filetype/folds.scm`,
+        -- performance and stability are better than `foldmethod=nvim_treesitter#foldexpr()`
+        require('ufo').setup({
+            provider_selector = function(bufnr, filetype, buftype)
+                return {'treesitter', 'indent'}
+            end
+        })
+      end
+    },
+
+    { 'junegunn/vim-easy-align',
+      config = function()
+        vim.keymap.set('v', '<Enter>', '<Plug>(EasyAlign)', {noremap = true})
+        vim.keymap.set('n', 'ga', '<Plug>(EasyAlign)', {noremap = true})
+      end
+    },
+
+    { 'folke/trouble.nvim',
+      dependencies = 'nvim-tree/nvim-web-devicons',
+      config = function(_, opts)
+        local trouble = require('trouble')
+        trouble.setup(opts)
+        vim.keymap.set("n", "<leader>xx", function() trouble.open() end)
+        vim.keymap.set("n", "<leader>xw", function() trouble.open("workspace_diagnostics") end)
+        vim.keymap.set("n", "<leader>xd", function() trouble.open("document_diagnostics") end)
+        -- vim.keymap.set("n", "<leader>xl", function() trouble.open("quickfix") end)
+        -- vim.keymap.set("n", "<leader>xq", function() trouble.open("loclist") end)
+        -- vim.keymap.set("n", "gR", function() trouble.open("lsp_references") end)
+      end
+    },
+
+    { 'jose-elias-alvarez/null-ls.nvim',
+      dependencies = "nvim-lua/plenary.nvim",
+      enabled = true,
+      config = require('plugin_setup.null-ls').config,
+    },
+
     -- web --
- 
+
     -- others --
 
     { "vim-airline/vim-airline",
@@ -287,35 +380,10 @@ require("lazy").setup({
         vim.g.airline_powerline_fonts = 1
       end
     },
- 
+
     "vim-airline/vim-airline-themes",
 
     'nathanaelkane/vim-indent-guides',
-
-    { "zefei/vim-wintabs",
-      config = function()
-          for i = 1, 9 do
-              vim.api.nvim_set_keymap("n", "<leader>" .. i, ":WintabsGo " .. i .. "<CR>", { noremap = true, silent = true })
-          end
-
-          vim.api.nvim_set_keymap("n", "<leader>0", ":WintabsGo 10<CR>", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "<leader>$", ":WintabsLast<CR>", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "gb", "<Plug>(wintabs_next)", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "gB", "<Plug>(wintabs_previous)", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "<C-T>c", "<Plug>(wintabs_close)", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "<C-T>o", "<Plug>(wintabs_only)", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "<C-W>c", "<Plug>(wintabs_close_window)", { noremap = true, })
-          vim.api.nvim_set_keymap("n", "<C-W>o", "<Plug>(wintabs_only_window)", { noremap = true, })
-          vim.cmd('command! Tabc WintabsCloseVimtab')
-          vim.cmd('command! Tabo WintabsOnlyVimtab')
-          vim.g.wintabs_autoclose_vimtab = 1
-          vim.g.wintabs_display = 'tabline'
-          vim.g.wintabs_ui_sep_spaceline = 'GT，'
-          vim.g.wintabs_ui_buffer_name_format = '%o%t'
-      end
-    },
-
-    "zefei/vim-wintabs-powerline",
 
     { "junegunn/vim-peekaboo",
       config = function()
@@ -333,10 +401,33 @@ require("lazy").setup({
         vim.g.minisurround_disable   = true
         vim.g.minicompletion_disable = true
         vim.g.ministarter_disable    = true
+
+        require('mini.sessions').setup {
+          hooks = {
+            pre = {
+              write = function ()
+                -- for barbar.nvim
+                vim.api.nvim_exec_autocmds('User', { pattern = 'SessionSavePre' })
+
+                local ok, scope = pcall(require, 'scope')
+                if ok then
+                  vim.cmd('ScopeSaveState')
+                end
+              end,
+            },
+            post = {
+              read = function ()
+                    local ok, scope = pcall(require, 'scope')
+                    if ok then
+                      vim.cmd('ScopeLoadState')
+                    end
+                end,
+            },
+          }
+        }
+
       end
     },
-
-    "Shougo/vimproc.vim",
 
     { "milkypostman/vim-togglelist",
       config = function()
@@ -346,68 +437,111 @@ require("lazy").setup({
       end,
     },
 
-    "nvim-lua/plenary.nvim",
+
+    ---- telescope and friends ----
 
     { "nvim-telescope/telescope.nvim",
+      dependencies = "nvim-lua/plenary.nvim",
       config = function ()
         local builtin = require('telescope.builtin')
-        vim.keymap.set("n", "<leader>f", builtin.find_files, {noremap = true})
-        vim.keymap.set("n", "<leader>L", builtin.live_grep, {noremap = true})
-        vim.keymap.set("n", "<leader>B", builtin.buffers, {noremap = true})
-        vim.keymap.set("n", "<leader>H", builtin.help_tags, {noremap = true})
-        vim.keymap.set("n", "<leader>T", builtin.tags, {noremap = true})
-        vim.keymap.set("n", "<leader>dd", builtin.diagnostics, {noremap = true})
+        local map_opts = {noremap = true}
+        vim.keymap.set("n", "<leader>f", builtin.find_files, map_opts)
+        vim.keymap.set("n", "<leader>of", builtin.oldfiles, map_opts)
+        vim.keymap.set("n", "<leader>L", builtin.live_grep, map_opts)
+        vim.keymap.set("n", "<leader>B", builtin.buffers, map_opts)
+        vim.keymap.set("n", "<leader>H", builtin.help_tags, map_opts)
+        vim.keymap.set("n", "<leader>T", builtin.tags, map_opts)
+        vim.keymap.set("n", "<leader>bt", builtin.current_buffer_tags, map_opts)
+        vim.keymap.set("n", "<leader>bf", builtin.current_buffer_fuzzy_find, map_opts)
+        vim.keymap.set("n", "<leader>td", builtin.diagnostics, map_opts)
+        vim.keymap.set("n", "<leader>tc", builtin.commands, map_opts)
+        vim.keymap.set("n", "<leader>tm", builtin.marks, map_opts)
       end,
     },
 
     { "nvim-telescope/telescope-fzf-native.nvim",
       build = 'make',
-    },
-
-    { 'junegunn/vim-easy-align',
+      dependencies = { 'nvim-telescope/telescope.nvim' },
       config = function()
-        vim.keymap.set('v', '<Enter>', '<Plug>(EasyAlign)', {noremap = true})
-        vim.keymap.set('n', 'ga', '<Plug>(EasyAlign)', {noremap = true})
+        require('telescope').load_extension('fzf')
       end
     },
 
-    { 'kshenoy/vim-signature' },
 
     --- haskell ----
+
     -- 'neovimhaskell/haskell-vim',
 
+    { 'alx741/yesod.vim',
+      config = function()
+        vim.g.yesod_disable_maps = 1
+      end
+    },
+
     { "pbrisbin/vim-syntax-shakespeare",
-      ft = { 'hamlet', 'cassius', 'julius' }
+      ft = { 'hamlet', 'cassius', 'julius', 'haskell', }
     },
 
     { 'mrcjkb/haskell-tools.nvim',
       dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
+      enabled = true,  -- poor performance
       branch = '1.x.x',
       ft = { 'haskell', 'lhaskell', 'cabal', 'cabalproject' },
       config = function()
         local ht = require('haskell-tools')
+        local def_opts = { noremap = true, silent = true, }
 
         ht.start_or_attach {
           hls = { -- LSP client options
+            debug = true,
+            on_attach = function(client, bufnr)
+              -- opt-out of semantic highlighting
+              -- not sure if this is needed or correct
+              -- client.server_capabilities.semanticTokensProvider = nil
+
+              local map_opts = vim.tbl_extend('keep', def_opts, { buffer = bufnr, })
+              vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, map_opts)
+              -- haskell-language-server relies heavily on codeLenses,
+              -- so auto-refresh (see advanced configuration) is enabled by default
+              -- vim.keymap.set('n', '<space>ca', vim.lsp.codelens.run, map_opts)
+              -- vim.keymap.set('n', '<space>hs', ht.hoogle.hoogle_signature, map_opts)
+              -- vim.keymap.set('n', '<space>ea', ht.lsp.buf_eval_all, map_opts)
+            end,
+
             default_settings = {
               haskell = { -- haskell-language-server options
                 formattingProvider = 'fourmolu',
                 -- Setting this to true could have a performance impact on large mono repos.
                 checkProject = false,
                 -- ...
-              }
-            }
+              },
+              plugin = {
+                hlint = {
+                  config = {
+                    flags = { "-XCPP " },
+                  },
+                },
+              },
+            },
           }
         }
       end
     },
 
+    -- syntax highlighting --
+    'lifepillar/pgsql.vim',
+
     --- colorschemes ----
     { "rebelot/kanagawa.nvim", priority = 100 },
+    { "sainnhe/everforest", priority = 100 },
 })
 
-vim.cmd("colorscheme kanagawa")
 vim.o.bg = 'dark'
+vim.g.everforest_background = 'soft'
+vim.g.everforest_better_performance = 1
+vim.cmd("colorscheme everforest")
+
+-- vim.cmd("colorscheme kanagawa")
 
 
 vim.keymap.set('n', '<leader>do', vim.diagnostic.open_float, { noremap = true, })
@@ -419,10 +553,26 @@ vim.keymap.set('n', '<leader>dne', function () vim.diagnostic.goto_next({ severi
 -- vim.api.nvim_set_keymap('n', '<leader>dd', '<cmd>lua vim.diagnostic.setloclist()<CR>', { noremap = true, silent = true })
 
 vim.api.nvim_create_autocmd('FileType', {
-  pattern = { 'haskell', 'html' },
+  pattern = { 'haskell', 'html', 'lua', 'vim', },
   callback = function ()
     vim.opt_local.expandtab = true
+    vim.opt_local.cuc = true
+    vim.opt_local.cul = true
+    vim.opt_local.number = true
+    vim.opt_local.relativenumber = true
+
+    -- for unknown reason, 'syntax' optoin is empty when opening haskell files ('filetype' has been detected correctly)
+    vim.opt_local.syntax = 'ON'
+
     my_set_local_tab_stop(2)
+  end,
+})
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'python' },
+  callback = function ()
+    vim.opt_local.expandtab = true
+    my_set_local_tab_stop(4)
   end,
 })
 
@@ -441,3 +591,8 @@ vim.api.nvim_create_autocmd('BufFilePost', {
     my_set_local_tab_stop(2)
   end,
 })
+
+
+vim.api.nvim_create_user_command("DiagnosticReset", function()
+    vim.diagnostic.reset()
+end, { desc = [[Reset diagnostics globally.]] })
