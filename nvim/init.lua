@@ -456,6 +456,13 @@ require("lazy").setup({
         vim.keymap.set("n", "<leader>td", builtin.diagnostics, map_opts)
         vim.keymap.set("n", "<leader>tc", builtin.commands, map_opts)
         vim.keymap.set("n", "<leader>tm", builtin.marks, map_opts)
+
+        require('telescope').setup{
+          defaults = {
+            layout_strategy = 'vertical',
+            layout_config = { height = 0.95 },
+          },
+        }
       end,
     },
 
@@ -484,7 +491,10 @@ require("lazy").setup({
 
     { 'mrcjkb/haskell-tools.nvim',
       dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
-      enabled = true,  -- poor performance
+      -- CAUTION for big codebase project: poor performance, huge memory footprint
+      -- Also, HlsStop won't make hls process cleanly exit (it becomes a zombie)
+      --       HlsRestart does not work either.
+      enabled = false,
       branch = '1.x.x',
       ft = { 'haskell', 'lhaskell', 'cabal', 'cabalproject' },
       config = function()
@@ -492,6 +502,12 @@ require("lazy").setup({
         local def_opts = { noremap = true, silent = true, }
 
         ht.start_or_attach {
+          tools = {
+            log = {
+              level = vim.log.levels.DEBUG,
+            },
+          },
+
           hls = { -- LSP client options
             debug = true,
             on_attach = function(client, bufnr)

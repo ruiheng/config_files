@@ -8,6 +8,16 @@ local severity_table = {
   -- hint = 4,
 }
 
+local function strip_some_prefix(line)
+  if line == "" then return line end
+
+  -- may contain prefix like: xxx-lib > ....
+  local line1 = string.match(line, '^[%w-]+%s*> (.+)$')
+  if line1 ~= nil then line = line1 end
+
+  return line
+end
+
 -- line format: filename:error_span_str: severity
 local function parse_diagnostics_beginning(line)
   local log = require("null-ls.logger")
@@ -18,7 +28,8 @@ local function parse_diagnostics_beginning(line)
     log:error(line .. ": " .. err_msg)
   end
 
-  local filename_and_error_span_str, severity_str = string.match(line, '^(.+): ([^ ]+):$')
+  line = strip_some_prefix(line)
+  local filename_and_error_span_str, severity_str = string.match(line, '^(/.+): (%w+):')
   local severity
   if filename_and_error_span_str ~= nil and severity_str ~= nil then
     severity = severity_table[severity_str]
@@ -35,7 +46,7 @@ local function parse_diagnostics_beginning(line)
 
     --   try: (row, col)-(end_row, end_col)
     local num1, num2, num3, num4
-    filename, num1, num2, num3, num4 = string.match(filename_and_error_span_str, "(.+):%((%d+),(%d+)%)-%((%d)+,(%d+)%)$")
+    filename, num1, num2, num3, num4 = string.match(filename_and_error_span_str, "(.+):%((%d+),(%d+)%)%-%((%d+),(%d+)%)$")
     if filename ~= nil then
       row = tonumber(num1)
       col = tonumber(num2)
@@ -61,7 +72,7 @@ local function parse_diagnostics_beginning(line)
     end
   else
     -- other messages
-    -- log:debug('line not match: ' .. line)
+    -- log:debug('line not match beginning mark: ' .. line)
   end
 
   --[[
@@ -76,7 +87,7 @@ end
 
 -- line that begins with 4 spaces
 local function parse_indented_message_line(line)
-  local log = require("null-ls.logger")
+  line = strip_some_prefix(line)
   if line:sub(1, 4) == "    " then
     return line:sub(5)
   end
@@ -101,9 +112,7 @@ local other_normal_message_patterns = {
 local function other_normal_message(line)
   if line == "" then return true end
 
-  -- may contain prefix like: xxx-lib > ....
-  local line1 = string.match(line, '^[%w-]+%s?>%s+([^%s].+)$')
-  if line1 ~= nil then line = line1 end
+  line = strip_some_prefix(line)
 
   line1 = string.match(line, '^%[%s*%d+ of%s+%d+%]%s+([^%s].+)$')
   if line1 ~= nil then line = line1 end
@@ -164,6 +173,11 @@ local function parse_ghc_build_output(output)
         -- log:debug('got msg line: ' .. msg)
         table.insert(msg_lines, msg)
       else
+        if #msg_lines == 0 then
+          log:error('should be a message:' .. line)
+          log:error('should be a message:' .. strip_some_prefix(line))
+        end
+
         -- end of diagnostic message
         diag.message = table.concat(msg_lines, "\n")
         table.insert(diags, diag)
@@ -180,6 +194,8 @@ end
 -- a flag that enables `stack_build` source
 M.stack_build_enabled = false
 
+M.last_run = 0
+
 M.config = function(_, _)
     local null_ls = require('null-ls')
     local helpers = require('null-ls.helpers')
@@ -194,15 +210,32 @@ M.config = function(_, _)
       generator = helpers.generator_factory{
         method = null_ls.methods.DIAGNOSTICS_ON_SAVE,  -- not the same as methods.lsp.DID_SAVE
         multiple_files = true,
-        args = { "build", "--fast",
-                "--ghc-options", "-fno-diagnostics-show-caret",
-                "--ghc-options", "-fdefer-diagnostics",
-                "--ghc-options", "-fdiagnostics-color=never",
-                "--ghc-options", "-ferror-spans",
-                "."
-              },
         command = "stack",
-        timeout = 100000,
+
+        args = function()
+            local args = { "build", "--fast",
+                        "--ghc-options", "-fno-diagnostics-show-caret",
+                        "--ghc-options", "-fdefer-diagnostics",
+                        "--ghc-options", "-fdiagnostics-color=never",
+                        "--ghc-options", "-ferror-spans",
+                      }
+
+            local f = io.open("stack-diagnostic-flags.txt", "rb")
+            if f == nil then
+                table.insert(args, ".")
+            else
+              for line in f:lines() do
+                if line:find('#', 1, true) ~= 1 then
+                  table.insert(args, line)
+                end
+              end
+              f:close()
+            end
+
+            return args
+        end,
+
+        timeout = 100000, -- stack build may take a long time
         check_exit_code = function(code)
             return code <= 1
         end,
@@ -221,7 +254,18 @@ M.config = function(_, _)
           if (results == nil or #results == 0) then
             print([['stack build' command fininshed.]])
           else
-            print([['stack build' command fininshed with some diagnostics.]])
+            local errors = 0
+            local warnings = 0
+
+            for _, r in ipairs(results) do
+              if r.severity == 1 then
+                errors = errors + 1
+              elseif r.severity == 2 then
+                warnings = warnings + 1
+              end
+            end
+
+            print([['stack build' command fininshed with some diagnostics: ]] .. errors .. [[ errors and ]] .. warnings .. [[ warnings. Total ]] .. #results .. [[ diagnostics.]] )
           end
 
           return done( results )
@@ -244,6 +288,14 @@ M.config = function(_, _)
           --     -- log:debug("other client active: " .. client.id)
           --   end
           -- end
+
+          local now = vim.loop.hrtime()
+          local diff = (now - M.last_run) / 1000000000
+          if diff < 5 then
+            log:debug("stack build still running or restart too fast, do nothing.")
+            return false
+          end
+          M.last_run = now
 
           return true
         end,
