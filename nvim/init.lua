@@ -46,6 +46,8 @@ vim.opt.encoding = "utf-8"
 vim.o.hidden = true
 vim.o.expandtab = true
 vim.o.showcmd = true
+vim.o.title = true
+vim.o.titlestring = '%f %{fnamemodify(getcwd(), ":~")} -- NVIM'
 vim.o.mouse = 'a'
 vim.o.shortmess = vim.o.shortmess .. 'c'
 vim.o.sessionoptions = vim.o.sessionoptions .. ',globals'
@@ -136,6 +138,14 @@ require("lazy").setup({
     "szw/vim-maximizer",
 
     "azabiong/vim-highlighter",
+
+    { "akinsho/toggleterm.nvim",
+      version = "*",
+      opts = {
+        open_mapping = [[<F12>]],
+        direction = 'float',
+      },
+    },
 
     { "phaazon/hop.nvim", branch = "v2"
       , config = function()
