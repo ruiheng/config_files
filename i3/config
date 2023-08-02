@@ -33,7 +33,7 @@ set $down j
 set $left h
 set $right l
 
-# use Mouse+$mod to drag floating windows to their wanted position
+ #use Mouse+$mod to drag floating windows to their wanted position
 floating_modifier $mod
 
 # start a terminal
@@ -184,7 +184,7 @@ bar {
 #
 # Please remove the following exec line:
 #######################################################################
-exec i3-config-wizard
+#exec i3-config-wizard
 
 # ruiheng
 workspace_auto_back_and_forth yes
