@@ -29,6 +29,8 @@ local function parse_diagnostics_beginning(line)
   end
 
   line = strip_some_prefix(line)
+  if vim.trim(line) == '' then return end
+
   local filename_and_error_span_str, severity_str = string.match(line, '^(/.+): (%w+):')
   local severity
   if filename_and_error_span_str ~= nil and severity_str ~= nil then
@@ -100,11 +102,13 @@ local other_normal_message_patterns = {
   '^build %(.+%)',
   '^Preprocessing library for .+',
   '^Preprocessing executable .+',
+  '^Building executable .+',
+  '^Installing executable .+',
   '^Building library for .+',
   '^Installing library in .+',
   '^Installing executable in .+',
   '^copy/register',
-  '^Registering library in .+',
+  '^Registering library .+',
   '^Compiling .+',
   '^Linking .+',
 }
@@ -133,11 +137,14 @@ local function parse_ghc_build_output(output)
   local msg_lines = {}
   local stack_summary_msg = nil
 
+  local unrecognized_list = {}
+
   local function handle_other_line(line)
     if other_normal_message(line) then
       return
     end
     log:debug('unrecognized line: ' .. line)
+    table.insert(unrecognized_list, line)
   end
 
   local function try_stack_final_summary(line)
@@ -188,7 +195,7 @@ local function parse_ghc_build_output(output)
     end
   end
 
-  return diags
+  return diags, unrecognized_list
 end
 
 -- a flag that enables `stack_build` source
@@ -250,7 +257,16 @@ M.config = function(_, _)
             return done()
           end
 
-          local results = parse_ghc_build_output(output)
+          local results, unrecognized_list = parse_ghc_build_output(output)
+
+          local qf_list = {}
+          for _, line in ipairs(unrecognized_list) do
+            table.insert(qf_list, { text = line })
+          end
+          if #qf_list > 0 then
+            vim.fn.setqflist(qf_list, 'r')
+          end
+
           if (results == nil or #results == 0) then
             print([['stack build' command fininshed.]])
           else
