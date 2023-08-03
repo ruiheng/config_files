@@ -46,6 +46,10 @@ M.config = function(_, _)
 
           local results = parser.diags
 
+          for _, r in ipairs(results) do
+            diag_set_line_col_one_indexed(r)
+          end
+
           if (results == nil or #results == 0) then
             print([['stack build' command fininshed.]])
           else

@@ -23,6 +23,47 @@ local function diag_set_bufnr(diag)
   end
 end
 
+
+local function diag_set_line_col_one_indexed(diag)
+  if diag.row then
+    diag.lnum = diag.row
+  end
+
+  if diag.end_row then
+    diag.end_lnum = diag.end_row
+  end
+
+  if diag._col then
+    diag.col = diag._col
+  end
+
+  if diag._end_col then
+    diag.end_col = diag._end_col
+  end
+end
+
+
+-- set lnum, end_lnum, col, end_col
+-- caution: in diagnostics structure, all these number a zero-indexed
+local function diag_set_line_col_zero_indexed(diag)
+  if diag.row then
+    diag.lnum = diag.row - 1
+  end
+
+  if diag.end_row then
+    diag.end_lnum = diag.end_row - 1
+  end
+
+  if diag._col then
+    diag.col = diag._col - 1
+  end
+
+  if diag._end_col then
+    diag.end_col = diag._end_col - 1
+  end
+end
+
+
 local function diag_set_text(diag)
   if diag.text == nil then
     diag.text = diag.message
@@ -137,6 +178,7 @@ local function qf_list_add_one(t)
       vim.fn.setqflist( { { text = t } }, 'a' )
     elseif type(t) == 'table' then
       diag_set_text(t)
+      diag_set_line_col_one_indexed(t)
       vim.fn.setqflist( { t }, 'a' )
     end
 
@@ -226,10 +268,9 @@ function StackBuildParser:parse_build_output_line(line)
     -- looking for a diagnostic message beginning
     local filename, severity, row, col, end_row, end_col = parse_diagnostics_beginning(line, self.log)
     if filename ~= nil and severity ~= nil and row ~= nil and col ~= nil then
-      self.diag = { row = row, col = col, end_row = end_row, end_col = end_col, filename = filename, severity = severity,
-                    -- be compatible with diagnostic-structure, quickfix
-                    -- caution: missing 'bufnr'
-                    lnum = row, end_lnum = end_row,
+      -- col/end_col maybe zero-indexed or one-indexed, depending on api usage
+      -- here they are saved as _col/_end_col, which are always one-indexed
+      self.diag = { row = row, _col = col, end_row = end_row, _end_col = end_col, filename = filename, severity = severity,
                   }
       self.msg_lines = {}
     else
@@ -292,6 +333,7 @@ function StackBuildParser:set_diagnostics(ns_id)
 
   for _, diag in ipairs(self.diags) do
     diag_set_bufnr(diag)
+    diag_set_line_col_zero_indexed(diag)
 
     if diag.bufnr == -1 then
       vim.notify("no bufnr for " .. diag.filename, vim.log.ERROR)
