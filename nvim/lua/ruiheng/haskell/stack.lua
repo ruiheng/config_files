@@ -17,6 +17,18 @@ local function strip_prompt_prefix(line)
   return line
 end
 
+local function diag_set_bufnr(diag)
+  if diag.bufnr == nil then
+    diag.bufnr = vim.fn.bufnr( diag.filename, true )
+  end
+end
+
+local function diag_set_text(diag)
+  if diag.text == nil then
+    diag.text = diag.message
+  end
+end
+
 
 -- line format: filename:error_span_str: severity
 local function parse_diagnostics_beginning(line, log)
@@ -119,9 +131,17 @@ local function other_normal_message(line)
   end
 end
 
-local function qf_list_add_one(line)
+local function qf_list_add_one(t)
   local function doit ()
-    vim.fn.setqflist( { { text = line } }, 'a' )
+    if type(t) == 'string' then
+      vim.fn.setqflist( { { text = t } }, 'a' )
+    elseif type(t) == 'table' then
+      diag_set_text(t)
+      vim.fn.setqflist( { t }, 'a' )
+    end
+
+    local qf = require('ruiheng.quickfix');
+    vim.api.nvim_exec_autocmds('User', { pattern = qf.quickfix_scroll_bottom_event } )
   end
 
   if vim.in_fast_event() then
@@ -161,15 +181,15 @@ function StackBuildParser:new(init_obj)
 end
 
 
-function StackBuildParser:append_qf_line(line)
+function StackBuildParser:append_qf_message(t)
   if self.sync_to_qf then
-    qf_list_add_one(line)
+    qf_list_add_one(t)
   end
 end
 
 
 function StackBuildParser:parse_output_other_line(line)
-  self:append_qf_line(line)
+  self:append_qf_message(line)
 
   if other_normal_message(line) then
     return
@@ -185,14 +205,14 @@ function StackBuildParser:try_parse_output_final_summary(line)
     if msg == nil then
       self:parse_output_other_line(line)
     else
-      self:append_qf_line(line)
+      self:append_qf_message(line)
       self.stack_summary_msg_started = true
       table.insert(self.stack_summary_msg, msg)
     end
   else
     local msg = parse_indented_message_line(line)
     if msg ~= nil then
-      self:append_qf_line(line)
+      self:append_qf_message(line)
       table.insert(self.stack_summary_msg, msg)
     else
       self:parse_output_other_line(line)
@@ -207,12 +227,11 @@ function StackBuildParser:parse_build_output_line(line)
     local filename, severity, row, col, end_row, end_col = parse_diagnostics_beginning(line, self.log)
     if filename ~= nil and severity ~= nil and row ~= nil and col ~= nil then
       self.diag = { row = row, col = col, end_row = end_row, end_col = end_col, filename = filename, severity = severity,
-                    -- be compatible with diagnostic-structure
+                    -- be compatible with diagnostic-structure, quickfix
                     -- caution: missing 'bufnr'
                     lnum = row, end_lnum = end_row,
                   }
       self.msg_lines = {}
-      self:append_qf_line(line)
     else
       self:try_parse_output_final_summary(line)
     end
@@ -221,7 +240,7 @@ function StackBuildParser:parse_build_output_line(line)
     local msg = parse_indented_message_line(line)
     if msg ~= nil then
       -- ignore diagnostic message content, because it is too long, user should use diagnostics to read it
-      -- self:append_qf_line(line)
+      -- self:append_qf_message(line)
       table.insert(self.msg_lines, msg)
     else
       if #self.msg_lines == 0 then
@@ -234,6 +253,7 @@ function StackBuildParser:parse_build_output_line(line)
       -- end of diagnostic message
       self.diag.message = table.concat(self.msg_lines, "\n")
       table.insert(self.diags, self.diag)
+      self:append_qf_message(self.diag)
       self.diag = nil
 
       self:try_parse_output_final_summary(line)
@@ -267,14 +287,11 @@ function StackBuildParser:set_quickfix_messages()
   end
 end
 
-
 function StackBuildParser:set_diagnostics(ns_id)
   local bufnr_diags = {}
 
   for _, diag in ipairs(self.diags) do
-    if diag.bufnr == nil then
-      diag.bufnr = vim.fn.bufnr( diag.filename, true )
-    end
+    diag_set_bufnr(diag)
 
     if diag.bufnr == -1 then
       vim.notify("no bufnr for " .. diag.filename, vim.log.ERROR)

@@ -65,12 +65,15 @@ vim.api.nvim_set_keymap('n', '<F2>', 'viw"0p', {noremap = true})
 vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'")
 
 
+-- invoke 'stack build' command, set diagnostics and quickfix
 vim.keymap.set('n', '<leader>bs',
     function()
-      require('haskell.stack').start_build_job()
+      require('ruiheng.haskell.stack').start_build_job()
+      require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
     end ,
     {noremap = true, silent = true}
   )
+
 
 function my_set_local_tab_stop(n)
   vim.opt_local.tabstop = n
@@ -210,12 +213,12 @@ require("lazy").setup({
 
       enabled = true,
 
-      config = require('plugin_setup.bufferline').config,
+      config = require('ruiheng.plugin_setup.bufferline').config,
     },
 
     { 'tiagovla/scope.nvim',
       enabled = true,
-      config = require('plugin_setup.scope').config,
+      config = require('ruiheng.plugin_setup.scope').config,
     },
 
     { 'backdround/tabscope.nvim',
@@ -386,7 +389,7 @@ require("lazy").setup({
     { 'jose-elias-alvarez/null-ls.nvim',
       dependencies = "nvim-lua/plenary.nvim",
       enabled = true,
-      config = require('plugin_setup.null-ls').config,
+      config = require('ruiheng.plugin_setup.null-ls').config,
     },
 
     -- web --
@@ -468,7 +471,7 @@ require("lazy").setup({
         vim.keymap.set("n", "<leader>L", builtin.live_grep, map_opts)
         vim.keymap.set("n", "<leader>B", builtin.buffers, map_opts)
         vim.keymap.set("n", "<leader>H", builtin.help_tags, map_opts)
-        vim.keymap.set("n", "<leader>T", builtin.tags, map_opts)
+        vim.keymap.set("n", "<leader>T", function () return builtin.tags {fname_width = 70} end, map_opts)
         vim.keymap.set("n", "<leader>bt", builtin.current_buffer_tags, map_opts)
         vim.keymap.set("n", "<leader>bf", builtin.current_buffer_fuzzy_find, map_opts)
         vim.keymap.set("n", "<leader>td", builtin.diagnostics, map_opts)
@@ -571,11 +574,10 @@ require("lazy").setup({
 })
 
 vim.o.bg = 'dark'
-vim.g.everforest_background = 'soft'
-vim.g.everforest_better_performance = 1
-vim.cmd("colorscheme everforest")
-
--- vim.cmd("colorscheme kanagawa")
+-- vim.g.everforest_background = 'soft'
+-- vim.g.everforest_better_performance = 1
+-- vim.cmd("colorscheme everforest")
+vim.cmd("colorscheme kanagawa")
 
 
 vim.keymap.set('n', '<leader>do', vim.diagnostic.open_float, { noremap = true, })

@@ -11,7 +11,7 @@ M.config = function(_, _)
     local helpers = require('null-ls.helpers')
     local log = require("null-ls.logger")
     local methods = require('null-ls.methods')
-    local stack = require('haskell.stack')
+    local stack = require('ruiheng.haskell.stack')
 
     local stack_build = {
       name = "my-haskell-stack",
