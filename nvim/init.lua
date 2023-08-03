@@ -64,6 +64,14 @@ vim.api.nvim_set_keymap('n', '<F2>', 'viw"0p', {noremap = true})
 -- see: http://vim.wikia.com/wiki/Selecting_your_pasted_text
 vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'")
 
+
+vim.keymap.set('n', '<leader>bs',
+    function()
+      require('haskell.stack').start_build_job()
+    end ,
+    {noremap = true, silent = true}
+  )
+
 function my_set_local_tab_stop(n)
   vim.opt_local.tabstop = n
   vim.opt_local.softtabstop = n
