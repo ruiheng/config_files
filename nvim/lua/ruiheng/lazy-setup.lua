@@ -36,20 +36,6 @@ require("lazy").setup({
 
     "azabiong/vim-highlighter",
 
-    { 'willothy/flatten.nvim',
-      -- enure that it run first to minimize delay when open file from terminal
-      lazy = false, priority = 1001,
-      config = true, -- or set opts
-    },
-
-    { "akinsho/toggleterm.nvim",
-      version = "*",
-      opts = {
-        open_mapping = [[<F12>]],
-        direction = 'float',
-      },
-    },
-
     { "phaazon/hop.nvim", branch = "v2"
       , config = function()
           local hop = require('hop')
@@ -79,6 +65,22 @@ require("lazy").setup({
           end, {remap=true})
 
         end
+    },
+
+    -- terminal --
+
+    { 'willothy/flatten.nvim',
+      -- enure that it run first to minimize delay when open file from terminal
+      lazy = false, priority = 1001,
+      config = true, -- or set opts
+    },
+
+    { "akinsho/toggleterm.nvim",
+      version = "*",
+      opts = {
+        open_mapping = [[<F12>]],
+        direction = 'float',
+      },
     },
 
     -- git --
@@ -185,7 +187,6 @@ require("lazy").setup({
           },
         }
 
-        print('nvim-treesitter loaded')
         vim.o.foldmethod = 'expr'
         vim.o.foldexpr = 'nvim_treesitter#foldexpr()'
         vim.o.foldenable = false
@@ -400,6 +401,16 @@ require("lazy").setup({
     --- haskell ----
 
     -- 'neovimhaskell/haskell-vim',
+
+    { 'sdiehl/vim-ormolu',
+      enabled = false, -- or use 'haskell-tools'
+      ft = { 'haskell' },
+      config = function()
+        vim.g.ormolu_command = 'fourmolu'
+        vim.g.ormolu_options = { '-o -XTypeApplications', '-q', '--no-cabal', }
+        vim.g.ormolu_disabled = 1
+      end,
+    },
 
     { 'alx741/yesod.vim',
       config = function()

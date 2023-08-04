@@ -70,7 +70,7 @@ vim.keymap.set('n', '<leader>bs',
     function()
       local errs = require('ruiheng').save_all_buffers()
       if #errs > 0 then
-        print('some buffer not saved')
+        print('some buffer not saved: ' .. vim.inspect(errs))
       else
         require('ruiheng.haskell.stack').start_build_job()
         require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
