@@ -34,7 +34,23 @@ local function save_all_buffers()
   return errs
 end
 
+
+local function current_filename_glob_patten()
+  local filename = vim.api.nvim_buf_get_name(0)
+  if filename == '' then return end
+  local i = filename:find("%.")
+
+  if i == nil then
+    return '*'
+  else
+    local ext = filename:sub(i+1)
+    return '*.' .. ext
+  end
+end
+
+
 return {
   save_bufer = save_bufer,
   save_all_buffers = save_all_buffers,
+  current_filename_glob_patten = current_filename_glob_patten,
 }

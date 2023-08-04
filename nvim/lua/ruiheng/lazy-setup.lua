@@ -392,6 +392,23 @@ require("lazy").setup({
         vim.keymap.set("n", "<leader>f", builtin.find_files, map_opts)
         vim.keymap.set("n", "<leader>of", builtin.oldfiles, map_opts)
         vim.keymap.set("n", "<leader>L", builtin.live_grep, map_opts)
+
+        vim.keymap.set("n", "<leader>tl",
+          function ()
+            local patten = require('ruiheng').current_filename_glob_patten()
+            return builtin.live_grep { glob_pattern = patten, }
+          end,
+          map_opts)
+
+        -- specially for Yesod project
+        vim.keymap.set("n", "<leader>ty",
+          function ()
+            return builtin.live_grep {
+                    glob_pattern = { '*.hs', '*.hamlet', '*.julius', '*.lucius', '*.cassius', 'static/*.js', 'static/*.css',}
+                  }
+          end,
+          map_opts)
+
         vim.keymap.set("n", "<leader>B", builtin.buffers, map_opts)
         vim.keymap.set("n", "<leader>H", builtin.help_tags, map_opts)
         vim.keymap.set("n", "<leader>T", function () return builtin.tags {fname_width = 70} end, map_opts)
