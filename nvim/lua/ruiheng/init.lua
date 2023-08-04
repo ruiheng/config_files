@@ -37,7 +37,7 @@ end
 
 local function current_filename_glob_patten()
   local filename = vim.api.nvim_buf_get_name(0)
-  if filename == '' then return end
+  if filename == '' then return '*' end
   local i = filename:find("%.")
 
   if i == nil then
