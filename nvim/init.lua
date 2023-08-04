@@ -68,8 +68,13 @@ vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'")
 -- invoke 'stack build' command, set diagnostics and quickfix
 vim.keymap.set('n', '<leader>bs',
     function()
-      require('ruiheng.haskell.stack').start_build_job()
-      require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
+      local errs = require('ruiheng').save_all_buffers()
+      if #errs > 0 then
+        print('some buffer not saved')
+      else
+        require('ruiheng.haskell.stack').start_build_job()
+        require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
+      end
     end ,
     {noremap = true, silent = true}
   )
