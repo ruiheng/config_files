@@ -423,6 +423,8 @@ require("lazy").setup({
 
     -- 'neovimhaskell/haskell-vim',
 
+    'itchyny/vim-haskell-indent',
+
     { 'sdiehl/vim-ormolu',
       enabled = false, -- or use 'haskell-tools'
       ft = { 'haskell' },
