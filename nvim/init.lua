@@ -250,6 +250,10 @@ require("lazy").setup({
             enable = true,
           },
 
+          indent = {
+            enable = true,
+          },
+
           textobjects = {
             select = {
               enable = true,
@@ -293,6 +297,11 @@ require("lazy").setup({
             },
           },
         }
+
+        print('nvim-treesitter loaded')
+        vim.o.foldmethod = 'expr'
+        vim.o.foldexpr = 'nvim_treesitter#foldexpr()'
+        vim.o.foldenable = false
      end
     },
 
