@@ -1,2 +1,4 @@
 function-arrows: leading
 indentation: 2
+respectful: true
+newlines-between-decls: 2
