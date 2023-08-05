@@ -464,10 +464,15 @@ require("lazy").setup({
 
     { 'mrcjkb/haskell-tools.nvim',
       dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
+
       -- CAUTION for big codebase project: poor performance, huge memory footprint
       -- Also, HlsStop won't make hls process cleanly exit (it becomes a zombie)
       --       HlsRestart does not work either.
-      enabled = false,
+      enabled = function ()
+        -- only enable when neccessary
+        return os.getenv('HASKELL_TOOLS') == '1'
+      end,
+
       branch = '1.x.x',
       ft = { 'haskell', 'lhaskell', 'cabal', 'cabalproject' },
       config = function()
