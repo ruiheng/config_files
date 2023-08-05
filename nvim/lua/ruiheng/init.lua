@@ -26,9 +26,11 @@ end
 local function save_all_buffers()
   local errs = {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    local err = save_bufer(buf)
-    if err then
-      table.insert(errs, { file = vim.api.nvim_buf_get_name(buf), bufnr = buf, err = err } )
+    if vim.api.nvim_buf_is_loaded(buf) then
+      local err = save_bufer(buf)
+      if err then
+        table.insert(errs, { file = vim.api.nvim_buf_get_name(buf), bufnr = buf, err = err } )
+      end
     end
   end
   return errs
