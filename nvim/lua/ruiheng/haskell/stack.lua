@@ -363,8 +363,10 @@ M.make_start_build_args = function ()
 
   local f = io.open("stack-diagnostic-flags.txt", "rb")
   if f == nil then
+      qf_list_add_one('stack-diagnostic-flags.txt not found')
       table.insert(args, ".")
   else
+    qf_list_add_one('found stack-diagnostic-flags.txt')
     for line in f:lines() do
       if line:find('#', 1, true) ~= 1 then
         table.insert(args, line)
@@ -390,9 +392,12 @@ M.start_build_job = function ()
 
   local line_leftover = nil
   local pid = nil
+  local job_start, job_end
 
   local function on_exit(obj)
-    print([['stack build' finished with code: ]] .. obj.code)
+    job_end = vim.uv.hrtime()
+    local duration = ( job_end - job_start ) / 1000000000
+    print([['stack build' finished with code: ]] .. obj.code .. ' in ' .. duration .. 's')
 
     vim.schedule_wrap(function()
       parser:set_diagnostics(ns_id)
@@ -441,11 +446,13 @@ M.start_build_job = function ()
   vim.fn.setqflist({}, 'r')
   vim.diagnostic.reset(ns_id, nil)
 
+  qf_list_add_one(table.concat(cmd_args, ' '))
   local sys_obj = vim.system(cmd_args, { text = true, stderr = on_stderr, }, on_exit)
+  job_start = vim.uv.hrtime()
   table.insert(build_jobs, sys_obj)
 
   pid = sys_obj.pid
-  qf_list_add_one([['stack build' started, PID: ]] .. sys_obj.pid)
+  qf_list_add_one('Job started at ' .. vim.fn.strftime('%T') .. ', PID: ' .. sys_obj.pid)
 end
 
 
