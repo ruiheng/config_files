@@ -88,7 +88,7 @@ M.config = function(_, _)
           --   end
           -- end
 
-          local now = vim.loop.hrtime()
+          local now = vim.uv.hrtime()
           local diff = (now - M.last_run) / 1000000000
           if diff < 5 then
             log:debug("stack build still running or restart too fast, do nothing.")
