@@ -52,6 +52,8 @@ vim.o.mouse = 'a'
 vim.o.shortmess = vim.o.shortmess .. 'c'
 vim.o.sessionoptions = vim.o.sessionoptions .. ',globals'
 vim.o.wop = 'pum'
+vim.o.cuc = true
+vim.o.cul = true
 
 for i = 1, 9 do
     vim.api.nvim_set_keymap('n', ','..i, ':tabn '..i..'<CR>', {noremap = true, silent = true})

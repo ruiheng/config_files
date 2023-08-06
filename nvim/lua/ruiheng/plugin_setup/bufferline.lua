@@ -50,6 +50,8 @@ M.config = function ()
     options = {
       diagnostics = false,
       show_buffer_icons = false,
+      show_close_icons = false,
+      show_buffer_close_icons = false,
       numbers = 'ordinal',
 
       close_command = delete_or_unlist_buffer,
