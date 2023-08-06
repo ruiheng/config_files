@@ -265,7 +265,10 @@ require("lazy").setup({
 
     { 'neoclide/coc.nvim', branch = 'release' },
 
+    'anuvyklack/pretty-fold.nvim',  -- use this or nvim-ufo
+
     {'kevinhwang91/nvim-ufo', dependencies = 'kevinhwang91/promise-async',
+      enabled = false, -- use pretty-fold.nvim instead
       config = function()
         vim.o.fillchars = [[eob: ,fold: ,foldopen:,foldsep: ,foldclose:]]
         vim.o.foldcolumn = '1' -- '0' is not bad
