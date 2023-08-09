@@ -9,8 +9,6 @@ local function save_bufer(buf)
   if filename == '' then return end
   if vim.startswith(filename, 'fugitive://') then return end
 
-  print('filename: ' .. filename .. ' buf_type: ' .. buf_type)
-
   local ok, err = pcall(vim.api.nvim_buf_call, buf,
                         function()
                           vim.cmd('write')

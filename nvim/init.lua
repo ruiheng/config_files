@@ -54,6 +54,8 @@ vim.o.sessionoptions = vim.o.sessionoptions .. ',globals'
 vim.o.wop = 'pum'
 vim.o.cuc = true
 vim.o.cul = true
+vim.o.number = true
+vim.o.relativenumber = true
 
 for i = 1, 9 do
     vim.api.nvim_set_keymap('n', ','..i, ':tabn '..i..'<CR>', {noremap = true, silent = true})
