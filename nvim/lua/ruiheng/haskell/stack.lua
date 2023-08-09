@@ -74,7 +74,7 @@ end
 -- line format: filename:error_span_str: severity
 local function parse_diagnostics_beginning(line, log)
   local row, col, end_row, end_col
-  local filename, severity
+  local filename, severity, msg
 
   local function log_error(err_msg)
     if log then log:error(line .. ": " .. err_msg) end
@@ -83,7 +83,7 @@ local function parse_diagnostics_beginning(line, log)
   line = strip_prompt_prefix(line)
   if vim.trim(line) == '' then return end
 
-  local filename_and_error_span_str, severity_str = string.match(line, '^(/.+): (%w+):')
+  local filename_and_error_span_str, severity_str, msg = string.match(line, '^(/.+): (%w+):(.*)$')
   local severity
   if filename_and_error_span_str ~= nil and severity_str ~= nil then
     severity = severity_table[severity_str]
@@ -129,7 +129,7 @@ local function parse_diagnostics_beginning(line, log)
     -- log:debug('line not match beginning mark: ' .. line)
   end
 
-  return filename, severity, row, col, end_row, end_col
+  return filename, severity, row, col, end_row, end_col, msg
 end
 
 
@@ -266,13 +266,17 @@ end
 function StackBuildParser:parse_build_output_line(line)
   if self.diag == nil then
     -- looking for a diagnostic message beginning
-    local filename, severity, row, col, end_row, end_col = parse_diagnostics_beginning(line, self.log)
+    local filename, severity, row, col, end_row, end_col, msg = parse_diagnostics_beginning(line, self.log)
     if filename ~= nil and severity ~= nil and row ~= nil and col ~= nil then
       -- col/end_col maybe zero-indexed or one-indexed, depending on api usage
       -- here they are saved as _col/_end_col, which are always one-indexed
       self.diag = { row = row, _col = col, end_row = end_row, _end_col = end_col, filename = filename, severity = severity,
                   }
       self.msg_lines = {}
+      if msg then
+        msg = vim.trim(msg)
+        if #msg > 0 then table.insert(self.msg_lines, msg) end
+      end
     else
       self:try_parse_output_final_summary(line)
     end
