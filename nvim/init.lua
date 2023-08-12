@@ -83,6 +83,9 @@ vim.keymap.set('n', '<leader>bs',
     {noremap = true, silent = true}
   )
 
+-- create GhcidWatchOutput and GhcidUnwatchOutput
+require('ruiheng.haskell.stack').create_user_command_for_watching()
+
 
 function my_set_local_tab_stop(n)
   vim.opt_local.tabstop = n
@@ -153,18 +156,45 @@ vim.keymap.set('n', '<leader>dne', function () vim.diagnostic.goto_next({ severi
 vim.api.nvim_create_autocmd('FileType', {
   pattern = { 'haskell', 'html', 'lua', 'vim', },
   callback = function ()
-    vim.opt_local.expandtab = true
-    vim.opt_local.cuc = true
-    vim.opt_local.cul = true
-    vim.opt_local.number = true
-    vim.opt_local.relativenumber = true
+    local opt_local = vim.opt_local
+    opt_local.expandtab = true
+    opt_local.cuc = true
+    opt_local.cul = true
+    opt_local.number = true
+    opt_local.relativenumber = true
 
     -- for unknown reason, 'syntax' optoin is empty when opening haskell files ('filetype' has been detected correctly)
     vim.opt_local.syntax = 'ON'
 
+    -- opt_local.foldmethod = 'expr'
+    -- opt_local.foldexpr = 'nvim_treesitter#foldexpr()'
+    opt_local.foldenable = false
+
     my_set_local_tab_stop(2)
   end,
 })
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'javascript', },
+  callback = function ()
+    local opt_local = vim.opt_local
+    opt_local.expandtab = true
+    opt_local.cuc = true
+    opt_local.cul = true
+    opt_local.number = true
+    opt_local.relativenumber = true
+
+    -- for unknown reason, 'syntax' optoin is empty when opening haskell files ('filetype' has been detected correctly)
+    vim.opt_local.syntax = 'ON'
+
+    -- opt_local.foldmethod = 'expr'
+    -- opt_local.foldexpr = 'nvim_treesitter#foldexpr()'
+    opt_local.foldenable = false
+
+    my_set_local_tab_stop(4)
+  end,
+})
+
 
 vim.api.nvim_create_autocmd('FileType', {
   pattern = { 'python' },
