@@ -15,12 +15,24 @@ require("lazy").setup({
     -- general behavior ---
     "tpope/vim-repeat",
     "vim-scripts/visualrepeat",
-    "machakann/vim-sandwich",
     "jeffkreeftmeijer/vim-numbertoggle",
     "unblevable/quick-scope",
     "tpope/vim-abolish",
     "equalsraf/neovim-gui-shim",
     "machakann/vim-highlightedyank",
+
+    -- use sandwich or surround
+    -- "machakann/vim-sandwich",
+    {
+        "kylechui/nvim-surround",
+        version = "*", -- Use for stability; omit to use `main` branch for the latest features
+        event = "VeryLazy",
+        config = function()
+            require("nvim-surround").setup({
+                -- Configuration here, or leave empty to use defaults
+            })
+        end
+    },
 
     -- toggl, display and navigate marks
     { 'kshenoy/vim-signature' },
@@ -36,8 +48,10 @@ require("lazy").setup({
 
     "azabiong/vim-highlighter",
 
-    { "phaazon/hop.nvim", branch = "v2"
-      , config = function()
+    -- motion --
+    { "phaazon/hop.nvim", branch = "v2",
+      enabled = false, -- use leap
+      config = function()
           local hop = require('hop')
           hop.setup()
           --[[
@@ -65,6 +79,12 @@ require("lazy").setup({
           end, {remap=true})
 
         end
+    },
+
+    { 'ggandor/leap.nvim',
+      config = function ()
+        require('leap').add_default_mappings()
+      end
     },
 
     -- terminal --
@@ -123,6 +143,11 @@ require("lazy").setup({
 
 
     -- general programming ---
+
+    {
+      "folke/todo-comments.nvim",
+      dependencies = { "nvim-lua/plenary.nvim" },
+    },
 
     { "lukas-reineke/indent-blankline.nvim",
       config = function()
@@ -208,11 +233,13 @@ require("lazy").setup({
           },
         }
 
-        vim.o.foldmethod = 'expr'
-        vim.o.foldexpr = 'nvim_treesitter#foldexpr()'
-        vim.o.foldenable = false
+        -- vim.o.foldmethod = 'expr'
+        -- vim.o.foldexpr = 'nvim_treesitter#foldexpr()'
+        -- vim.o.foldenable = false
      end
     },
+
+    'nvim-treesitter/nvim-treesitter-context',
 
     { 'neovim/nvim-lspconfig',
       config = function()
@@ -261,35 +288,22 @@ require("lazy").setup({
       dependencies = 'kana/vim-textobj-user',
     },
 
-    "Exafunction/codeium.vim",
+    { "Exafunction/codeium.vim",
+      config = function()
+        -- vim.g.codeium_no_map_tab = true
+        -- vim.keymap.set('i', '<C-g>', function () return vim.fn['codeium#Accept']() end, { expr = true })
+      end,
+    },
 
     { 'neoclide/coc.nvim', branch = 'release' },
 
-    'anuvyklack/pretty-fold.nvim',  -- use this or nvim-ufo
+    -- 'anuvyklack/pretty-fold.nvim',  -- use this or nvim-ufo
 
     {'kevinhwang91/nvim-ufo', dependencies = 'kevinhwang91/promise-async',
-      enabled = false, -- use pretty-fold.nvim instead
-      config = function()
-        vim.o.fillchars = [[eob: ,fold: ,foldopen:,foldsep: ,foldclose:]]
-        vim.o.foldcolumn = '1' -- '0' is not bad
-        vim.o.foldlevel = 99 -- Using ufo provider need a large value, feel free to decrease the value
-        vim.o.foldlevelstart = 99
-        vim.o.foldenable = true
-
-        -- Using ufo provider need remap `zR` and `zM`. If Neovim is 0.6.1, remap yourself
-        vim.keymap.set('n', 'zR', require('ufo').openAllFolds)
-        vim.keymap.set('n', 'zM', require('ufo').closeAllFolds)
-
-        -- Option 3: treesitter as a main provider instead
-        -- Only depend on `nvim-treesitter/queries/filetype/folds.scm`,
-        -- performance and stability are better than `foldmethod=nvim_treesitter#foldexpr()`
-        require('ufo').setup({
-            provider_selector = function(bufnr, filetype, buftype)
-                return {'treesitter', 'indent'}
-            end
-        })
-      end
+      enabled = true, -- use pretty-fold.nvim instead
+      config = require('ruiheng.plugin_setup.nvim-ufo').config,
     },
+
 
     { 'junegunn/vim-easy-align',
       config = function()
@@ -303,11 +317,11 @@ require("lazy").setup({
       config = function(_, opts)
         local trouble = require('trouble')
         trouble.setup(opts)
-        vim.keymap.set("n", "<leader>xx", function() trouble.open() end)
-        vim.keymap.set("n", "<leader>xw", function() trouble.open("workspace_diagnostics") end)
-        vim.keymap.set("n", "<leader>xd", function() trouble.open("document_diagnostics") end)
-        -- vim.keymap.set("n", "<leader>xl", function() trouble.open("quickfix") end)
-        -- vim.keymap.set("n", "<leader>xq", function() trouble.open("loclist") end)
+        vim.keymap.set("n", "<leader>xx", function() trouble.toggle() end)
+        vim.keymap.set("n", "<leader>xw", function() trouble.toggle("workspace_diagnostics") end)
+        vim.keymap.set("n", "<leader>xd", function() trouble.toggle("document_diagnostics") end)
+        vim.keymap.set("n", "<leader>xq", function() trouble.toggle("quickfix") end)
+        vim.keymap.set("n", "<leader>xl", function() trouble.toggle("loclist") end)
         -- vim.keymap.set("n", "gR", function() trouble.open("lsp_references") end)
       end
     },
