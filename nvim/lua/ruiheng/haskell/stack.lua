@@ -401,9 +401,10 @@ M.start_build_job = function ()
   local function on_exit(obj)
     job_end = vim.uv.hrtime()
     local duration = ( job_end - job_start ) / 1000000000
-    print([['stack build' finished with code: ]] .. obj.code .. ' in ' .. duration .. 's')
-
     vim.schedule_wrap(function()
+      qf_list_add_one('Job finished at ' .. vim.fn.strftime('%T') .. ', with code: ' .. obj.code)
+      print([['stack build' finished with code: ]] .. obj.code .. ' in ' .. duration .. 's')
+
       parser:set_diagnostics(ns_id)
     end)()
 
@@ -459,6 +460,82 @@ M.start_build_job = function ()
   qf_list_add_one('Job started at ' .. vim.fn.strftime('%T') .. ', PID: ' .. sys_obj.pid)
 end
 
+
+M.fs_event_handle = nil
+
+M.watch_ghci_output = function (path)
+  if fs_event_handle == nil then
+    M.fs_event_handle = vim.uv.new_fs_event()
+  else
+    vim.uv.fs_event_stop(M.fs_event_handle)
+  end
+
+  local event_cb = function(err, filename, events)
+    vim.schedule_wrap(function ()
+        if err then
+          vim.notify(err, vim.log.ERROR)
+        else
+          -- delay a little while to wait full content written to the file?
+          vim.uv.sleep(100)
+
+          local f = io.open(filename, "rb")
+          if f == nil then
+              vim.notify("Cannot open file: " .. filename)
+          else
+            local output = f:read("*a")
+            f:close()
+
+            if vim.startswith(output, 'All good') then
+                vim.fn.setqflist({}, 'r')
+                vim.diagnostic.reset(ns_id, nil)
+                qf_list_add_one(output)
+                vim.notify(output, vim.log.INFO)
+
+            else
+              if output == '' then
+                  vim.notify('output is empty', vim.log.INFO)
+              end
+
+                vim.fn.setqflist({}, 'r')
+                vim.diagnostic.reset(ns_id, nil)
+
+                vim.notify("updated output from file: " .. filename)
+                local parser = StackBuildParser:new { sync_to_qf = true }
+                parser:parse_build_output_whole(output)
+                parser:set_diagnostics(ns_id)
+            end
+          end
+        end
+    end)()
+  end
+
+  vim.uv.fs_event_start(M.fs_event_handle, path, {}, event_cb)
+end
+
+
+M.unwatch_ghci_output = function ()
+  if fs_event_handle then
+    vim.uv.fs_event_stop(M.fs_event_handle)
+    vim.notify("Watching stopped.")
+  end
+end
+
+
+M.create_user_command_for_watching = function ()
+  vim.api.nvim_create_user_command('GhcidWatchOutput',
+      function (args)
+        local filename = "ghcid-output.txt"
+        if #args.fargs > 0 then
+          filename = args.fargs[1]
+        end
+
+        M.watch_ghci_output(filename)
+      end,
+      { nargs = '?'})
+
+  vim.api.nvim_create_user_command('GhcidUnwatchOutput', M.unwatch_ghci_output,
+      { nargs = 0})
+end
 
 M.ns_id = ns_id
 M.StackBuildParser = StackBuildParser
