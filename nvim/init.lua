@@ -76,7 +76,7 @@ vim.keymap.set('n', '<leader>bs',
       if #errs > 0 then
         print('some buffer not saved: ' .. vim.inspect(errs))
       else
-        require('ruiheng.haskell.stack').start_build_job()
+        require('ruiheng.haskell.ghc').start_build_job()
         require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
       end
     end ,
@@ -84,7 +84,7 @@ vim.keymap.set('n', '<leader>bs',
   )
 
 -- create GhcidWatchOutput and GhcidUnwatchOutput
-require('ruiheng.haskell.stack').create_user_command_for_watching()
+require('ruiheng.haskell.ghc').create_user_command_for_watching()
 
 
 function my_set_local_tab_stop(n)

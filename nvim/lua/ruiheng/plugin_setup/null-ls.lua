@@ -11,7 +11,7 @@ M.config = function(_, _)
     local helpers = require('null-ls.helpers')
     local log = require("null-ls.logger")
     local methods = require('null-ls.methods')
-    local stack = require('ruiheng.haskell.stack')
+    local stack = require('ruiheng.haskell.ghc')
 
     local stack_build = {
       name = "my-haskell-stack",
@@ -40,7 +40,7 @@ M.config = function(_, _)
           end
 
           local log = require("null-ls.logger")
-          local parser = stack.StackBuildParser:new({ log = log })
+          local parser = stack.GhcOutputParser:new({ log = log })
           parser:parse_build_output_whole(output)
           parser:set_quickfix_messages()
 

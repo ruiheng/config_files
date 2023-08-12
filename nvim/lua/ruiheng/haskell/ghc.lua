@@ -194,9 +194,9 @@ local function qf_list_add_one(t)
 end
 
 
-local StackBuildParser = {}
+local GhcOutputParser = {}
 
-function StackBuildParser:new(init_obj)
+function GhcOutputParser:new(init_obj)
   local o = vim.tbl_extend(
           'force',
           {
@@ -223,14 +223,14 @@ function StackBuildParser:new(init_obj)
 end
 
 
-function StackBuildParser:append_qf_message(t)
+function GhcOutputParser:append_qf_message(t)
   if self.sync_to_qf then
     qf_list_add_one(t)
   end
 end
 
 
-function StackBuildParser:parse_output_other_line(line)
+function GhcOutputParser:parse_output_other_line(line)
   self:append_qf_message(line)
 
   if other_normal_message(line) then
@@ -241,7 +241,7 @@ function StackBuildParser:parse_output_other_line(line)
 end
 
 
-function StackBuildParser:try_parse_output_final_summary(line)
+function GhcOutputParser:try_parse_output_final_summary(line)
   if not self.stack_summary_msg_started then
     local msg = string.match(line, '^Error: %[S%-%d+%]')
     if msg == nil then
@@ -263,7 +263,7 @@ function StackBuildParser:try_parse_output_final_summary(line)
 end
 
 
-function StackBuildParser:parse_build_output_line(line)
+function GhcOutputParser:parse_build_output_line(line)
   if self.diag == nil then
     -- looking for a diagnostic message beginning
     local filename, severity, row, col, end_row, end_col, msg = parse_diagnostics_beginning(line, self.log)
@@ -307,7 +307,7 @@ function StackBuildParser:parse_build_output_line(line)
 end
 
 
-function StackBuildParser:parse_build_output_whole(output)
+function GhcOutputParser:parse_build_output_whole(output)
   local lines = vim.split(output, "\n")
 
   for _, line in ipairs(lines) do
@@ -317,7 +317,7 @@ end
 
 
 -- only copy unrecognized messages and summary messages
-function StackBuildParser:set_quickfix_messages()
+function GhcOutputParser:set_quickfix_messages()
   local qf_list = {}
   for _, line in ipairs(self.unrecognized_list) do
     table.insert(qf_list, { text = line })
@@ -332,7 +332,7 @@ function StackBuildParser:set_quickfix_messages()
   end
 end
 
-function StackBuildParser:set_diagnostics(ns_id)
+function GhcOutputParser:set_diagnostics(ns_id)
   local bufnr_diags = {}
 
   for _, diag in ipairs(self.diags) do
@@ -383,7 +383,7 @@ M.make_start_build_args = function ()
 end
 
 
-local namespace_name = 'stack-build'
+local namespace_name = 'ruiheng-ghc-compile'
 local ns_id = vim.api.nvim_create_namespace(namespace_name)
 local build_jobs = {}
 
@@ -392,7 +392,7 @@ M.start_build_job = function ()
   local cmd_args = M.make_start_build_args()
   table.insert(cmd_args, 1, "stack")
 
-  local parser = StackBuildParser:new { sync_to_qf = true }
+  local parser = GhcOutputParser:new { sync_to_qf = true }
 
   local line_leftover = nil
   local pid = nil
@@ -500,7 +500,7 @@ M.watch_ghci_output = function (path)
                 vim.diagnostic.reset(ns_id, nil)
 
                 vim.notify("updated output from file: " .. filename)
-                local parser = StackBuildParser:new { sync_to_qf = true }
+                local parser = GhcOutputParser:new { sync_to_qf = true }
                 parser:parse_build_output_whole(output)
                 parser:set_diagnostics(ns_id)
             end
@@ -538,6 +538,6 @@ M.create_user_command_for_watching = function ()
 end
 
 M.ns_id = ns_id
-M.StackBuildParser = StackBuildParser
+M.GhcOutputParser = GhcOutputParser
 
 return M
