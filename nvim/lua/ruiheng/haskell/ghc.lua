@@ -356,30 +356,34 @@ function GhcOutputParser:set_diagnostics(ns_id)
 end
 
 
-M.make_start_build_args = function ()
-  local args = {
-              "build", "--fast",
-              "--ghc-options", "-fno-diagnostics-show-caret",
-              "--ghc-options", "-fdefer-diagnostics",
-              "--ghc-options", "-fdiagnostics-color=never",
-              "--ghc-options", "-ferror-spans",
-            }
+M.make_start_build_args = function (cmd)
+  if cmd == nil or cmd == 'stack' then
+    local args = {
+                "build", "--fast",
+                "--ghc-options", "-fno-diagnostics-show-caret",
+                "--ghc-options", "-fdefer-diagnostics",
+                "--ghc-options", "-fdiagnostics-color=never",
+                "--ghc-options", "-ferror-spans",
+              }
 
-  local f = io.open("stack-diagnostic-flags.txt", "rb")
-  if f == nil then
-      qf_list_add_one('stack-diagnostic-flags.txt not found')
-      table.insert(args, ".")
-  else
-    qf_list_add_one('found stack-diagnostic-flags.txt')
-    for line in f:lines() do
-      if line:find('#', 1, true) ~= 1 then
-        table.insert(args, line)
+    local f = io.open("stack-diagnostic-flags.txt", "rb")
+    if f == nil then
+        qf_list_add_one('stack-diagnostic-flags.txt not found')
+        table.insert(args, ".")
+    else
+      qf_list_add_one('found stack-diagnostic-flags.txt')
+      for line in f:lines() do
+        if line:find('#', 1, true) ~= 1 then
+          table.insert(args, line)
+        end
       end
+      f:close()
     end
-    f:close()
-  end
 
-  return args
+    return args
+  else
+    return { "build", }
+  end
 end
 
 
@@ -388,9 +392,19 @@ local ns_id = vim.api.nvim_create_namespace(namespace_name)
 local build_jobs = {}
 
 -- create a new job to call 'stack build'
-M.start_build_job = function ()
-  local cmd_args = M.make_start_build_args()
-  table.insert(cmd_args, 1, "stack")
+M.start_build_job = function (cmd, init_cmd_args)
+  if cmd == nil then
+    cmd = 'stack'
+  end
+
+  local cmd_args
+  if init_cmd_args then
+    cmd_args = init_cmd_args
+  else
+    cmd_args = M.make_start_build_args(cmd)
+  end
+
+  table.insert(cmd_args, 1, cmd)
 
   local parser = GhcOutputParser:new { sync_to_qf = true }
 
