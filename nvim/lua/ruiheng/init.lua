@@ -58,8 +58,13 @@ local function setup_new_terminal(terminal)
   local map_opts = { buffer = terminal.bufnr, }
 -- use <localleader>x to close the terminal window (but keep the command running)
 -- use <localleader>t to cycle through running terminals
-  vim.keymap.set( { 'n', 't' }, '<localleader>t', function() M.cycle_running_cmd_terminal() end, map_opts )
-  vim.keymap.set( { 'n', 't' }, '<localleader>x', function() terminal:close() end, map_opts )
+  vim.keymap.set( { 'n', 't' }, '<localleader>t',
+    function() M.cycle_running_cmd_terminal() end,
+    vim.tbl_extend('force', map_opts, { desc = 'Cycle through running terminals.' }))
+
+  vim.keymap.set( { 'n', 't' }, '<localleader>x',
+    function() terminal:close() end,
+    vim.tbl_extend('force', map_opts, { desc = 'Close terminal.' }))
 end
 
 --  create (or reuse existing one) to run a command
