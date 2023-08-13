@@ -557,5 +557,6 @@ require("lazy").setup({
     --- colorschemes ----
     { "rebelot/kanagawa.nvim", priority = 100 },
     { "sainnhe/everforest", priority = 100 },
+    { "ellisonleao/gruvbox.nvim", priority = 1000 },
 })
 
