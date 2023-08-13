@@ -107,7 +107,18 @@ vim.keymap.set('n', '<leader>R',
     function()
       require('ruiheng').toggle_terminal_run()
     end ,
-    {noremap = true, silent = true}
+    {noremap = true, silent = true, desc = 'resume last terminal that was created by ToggleTerminalRun'}
+  )
+
+vim.keymap.set('n', '<leader>lg',
+    function()
+      require('ruiheng').toggle_terminal_run('lazygit')
+    end ,
+    {noremap = true, silent = true, desc = 'run lazygit in a terminal'}
+  )
+
+vim.keymap.set('n', '<leader>tr', ':ToggleTerminalRun ',
+    {noremap = true, desc = 'invoke ToggleTerminalRun'}
   )
 
 function my_set_local_tab_stop(n)

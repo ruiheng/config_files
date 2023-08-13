@@ -65,7 +65,7 @@ end
 --  create (or reuse existing one) to run a command
 --  this requires 'toggleterm.nvim'
 function M.toggle_terminal_run (cmd_args)
-  if cmd_args == nil or #cmd_args == 0 then
+  if cmd_args == nil or cmd_args == '' or #cmd_args == 0 then
     if current_terminal ~= nil then
       current_terminal:open()
       return True
@@ -74,7 +74,16 @@ function M.toggle_terminal_run (cmd_args)
     return False
   end
 
-  local cmd = table.concat(cmd_args, ' ')
+  local cmd
+  if type(cmd_args) == 'string' then
+    cmd = cmd_args
+  elseif type(cmd_args) == 'table' then
+    cmd = table.concat(cmd_args, ' ')
+  else
+    print('invalid argument type: ' .. type(cmd_args))
+    return
+  end
+
   local old_terminal = cmd_to_terminal[cmd]
 
   local on_exit = function (terminal, job, exit_code, name)
