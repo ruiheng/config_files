@@ -76,6 +76,7 @@ function M.toggle_terminal_run (cmd_args)
       return True
     end
 
+    vim.notify('no running terminal', vim.log.levels.WARN)
     return False
   end
 
@@ -142,6 +143,7 @@ M.cycle_running_cmd_terminal = function (pattern)
   end
 
   if current_terminal == nil then
+    -- current terminal exited
     local the_terminal
     for cmd, term in pairs(cmd_to_terminal) do
       if pattern == nil or string.match(cmd, pattern) ~= nil then
@@ -157,6 +159,8 @@ M.cycle_running_cmd_terminal = function (pattern)
 
     if the_terminal then
       pick(the_terminal)
+    else
+      vim.notify('no running terminal', vim.log.levels.WARN)
     end
   else
     local first_terminal = nil
@@ -183,6 +187,8 @@ M.cycle_running_cmd_terminal = function (pattern)
       pick(the_terminal)
     elseif first_terminal then
       pick(first_terminal)
+    else
+      vim.notify('no running terminal', vim.log.levels.WARN)
     end
   end
 end
