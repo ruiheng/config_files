@@ -86,6 +86,19 @@ vim.keymap.set('n', '<leader>bs',
 -- create GhcidWatchOutput and GhcidUnwatchOutput
 require('ruiheng.haskell.ghc').create_user_command_for_watching()
 
+-- run ghcid in a terminal and show, or hide the terminal if it is active
+vim.api.nvim_create_user_command("ToggleTerminalRun",
+  function (args)
+    if #args.fargs == 0 then
+      print('usage: ToggleTerminalRun [command] [args...]')
+      return
+    end
+    require('ruiheng').toggle_terminal_run(args.fargs)
+  end,
+  { nargs = "+",
+    desc = [[Run a command in a terminal.]],
+  })
+
 
 function my_set_local_tab_stop(n)
   vim.opt_local.tabstop = n
@@ -142,7 +155,8 @@ vim.o.bg = 'dark'
 -- vim.g.everforest_background = 'soft'
 -- vim.g.everforest_better_performance = 1
 -- vim.cmd("colorscheme everforest")
-vim.cmd("colorscheme kanagawa")
+-- vim.cmd("colorscheme kanagawa")
+vim.cmd("colorscheme gruvbox")
 
 
 vim.keymap.set('n', '<leader>do', vim.diagnostic.open_float, { noremap = true, })
@@ -166,8 +180,8 @@ vim.api.nvim_create_autocmd('FileType', {
     -- for unknown reason, 'syntax' optoin is empty when opening haskell files ('filetype' has been detected correctly)
     vim.opt_local.syntax = 'ON'
 
-    -- opt_local.foldmethod = 'expr'
-    -- opt_local.foldexpr = 'nvim_treesitter#foldexpr()'
+    opt_local.foldmethod = 'expr'
+    opt_local.foldexpr = 'nvim_treesitter#foldexpr()'
     opt_local.foldenable = false
 
     my_set_local_tab_stop(2)
