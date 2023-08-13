@@ -87,6 +87,18 @@ require("lazy").setup({
       end
     },
 
+    { 'abecodes/tabout.nvim',
+      dependencies = {
+        'nvim-treesitter/nvim-treesitter',
+      },
+      config = function()
+        require('tabout').setup {
+          tabkey = '<leader><Tab>',
+          backwords_tabkey = '<leader><Shift-Tab>',
+        }
+      end,
+    },
+
     -- terminal --
 
     { 'willothy/flatten.nvim',
