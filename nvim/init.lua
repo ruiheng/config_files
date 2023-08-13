@@ -38,6 +38,7 @@ end
 ---------------- options, key mappings -------------
 
 vim.g.mapleader = " " -- make sure to set `mapleader` before lazy
+vim.g.maplocalleader = ","
 
 vim.cmd.filetype("on")
 vim.cmd.filetype("plugin on")
@@ -86,7 +87,9 @@ vim.keymap.set('n', '<leader>bs',
 -- create GhcidWatchOutput and GhcidUnwatchOutput
 require('ruiheng.haskell.ghc').create_user_command_for_watching()
 
--- run ghcid in a terminal and show, or hide the terminal if it is active
+-- run a command (usually long-running) in a terminal and show
+-- use <localleader>x to close the terminal window (but keep the command running)
+-- use <localleader>t to cycle through running terminals
 vim.api.nvim_create_user_command("ToggleTerminalRun",
   function (args)
     if #args.fargs == 0 then
@@ -99,6 +102,13 @@ vim.api.nvim_create_user_command("ToggleTerminalRun",
     desc = [[Run a command in a terminal.]],
   })
 
+-- resume the last terminal window that was created by ToggleTerminalRun
+vim.keymap.set('n', '<leader>R',
+    function()
+      require('ruiheng').toggle_terminal_run()
+    end ,
+    {noremap = true, silent = true}
+  )
 
 function my_set_local_tab_stop(n)
   vim.opt_local.tabstop = n

@@ -1,4 +1,6 @@
-local function save_bufer(buf)
+local M = {}
+
+M.save_bufer = function (buf)
   local buf_type = vim.api.nvim_get_option_value("buftype", { buf = buf })
   if buf_type ~= '' then return end
 
@@ -21,11 +23,11 @@ local function save_bufer(buf)
 end
 
 
-local function save_all_buffers()
+M.save_all_buffers = function ()
   local errs = {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then
-      local err = save_bufer(buf)
+      local err = M.save_bufer(buf)
       if err then
         table.insert(errs, { file = vim.api.nvim_buf_get_name(buf), bufnr = buf, err = err } )
       end
@@ -35,7 +37,7 @@ local function save_all_buffers()
 end
 
 
-local function current_filename_glob_patten()
+function M.current_filename_glob_patten()
   local filename = vim.api.nvim_buf_get_name(0)
   if filename == '' then return '*' end
   local i = filename:find("%.")
@@ -54,12 +56,24 @@ local current_terminal = nil
 
 local function setup_new_terminal(terminal)
   local map_opts = { buffer = terminal.bufnr, }
-  -- vim.keymap.set( { 'n', 't'
+-- use <localleader>x to close the terminal window (but keep the command running)
+-- use <localleader>t to cycle through running terminals
+  vim.keymap.set( { 'n', 't' }, '<localleader>t', function() M.cycle_running_cmd_terminal() end, map_opts )
+  vim.keymap.set( { 'n', 't' }, '<localleader>x', function() terminal:close() end, map_opts )
 end
 
 --  create (or reuse existing one) to run a command
 --  this requires 'toggleterm.nvim'
-local toggle_terminal_run = function (cmd_args)
+function M.toggle_terminal_run (cmd_args)
+  if cmd_args == nil or #cmd_args == 0 then
+    if current_terminal ~= nil then
+      current_terminal:open()
+      return True
+    end
+
+    return False
+  end
+
   local cmd = table.concat(cmd_args, ' ')
   local old_terminal = cmd_to_terminal[cmd]
 
@@ -107,7 +121,7 @@ end
 
 
 -- show next terminal window that was created by toggle_terminal_run
-local next_running_cmd_terminal = function ()
+M.cycle_running_cmd_terminal = function (pattern)
   local pick = function (term)
     term:open()
     current_terminal = term
@@ -116,11 +130,13 @@ local next_running_cmd_terminal = function ()
   if current_terminal == nil then
     local the_terminal
     for cmd, term in pairs(cmd_to_terminal) do
-      if the_terminal == nil then
-        the_terminal = term
-      else
-        if the_terminal.job_id > term.job_id then
+      if pattern == nil or string.match(cmd, pattern) ~= nil then
+        if the_terminal == nil then
           the_terminal = term
+        else
+          if the_terminal.job_id > term.job_id then
+            the_terminal = term
+          end
         end
       end
     end
@@ -133,12 +149,19 @@ local next_running_cmd_terminal = function ()
     local the_terminal
 
     for cmd, term in pairs(cmd_to_terminal) do
-      if first_terminal == nil then
-        first_terminal = term
-      end
+      if pattern == nil or string.match(cmd, pattern) ~= nil then
+        if first_terminal == nil or term.job_id < first_terminal.job_id then
+          first_terminal = term
+        end
 
-      if the_terminal.job_id > term.job_id then
-        the_terminal = term
+        -- next terminal that job_id > current_terminal.job_id
+        if term ~= current_terminal then
+          if the_terminal == nil then
+            the_terminal = term
+          elseif the_terminal.job_id > term.job_id then
+            the_terminal = term
+          end
+        end
       end
     end
 
@@ -150,9 +173,4 @@ local next_running_cmd_terminal = function ()
   end
 end
 
-return {
-  save_bufer = save_bufer,
-  save_all_buffers = save_all_buffers,
-  current_filename_glob_patten = current_filename_glob_patten,
-  toggle_terminal_run = toggle_terminal_run,
-
+return M
