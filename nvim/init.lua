@@ -99,6 +99,7 @@ vim.api.nvim_create_user_command("ToggleTerminalRun",
     require('ruiheng').toggle_terminal_run(args.fargs)
   end,
   { nargs = "+",
+    complete = 'file_in_path',
     desc = [[Run a command in a terminal.]],
   })
 

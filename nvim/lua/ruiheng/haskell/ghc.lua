@@ -545,10 +545,15 @@ M.create_user_command_for_watching = function ()
 
         M.watch_ghci_output(filename)
       end,
-      { nargs = '?'})
+      { nargs = '?',
+        complete = 'file',
+        desc = 'Watch ghcid generated output file, default to "ghcid-output.txt".'
+      })
 
   vim.api.nvim_create_user_command('GhcidUnwatchOutput', M.unwatch_ghci_output,
-      { nargs = 0})
+      { nargs = 0,
+        desc = 'Stop watching ghcid generated output file.'
+      })
 end
 
 M.ns_id = ns_id
