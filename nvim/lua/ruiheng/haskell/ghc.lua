@@ -484,6 +484,39 @@ M.watch_ghci_output = function (path)
     vim.uv.fs_event_stop(M.fs_event_handle)
   end
 
+  local parse_output_file = function (filename, f)
+    if f == nil then
+      f = io.open(filename, "rb")
+    end
+
+    if f == nil then
+        vim.notify("Cannot open file: " .. filename)
+    else
+      local output = f:read("*a")
+      f:close()
+
+      if vim.startswith(output, 'All good') then
+          vim.fn.setqflist({}, 'r')
+          vim.diagnostic.reset(ns_id, nil)
+          qf_list_add_one(output)
+          vim.notify(output, vim.log.INFO)
+
+      else
+        if output == '' then
+            vim.notify('output is empty', vim.log.INFO)
+        end
+
+          vim.fn.setqflist({}, 'r')
+          vim.diagnostic.reset(ns_id, nil)
+
+          vim.notify("updated output from file: " .. filename)
+          local parser = GhcOutputParser:new { sync_to_qf = true }
+          parser:parse_build_output_whole(output)
+          parser:set_diagnostics(ns_id)
+      end
+    end
+  end
+
   local event_cb = function(err, filename, events)
     vim.schedule_wrap(function ()
         if err then
@@ -491,39 +524,18 @@ M.watch_ghci_output = function (path)
         else
           -- delay a little while to wait full content written to the file?
           vim.uv.sleep(100)
-
-          local f = io.open(filename, "rb")
-          if f == nil then
-              vim.notify("Cannot open file: " .. filename)
-          else
-            local output = f:read("*a")
-            f:close()
-
-            if vim.startswith(output, 'All good') then
-                vim.fn.setqflist({}, 'r')
-                vim.diagnostic.reset(ns_id, nil)
-                qf_list_add_one(output)
-                vim.notify(output, vim.log.INFO)
-
-            else
-              if output == '' then
-                  vim.notify('output is empty', vim.log.INFO)
-              end
-
-                vim.fn.setqflist({}, 'r')
-                vim.diagnostic.reset(ns_id, nil)
-
-                vim.notify("updated output from file: " .. filename)
-                local parser = GhcOutputParser:new { sync_to_qf = true }
-                parser:parse_build_output_whole(output)
-                parser:set_diagnostics(ns_id)
-            end
-          end
+          parse_output_file(filename)
         end
     end)()
   end
 
   vim.uv.fs_event_start(M.fs_event_handle, path, {}, event_cb)
+
+  -- parse output file immediately
+  local f = io.open(path, "rb")
+  if f then
+    parse_output_file(path, f)
+  end
 end
 
 
