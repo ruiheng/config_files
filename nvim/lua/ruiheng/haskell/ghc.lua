@@ -359,7 +359,7 @@ end
 M.make_start_build_args = function (cmd)
   if cmd == nil or cmd == 'stack' then
     local args = {
-                "build", "--fast",
+                "build",
                 "--ghc-options", "-fno-diagnostics-show-caret",
                 "--ghc-options", "-fdefer-diagnostics",
                 "--ghc-options", "-fdiagnostics-color=never",
