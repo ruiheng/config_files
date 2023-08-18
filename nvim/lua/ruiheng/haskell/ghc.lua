@@ -462,7 +462,7 @@ M.start_build_job = function (cmd, init_cmd_args)
     end
   end
 
-  vim.fn.setqflist({}, 'r')
+  vim.fn.setqflist({}, ' ' )
   vim.diagnostic.reset(ns_id, nil)
 
   qf_list_add_one(table.concat(cmd_args, ' '))
@@ -499,7 +499,7 @@ M.watch_ghci_output = function (path)
           vim.fn.setqflist({}, 'r')
           vim.diagnostic.reset(ns_id, nil)
           qf_list_add_one(output)
-          vim.notify(output, vim.log.INFO)
+          vim.notify('All good', vim.log.INFO)
 
       else
         if output == '' then
