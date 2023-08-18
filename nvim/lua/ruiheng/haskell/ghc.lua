@@ -1,5 +1,32 @@
 local M = {}
 
+M.locate_first_cabal_file = function ()
+  local dir = vim.fn.getcwd()
+
+  while true do
+    local files = vim.fn.glob(dir .. '/*.cabal', 0, 1)
+    if #files == 1 then
+      return files[1]
+    elseif #files > 1 then
+      return nil, 'More than one cabal file found: ' .. table.concat(files, ', ')
+    end
+
+    dir = vim.fn.fnamemodify(dir, ':h')
+    if dir == '/' then break end
+  end
+
+  return nil, 'No cabal file found'
+end
+
+M.get_name_from_cabal_file = function (file)
+  local line
+  for line in io.lines(file) do
+    local name = string.match(line, '^name:%s*(.+)%s*$')
+    if name then return name end
+  end
+end
+
+
 local severity_table = {
   error = 1,
   warning = 2,
@@ -356,7 +383,9 @@ function GhcOutputParser:set_diagnostics(ns_id)
 end
 
 
-M.make_start_build_args = function (cmd)
+M.make_start_build_args_wd = function (cmd)
+  local working_dir = vim.fn.getcwd()
+
   if cmd == nil or cmd == 'stack' then
     local args = {
                 "build",
@@ -368,8 +397,21 @@ M.make_start_build_args = function (cmd)
 
     local f = io.open("stack-diagnostic-flags.txt", "rb")
     if f == nil then
-        qf_list_add_one('stack-diagnostic-flags.txt not found')
+      qf_list_add_one('stack-diagnostic-flags.txt not found')
+      local cabal_file = M.locate_first_cabal_file()
+      local package_name
+      if cabal_file ~= nil then
+        qf_list_add_one('Found cabal file: ' .. cabal_file)
+        package_name = M.get_name_from_cabal_file(cabal_file)
+        qf_list_add_one('Package name: ' .. package_name)
+        working_dir = vim.fn.fnamemodify(cabal_file, ':p:h')
+      end
+
+      if package_name ~= nil then
+        table.insert(args, package_name)
+      else
         table.insert(args, ".")
+      end
     else
       qf_list_add_one('found stack-diagnostic-flags.txt')
       for line in f:lines() do
@@ -380,9 +422,9 @@ M.make_start_build_args = function (cmd)
       f:close()
     end
 
-    return args
+    return args, working_dir
   else
-    return { "build", }
+    return { "build", }, working_dir
   end
 end
 
@@ -392,16 +434,22 @@ local ns_id = vim.api.nvim_create_namespace(namespace_name)
 local build_jobs = {}
 
 -- create a new job to call 'stack build'
-M.start_build_job = function (cmd, init_cmd_args)
+M.start_build_job = function (cmd, init_cmd_args, init_wd)
+  vim.fn.setqflist({}, ' ' )
+
+  local wd = '.'
+
   if cmd == nil then
     cmd = 'stack'
   end
+
+  if init_wd ~= nil then wd = init_wd end
 
   local cmd_args
   if init_cmd_args then
     cmd_args = init_cmd_args
   else
-    cmd_args = M.make_start_build_args(cmd)
+    cmd_args, wd = M.make_start_build_args_wd(cmd)
   end
 
   table.insert(cmd_args, 1, cmd)
@@ -462,11 +510,10 @@ M.start_build_job = function (cmd, init_cmd_args)
     end
   end
 
-  vim.fn.setqflist({}, ' ' )
   vim.diagnostic.reset(ns_id, nil)
 
   qf_list_add_one(table.concat(cmd_args, ' '))
-  local sys_obj = vim.system(cmd_args, { text = true, stderr = on_stderr, }, on_exit)
+  local sys_obj = vim.system(cmd_args, { text = true, stderr = on_stderr, cwd = wd, }, on_exit)
   job_start = vim.uv.hrtime()
   table.insert(build_jobs, sys_obj)
 

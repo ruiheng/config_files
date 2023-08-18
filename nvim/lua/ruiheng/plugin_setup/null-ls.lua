@@ -12,6 +12,7 @@ M.config = function(_, _)
     local log = require("null-ls.logger")
     local methods = require('null-ls.methods')
     local stack = require('ruiheng.haskell.ghc')
+    local args, wd = stack.make_start_build_args_wd()
 
     local stack_build = {
       name = "my-haskell-stack",
@@ -22,7 +23,8 @@ M.config = function(_, _)
         method = null_ls.methods.DIAGNOSTICS_ON_SAVE,  -- not the same as methods.lsp.DID_SAVE
         multiple_files = true,
         command = "stack",
-        args = stack.make_start_build_args,
+        args = args,
+        cwd = wd,
 
         timeout = 100000, -- stack build may take a long time
         check_exit_code = function(code)
