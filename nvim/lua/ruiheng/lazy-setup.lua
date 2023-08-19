@@ -241,7 +241,15 @@ require("lazy").setup({
      end
     },
 
-    'nvim-treesitter/nvim-treesitter-context',
+    { 'nvim-treesitter/nvim-treesitter-context',
+      config = function()
+        vim.keymap.set("n", "[c", function()
+          require("treesitter-context").go_to_context()
+        end, { silent = true })
+
+        vim.cmd('hi TreesitterContextBottom gui=underline guisp=Grey')
+      end,
+    },
 
     { 'neovim/nvim-lspconfig',
       config = function()
