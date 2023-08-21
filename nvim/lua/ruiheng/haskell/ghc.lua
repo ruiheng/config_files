@@ -385,6 +385,7 @@ end
 
 M.make_start_build_args_wd = function (cmd)
   local working_dir = vim.fn.getcwd()
+  local package_name
 
   if cmd == nil or cmd == 'stack' then
     local args = {
@@ -395,23 +396,18 @@ M.make_start_build_args_wd = function (cmd)
                 "--ghc-options", "-ferror-spans",
               }
 
+    local cabal_file = M.locate_first_cabal_file()
+    if cabal_file ~= nil then
+      qf_list_add_one('Found cabal file: ' .. cabal_file)
+      package_name = M.get_name_from_cabal_file(cabal_file)
+      qf_list_add_one('Package name: ' .. package_name)
+      working_dir = vim.fn.fnamemodify(cabal_file, ':p:h')
+    end
+
     local f = io.open("stack-diagnostic-flags.txt", "rb")
     if f == nil then
       qf_list_add_one('stack-diagnostic-flags.txt not found')
-      local cabal_file = M.locate_first_cabal_file()
-      local package_name
-      if cabal_file ~= nil then
-        qf_list_add_one('Found cabal file: ' .. cabal_file)
-        package_name = M.get_name_from_cabal_file(cabal_file)
-        qf_list_add_one('Package name: ' .. package_name)
-        working_dir = vim.fn.fnamemodify(cabal_file, ':p:h')
-      end
 
-      if package_name ~= nil then
-        table.insert(args, package_name)
-      else
-        table.insert(args, ".")
-      end
     else
       qf_list_add_one('found stack-diagnostic-flags.txt')
       for line in f:lines() do
@@ -420,6 +416,12 @@ M.make_start_build_args_wd = function (cmd)
         end
       end
       f:close()
+    end
+
+    if package_name ~= nil then
+      table.insert(args, package_name)
+    else
+      table.insert(args, ".")
     end
 
     return args, working_dir
