@@ -4,8 +4,7 @@ M.save_bufer = function (buf)
   local buf_type = vim.api.nvim_get_option_value("buftype", { buf = buf })
   if buf_type ~= '' then return end
 
-  if vim.api.nvim_get_option_value("readonly", { buf = buf }) then return end
-  if not vim.api.nvim_get_option_value("modifiable", { buf = buf }) then return end
+  if not vim.api.nvim_get_option_value("modified", { buf = buf }) then return end
 
   local filename = vim.api.nvim_buf_get_name(buf)
   if filename == '' then return end
