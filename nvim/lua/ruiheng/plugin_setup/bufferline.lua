@@ -56,12 +56,14 @@ M.config = function ()
 
       close_command = delete_or_unlist_buffer,
 
-      --[[
       custom_filter = function(buf_num, buf_nums)
         local buf_type = vim.bo[buf_num].buftype
-        return buf_type == ''
+        if buf_type == 'quickfix' or buf_type == 'terminal' then
+          return false
+        end
+
+        return true
       end,
-      --]]
     },
   }
 
