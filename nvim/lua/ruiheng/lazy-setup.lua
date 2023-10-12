@@ -34,7 +34,7 @@ require("lazy").setup({
         end
     },
 
-    -- toggl, display and navigate marks
+    -- toggle, display and navigate marks
     { 'kshenoy/vim-signature' },
 
     { "t9md/vim-choosewin",
@@ -371,6 +371,8 @@ require("lazy").setup({
 
     -- web --
 
+    'posva/vim-vue',
+
     -- others --
 
     { "vim-airline/vim-airline",
@@ -456,7 +458,7 @@ require("lazy").setup({
 
     -- 'neovimhaskell/haskell-vim',
 
-    'itchyny/vim-haskell-indent',
+    -- 'itchyny/vim-haskell-indent',
 
     { 'sdiehl/vim-ormolu',
       enabled = false, -- or use 'haskell-tools'
