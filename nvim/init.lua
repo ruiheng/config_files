@@ -260,3 +260,13 @@ vim.api.nvim_create_autocmd('BufFilePost', {
 vim.api.nvim_create_user_command("DiagnosticReset", function()
     vim.diagnostic.reset()
 end, { desc = [[Reset diagnostics globally.]] })
+
+
+-- WORKAROUND: telescope.nvim may open a file buffer in insert mode
+vim.api.nvim_create_autocmd({ "BufLeave", "BufWinLeave" }, {
+  callback = function(event)
+    if vim.bo[event.buf].filetype == "TelescopePrompt" then
+      vim.api.nvim_exec2("silent! stopinsert!", {})
+    end
+  end
+})
