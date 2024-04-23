@@ -89,12 +89,12 @@ M.config = function ()
 
   map("n", "<C-T>p", "<cmd>BufferLineTogglePin<CR>", map_opts)
   map("n", "<C-T>o", "<cmd>BufferLineCloseOthers<CR>", map_opts)
+  map("n", "<C-T>r", "<cmd>BufferLineCloseRight<CR>", map_opts)
+  map("n", "<C-T>l", "<cmd>BufferLineCloseLeft<CR>", map_opts)
 
   map("n", "<C-T><", "<cmd>BufferLineMovePrev<CR>", map_opts)
   map("n", "<C-T>>", "<cmd>BufferLineMoveNext<CR>", map_opts)
 
-  map("n", "<leader>p", "<cmd>BufferPick<CR>", map_opts)
-  map("n", "<leader>P", "<cmd>BufferPickDelete<CR>", map_opts)
   map("n", "<C-T>0", ":lua require'bufferline'.move_to(1)<CR>", map_opts)
   map("n", "<C-T>$", ":lua require'bufferline'.move_to(-1)<CR>", map_opts)
 
