@@ -298,6 +298,7 @@ require("lazy").setup({
     },
 
     { 'neovim/nvim-lspconfig',
+      enabled = true,
       config = function()
         local lspconfig = require('lspconfig')
         lspconfig.pyright.setup {}
@@ -351,12 +352,13 @@ require("lazy").setup({
       end,
     },
 
-    { 'neoclide/coc.nvim', branch = 'release' },
+    -- use lspconfig instead: works better with telescope
+    -- { 'neoclide/coc.nvim', branch = 'release' },
 
     -- 'anuvyklack/pretty-fold.nvim',  -- use this or nvim-ufo
 
     {'kevinhwang91/nvim-ufo', dependencies = 'kevinhwang91/promise-async',
-      enabled = true, -- use pretty-fold.nvim instead
+      enabled = true, -- or use pretty-fold.nvim instead
       config = require('ruiheng.plugin_setup.nvim-ufo').config,
     },
 
