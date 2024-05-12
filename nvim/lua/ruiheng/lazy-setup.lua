@@ -118,14 +118,33 @@ require("lazy").setup({
     'mhinz/vim-signify',
 
     -- overall nvim behavior ---
+    {
+        "ThePrimeagen/harpoon",
+        branch = "harpoon2",
+        dependencies = { "nvim-lua/plenary.nvim" },
+        config = require('ruiheng.plugin_setup.harpoon').config,
+    },
+
+    {
+      "willothy/nvim-cokeline",
+      dependencies = {
+        "nvim-lua/plenary.nvim",        -- Required for v0.4.0+
+        "nvim-tree/nvim-web-devicons", -- If you want devicons
+        "stevearc/resession.nvim"       -- Optional, for persistent history
+      },
+      enabled = false, -- alternative to bufferline.nvim
+      -- config = true
+      config = require('ruiheng.plugin_setup.cokeline').config,
+    },
 
     { 'akinsho/bufferline.nvim',
       dependencies =
         { 'nvim-tree/nvim-web-devicons', -- optional
         },
-      version = '*',
+      branch = "main",
+      commit = "73540cb95f8d95aa1af3ed57713c6720c78af915",
 
-      enabled = true,
+      enabled = true, -- some issues in current version, use nvim-cokeline for now
 
       config = require('ruiheng.plugin_setup.bufferline').config,
     },
