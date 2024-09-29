@@ -338,10 +338,17 @@ require("lazy").setup({
       dependencies = 'kana/vim-textobj-user',
     },
 
-    { "Exafunction/codeium.vim",
+    -- { "Exafunction/codeium.vim",
+    --   config = function()
+    --     -- vim.g.codeium_no_map_tab = true
+    --     -- vim.keymap.set('i', '<C-g>', function () return vim.fn['codeium#Accept']() end, { expr = true })
+    --   end,
+    -- },
+
+    {
+      "supermaven-inc/supermaven-nvim",
       config = function()
-        -- vim.g.codeium_no_map_tab = true
-        -- vim.keymap.set('i', '<C-g>', function () return vim.fn['codeium#Accept']() end, { expr = true })
+        require("supermaven-nvim").setup({})
       end,
     },
 
