@@ -299,14 +299,7 @@ require("lazy").setup({
 
     { 'neovim/nvim-lspconfig',
       enabled = true,
-      config = function()
-        local lspconfig = require('lspconfig')
-        lspconfig.pyright.setup {}
-        lspconfig.tsserver.setup {}
-
-        -- use either this or haskell-tools
-        -- lspconfig.hls.setup {}
-      end
+      config = require('ruiheng.plugin_setup.lspconfig').config,
     },
 
     { "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
