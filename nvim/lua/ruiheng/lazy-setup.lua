@@ -41,6 +41,8 @@ require("lazy").setup({
       config = function ()
         vim.api.nvim_set_keymap('n',  '-',  '<Plug>(choosewin)', {noremap = true, silent = true})
         vim.g.choosewin_overlay_enable = 1
+        vim.g.choosewin_statusline_replace = 0
+        vim.g.choosewin_tabline_replace = 0 -- otherwise, bufferline.nvim may not work properly
       end
     },
 
