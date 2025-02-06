@@ -38,6 +38,7 @@ require("lazy").setup({
     { 'kshenoy/vim-signature' },
 
     { "t9md/vim-choosewin",
+      enabled = false, -- sems to break undo history
       config = function ()
         vim.api.nvim_set_keymap('n',  '-',  '<Plug>(choosewin)', {noremap = true, silent = true})
         vim.g.choosewin_overlay_enable = 1
