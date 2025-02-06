@@ -145,7 +145,7 @@ require("lazy").setup({
         { 'nvim-tree/nvim-web-devicons', -- optional
         },
       branch = "main",
-      commit = "73540cb95f8d95aa1af3ed57713c6720c78af915",
+      -- commit = "73540cb95f8d95aa1af3ed57713c6720c78af915",
 
       enabled = true, -- some issues in current version, use nvim-cokeline for now
 
