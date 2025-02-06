@@ -10,7 +10,7 @@ M.config = function ()
     end
   end
 
-  lspconfig.ruff_lsp.setup {
+  lspconfig.ruff.setup {
     -- on_attach = on_attach,
   }
 
