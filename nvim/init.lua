@@ -178,7 +178,8 @@ vim.o.bg = 'dark'
 -- vim.g.everforest_better_performance = 1
 -- vim.cmd("colorscheme everforest")
 -- vim.cmd("colorscheme kanagawa")
-vim.cmd("colorscheme gruvbox")
+-- vim.cmd("colorscheme gruvbox")
+vim.cmd("colorscheme tokyonight")
 
 
 vim.keymap.set('n', '<leader>do', vim.diagnostic.open_float, { noremap = true, })
