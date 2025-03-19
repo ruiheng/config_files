@@ -229,10 +229,17 @@ require("lazy").setup({
     { "sbdchd/neoformat" },
 
     { "nvim-treesitter/nvim-treesitter",
+      branch = 'master',
       build = ':TSUpdate', -- We recommend updating the parsers on update
       config = function()
-        require'nvim-treesitter.configs'.setup {
+        local configs = require("nvim-treesitter.configs")
+        configs.setup {
+          ensure_installed = { "c", "cpp", "haskell", "python", "javascript", "css", "html", "markdown", "markdown_inline", "git_rebase", "gitcommit", "gitignore", "json", "lua", "make", "toml", "yaml", "vim", "vimdoc", "zig" },
           highlight = {
+            enable = true,
+            additional_vim_regex_highlighting = false,
+          },
+          injections = {
             enable = true,
           },
 
