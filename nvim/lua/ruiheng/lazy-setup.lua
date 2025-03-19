@@ -592,8 +592,10 @@ require("lazy").setup({
 
     -- syntax highlighting --
     'lifepillar/pgsql.vim',
+    'glench/vim-jinja2-syntax',
 
     --- colorschemes ----
+    { 'ribru17/bamboo.nvim', priority = 2100 },
     { "rebelot/kanagawa.nvim", priority = 100 },
     { "sainnhe/everforest", priority = 100 },
     { "ellisonleao/gruvbox.nvim", priority = 1000 },
