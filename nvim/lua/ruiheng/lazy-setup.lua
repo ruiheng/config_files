@@ -348,18 +348,37 @@ require("lazy").setup({
       dependencies = 'kana/vim-textobj-user',
     },
 
-    -- { "Exafunction/codeium.vim",
-    --   config = function()
-    --     -- vim.g.codeium_no_map_tab = true
-    --     -- vim.keymap.set('i', '<C-g>', function () return vim.fn['codeium#Accept']() end, { expr = true })
-    --   end,
-    -- },
+    { 'stevearc/aerial.nvim',
+      opts = {},
+      dependencies = { 'nvim-tree/nvim-web-devicons', 'nvim-treesitter/nvim-treesitter', },
+      config = function()
+        require('aerial').setup({
+        })
+
+        vim.keymap.set('n', '<leader>a', '<cmd>AerialToggle!<CR>', {noremap = true, silent = true})
+      end,
+    },
+
+    -- AI --
+    { "Exafunction/codeium.vim",
+      enabled = false,
+      config = function()
+        -- vim.g.codeium_no_map_tab = true
+        -- vim.keymap.set('i', '<C-g>', function () return vim.fn['codeium#Accept']() end, { expr = true })
+      end,
+    },
 
     {
       "supermaven-inc/supermaven-nvim",
       config = function()
         require("supermaven-nvim").setup({})
       end,
+      enabled = true,
+    },
+
+    {
+      "github/copilot.vim",
+      enabled = false,
     },
 
     -- use lspconfig instead: works better with telescope
