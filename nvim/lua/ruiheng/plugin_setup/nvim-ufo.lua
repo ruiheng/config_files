@@ -4,8 +4,9 @@ M.config = function ()
   vim.o.fillchars = [[eob: ,fold: ,foldopen:,foldsep: ,foldclose:]]
   vim.o.foldcolumn = '1' -- '0' is not bad
   vim.o.foldlevel = 99 -- Using ufo provider need a large value, feel free to decrease the value
-  vim.o.foldlevelstart = 99
-  vim.o.foldenable = true
+  -- vim.o.foldlevelstart = 1
+  vim.o.foldnestmax = 4
+  vim.o.foldenable = false
 
   -- Using ufo provider need remap `zR` and `zM`. If Neovim is 0.6.1, remap yourself
   vim.keymap.set('n', 'zR', require('ufo').openAllFolds)
@@ -43,6 +44,10 @@ M.config = function ()
   -- Only depend on `nvim-treesitter/queries/filetype/folds.scm`,
   -- performance and stability are better than `foldmethod=nvim_treesitter#foldexpr()`
   require('ufo').setup({
+    open_fold_hl_timeout = 100,
+    provider_selector = function(bufnr, filetype, method)
+      return { 'treesitter', 'indent' }
+    end,
   })
 end
 
