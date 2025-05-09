@@ -14,7 +14,8 @@ M.config = function ()
     -- on_attach = on_attach,
   }
 
-  lspconfig.pyright.setup { }
+  -- lspconfig.pyright.setup { }
+  lspconfig.basedpyright.setup { }
 
   lspconfig.ts_ls.setup {}
 
