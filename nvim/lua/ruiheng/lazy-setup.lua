@@ -604,7 +604,14 @@ require("lazy").setup({
     'glench/vim-jinja2-syntax',
 
     --- colorschemes ----
-    { 'ribru17/bamboo.nvim', priority = 2100 },
+    { 'ribru17/bamboo.nvim',
+      priority = 2100,
+      config = function()
+        require('bamboo').setup {
+        }
+        require('bamboo').load()
+      end,
+    },
     { "rebelot/kanagawa.nvim", priority = 100 },
     { "sainnhe/everforest", priority = 100 },
     { "ellisonleao/gruvbox.nvim", priority = 1000 },
