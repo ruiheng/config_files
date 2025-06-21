@@ -623,7 +623,8 @@ require("lazy").setup({
 
     -- syntax highlighting --
     'lifepillar/pgsql.vim',
-    'glench/vim-jinja2-syntax',
+    -- 'glench/vim-jinja2-syntax', # not working
+    'HiPhish/jinja.vim',
 
     --- colorschemes ----
     { 'ribru17/bamboo.nvim',
