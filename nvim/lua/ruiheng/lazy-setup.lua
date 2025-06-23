@@ -479,36 +479,8 @@ require("lazy").setup({
     "yssl/QFEnter",
 
     { "echasnovski/mini.nvim",
-      config = function()
-        vim.g.minisurround_disable   = true
-        vim.g.minicompletion_disable = true
-        vim.g.ministarter_disable    = true
-
-        require('mini.sessions').setup {
-          hooks = {
-            pre = {
-              write = function ()
-                -- for barbar.nvim
-                vim.api.nvim_exec_autocmds('User', { pattern = 'SessionSavePre' })
-
-                local ok, scope = pcall(require, 'scope')
-                if ok then
-                  vim.cmd('ScopeSaveState')
-                end
-              end,
-            },
-            post = {
-              read = function ()
-                    local ok, scope = pcall(require, 'scope')
-                    if ok then
-                      vim.cmd('ScopeLoadState')
-                    end
-                end,
-            },
-          }
-        }
-
-      end
+      version = '*',
+      config = require('ruiheng.plugin_setup.mini').config,
     },
 
     { "milkypostman/vim-togglelist",
