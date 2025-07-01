@@ -183,6 +183,22 @@ require("lazy").setup({
       config = require('ruiheng.plugin_setup.bufferline').config,
     },
 
+    {
+      'ryanoneill/treble.nvim',
+      dependencies = {
+        {
+          'akinsho/bufferline.nvim',
+          version = '*',
+          dependencies = 'nvim-tree/nvim-web-devicons'
+        },
+        {
+          'nvim-telescope/telescope.nvim',
+          tag = '0.1.1',
+          dependencies = 'nvim-lua/plenary.nvim'
+        }
+      }
+    },
+
     { 'tiagovla/scope.nvim',
       enabled = true,
       config = require('ruiheng.plugin_setup.scope').config,
