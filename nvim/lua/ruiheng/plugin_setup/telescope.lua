@@ -28,8 +28,11 @@ M.config = function()
     end,
     vim.tbl_extend('force', map_opts, { desc = 'Live grep in Yesod project.' }))
 
-  vim.keymap.set("n", "<leader>B", builtin.buffers,
-    vim.tbl_extend('force', map_opts, { desc = 'Telescope: Buffers.' }))
+  -- vim.keymap.set("n", "<leader>B", builtin.buffers,
+  --   vim.tbl_extend('force', map_opts, { desc = 'Telescope: Buffers.' }))
+  local treble = require('treble')
+  vim.keymap.set("n", "<leader>B", treble.buffers,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: Bufferline Buffers.' }))
 
   vim.keymap.set("n", "<leader>H", builtin.help_tags,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: Search Help.' }))
