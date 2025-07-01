@@ -34,6 +34,8 @@ require("lazy").setup({
         end
     },
 
+    { 'kevinhwang91/nvim-bqf' },
+
     -- toggle, display and navigate marks
     { 'kshenoy/vim-signature' },
 
