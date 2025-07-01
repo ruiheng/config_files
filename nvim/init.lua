@@ -238,6 +238,7 @@ vim.api.nvim_create_autocmd('FileType', {
   pattern = { 'python' },
   callback = function ()
     vim.opt_local.expandtab = true
+    vim.opt_local.colorcolumn = '120'
     my_set_local_tab_stop(4)
   end,
 })
