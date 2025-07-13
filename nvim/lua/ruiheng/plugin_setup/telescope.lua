@@ -49,16 +49,33 @@ M.config = function()
   vim.keymap.set("n", "<leader>td", builtin.diagnostics,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: diagnostics.' }))
 
+  vim.keymap.set("n", "<leader>ds", builtin.lsp_document_symbols,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: LSP Document Symbols.' }))
+
+  vim.keymap.set("n", "<leader>ws", builtin.lsp_workspace_symbols,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: LSP Workspace Symbols.' }))
+
+  vim.keymap.set("n", "<leader>ts", builtin.treesitter,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: Treesitter.' }))
+
   vim.keymap.set("n", "<leader>tc", builtin.commands,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: vim commands.' }))
 
   vim.keymap.set("n", "<leader>tm", builtin.marks,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: marks.' }))
 
+  vim.keymap.set("n", "<leader>tb", builtin.builtin,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: all builtin pickers.' }))
+
   require('telescope').setup{
     defaults = {
       layout_strategy = 'vertical',
       layout_config = { height = 0.95 },
+    },
+    pickers = {
+      lsp_document_symbols = {
+        symbol_width = 60,
+      },
     },
   }
 end
