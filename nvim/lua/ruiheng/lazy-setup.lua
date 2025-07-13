@@ -143,11 +143,11 @@ require("lazy").setup({
 
     { 'tpope/vim-fugitive',
       config = function ()
-        vim.api.nvim_set_keymap('n', '<leader>gs', ':Gstatus<CR>', {noremap = true, })
-        vim.api.nvim_set_keymap('n', '<leader>gd', ':Gdiff<CR>', {noremap = true, })
-        vim.api.nvim_set_keymap('n', '<leader>gc', ':Gcommit<CR>', {noremap = true, })
-        vim.api.nvim_set_keymap('n', '<leader>gl', ':Glog<CR>', {noremap = true, })
-        vim.api.nvim_set_keymap('n', '<leader>gp', ':Git push<CR>', {noremap = true, })
+        -- vim.api.nvim_set_keymap('n', '<leader>gs', ':Gstatus<CR>', {noremap = true, })
+        -- vim.api.nvim_set_keymap('n', '<leader>gd', ':Gdiff<CR>', {noremap = true, })
+        -- vim.api.nvim_set_keymap('n', '<leader>gc', ':Gcommit<CR>', {noremap = true, })
+        -- vim.api.nvim_set_keymap('n', '<leader>gl', ':Glog<CR>', {noremap = true, })
+        -- vim.api.nvim_set_keymap('n', '<leader>gp', ':Git push<CR>', {noremap = true, })
       end,
     },
     'junegunn/gv.vim',
