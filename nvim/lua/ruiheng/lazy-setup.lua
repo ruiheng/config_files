@@ -39,8 +39,68 @@ require("lazy").setup({
     -- toggle, display and navigate marks
     { 'kshenoy/vim-signature' },
 
+    {
+      'saghen/blink.cmp',
+      -- optional: provides snippets for the snippet source
+      dependencies = { 'rafamadriz/friendly-snippets' },
+
+      -- use a release tag to download pre-built binaries
+      version = '1.*',
+      -- AND/OR build from source, requires nightly: https://rust-lang.github.io/rustup/concepts/channels.html#working-with-nightly-rust
+      -- build = 'cargo build --release',
+      -- If you use nix, you can build from source using latest nightly rust with:
+      -- build = 'nix run .#build-plugin',
+
+      ---@module 'blink.cmp'
+      ---@type blink.cmp.Config
+      opts = {
+        -- 'default' (recommended) for mappings similar to built-in completions (C-y to accept)
+        -- 'super-tab' for mappings similar to vscode (tab to accept)
+        -- 'enter' for enter to accept
+        -- 'none' for no mappings
+        --
+        -- All presets have the following mappings:
+        -- C-space: Open menu or open docs if already open
+        -- C-n/C-p or Up/Down: Select next/previous item
+        -- C-e: Hide menu
+        -- C-k: Toggle signature help (if signature.enabled = true)
+        --
+        -- See :h blink-cmp-config-keymap for defining your own keymap
+        keymap = {
+          preset = 'default',
+          ['<C-space>'] = {},
+          ['<A-space>'] = { function(cmp) cmp.show({ providers = { 'snippets' } }) end },
+          },
+
+        signature = { enabled = true },
+
+        appearance = {
+          -- 'mono' (default) for 'Nerd Font Mono' or 'normal' for 'Nerd Font'
+          -- Adjusts spacing to ensure icons are aligned
+          nerd_font_variant = 'mono'
+        },
+
+        -- (Default) Only show the documentation popup when manually triggered
+        completion = { documentation = { auto_show = false } },
+
+        -- Default list of enabled providers defined so that you can extend it
+        -- elsewhere in your config, without redefining it, due to `opts_extend`
+        sources = {
+          default = { 'lsp', 'path', 'snippets', 'buffer' },
+        },
+
+        -- (Default) Rust fuzzy matcher for typo resistance and significantly better performance
+        -- You may use a lua implementation instead by using `implementation = "lua"` or fallback to the lua implementation,
+        -- when the Rust fuzzy matcher is not available, by using `implementation = "prefer_rust"`
+        --
+        -- See the fuzzy documentation for more information
+        fuzzy = { implementation = "prefer_rust_with_warning" }
+      },
+      opts_extend = { "sources.default" }
+    },
+
     { "t9md/vim-choosewin",
-      enabled = false, -- sems to break undo history
+      enabled = false, -- seems to break undo history
       config = function ()
         vim.api.nvim_set_keymap('n',  '-',  '<Plug>(choosewin)', {noremap = true, silent = true})
         vim.g.choosewin_overlay_enable = 1
@@ -151,11 +211,17 @@ require("lazy").setup({
       end,
     },
     'junegunn/gv.vim',
-    'mhinz/vim-signify',
+    -- 'mhinz/vim-signify', -- use gitsigns.nvim instead
+
+    { 'lewis6991/gitsigns.nvim',
+      config = require('ruiheng.plugin_setup.gitsigns').config,
+    },
+
 
     -- overall nvim behavior ---
     {
         "ThePrimeagen/harpoon",
+        enabled = false,
         branch = "harpoon2",
         dependencies = { "nvim-lua/plenary.nvim" },
         config = require('ruiheng.plugin_setup.harpoon').config,
@@ -183,6 +249,86 @@ require("lazy").setup({
       enabled = true, -- some issues in current version, use nvim-cokeline for now
 
       config = require('ruiheng.plugin_setup.bufferline').config,
+    },
+
+    {
+      -- Our custom vertical bufferline
+      'vertical-bufferline',
+      dir = '/home/ruiheng/config_files/nvim/lua/vertical-bufferline',
+      dependencies = { 'akinsho/bufferline.nvim' },
+      enabled = true,
+      -- enabled = function()
+      --   -- 只有在启用时才加载这个插件
+      --   return vim.g.enable_vertical_bufferline == 1
+      -- end,
+      config = function()
+        local vbl = require('vertical-bufferline')
+
+        -- Keymap to toggle the vertical bufferline
+        vim.keymap.set('n', '<leader>vb', function()
+          vbl.toggle()
+        end, { noremap = true, silent = true, desc = "Toggle vertical bufferline" })
+
+        -- 分组管理快捷键
+        vim.keymap.set('n', '<leader>gn', function()
+          vbl.switch_to_next_group()
+        end, { noremap = true, silent = true, desc = "Switch to next buffer group" })
+
+        vim.keymap.set('n', '<leader>gp', function()
+          vbl.switch_to_prev_group()
+        end, { noremap = true, silent = true, desc = "Switch to previous buffer group" })
+
+
+        vim.keymap.set('n', '<leader>gc', function()
+          local group_id = vbl.create_group()
+          vim.notify("Created new group (use <leader>gr to rename it)", vim.log.levels.INFO)
+        end, { noremap = true, silent = true, desc = "Create new buffer group" })
+
+        vim.keymap.set('n', '<leader>gr', function()
+          vim.ui.input({ prompt = "Rename current group to: " }, function(name)
+            if name and name ~= "" then
+              vim.cmd("VBufferLineRenameGroup " .. name)
+            end
+          end)
+        end, { noremap = true, silent = true, desc = "Rename current buffer group" })
+
+        vim.keymap.set('n', '<leader>ve', function()
+          vbl.toggle_expand_all()
+        end, { noremap = true, silent = true, desc = "Toggle expand all groups mode" })
+
+        -- 分组排序快捷键
+        vim.keymap.set('n', '<leader>gU', function()
+          vbl.move_group_up()
+        end, { noremap = true, silent = true, desc = "Move current group up" })
+
+        vim.keymap.set('n', '<leader>gD', function()
+          vbl.move_group_down()
+        end, { noremap = true, silent = true, desc = "Move current group down" })
+
+        vim.keymap.set('n', '<leader>gg', function()
+            require('vertical-bufferline.groups').switch_to_previous_group()
+        end, { desc = 'Switch to previous group' })
+
+        -- 快速切换到特定分组（通过分组编号）
+        for i = 1, 9 do
+          vim.keymap.set('n', '<leader>g' .. i, function()
+            local groups = vbl.groups.get_all_groups()
+            if groups[i] then
+              vbl.groups.set_active_group(groups[i].id)
+              vim.notify("Switched to group: " .. groups[i].name, vim.log.levels.INFO)
+            else
+              vim.notify("Group " .. i .. " does not exist", vim.log.levels.WARN)
+            end
+          end, { noremap = true, silent = true, desc = "Switch to group " .. i })
+        end
+
+        -- 快速切换到历史文件（通过历史位置编号）
+        for i = 1, 9 do
+          vim.keymap.set('n', '<leader>h' .. i, function()
+            vbl.switch_to_history_file(i)
+          end, { noremap = true, silent = true, desc = "Switch to history file " .. i })
+        end
+      end,
     },
 
     {
@@ -616,6 +762,13 @@ require("lazy").setup({
     'lifepillar/pgsql.vim',
     -- 'glench/vim-jinja2-syntax', # not working
     'HiPhish/jinja.vim',
+    "ixru/nvim-markdown",
+
+    {
+      -- Our custom vertical bufferline
+      'jinja-mixied',
+      dir = '/home/ruiheng/config_files/nvim/jinja-mixed',
+    },
 
     --- colorschemes ----
     { 'ribru17/bamboo.nvim',

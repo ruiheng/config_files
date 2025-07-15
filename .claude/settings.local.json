@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(nvim:*)",
+      "Bash(luac:*)",
+      "Bash(ls:*)",
+      "Bash(rg:*)",
+      "Bash(touch:*)",
+      "Bash(git add:*)",
+      "Bash(lua:*)",
+      "Bash(find:*)",
+      "Bash(git commit:*)",
+      "Bash(git rebase:*)",
+      "Bash(git filter-branch:*)"
+    ],
+    "deny": []
+  }
+}

@@ -35,6 +35,18 @@ if vim.g.enable_lsp == nil then
     g_set('enable_lsp', vim.g.haskell_mode == 1 or vim.g.rust_mode == 1)
 end
 
+-- 检查并设置 enable_vertical_bufferline
+-- 可以通过命令行参数 --cmd "let g:enable_vertical_bufferline=1" 来启用
+-- 或者设置环境变量 NVIM_ENABLE_VBL=1
+if vim.g.enable_vertical_bufferline == nil then
+    -- 默认禁用，通过以下方式启用：
+    -- 1. 命令行：nvim --cmd "let g:enable_vertical_bufferline=1"
+    -- 2. 环境变量：NVIM_ENABLE_VBL=1 nvim
+    -- 3. 直接设置：在init.lua前面添加 vim.g.enable_vertical_bufferline = 1
+    local env_enable = os.getenv("NVIM_ENABLE_VBL")
+    g_set('enable_vertical_bufferline', env_enable == "1" and 1 or 0)
+end
+
 ---------------- options, key mappings -------------
 
 vim.g.mapleader = " " -- make sure to set `mapleader` before lazy
@@ -172,6 +184,7 @@ end
 
 vim.opt.rtp:prepend(lazypath)
 require('ruiheng.lazy-setup')
+
 
 vim.o.bg = 'dark'
 -- vim.g.everforest_background = 'soft'

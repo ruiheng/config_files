@@ -8,8 +8,6 @@ M.config = function ()
   -- doesn't work, no effect. don't know why
   -- require('mini.animate').setup()
 
-  require('mini.surround').setup()
-
   -- require('mini.surround').setup {
   --   -- Module mappings. Use `''` (empty string) to disable one.
   --   mappings = {

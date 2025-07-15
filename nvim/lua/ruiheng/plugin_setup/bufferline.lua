@@ -1,7 +1,16 @@
 local M = {}
 
--- to work with 'scope.nvim'
-local function delete_or_unlist_buffer(target)
+-- Smart buffer close function that works with vertical-bufferline and scope.nvim
+local function smart_delete_buffer(target)
+  -- Check if vertical-bufferline is enabled and available
+  if vim.g.enable_vertical_bufferline == 1 then
+    local ok, vbl_integration = pcall(require, 'vertical-bufferline.bufferline-integration')
+    if ok and vbl_integration.smart_close_buffer then
+      return vbl_integration.smart_close_buffer(target)
+    end
+  end
+  
+  -- Fallback to scope.nvim logic if vertical-bufferline is not available
   local function good_to_close()
       local to_go = true
       if vim.api.nvim_get_option_value("modified", { buf = target }) then
@@ -23,8 +32,11 @@ local function delete_or_unlist_buffer(target)
               if good_to_close() then
                   vim.cmd("enew")
                   vim.api.nvim_set_option_value("buflisted", false, { buf = target })
-                  if target == vim.api.nvim_get_current_buf() then
-                    vim.cmd('bnext')
+                  -- Safe bnext with fallback
+                  local success = pcall(vim.cmd, 'bnext')
+                  if not success then
+                    -- If bnext fails, we're likely at the last buffer
+                    vim.cmd("enew")
                   end
               end
           else
@@ -33,7 +45,11 @@ local function delete_or_unlist_buffer(target)
       else
           vim.api.nvim_set_option_value("buflisted", false, { buf = target })
           if target == vim.api.nvim_get_current_buf() then
-            vim.cmd('bnext')
+            local success = pcall(vim.cmd, 'bnext')
+            if not success then
+              -- If bnext fails, create a new buffer
+              vim.cmd("enew")
+            end
           end
       end
   else
@@ -54,7 +70,7 @@ M.config = function ()
       show_buffer_close_icons = false,
       numbers = 'ordinal',
 
-      close_command = delete_or_unlist_buffer,
+      close_command = smart_delete_buffer,
 
       custom_filter = function(buf_num, buf_nums)
         local buf_type = vim.bo[buf_num].buftype

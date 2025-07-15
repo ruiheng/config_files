@@ -30,6 +30,7 @@
 [push]
 	default = simple
 [http]
+        #proxy = http://vm-host:10809
 	#proxy = socks5://172.16.245.1:1080
 	#proxy = socks5://192.168.222.1:2080
 	#proxy = http://127.0.0.1:7777

@@ -1,6 +1,7 @@
 local M = {}
 
 M.config = function(_, opts)
+    vim.opt.sessionoptions = 'buffers,tabpages,globals'
     require('scope').setup(opts)
     require('telescope').load_extension('scope')
 
