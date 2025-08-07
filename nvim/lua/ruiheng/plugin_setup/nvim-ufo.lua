@@ -54,6 +54,9 @@ M.config = function ()
   end
 
   require('ufo').setup({
+    provider_selector = function(bufnr, filetype, buftype)
+        return { 'treesitter', }
+      end,
     fold_virt_text_handler = handler,
     close_fold_kinds_for_ft = {
             default = {'imports', 'comment'},
