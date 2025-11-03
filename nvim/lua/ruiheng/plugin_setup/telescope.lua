@@ -52,8 +52,9 @@ M.config = function()
   vim.keymap.set("n", "<leader>ds", builtin.lsp_document_symbols,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: LSP Document Symbols.' }))
 
-  vim.keymap.set("n", "<leader>ws", builtin.lsp_workspace_symbols,
-    vim.tbl_extend('force', map_opts, { desc = 'Telescope: LSP Workspace Symbols.' }))
+  -- lsp_workspace_symbols doesn't work, use lsp_dynamic_workspace_symbols instead
+  vim.keymap.set("n", "<leader>ws", builtin.lsp_dynamic_workspace_symbols,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: LSP Dynamic Workspace Symbols.' }))
 
   vim.keymap.set("n", "<leader>ts", builtin.treesitter,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: Treesitter.' }))
