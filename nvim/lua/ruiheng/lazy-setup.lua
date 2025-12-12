@@ -661,6 +661,7 @@ require("lazy").setup({
 
     { "nvim-telescope/telescope.nvim",
       dependencies = "nvim-lua/plenary.nvim",
+      tag = 'v0.2.0',
       config = require('ruiheng.plugin_setup.telescope').config,
     },
 
