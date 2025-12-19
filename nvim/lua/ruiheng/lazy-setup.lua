@@ -19,7 +19,6 @@ require("lazy").setup({
     "unblevable/quick-scope",
     "tpope/vim-abolish",
     "equalsraf/neovim-gui-shim",
-    "machakann/vim-highlightedyank",
 
     -- use sandwich or surround
     -- "machakann/vim-sandwich",
@@ -631,11 +630,31 @@ require("lazy").setup({
 
     'nathanaelkane/vim-indent-guides',
 
+    -- clipboard --
+    -- "machakann/vim-highlightedyank", -- obsoleted by yanky.nvim
+
     { "junegunn/vim-peekaboo",
       config = function()
         vim.g.peekaboo_delay = 750
       end
     },
+
+    {
+      "gbprod/yanky.nvim",
+      opts = {
+        system_clipboard = {
+          sync_with_ring = not vim.env.SSH_CONNECTION,
+        },
+        highlight = { timer = 300 },
+      },
+      keys = {
+          { "p", "<Plug>(YankyPutAfter)", mode = { "n", "x" } },
+          { "P", "<Plug>(YankyPutBefore)", mode = { "n", "x" } },
+          { "<c-n>", "<Plug>(YankyCycleForward)", mode = "n" }, -- 粘贴后按 Ctrl-n 切换下一个历史
+          { "<c-p>", "<Plug>(YankyCycleBackward)", mode = "n" },
+      },
+    },
+
 
     "junegunn/vim-slash",
     "junegunn/limelight.vim",
