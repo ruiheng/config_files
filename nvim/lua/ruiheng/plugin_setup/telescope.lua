@@ -1,5 +1,6 @@
 local M = {} 
 M.config = function()
+  local telescope = require('telescope')
   local builtin = require('telescope.builtin')
   local map_opts = {noremap = true}
 
@@ -20,7 +21,7 @@ M.config = function()
     vim.tbl_extend('force', map_opts, { desc = 'Live grep in files with same extension name of the current file.' }))
 
   -- specially for Yesod project
-  vim.keymap.set("n", "<leader>ty",
+  vim.keymap.set("n", "<leader>tY",
     function ()
       return builtin.live_grep {
               glob_pattern = { '*.hs', '*.hamlet', '*.julius', '*.lucius', '*.cassius', 'static/*.js', 'static/*.css',}
@@ -28,11 +29,14 @@ M.config = function()
     end,
     vim.tbl_extend('force', map_opts, { desc = 'Live grep in Yesod project.' }))
 
-  -- vim.keymap.set("n", "<leader>B", builtin.buffers,
-  --   vim.tbl_extend('force', map_opts, { desc = 'Telescope: Buffers.' }))
-  local treble = require('treble')
-  vim.keymap.set("n", "<leader>B", treble.buffers,
-    vim.tbl_extend('force', map_opts, { desc = 'Telescope: Bufferline Buffers.' }))
+  vim.keymap.set("n", "<leader>B", builtin.buffers,
+    vim.tbl_extend('force', map_opts, { desc = 'Telescope: Buffers.' }))
+
+  local treble_ok, treble = pcall(require, 'treble')
+  if treble_ok then
+    vim.keymap.set("n", "<leader>B", treble.buffers,
+      vim.tbl_extend('force', map_opts, { desc = 'Telescope: Bufferline Buffers.' }))
+  end
 
   vim.keymap.set("n", "<leader>H", builtin.help_tags,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: Search Help.' }))
@@ -68,7 +72,12 @@ M.config = function()
   vim.keymap.set("n", "<leader>tb", builtin.builtin,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: all builtin pickers.' }))
 
-  require('telescope').setup{
+  local function safe_load_extension(ext)
+    local ok = pcall(telescope.load_extension, ext)
+    return ok
+  end
+
+  telescope.setup{
     defaults = {
       layout_strategy = 'vertical',
       layout_config = { height = 0.95 },
@@ -78,7 +87,27 @@ M.config = function()
         symbol_width = 60,
       },
     },
+    extensions = {
+        ast_grep = {
+            command = {
+                "ast-grep",
+                "--json=stream",
+            }, -- must have --json=stream
+            grep_open_files = false, -- search in opened files
+            lang = nil, -- string value, specify language for ast-grep `nil` for default
+      }
+    },
   }
+
+  if safe_load_extension("yank_history") then
+    vim.keymap.set("n", "<leader>ty", ":Telescope yank_history<CR>",
+      vim.tbl_extend('force', map_opts, { desc = 'Telescope: yanky history' }))
+  end
+
+  if safe_load_extension("ast_grep") then
+    vim.keymap.set('n', '<leader>sg', ':Telescope ast_grep<CR>',
+        {noremap = true, desc = 'invoke Telelescope for AST Grep' })
+  end
 end
 
 return M
