@@ -286,3 +286,46 @@ vim.api.nvim_create_autocmd({ "BufLeave", "BufWinLeave" }, {
     end
   end
 })
+
+vim.o.guifont = "AnonymicePro Nerd Font Mono:h16"
+
+if vim.g.neovide then
+  vim.g.neovide_cursor_animation_length = 0
+  vim.g.neovide_scroll_animation_length = 0
+
+
+  local function set_ime(args)
+      if args.event:match("Enter$") then
+          vim.g.neovide_input_ime = true
+      else
+          vim.g.neovide_input_ime = false
+      end
+  end
+
+  -- 自动切换输入法，包含 Terminal 模式以便在终端里输入中文
+  local ime_input = vim.api.nvim_create_augroup("ime_input", { clear = true })
+
+  vim.api.nvim_create_autocmd({ "InsertEnter", "InsertLeave", "CmdlineEnter", "CmdlineLeave", "TermEnter", "TermLeave" }, {
+      group = ime_input,
+      pattern = "*",
+      callback = set_ime
+  })
+
+  vim.g.neovide_scale_factor = 1.0
+  
+  -- 定义一个修改缩放比例的辅助函数
+  local function change_scale_factor(delta)
+      vim.g.neovide_scale_factor = vim.g.neovide_scale_factor * delta
+  end
+  
+  -- 快捷键配置 (Mac 使用 Command键，Windows/Linux 使用 Ctrl键)
+  -- Zoom In (放大)
+  vim.keymap.set("n", "<C-=>", function() change_scale_factor(1.1) end)
+  vim.keymap.set("n", "<C-+>", function() change_scale_factor(1.1) end) -- 兼容某些键盘布局
+  
+  -- Zoom Out (缩小)
+  vim.keymap.set("n", "<C-->", function() change_scale_factor(1/1.1) end)
+  
+  -- Reset (重置回 1.0)
+  vim.keymap.set("n", "<C-0>", function() vim.g.neovide_scale_factor = 1.0 end)
+end
