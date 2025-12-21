@@ -627,12 +627,18 @@ require("lazy").setup({
           sync_with_ring = not vim.env.SSH_CONNECTION,
         },
         highlight = { timer = 300 },
+        textobj = {
+          enabled = true,
+        },
       },
       keys = {
           { "p", "<Plug>(YankyPutAfter)", mode = { "n", "x" } },
           { "P", "<Plug>(YankyPutBefore)", mode = { "n", "x" } },
           { "<c-n>", "<Plug>(YankyCycleForward)", mode = "n" }, -- 粘贴后按 Ctrl-n 切换下一个历史
           { "<c-p>", "<Plug>(YankyCycleBackward)", mode = "n" },
+          { "=p", "<Plug>(YankyPutAfterFilter)", mode = "n" },
+          { "=P", "<Plug>(YankyPutBeforeFilter)", mode = "n" },
+          { "iy", function() require("yanky.textobj").last_put() end, mode = { "o", "x" } },
       },
     },
 

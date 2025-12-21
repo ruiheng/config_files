@@ -79,7 +79,7 @@ vim.api.nvim_set_keymap('v', '<F2>', '"0p', {noremap = true})
 vim.api.nvim_set_keymap('n', '<F2>', 'viw"0p', {noremap = true})
 
 -- see: http://vim.wikia.com/wiki/Selecting_your_pasted_text
-vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'")
+-- vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'") -- obsoleted by 'yanky'
 
 
 -- invoke 'stack build' command, set diagnostics and quickfix
