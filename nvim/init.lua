@@ -328,4 +328,22 @@ if vim.g.neovide then
   
   -- Reset (重置回 1.0)
   vim.keymap.set("n", "<C-0>", function() vim.g.neovide_scale_factor = 1.0 end)
+else
+  if vim.g.GuiLoaded then
+    local function set_gui_font(size)
+      vim.cmd(("GuiFont AnonymicePro\\ Nerd\\ Font\\ Mono:h%d"):format(size))
+    end
+
+    local function change_gui_font(delta)
+      local current = vim.opt.guifont:get()[1] or ""
+      local _, _, size = current:find(":h(%d+)")
+      size = tonumber(size) or 16
+      set_gui_font(math.max(6, size + delta))
+    end
+
+    vim.keymap.set("n", "<C-=>", function() change_gui_font(1) end)
+    vim.keymap.set("n", "<C-->", function() change_gui_font(-1) end)
+    vim.keymap.set("n", "<C-0>", function() set_gui_font(16) end)
+  end
+end
 end
