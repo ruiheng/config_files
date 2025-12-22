@@ -41,7 +41,7 @@ require("lazy").setup({
     "tpope/vim-repeat",
     "vim-scripts/visualrepeat",
     "jeffkreeftmeijer/vim-numbertoggle",
-    -- "unblevable/quick-scope",
+    -- "unblevable/quick-scope", -- use snacks.nvim
     "tpope/vim-abolish",
     "equalsraf/neovim-gui-shim",
 
