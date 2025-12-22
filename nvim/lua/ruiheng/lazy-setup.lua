@@ -13,10 +13,35 @@ end
 
 require("lazy").setup({
     -- general behavior ---
+    {
+      "folke/snacks.nvim",
+      priority = 1000,
+      lazy = false,
+      ---@type snacks.Config
+      opts = {
+        -- your configuration comes here
+        -- or leave it empty to use the default settings
+        -- refer to the configuration section below
+        bigfile = { enabled = true },
+        -- dashboard = { enabled = true },
+        explorer = { enabled = true },
+        indent = { enabled = true },
+        input = { enabled = true },
+        picker = { enabled = true },
+        notifier = { enabled = true },
+        quickfile = { enabled = true },
+        scope = { enabled = true },
+        -- scroll = { enabled = true },
+        statuscolumn = { enabled = true },
+        -- words = { enabled = true },
+        -- zen = { enabled = true },
+      },
+    },
+
     "tpope/vim-repeat",
     "vim-scripts/visualrepeat",
     "jeffkreeftmeijer/vim-numbertoggle",
-    "unblevable/quick-scope",
+    -- "unblevable/quick-scope",
     "tpope/vim-abolish",
     "equalsraf/neovim-gui-shim",
 
@@ -33,6 +58,20 @@ require("lazy").setup({
         end
     },
 
+    {
+      'MagicDuck/grug-far.nvim',
+      -- Note (lazy loading): grug-far.lua defers all it's requires so it's lazy by default
+      -- additional lazy config to defer loading is not really needed...
+      config = function()
+        -- optional setup call to override plugin options
+        -- alternatively you can set options with vim.g.grug_far = { ... }
+        require('grug-far').setup({
+          -- options, see Configuration section below
+          -- there are no required options atm
+        });
+      end
+    },
+
     { 'kevinhwang91/nvim-bqf' },
 
     -- toggle, display and navigate marks
@@ -40,8 +79,12 @@ require("lazy").setup({
 
     {
       'saghen/blink.cmp',
+      enabled = true,
       -- optional: provides snippets for the snippet source
-      dependencies = { 'rafamadriz/friendly-snippets' },
+      dependencies = {
+        'rafamadriz/friendly-snippets',
+        -- 'Exafunction/windsurf.nvim',
+      },
 
       -- use a release tag to download pre-built binaries
       version = '1.*',
@@ -85,7 +128,10 @@ require("lazy").setup({
         -- Default list of enabled providers defined so that you can extend it
         -- elsewhere in your config, without redefining it, due to `opts_extend`
         sources = {
-          default = { 'lsp', 'path', 'snippets', 'buffer' },
+          default = { 'lsp', 'path', 'snippets', 'buffer', },
+          -- providers = {
+          --   codeium = { name = "codeium", module = "codeium.blink", async = true },
+          -- },
         },
 
         -- (Default) Rust fuzzy matcher for typo resistance and significantly better performance
@@ -98,6 +144,181 @@ require("lazy").setup({
       opts_extend = { "sources.default" }
     },
 
+    "szw/vim-maximizer",
+
+    "azabiong/vim-highlighter",
+
+    {
+      'tadaa/vimade',
+      -- default opts (you can partially set these or configure them however you like)
+      opts = {
+        -- Recipe can be any of 'default', 'minimalist', 'duo', and 'ripple'
+        -- Set animate = true to enable animations on any recipe.
+        -- See the docs for other config options.
+        recipe = {'default', {animate=false}},
+        -- ncmode = 'windows' will fade inactive windows.
+        -- ncmode = 'focus' will only fade after you activate the `:VimadeFocus` command.
+        ncmode = 'buffers',
+        -- fadelevel = 0.8, -- any value between 0 and 1. 0 is hidden and 1 is opaque.
+        -- Changes the real or theoretical background color. basebg can be used to give
+        -- transparent terminals accurating dimming.  See the 'Preparing a transparent terminal'
+        -- section in the README.md for more info.
+        -- basebg = [23,23,23],
+        fadelevel = function(style, state)
+          if style.win.buf_opts.syntax == 'vertical-bufferline' then
+            return 1
+          else
+            return 0.8
+          end
+        end,
+        basebg = '',
+        tint = {
+          -- bg = {rgb={0,0,0}, intensity=0.3}, -- adds 30% black to background
+          -- fg = {rgb={0,0,255}, intensity=0.3}, -- adds 30% blue to foreground
+          -- fg = {rgb={120,120,120}, intensity=1}, -- all text will be gray
+          -- sp = {rgb={255,0,0}, intensity=0.5}, -- adds 50% red to special characters
+          -- you can also use functions for tint or any value part in the tint object
+          -- to create window-specific configurations
+          -- see the `Tinting` section of the README for more details.
+        },
+        -- prevent a window or buffer from being styled. You 
+        blocklist = {
+          default = {
+            highlights = {
+              laststatus_3 = function(win, active)
+                -- Global statusline, laststatus=3, is currently disabled as multiple windows take
+                -- ownership of the StatusLine highlight (see #85).
+                if vim.go.laststatus == 3 then
+                    -- you can also return tables (e.g. {'StatusLine', 'StatusLineNC'})
+                    return 'StatusLine'
+                end
+              end,
+              -- Prevent ActiveTabs from highlighting.
+              'TabLineSel',
+              'Pmenu',
+              'PmenuSel',
+              'PmenuKind',
+              'PmenuKindSel',
+              'PmenuExtra',
+              'PmenuExtraSel',
+              'PmenuSbar',
+              'PmenuThumb',
+              -- Lua patterns are supported, just put the text between / symbols:
+              -- '/^StatusLine.*/' -- will match any highlight starting with "StatusLine"
+            },
+            buf_opts = { buftype = {'prompt'} },
+            -- buf_name = {'name1','name2', name3'},
+            -- buf_vars = { variable = {'match1', 'match2'} },
+            -- win_opts = { option = {'match1', 'match2' } },
+            -- win_vars = { variable = {'match1', 'match2'} },
+            -- win_type = {'name1','name2', name3'},
+            -- win_config = { variable = {'match1', 'match2'} },
+          },
+          default_block_floats = function (win, active)
+            return win.win_config.relative ~= '' and
+              (win ~= active or win.buf_opts.buftype =='terminal') and true or false
+          end,
+          -- any_rule_name1 = {
+          --   buf_opts = {}
+          -- },
+          -- only_behind_float_windows = {
+          --   buf_opts = function(win, current)
+          --     if (win.win_config.relative == '')
+          --       and (current and current.win_config.relative ~= '') then
+          --         return false
+          --     end
+          --     return true
+          --   end
+          -- },
+        },
+        -- Link connects windows so that they style or unstyle together.
+        -- Properties are matched against the active window. Same format as blocklist above
+        link = {},
+        groupdiff = true, -- links diffs so that they style together
+        groupscrollbind = false, -- link scrollbound windows so that they style together.
+        -- enable to bind to FocusGained and FocusLost events. This allows fading inactive
+        -- tmux panes.
+        enablefocusfading = false,
+        -- Time in milliseconds before re-checking windows. This is only used when usecursorhold
+        -- is set to false.
+        checkinterval = 1000,
+        -- enables cursorhold event instead of using an async timer.  This may make Vimade
+        -- feel more performant in some scenarios. See h:updatetime.
+        usecursorhold = false,
+        -- when nohlcheck is disabled the highlight tree will always be recomputed. You may
+        -- want to disable this if you have a plugin that creates dynamic highlights in
+        -- inactive windows. 99% of the time you shouldn't need to change this value.
+        nohlcheck = true,
+        focus = {
+           providers = {
+              filetypes = {
+                default = {
+                  -- If you use mini.indentscope, snacks.indent, or hlchunk, you can also highlight
+                  -- using the same indent scope!
+                  -- {'snacks', {}},
+                  -- {'mini', {}},
+                  -- {'hlchunk', {}},
+                  {'treesitter', {
+                    min_node_size = 2, 
+                    min_size = 1,
+                    max_size = 0,
+                    -- exclude types either too large and/or mundane
+                    exclude = {
+                      'script_file',
+                      'stream',
+                      'document',
+                      'source_file',
+                      'translation_unit',
+                      'chunk',
+                      'module',
+                      'stylesheet',
+                      'statement_block',
+                      'block',
+                      'pair',
+                      'program',
+                      'switch_case',
+                      'catch_clause',
+                      'finally_clause',
+                      'property_signature',
+                      'dictionary',
+                      'assignment',
+                      'expression_statement',
+                      'compound_statement',
+                    }
+                  }},
+                  -- if treesitter fails or there isn't a good match, fallback to blanks
+                  -- (similar to limelight)
+                  {'blanks', {
+                    min_size = 1,
+                    max_size = '35%'
+                  }},
+                  -- if blanks fails to find a good match, fallback to static 35%
+                  {'static', {
+                    size = '35%'
+                  }},
+                },
+                -- You can make custom configurations for any filetype.  Here are some examples.
+                -- markdown ={{'blanks', {min_size=0, max_size='50%'}}, {'static', {max_size='50%'}}}
+                -- javascript = {
+                  -- -- only use treesitter (no fallbacks)
+                --   {'treesitter', { min_node_size = 2, include = {'if_statement', ...}}},
+                -- },
+                -- typescript = {
+                --   {'treesitter', { min_node_size = 2, exclude = {'if_statement'}}}, 
+                --   {'static', {size = '35%'}}
+                -- },
+                -- java = {
+                  -- -- mini with a fallback to blanks
+                  -- {'mini', {min_size = 1, max_size = 20}},
+                  -- {'blanks', {min_size = 1, max_size = '100%' }}, 
+                -- },
+              },
+            }
+          },
+      }
+    },
+
+    -- motion --
     { "t9md/vim-choosewin",
       enabled = false, -- seems to break undo history
       config = function ()
@@ -108,11 +329,6 @@ require("lazy").setup({
       end
     },
 
-    "szw/vim-maximizer",
-
-    "azabiong/vim-highlighter",
-
-    -- motion --
     { "phaazon/hop.nvim", branch = "v2",
       enabled = false, -- use leap
       config = function()
@@ -198,8 +414,30 @@ require("lazy").setup({
       },
     },
 
-    -- git --
+    'voldikss/vim-floaterm',
 
+    -- git --
+    {
+        "kdheepak/lazygit.nvim",
+        lazy = true,
+        cmd = {
+            "LazyGit",
+            "LazyGitConfig",
+            "LazyGitCurrentFile",
+            "LazyGitFilter",
+            "LazyGitFilterCurrentFile",
+        },
+        -- optional for floating window border decoration
+        dependencies = {
+            "nvim-lua/plenary.nvim",
+        },
+        -- setting the keybinding for LazyGit with 'keys' is recommended in
+        -- order to load the plugin when the command is run for the first time
+        keys = {
+            { "<leader>lg", "<cmd>LazyGit<cr>", desc = "LazyGit" }
+        },
+    },
+        
     { 'tpope/vim-fugitive',
       config = function ()
         -- vim.api.nvim_set_keymap('n', '<leader>gs', ':Gstatus<CR>', {noremap = true, })
@@ -311,35 +549,25 @@ require("lazy").setup({
       end,
     },
 
+    -- general programming ---
+
     {
-      'ryanoneill/treble.nvim',
-      dependencies = {
-        {
-          'akinsho/bufferline.nvim',
-          version = '*',
-          dependencies = 'nvim-tree/nvim-web-devicons'
-        },
-        {
-          'nvim-telescope/telescope.nvim',
-          tag = '0.1.1',
-          dependencies = 'nvim-lua/plenary.nvim'
-        }
+      "folke/zen-mode.nvim",
+      opts = {
+        -- your configuration comes here
+        -- or leave it empty to use the default settings
+        -- refer to the configuration section below
       }
     },
 
-    { 'tiagovla/scope.nvim',
-      enabled = true,
-      config = require('ruiheng.plugin_setup.scope').config,
+    {
+      "folke/twilight.nvim",
+      opts = {
+        -- your configuration comes here
+        -- or leave it empty to use the default settings
+        -- refer to the configuration section below
+      }
     },
-
-    { 'backdround/tabscope.nvim',
-      -- with tabscope, session could not be restored with all tabs and their buffers
-      -- only the 'active' buffer of each vim tab can be restored.
-      enabled = false,
-    },
-
-
-    -- general programming ---
 
     {
       "folke/todo-comments.nvim",
@@ -401,7 +629,21 @@ require("lazy").setup({
       end
     },
 
-    { "sbdchd/neoformat" },
+    -- { "sbdchd/neoformat" },
+    {
+      'stevearc/conform.nvim',
+      opts = {
+        formatters_by_ft = {
+          -- lua = { "stylua" },
+          -- Conform will run multiple formatters sequentially
+          python = { "ruff" },
+          -- You can customize some of the format options for the filetype (:help conform.format)
+          -- rust = { "rustfmt", lsp_format = "fallback" },
+          -- Conform will run the first available formatter
+          -- javascript = { "prettierd", "prettier", stop_after_first = true },
+        },
+      },
+    },
 
     { "nvim-treesitter/nvim-treesitter",
       branch = 'master',
@@ -483,9 +725,24 @@ require("lazy").setup({
       end,
     },
 
+    -- LSP --
+
     { 'neovim/nvim-lspconfig',
       enabled = true,
       config = require('ruiheng.plugin_setup.lspconfig').config,
+    },
+
+    {
+        "mason-org/mason.nvim",
+        opts = {
+            ui = {
+                icons = {
+                    package_installed = "✓",
+                    package_pending = "➜",
+                    package_uninstalled = "✗"
+                }
+            }
+        }
     },
 
     { "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
@@ -549,13 +806,59 @@ require("lazy").setup({
       config = function()
         require("supermaven-nvim").setup({})
       end,
-      enabled = true,
+      enabled = false,
     },
 
     {
       "github/copilot.vim",
       enabled = false,
     },
+
+    {
+      "olimorris/codecompanion.nvim",
+      enabled = false,
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "nvim-treesitter/nvim-treesitter",
+      },
+      config = require('ruiheng.plugin_setup.codecompanion').config,
+    },
+
+    {
+        "Exafunction/windsurf.nvim",
+        enabled = false,
+        dependencies = {
+            "nvim-lua/plenary.nvim",
+            -- "saghen/blink.cmp",
+            "hrsh7th/nvim-cmp",
+        },
+        config = function()
+            require("codeium").setup({
+              -- enable_cmp_source = false,
+            })
+        end
+    },
+
+    { 'codota/tabnine-nvim',
+      build = "./dl_binaries.sh",
+      enabled = true,
+      config = function ()
+        require('tabnine').setup({
+          disable_auto_comment=true,
+          accept_keymap="<Tab>",
+          dismiss_keymap = "<C-]>",
+          debounce_ms = 800,
+          suggestion_color = {gui = "#808080", cterm = 244},
+          exclude_filetypes = {"TelescopePrompt", "NvimTree"},
+          log_file_path = nil, -- absolute path to Tabnine log file
+          ignore_certificate_errors = false,
+          workspace_folders = {
+            paths = { "/home/ruiheng/lyceum" },
+          },
+        })
+      end,
+    },
+
 
     -- use lspconfig instead: works better with telescope
     -- { 'neoclide/coc.nvim', branch = 'release' },
@@ -679,6 +982,8 @@ require("lazy").setup({
       end
     },
 
+    "Marskey/telescope-sg",
+
     --- haskell ----
 
     -- 'neovimhaskell/haskell-vim',
@@ -789,6 +1094,7 @@ require("lazy").setup({
     },
 
     --- colorschemes ----
+    { "catppuccin/nvim", name = "catppuccin", priority = 3000 },
     { 'ribru17/bamboo.nvim',
       priority = 2100,
       config = function()
@@ -798,8 +1104,8 @@ require("lazy").setup({
       end,
     },
     { "rebelot/kanagawa.nvim", priority = 100 },
-    { "sainnhe/everforest", priority = 100 },
-    { "ellisonleao/gruvbox.nvim", priority = 1000 },
-    { "folke/tokyonight.nvim", priority = 2000 },
+    -- { "sainnhe/everforest", priority = 100 },
+    -- { "ellisonleao/gruvbox.nvim", priority = 1000 },
+    -- { "folke/tokyonight.nvim", priority = 2000 },
 })
 
