@@ -42,9 +42,26 @@ require("lazy").setup({
       "folke/which-key.nvim",
       event = "VeryLazy",
       opts = {
-        -- your configuration comes here
-        -- or leave it empty to use the default settings
-        -- refer to the configuration section below
+        delay = 500,
+        filter = function(mapping)
+          -- 示例：如果描述包含 "WK-IGNORE"，则不显示
+          if mapping.desc and mapping.desc:find("[WK-IGNORE]") then
+            return false
+          end
+          -- 默认显示
+          return true
+        end,
+        plugins = {
+          presets = {
+            operators = false,    -- 隐藏运算符帮助 (如 d, y, c)
+            -- motions = false,      -- 隐藏移动帮助 (如 h, j, k, l)
+            text_objects = false, -- 隐藏文本对象帮助 (如 a, i)
+            -- windows = false,      -- 隐藏窗口导航帮助 (<c-w>)
+            nav = false,          -- 隐藏杂项导航 (如 G, gg)
+            -- z = false,            -- 隐藏 z 键前缀的绑定 (折叠等)
+            -- g = false,            -- 隐藏 g 键前缀的绑定
+          },
+        },
       },
       keys = {
         {

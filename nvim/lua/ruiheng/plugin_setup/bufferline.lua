@@ -85,37 +85,47 @@ M.config = function ()
 
   local map = vim.api.nvim_set_keymap
   local map_opts = { noremap = true, silent = true }
+  local map_opts_wk_ignore = vim.deepcopy(map_opts)
+  map_opts_wk_ignore['desc'] = '[WK-IGNORE]'
 
-  for i = 1, 9 do
-      map("n", "<leader>" .. i, "<cmd>BufferLineGoToBuffer " .. i .. "<CR>", map_opts)
-
-      -- go to absolute pos
-      vim.keymap.set("n", "<leader>b" .. i, function () bufferline.go_to(i, true) end, map_opts)
+  local function mk_map_opts(desc, ignore)
+    if ignore then
+      desc = desc.. " [WK-IGNORE]"
+    end
+    return { noremap = true, silent = true, desc = desc }
   end
 
-  map("n", "<leader>0", "<cmd>BufferLineGoToBuffer 10<CR>", map_opts)
-  map("n", "<leader>$", "<cmd>BufferLineGoToBuffer -1<CR>", map_opts)
+
+  for i = 1, 9 do
+      map("n", "<leader>" .. i, "<cmd>BufferLineGoToBuffer " .. i .. "<CR>", map_opts_wk_ignore)
+
+      -- go to absolute pos
+      vim.keymap.set("n", "<leader>b" .. i, function () bufferline.go_to(i, true) end, map_opts_wk_ignore)
+  end
+
+  map("n", "<leader>0", "<cmd>BufferLineGoToBuffer 10<CR>", map_opts_wk_ignore)
+  map("n", "<leader>$", "<cmd>BufferLineGoToBuffer -1<CR>", map_opts_wk_ignore)
 
   -- go to absolute pos
-  vim.keymap.set("n", "<leader>b0", function () bufferline.go_to(10, true) end, map_opts)
-  vim.keymap.set("n", "<leader>b$", function () bufferline.go_to(-1, true) end, map_opts)
+  vim.keymap.set("n", "<leader>b0", function () bufferline.go_to(10, true) end, map_opts_wk_ignore)
+  vim.keymap.set("n", "<leader>b$", function () bufferline.go_to(-1, true) end, map_opts_wk_ignore)
 
-  map("n", "gb", "<cmd>BufferLineCycleNext<CR>", map_opts)
-  map("n", "gB", "<cmd>BufferLineCyclePrev<CR>", map_opts)
+  map("n", "gb", "<cmd>BufferLineCycleNext<CR>", map_opts_wk_ignore)
+  map("n", "gB", "<cmd>BufferLineCyclePrev<CR>", map_opts_wk_ignore)
 
-  map("n", "<C-T>p", "<cmd>BufferLineTogglePin<CR>", map_opts)
-  map("n", "<C-T>o", "<cmd>BufferLineCloseOthers<CR>", map_opts)
-  map("n", "<C-T>r", "<cmd>BufferLineCloseRight<CR>", map_opts)
-  map("n", "<C-T>l", "<cmd>BufferLineCloseLeft<CR>", map_opts)
+  map("n", "<C-T>p", "<cmd>BufferLineTogglePin<CR>", mk_map_opts('Pin the buffer [bufferline]', false))
+  map("n", "<C-T>o", "<cmd>BufferLineCloseOthers<CR>", mk_map_opts('Close other buffers [bufferline]', false))
+  map("n", "<C-T>r", "<cmd>BufferLineCloseRight<CR>", mk_map_opts('Close the next/right buffer [bufferline]', false))
+  map("n", "<C-T>l", "<cmd>BufferLineCloseLeft<CR>", mk_map_opts('Close the prev/left buffer [bufferline]', false))
 
-  map("n", "<C-T><", "<cmd>BufferLineMovePrev<CR>", map_opts)
-  map("n", "<C-T>>", "<cmd>BufferLineMoveNext<CR>", map_opts)
+  map("n", "<C-T><", "<cmd>BufferLineMovePrev<CR>", mk_map_opts('Move the buffer to prev/left [bufferline]', false))
+  map("n", "<C-T>>", "<cmd>BufferLineMoveNext<CR>", mk_map_opts('Move the buffer to next/right [bufferline]', false))
 
-  map("n", "<C-T>0", ":lua require'bufferline'.move_to(1)<CR>", map_opts)
-  map("n", "<C-T>$", ":lua require'bufferline'.move_to(-1)<CR>", map_opts)
+  map("n", "<C-T>0", ":lua require'bufferline'.move_to(1)<CR>", mk_map_opts('Move the buffer to first [bufferline]', false))
+  map("n", "<C-T>$", ":lua require'bufferline'.move_to(-1)<CR>", mk_map_opts('Move the buffer to last [bufferline]', false))
 
-  map("n", "<leader>p", "<cmd>BufferLinePick<CR>", map_opts)
-  map("n", "<leader>P", "<cmd>BufferLinePickClose<CR>", map_opts)
+  map("n", "<leader>p", "<cmd>BufferLinePick<CR>", map_opts_wk_ignore)
+  map("n", "<leader>P", "<cmd>BufferLinePickClose<CR>", map_opts_wk_ignore)
 end
 
 return M
