@@ -82,23 +82,6 @@ vim.api.nvim_set_keymap('n', '<F2>', 'viw"0p', {noremap = true})
 -- vim.cmd("nnoremap <expr> <leader>vp '`[' . strpart(getregtype(), 0, 1) . '`]'") -- obsoleted by 'yanky'
 
 
--- invoke 'stack build' command, set diagnostics and quickfix
-vim.keymap.set('n', '<leader>bs',
-    function()
-      local errs = require('ruiheng').save_all_buffers()
-      if #errs > 0 then
-        print('some buffer not saved: ' .. vim.inspect(errs))
-      else
-        require('ruiheng.haskell.ghc').start_build_job()
-        require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
-      end
-    end ,
-    {noremap = true, silent = true}
-  )
-
--- create GhcidWatchOutput and GhcidUnwatchOutput
-require('ruiheng.haskell.ghc').create_user_command_for_watching()
-
 -- run a command (usually long-running) in a terminal and show
 -- use <localleader>x to close the terminal window (but keep the command running)
 -- use <localleader>t to cycle through running terminals
@@ -346,4 +329,63 @@ else
     vim.keymap.set("n", "<C-0>", function() set_gui_font(16) end)
   end
 end
+
+
+local function setup_uv_venv()
+    local cwd = vim.fn.getcwd()
+    local venv_path = ""
+    
+    -- 判断操作系统，设置虚拟环境 Python 的路径
+    if vim.fn.has("win32") == 1 then
+        venv_path = cwd .. "/.venv/Scripts/python.exe"
+    else
+        venv_path = cwd .. "/.venv/bin/python"
+    end
+
+    -- 如果存在 .venv，则将其设置为 Neovim 的 Python 宿主
+    if vim.fn.executable(venv_path) == 1 then
+        vim.g.python3_host_prog = venv_path
+        -- 可选：如果你希望 LSP 也能自动识别
+        -- 某些 LSP 插件可能需要在这里手动触发重连或设置
+    end
 end
+
+local lazy_python_loaded = false
+local lazy_haskell_loaded = false
+
+vim.api.nvim_create_autocmd("User", {
+    pattern = "LazyLoadPython",
+    callback = function()
+      if lazy_python_loaded then return end
+        
+      setup_uv_venv()
+
+      lazy_python_loaded = true
+    end,
+})
+
+vim.api.nvim_create_autocmd("User", {
+    pattern = "LazyLoadHaskell",
+    callback = function()
+      if lazy_haskell_loaded then return end
+        
+      -- invoke 'stack build' command, set diagnostics and quickfix
+      vim.keymap.set('n', '<leader>bs',
+          function()
+            local errs = require('ruiheng').save_all_buffers()
+            if #errs > 0 then
+              print('some buffer not saved: ' .. vim.inspect(errs))
+            else
+              require('ruiheng.haskell.ghc').start_build_job()
+              require('ruiheng.quickfix').open_quickfix_win_but_not_focus()
+            end
+          end ,
+          {noremap = true, silent = true}
+        )
+
+      -- create GhcidWatchOutput and GhcidUnwatchOutput
+      require('ruiheng.haskell.ghc').create_user_command_for_watching()
+
+      lazy_haskell_loaded = true
+    end,
+})

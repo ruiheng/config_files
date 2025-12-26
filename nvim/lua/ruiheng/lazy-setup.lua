@@ -588,6 +588,30 @@ require("lazy").setup({
     -- general programming ---
 
     {
+      'piersolenski/import.nvim',
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
+      dependencies = {
+        -- One of the following pickers is required:
+        'nvim-telescope/telescope.nvim',
+     -- 'folke/snacks.nvim',
+     -- 'ibhagwan/fzf-lua',
+      },
+      opts = {
+        picker = "telescope", -- or 'fzf-lua' , 'snacks'
+      },
+      keys = {
+        {
+          "<leader>im",
+          function()
+            require("import").pick()
+          end,
+          desc = "Import",
+        },
+      },
+    },
+
+    {
       "folke/zen-mode.nvim",
       opts = {
         -- your configuration comes here
@@ -607,12 +631,16 @@ require("lazy").setup({
 
     {
       "folke/todo-comments.nvim",
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       dependencies = { "nvim-lua/plenary.nvim" },
       opts = {
       },
     },
 
     { "lukas-reineke/indent-blankline.nvim",
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       main = 'ibl',
       config = function()
         vim.opt.termguicolors = true
@@ -628,10 +656,10 @@ require("lazy").setup({
       end,
     },
 
-    'mrcjkb/haskell-snippets.nvim',
-
     {
       "L3MON4D3/LuaSnip",
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       -- follow latest release.
       version = "2.*", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
       -- install jsregexp (optional!).
@@ -661,6 +689,8 @@ require("lazy").setup({
     },
 
     { "neomake/neomake",
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       config = function()
       end
     },
@@ -668,6 +698,8 @@ require("lazy").setup({
     -- { "sbdchd/neoformat" },
     {
       'stevearc/conform.nvim',
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       opts = {
         formatters_by_ft = {
           -- lua = { "stylua" },
@@ -682,6 +714,8 @@ require("lazy").setup({
     },
 
     { "nvim-treesitter/nvim-treesitter",
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       branch = 'master',
       build = ':TSUpdate', -- We recommend updating the parsers on update
       config = function()
@@ -764,24 +798,30 @@ require("lazy").setup({
     -- LSP --
 
     { 'neovim/nvim-lspconfig',
+      lazy = true,
+      event = { "User LazyLoadLSP", "User LazyLoadProgramming" },
       enabled = true,
       config = require('ruiheng.plugin_setup.lspconfig').config,
     },
 
     {
-        "mason-org/mason.nvim",
-        opts = {
-            ui = {
-                icons = {
-                    package_installed = "✓",
-                    package_pending = "➜",
-                    package_uninstalled = "✗"
-                }
-            }
-        }
+      "mason-org/mason.nvim",
+      lazy = true,
+      event = { "User LazyLoadLSP", "User LazyLoadProgramming" },
+      opts = {
+          ui = {
+              icons = {
+                  package_installed = "✓",
+                  package_pending = "➜",
+                  package_uninstalled = "✗"
+              }
+          }
+      }
     },
 
     { "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
+      lazy = true,
+      event = { "User LazyLoadLSP", "User LazyLoadProgramming" },
       config = function()
         local lsp_lines = require("lsp_lines")
         lsp_lines.setup()
@@ -877,6 +917,8 @@ require("lazy").setup({
 
     { 'codota/tabnine-nvim',
       build = "./dl_binaries.sh",
+      lazy = true,
+      event = { "User LazyLoadAI" },
       enabled = true,
       config = function ()
         require('tabnine').setup({
@@ -901,13 +943,18 @@ require("lazy").setup({
 
     -- 'anuvyklack/pretty-fold.nvim',  -- use this or nvim-ufo
 
-    {'kevinhwang91/nvim-ufo', dependencies = 'kevinhwang91/promise-async',
+    {'kevinhwang91/nvim-ufo',
+      dependencies = 'kevinhwang91/promise-async',
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       enabled = true, -- or use pretty-fold.nvim instead
       config = require('ruiheng.plugin_setup.nvim-ufo').config,
     },
 
 
     { 'junegunn/vim-easy-align',
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       config = function()
         vim.keymap.set('v', '<Enter>', '<Plug>(EasyAlign)', {noremap = true})
         vim.keymap.set('n', 'ga', '<Plug>(EasyAlign)', {noremap = true})
@@ -916,6 +963,8 @@ require("lazy").setup({
 
     { 'folke/trouble.nvim',
       dependencies = 'nvim-tree/nvim-web-devicons',
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       config = function(_, opts)
         local trouble = require('trouble')
         trouble.setup(opts)
@@ -929,6 +978,8 @@ require("lazy").setup({
     },
 
     { 'nvimtools/none-ls.nvim',
+      lazy = true,
+      event = { "User LazyLoadProgramming" },
       dependencies = "nvim-lua/plenary.nvim",
       enabled = true,
       config = require('ruiheng.plugin_setup.null-ls').config,
@@ -936,7 +987,10 @@ require("lazy").setup({
 
     -- web --
 
-    'posva/vim-vue',
+    { 'posva/vim-vue',
+      lazy = true,
+      event = { "User LazyLoadVue" },
+    },
 
     -- others --
 
@@ -948,7 +1002,8 @@ require("lazy").setup({
 
     "vim-airline/vim-airline-themes",
 
-    'nathanaelkane/vim-indent-guides',
+    -- TODO: remove?
+    -- 'nathanaelkane/vim-indent-guides',
 
     -- clipboard --
     -- "machakann/vim-highlightedyank", -- obsoleted by yanky.nvim
@@ -1020,11 +1075,35 @@ require("lazy").setup({
 
     "Marskey/telescope-sg",
 
+    --- Python ----
+
+    {
+      "alexpasmantier/pymple.nvim",
+      lazy = true,
+      event = { "User LazyLoadPython" },
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "MunifTanjim/nui.nvim",
+        -- optional (nicer ui)
+        "nvim-tree/nvim-web-devicons",
+      },
+      build = ":PympleBuild",
+      config = function()
+        require("pymple").setup()
+      end,
+    },
+
     --- haskell ----
 
     -- 'neovimhaskell/haskell-vim',
 
     -- 'itchyny/vim-haskell-indent',
+
+    {
+      'mrcjkb/haskell-snippets.nvim',
+      lazy = true,
+      event = { "User LazyLoadHaskell" },
+    },
 
     { 'sdiehl/vim-ormolu',
       enabled = false, -- or use 'haskell-tools'
@@ -1037,16 +1116,22 @@ require("lazy").setup({
     },
 
     { 'alx741/yesod.vim',
+      lazy = true,
+      event = { "User LazyLoadHaskell" },
       config = function()
         vim.g.yesod_disable_maps = 1
       end
     },
 
     { "pbrisbin/vim-syntax-shakespeare",
+      lazy = true,
+      event = { "User LazyLoadHaskell" },
       ft = { 'hamlet', 'cassius', 'julius', 'haskell', }
     },
 
     { 'mrcjkb/haskell-tools.nvim',
+      lazy = true,
+      event = { "User LazyLoadHaskell" },
       dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
 
       -- CAUTION for big codebase project: poor performance, huge memory footprint
@@ -1145,3 +1230,63 @@ require("lazy").setup({
     -- { "folke/tokyonight.nvim", priority = 2000 },
 })
 
+
+local normalize_lazy_load_group_names = {
+  python = "Python",
+  ai = "AI",
+  haskell = "Haskell",
+  programming = "Programming",
+  lsp = "LSP",
+  go = "Go",
+  markdown = "Markdown",
+  vue = "Vue",
+}
+
+local lazy_load_group_deps = {
+  python = { "programming", "lsp", },
+  haskell = { "programming", "lsp", },
+}
+
+-- trigger user event: LazyLoadPython, LazyLoadHaskell, etc
+local function lazy_load_group(names)
+  local real_names = {}
+
+  for _, name in ipairs(names) do
+    name = string.lower(name)
+    real_names[name] = true
+    deps = lazy_load_group_deps[name] or {}
+    for _, dep in ipairs(deps) do
+      real_names[dep] = true
+    end
+  end
+
+  for name, _ in pairs(real_names) do
+    name = normalize_lazy_load_group_names[string.lower(name)] or name
+    vim.api.nvim_exec_autocmds("User", { pattern = "LazyLoad" .. name })
+    print("Group [" .. name .. "] has been activated!")
+  end
+end
+
+-- 注册一个手动命令
+vim.api.nvim_create_user_command("LazyLoadGroup", function(opts)
+    lazy_load_group(opts.fargs)
+end, {
+    nargs = '+',
+    complete = function()
+        -- 这里可以手动列出你定义的组名，方便补全
+        local names = {}
+        for _, v in pairs(normalize_lazy_load_group_names) do
+          table.insert(names, v)
+        end
+        return names
+    end
+})
+
+
+vim.keymap.set('n', '<leader>llg', ':LazyLoadGroup ')
+
+local nvim_mode = vim.env.NViM_MODE or "default"
+
+if nvim_mode == "python" then
+  lazy_load_group({ "AI", "LSP", "Programming", "Python" })
+end
