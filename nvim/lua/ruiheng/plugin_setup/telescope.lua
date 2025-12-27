@@ -86,6 +86,9 @@ M.config = function()
       lsp_document_symbols = {
         symbol_width = 60,
       },
+      treesitter = {
+        symbol_width = 60,
+      },
     },
     extensions = {
         ast_grep = {
