@@ -73,8 +73,44 @@ M.config = function ()
       close_command = smart_delete_buffer,
 
       custom_filter = function(buf_num, buf_nums)
-        local buf_type = vim.bo[buf_num].buftype
-        if buf_type == 'quickfix' or buf_type == 'terminal' then
+        local buf_type = vim.api.nvim_get_option_value("buftype", { buf = buf_num })
+        local buf_name = vim.api.nvim_buf_get_name(buf_num)
+        local filetype = vim.api.nvim_get_option_value("filetype", { buf = buf_num })
+
+        -- Filter out common plugin/utility buffers that do not belong in bufferline
+        local ignored_buftypes = {
+          quickfix = true,
+          terminal = true,
+          prompt = true,
+          nofile = true,
+        }
+
+        local ignored_filetypes = {
+          fugitive = true,
+          fugitiveblame = true,
+          Trouble = true,
+          aerial = true,
+          ["aerial-nav"] = true,
+          Outline = true,
+        }
+
+        if ignored_buftypes[buf_type] then
+          return false
+        end
+
+        if ignored_filetypes[filetype] then
+          return false
+        end
+
+        if filetype:match("^dapui_") or filetype:match("^dap%-") then
+          return false
+        end
+
+        if filetype:match("^neo%-tree") or filetype == "NvimTree" then
+          return false
+        end
+
+        if buf_name:match("^fugitive://") then
           return false
         end
 
