@@ -69,6 +69,11 @@ M.config = function ()
       show_close_icons = false,
       show_buffer_close_icons = false,
       numbers = 'ordinal',
+      groups = {
+        items = {
+          require("bufferline.groups").builtin.pinned:with({ icon = "󰆣" }),
+        },
+      },
 
       close_command = smart_delete_buffer,
 
