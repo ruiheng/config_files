@@ -500,7 +500,7 @@ require("lazy").setup({
       branch = "main",
       -- commit = "73540cb95f8d95aa1af3ed57713c6720c78af915",
 
-      enabled = true, -- some issues in current version, use nvim-cokeline for now
+      enabled = false,
 
       config = require('ruiheng.plugin_setup.bufferline').config,
     },
@@ -509,7 +509,7 @@ require("lazy").setup({
       -- Our custom vertical bufferline
       'vertical-bufferline',
       dir = '/home/ruiheng/config_files/nvim/lua/vertical-bufferline',
-      dependencies = { 'akinsho/bufferline.nvim' },
+      -- dependencies = { 'akinsho/bufferline.nvim' },
       enabled = true,
       -- enabled = function()
       --   -- 只有在启用时才加载这个插件
@@ -518,63 +518,13 @@ require("lazy").setup({
       config = function()
         local vbl = require('vertical-bufferline')
 
-        -- Keymap to toggle the vertical bufferline
-        vim.keymap.set('n', '<leader>vb', function()
-          vbl.toggle()
-        end, { noremap = true, silent = true, desc = "Toggle vertical bufferline" })
-
-        -- 分组管理快捷键
-        vim.keymap.set('n', '<leader>gn', function()
-          vbl.switch_to_next_group()
-        end, { noremap = true, silent = true, desc = "Switch to next buffer group" })
-
-        vim.keymap.set('n', '<leader>gp', function()
-          vbl.switch_to_prev_group()
-        end, { noremap = true, silent = true, desc = "Switch to previous buffer group" })
-
-
-        vim.keymap.set('n', '<leader>gc', function()
-          local group_id = vbl.create_group()
-          vim.notify("Created new group (use <leader>gr to rename it)", vim.log.levels.INFO)
-        end, { noremap = true, silent = true, desc = "Create new buffer group" })
-
-        vim.keymap.set('n', '<leader>gr', function()
-          vim.ui.input({ prompt = "Rename current group to: " }, function(name)
-            if name and name ~= "" then
-              vim.cmd("VBufferLineRenameGroup " .. name)
-            end
-          end)
-        end, { noremap = true, silent = true, desc = "Rename current buffer group" })
-
-        vim.keymap.set('n', '<leader>ve', function()
-          vbl.toggle_expand_all()
-        end, { noremap = true, silent = true, desc = "Toggle expand all groups mode" })
-
-        -- 分组排序快捷键
-        vim.keymap.set('n', '<leader>gU', function()
-          vbl.move_group_up()
-        end, { noremap = true, silent = true, desc = "Move current group up" })
-
-        vim.keymap.set('n', '<leader>gD', function()
-          vbl.move_group_down()
-        end, { noremap = true, silent = true, desc = "Move current group down" })
-
-        vim.keymap.set('n', '<leader>gg', function()
-            require('vertical-bufferline.groups').switch_to_previous_group()
-        end, { desc = 'Switch to previous group' })
-
-        -- 快速切换到特定分组（通过分组编号）
-        for i = 1, 9 do
-          vim.keymap.set('n', '<leader>g' .. i, function()
-            local groups = vbl.groups.get_all_groups()
-            if groups[i] then
-              vbl.groups.set_active_group(groups[i].id)
-              vim.notify("Switched to group: " .. groups[i].name, vim.log.levels.INFO)
-            else
-              vim.notify("Group " .. i .. " does not exist", vim.log.levels.WARN)
-            end
-          end, { noremap = true, silent = true, desc = "Switch to group " .. i })
-        end
+        -- VBL keymap preset (opt-in)
+        local preset = vbl.keymap_preset({
+          history_prefix = '<leader>h',
+          buffer_prefix = '<leader>',
+          group_prefix = '<leader>g',
+        })
+        vbl.apply_keymaps(preset)
 
         -- 快速切换到历史文件（通过历史位置编号）
         for i = 1, 9 do

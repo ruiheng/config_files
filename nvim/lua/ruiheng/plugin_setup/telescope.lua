@@ -29,16 +29,7 @@ M.config = function()
     end,
     vim.tbl_extend('force', map_opts, { desc = 'Live grep in Yesod project.' }))
 
-  vim.keymap.set("n", "<leader>B", builtin.buffers,
-    vim.tbl_extend('force', map_opts, { desc = 'Telescope: Buffers.' }))
-
-  local treble_ok, treble = pcall(require, 'treble')
-  if treble_ok then
-    vim.keymap.set("n", "<leader>B", treble.buffers,
-      vim.tbl_extend('force', map_opts, { desc = 'Telescope: Bufferline Buffers.' }))
-  end
-
-  vim.keymap.set("n", "<leader>H", builtin.help_tags,
+  vim.keymap.set("n", "<leader>th", builtin.help_tags,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: Search Help.' }))
 
   vim.keymap.set("n", "<leader>T",
@@ -69,7 +60,7 @@ M.config = function()
   vim.keymap.set("n", "<leader>tm", builtin.marks,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: marks.' }))
 
-  vim.keymap.set("n", "<leader>tb", builtin.builtin,
+  vim.keymap.set("n", "<leader>tB", builtin.builtin,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: all builtin pickers.' }))
 
   local function safe_load_extension(ext)
@@ -110,6 +101,13 @@ M.config = function()
   if safe_load_extension("ast_grep") then
     vim.keymap.set('n', '<leader>sg', ':Telescope ast_grep<CR>',
         {noremap = true, desc = 'invoke Telelescope for AST Grep' })
+  end
+
+  if safe_load_extension("vertical_bufferline") then
+    vim.keymap.set('n', '<leader>tv', ':Telescope vertical_bufferline current_group<CR>',
+        {noremap = true, desc = 'Telelescope to show buffers in current group of vertical_bufferline' })
+  else
+      print("vertical_bufferline not available")
   end
 end
 
