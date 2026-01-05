@@ -204,7 +204,7 @@ require("lazy").setup({
           if style.win.buf_opts.syntax == 'vertical-bufferline' then
             return 1
           else
-            return 0.8
+            return 0.6
           end
         end,
         basebg = '',
