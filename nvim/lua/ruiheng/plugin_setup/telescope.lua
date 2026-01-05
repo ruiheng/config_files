@@ -2,6 +2,8 @@ local M = {}
 M.config = function()
   local telescope = require('telescope')
   local builtin = require('telescope.builtin')
+  safe_load_extension = require('ruiheng.utils').safe_load_telescope_extension
+
   local map_opts = {noremap = true}
 
   vim.keymap.set("n", "<leader>f", builtin.find_files,
@@ -63,11 +65,6 @@ M.config = function()
   vim.keymap.set("n", "<leader>tB", builtin.builtin,
     vim.tbl_extend('force', map_opts, { desc = 'Telescope: all builtin pickers.' }))
 
-  local function safe_load_extension(ext)
-    local ok = pcall(telescope.load_extension, ext)
-    return ok
-  end
-
   telescope.setup{
     defaults = {
       layout_strategy = 'vertical',
@@ -103,12 +100,6 @@ M.config = function()
         {noremap = true, desc = 'invoke Telelescope for AST Grep' })
   end
 
-  if safe_load_extension("vertical_bufferline") then
-    vim.keymap.set('n', '<leader>tv', ':Telescope vertical_bufferline current_group<CR>',
-        {noremap = true, desc = 'Telelescope to show buffers in current group of vertical_bufferline' })
-  else
-      print("vertical_bufferline not available")
-  end
 end
 
 return M

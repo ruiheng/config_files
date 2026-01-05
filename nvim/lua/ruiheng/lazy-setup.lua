@@ -509,13 +509,22 @@ require("lazy").setup({
       -- Our custom vertical bufferline
       'vertical-bufferline',
       dir = '/home/ruiheng/config_files/nvim/lua/vertical-bufferline',
-      -- dependencies = { 'akinsho/bufferline.nvim' },
+      dependencies = {
+        -- 'akinsho/bufferline.nvim',
+        'nvim-telescope/telescope.nvim',
+     },
       enabled = true,
       -- enabled = function()
       --   -- 只有在启用时才加载这个插件
       --   return vim.g.enable_vertical_bufferline == 1
       -- end,
       config = function()
+        telescope_ok, _ = pcall(require, 'telescope')
+        if  telescope_ok then
+          vim.keymap.set('n', '<leader>tv', ':Telescope vertical_bufferline current_group<CR>',
+              {noremap = true, desc = 'Telelescope to show buffers in current group of vertical_bufferline' })
+        end
+
         local vbl = require('vertical-bufferline')
 
         -- VBL keymap preset (opt-in)
@@ -526,12 +535,6 @@ require("lazy").setup({
         })
         vbl.apply_keymaps(preset)
 
-        -- 快速切换到历史文件（通过历史位置编号）
-        for i = 1, 9 do
-          vim.keymap.set('n', '<leader>h' .. i, function()
-            vbl.switch_to_history_file(i)
-          end, { noremap = true, silent = true, desc = "Switch to history file " .. i })
-        end
       end,
     },
 
@@ -1019,7 +1022,7 @@ require("lazy").setup({
       build = 'make',
       dependencies = { 'nvim-telescope/telescope.nvim' },
       config = function()
-        require('telescope').load_extension('fzf')
+        require('ruiheng.utils').safe_load_telescope_extension('fzf')
       end
     },
 
@@ -1159,7 +1162,6 @@ require("lazy").setup({
     },
 
     {
-      -- Our custom vertical bufferline
       'jinja-mixied',
       dir = '/home/ruiheng/config_files/nvim/jinja-mixed',
     },
