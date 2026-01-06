@@ -995,8 +995,8 @@ require("lazy").setup({
 
 
     "junegunn/vim-slash",
-    "junegunn/limelight.vim",
-    "takac/vim-hardtime",
+    -- "junegunn/limelight.vim",
+    -- "takac/vim-hardtime",
     "yssl/QFEnter",
 
     { "echasnovski/mini.nvim",
