@@ -201,7 +201,7 @@ require("lazy").setup({
         -- section in the README.md for more info.
         -- basebg = [23,23,23],
         fadelevel = function(style, state)
-          if style.win.buf_opts.syntax == 'vertical-bufferline' then
+          if style.win.buf_opts.syntax == 'buffer-nexus' then
             return 1
           else
             return 0.6
@@ -506,9 +506,8 @@ require("lazy").setup({
     },
 
     {
-      -- Our custom vertical bufferline
-      'vertical-bufferline',
-      dir = '/home/ruiheng/config_files/nvim/lua/vertical-bufferline',
+      'buffer-nexus',
+      dir = '/home/ruiheng/config_files/nvim/lua/buffer-nexus',
       dependencies = {
         -- 'akinsho/bufferline.nvim',
         'nvim-telescope/telescope.nvim',
@@ -521,19 +520,19 @@ require("lazy").setup({
       config = function()
         telescope_ok, _ = pcall(require, 'telescope')
         if  telescope_ok then
-          vim.keymap.set('n', '<leader>tv', ':Telescope vertical_bufferline current_group<CR>',
-              {noremap = true, desc = 'Telelescope to show buffers in current group of vertical_bufferline' })
+          vim.keymap.set('n', '<leader>tn', ':Telescope buffer_nexus current_group<CR>',
+              {noremap = true, desc = 'Telelescope to show buffers in current group of buffer-nexus' })
         end
 
-        local vbl = require('vertical-bufferline')
+        local bn = require('buffer-nexus')
 
         -- VBL keymap preset (opt-in)
-        local preset = vbl.keymap_preset({
+        local preset = bn.keymap_preset({
           history_prefix = '<leader>h',
           buffer_prefix = '<leader>',
           group_prefix = '<leader>g',
         })
-        vbl.apply_keymaps(preset)
+        bn.apply_keymaps(preset)
 
       end,
     },
