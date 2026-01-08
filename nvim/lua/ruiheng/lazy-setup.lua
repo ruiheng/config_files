@@ -983,8 +983,41 @@ require("lazy").setup({
     -- others --
 
     { "vim-airline/vim-airline",
+      init = function()
+        vim.g["airline#extensions#whitespace#enabled"] = 0
+      end,
       config = function()
         vim.g.airline_powerline_fonts = 1
+
+        local function set_buffer_nexus_status_hl()
+          local sl = vim.api.nvim_get_hl(0, { name = "StatusLine" })
+          local pm = vim.api.nvim_get_hl(0, { name = "PmenuSel" })
+          local fg = sl.fg or sl.foreground
+          local bg = pm.bg or pm.background or sl.bg or sl.background
+          if not fg and not bg then
+            return
+          end
+          vim.api.nvim_set_hl(0, "BNStatus", { fg = fg, bg = bg, bold = true })
+        end
+
+        set_buffer_nexus_status_hl()
+        vim.api.nvim_create_autocmd("ColorScheme", {
+          callback = set_buffer_nexus_status_hl,
+        })
+
+        _G.buffe_nexus_airline_label = function()
+          local ok, bn = pcall(require, "buffer-nexus")
+          if not ok or not bn.statusline_label then
+            return ""
+          end
+          return " " .. bn.statusline_label() .. " "
+        end
+
+        vim.fn["airline#parts#define_raw"](
+          "bn",
+          "%#BNStatus#%{v:lua.buffe_nexus_airline_label()}%#StatusLine#"
+        )
+        vim.g.airline_section_x = vim.fn["airline#section#create_right"]({ "bn", "filetype" })
       end
     },
 
