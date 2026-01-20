@@ -139,7 +139,6 @@ When you see code, immediately perform a three-tier judgment:
 **Semantic Code Agent**
 * Use **Serena**, a coding agent toolkit that works directly on the codebase. Think of it as an IDE for an LLM, providing tools for semantic code retrieval and editing.
 * **Activate Project:** Before use, activate a project with a command like: `"Activate the project /path/to/my_project"`
-*(Requires serena MCP. This section can be removed from the prompt after installation: `claude mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide-assistant --project "$(pwd)"`)
 * **Key Tools:**
     * `find_symbol`: Search for symbols globally or locally.
     * `find_referencing_symbols`: Find symbols that reference a given symbol.
@@ -153,12 +152,10 @@ When you see code, immediately perform a three-tier judgment:
 **Documentation Tools**
 * View official documentation.
 * `resolve-library-id` - Resolve a library name to its Context7 ID.
-* `get-library-docs` - Get the latest official documentation.
-    *(Requires Context7 MCP. This section can be removed from the prompt after installation: `claude mcp add --transport http context7 https://mcp.context7.com/mcp`)*
+* `query-docs` - Get the latest official documentation.
 
 **Real-World Code Search**
-* `searchGitHub` - Search for practical usage examples on GitHub.
-    *(Requires Grep MCP. This section can be removed from the prompt after installation: `claude mcp add --transport http grep https://mcp.grep.app`)*
+* Search for practical usage examples on GitHub using Grep.app MCP.
 
 **Specification Documentation Tool**
 * Use `specs-workflow` when writing requirements and design documents:
@@ -166,4 +163,3 @@ When you see code, immediately perform a three-tier judgment:
     * Initialize: `action.type="init"`
     * Update task: `action.type="complete_task"`
     * Path: `/docs/specs/*`
-    *(Requires spec-workflow MCP. This section can be removed from the prompt after installation: `claude mcp add spec-workflow-mcp -s user -- npx -y spec-workflow-mcp@latest`)*
