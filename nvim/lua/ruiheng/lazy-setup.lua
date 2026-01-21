@@ -774,7 +774,7 @@ require("lazy").setup({
       event = { "User LazyLoadProgramming" },
       config = function()
         require("treesitter-context").setup {
-          enabled = false,
+          enable = false,
         }
 
         vim.keymap.set("n", "[c", function()
