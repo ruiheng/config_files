@@ -1039,7 +1039,8 @@ require("lazy").setup({
       "gbprod/yanky.nvim",
       opts = {
         system_clipboard = {
-          sync_with_ring = not vim.env.SSH_CONNECTION,
+          -- sync_with_ring = not vim.env.SSH_CONNECTION,
+          sync_with_ring = false,
         },
         highlight = { timer = 300 },
         textobj = {
