@@ -690,13 +690,35 @@ require("lazy").setup({
         formatters_by_ft = {
           -- lua = { "stylua" },
           -- Conform will run multiple formatters sequentially
-          python = { "ruff" },
+          python = { "ruff_format" },
           -- You can customize some of the format options for the filetype (:help conform.format)
           -- rust = { "rustfmt", lsp_format = "fallback" },
           -- Conform will run the first available formatter
           -- javascript = { "prettierd", "prettier", stop_after_first = true },
         },
       },
+      config = function(_, opts)
+        require("conform").setup(opts)
+        local function set_formatexpr(bufnr)
+          if vim.bo[bufnr].buftype == "" then
+            vim.bo[bufnr].formatexpr = "v:lua.require'conform'.formatexpr()"
+          end
+        end
+
+        -- Apply to existing buffers when conform is loaded
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_loaded(buf) then
+            set_formatexpr(buf)
+          end
+        end
+
+        -- Keep it updated for newly entered buffers
+        vim.api.nvim_create_autocmd({ "FileType", "BufEnter" }, {
+          callback = function(args)
+            set_formatexpr(args.buf)
+          end,
+        })
+      end,
     },
 
     { "nvim-treesitter/nvim-treesitter",
