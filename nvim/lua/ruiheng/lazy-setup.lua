@@ -809,6 +809,17 @@ require("lazy").setup({
       }
     },
 
+    {
+        "mason-org/mason-lspconfig.nvim",
+        opts = {},
+        lazy = true,
+        event = { "User LazyLoadLSP", "User LazyLoadProgramming" },
+        dependencies = {
+            { "mason-org/mason.nvim", opts = {} },
+            "neovim/nvim-lspconfig",
+        },
+    },
+
     { "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
       lazy = true,
       event = { "User LazyLoadLSP", "User LazyLoadProgramming" },
