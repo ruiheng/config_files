@@ -584,6 +584,7 @@ require("lazy").setup({
      -- 'ibhagwan/fzf-lua',
       },
       opts = {
+        insert_at_top = false,
         picker = "telescope", -- or 'fzf-lua' , 'snacks'
       },
       keys = {
