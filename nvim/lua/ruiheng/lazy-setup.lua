@@ -800,7 +800,7 @@ require("lazy").setup({
           enable = false,
         }
 
-        vim.keymap.set("n", "[c", function()
+        vim.keymap.set("n", "<leader>[c", function()
           require("treesitter-context").go_to_context()
         end, { silent = true })
 
