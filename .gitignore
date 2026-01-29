@@ -2,6 +2,7 @@
 ###################
 *.swp
 *~
+Session.vim
 
 # Compiled source #
 ###################
@@ -42,3 +43,7 @@
 ehthumbs.db
 Thumbs.db
 
+
+.claude
+.gemini
+.serena
