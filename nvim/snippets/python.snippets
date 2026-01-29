@@ -1,0 +1,36 @@
+# ================================================================
+# Lyceum Python Snippets
+# ================================================================
+
+# Database transaction with commit
+snippet db_sess_commit
+	async with async_session() as db_sess:
+	    ${0}
+	    await db_sess.commit()
+
+snippet db_sess_scalars_all
+	async with async_session() as db_sess:
+	    (await db_sess.scalars(select(${1})
+	    .where(${1}.id == ${2},${0})
+	    )).all()
+
+snippet db_sess_scalar_query
+	await ${1:db_sess}.scalar(select(${2}).where(${2}))
+
+# NiceGUI page definition
+snippet nicegui_page
+	@ui.page('/some/path')
+	@spa_ready('chat')
+	@require_user_authenticated(req_privilege=True)
+	async def ${0:page_func}(user: User, privilege: UserPrivilege, client: Client):
+	    pass
+
+# Try-except with logger
+snippet try_log
+	try:
+	    ${1}
+	except Exception as ex:
+	    logger.error(f"got exception: {ex!r}")
+
+snippet maybe_async_callable
+	Callable[[${0}], ${1:None} | Awaitable[${1}]]
