@@ -2,6 +2,8 @@
 
 ## Commit Style
 
+Before committing, always review your changes using `git status` and `git diff`. Only stage and commit changes that are directly related to the work at hand. If you have unrelated changes, split them into separate commits. Prioritize committing general-purpose infrastructure and utility code first.
+
 Use conventional commit style with a concise description of what changed, unless it is a very simple change.
 
 **Format**: `<type>(<scope>): <description>`
