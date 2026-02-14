@@ -1,11 +1,9 @@
 ---
 name: delegate-task
-description: Analyzes a task and produces a structured implementation brief for another AI agent to execute. Use when delegating work to an independent AI and want a clear, copy-paste ready brief with objectives, components, checkpoints, and acceptance criteria.
+description: Analyzes a task and produces a structured implementation brief for another AI agent to execute. Also requires the executor to generate a review-request file for later review.
 ---
 
-# Task Decomposer
-
-## Your Role
+# Delegate Task
 
 Analyze the user's task and produce a structured implementation brief for another AI agent to execute.
 
@@ -37,13 +35,13 @@ List 2-4 key decisions. For each:
 - **Mitigation**: How to detect or avoid
 
 ### Context to Acquire
-Background information and files the executor should know about, categorized by when they're needed:
+Files and resources to know about, categorized by urgency:
 
-- **Read Before Starting**: Files that must be read before any implementation (e.g., existing similar implementations, configuration files, API contracts)
-- **Reference as Needed**: Files to consult during implementation (e.g., utility libraries, helper functions, test examples)
-- **Know It Exists**: Files to be aware of but may not need to read immediately (e.g., related modules that might be affected, documentation for future reference)
+- **Read Before Starting**: Files that must be read before implementation
+- **Reference as Needed**: Files to consult during implementation
+- **Know It Exists**: Files to be aware of but may not need to read immediately
 
-For each item, note what information it contains and why it matters.
+For each, note what information it contains and why it matters.
 
 ### Acceptance Criteria
 Specific, testable conditions:
@@ -54,6 +52,27 @@ Specific, testable conditions:
 - **NO GIT OPERATIONS**: Do NOT run any git commands.
 - **ANALYZE BEFORE ACTING**: Read all files in "Context to Acquire" first.
 - **ASK IF UNCLEAR**: Ask clarifying questions if needed.
+
+### Post-Completion Requirement
+
+After completing the task, create a file named `review-request-{timestamp}.md` in the project root with the following content:
+
+```markdown
+# Review Request
+
+## Original Task
+[Paste the original task description here]
+
+## Implementation Summary
+[What was done, key decisions made, trade-offs or compromises]
+
+## Files Modified/Created
+- `path/to/file1` - [brief description of changes]
+- `path/to/file2` - [brief description of changes]
+
+## Known Issues or Limitations
+[Anything the reviewer should be aware of]
+```
 
 ### Language Guidelines
 - Use English for all output, including code comments
@@ -70,3 +89,4 @@ Specific, testable conditions:
 4. **Language** - English primary; keep business terms in original form
 5. **Git prohibition** - Include clear no-git instruction
 6. **Context matters** - Specify files to read before starting
+7. **Review request** - Executor must generate review-request-{timestamp}.md file after completion
