@@ -304,6 +304,40 @@ echo Invalid option. Please try again.
 goto :prompt_loop
 
 :: =============================================================================
+:: Git Submodules
+:: =============================================================================
+
+:init_submodules
+call :log_info "Initializing git submodules..."
+
+if %DRY_RUN%==1 (
+    call :log_dry "Would run: git submodule update --init --recursive"
+    exit /b 0
+)
+
+:: Check if this is a git repository
+if not exist "%SCRIPT_DIR%\.git" (
+    call :log_info "Not a git repository, skipping submodule initialization"
+    exit /b 0
+)
+
+:: Check if .gitmodules exists
+if not exist "%SCRIPT_DIR%\.gitmodules" (
+    call :log_info "No .gitmodules found, skipping submodule initialization"
+    exit /b 0
+)
+
+:: Initialize and update submodules
+git -C "%SCRIPT_DIR%" submodule update --init --recursive > nul 2>&1
+if !errorlevel!==0 (
+    call :log_ok "Submodules initialized successfully"
+) else (
+    call :log_warn "Failed to initialize some submodules (may require SSH key)"
+    call :log_info "You can manually initialize later with: git submodule update --init --recursive"
+)
+exit /b 0
+
+:: =============================================================================
 :: Installation Functions
 :: =============================================================================
 
@@ -398,6 +432,9 @@ echo.
 
 call :log_info "Source directory: %SCRIPT_DIR%"
 call :log_info "Target home: %USERPROFILE%"
+
+:: Initialize git submodules first
+call :init_submodules
 
 :: Install configs
 call :install_home_configs

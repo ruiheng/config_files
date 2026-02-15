@@ -505,6 +505,38 @@ install_serena_config() {
 }
 
 # =============================================================================
+# Git Submodules
+# =============================================================================
+
+init_submodules() {
+    log_info "Initializing git submodules..."
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: git submodule update --init --recursive"
+        return 0
+    fi
+
+    if [[ ! -d "$SCRIPT_DIR/.git" ]]; then
+        log_warn "Not a git repository, skipping submodule initialization"
+        return 0
+    fi
+
+    # Check if there are any submodules defined
+    if [[ ! -f "$SCRIPT_DIR/.gitmodules" ]]; then
+        log_info "No .gitmodules found, skipping submodule initialization"
+        return 0
+    fi
+
+    # Initialize and update submodules
+    if git -C "$SCRIPT_DIR" submodule update --init --recursive; then
+        log_ok "Submodules initialized successfully"
+    else
+        log_warn "Failed to initialize some submodules (may require SSH key)"
+        log_info "You can manually initialize later with: git submodule update --init --recursive"
+    fi
+}
+
+# =============================================================================
 # Neovim Setup
 # =============================================================================
 
@@ -684,6 +716,9 @@ main() {
 
     log_info "Source directory: $SCRIPT_DIR"
     log_info "Target home: $HOME"
+
+    # Initialize git submodules first
+    init_submodules
 
     # Install configs
     install_home_configs
