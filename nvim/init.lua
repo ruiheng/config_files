@@ -69,6 +69,11 @@ vim.o.cuc = true
 vim.o.cul = true
 vim.o.number = true
 vim.o.relativenumber = true
+vim.o.foldcolumn = "auto"
+
+-- vim.o.timeout = true
+-- vim.o.timeoutlen = 1000
+
 
 for i = 1, 9 do
     vim.api.nvim_set_keymap('n', ','..i, ':tabn '..i..'<CR>', {noremap = true, silent = true})
