@@ -69,3 +69,4 @@ Treat this document as the ground truth. Do not verify or re-examine the work de
 5. **Reference specific files and code locations** - Make it easy to pick up where the previous agent left off
 6. **Prioritize current status** - What's in progress, what's blocked, what's next
 7. **Skip irrelevant history** - Don't summarize work from hours ago unless it directly impacts what to do now
+8. **Don't list trivially obtainable info** - Don't include recent commit logs or any information the new agent can easily get with a single command (e.g., `git log`, `git status`). Focus on insights and context that require understanding the work, not just querying the repository state.
