@@ -47,3 +47,6 @@ Thumbs.db
 .claude
 .gemini
 .serena
+
+# Neovim plugin lock file (auto-generated)
+nvim/lazy-lock.json
