@@ -425,32 +425,134 @@ install_xdg_configs() {
     link_file "grc" "$config_dir/grc"
 }
 
-install_claude_skills() {
-    log_info "Installing Claude Code skills (individually)..."
+prepare_skills_target_dir() {
+    local tool_name="$1"
+    local skills_dir="$2"
+    local action
 
-    local claude_skills_dir="$HOME/.claude/skills"
-    local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
-
-    # Create skills directory if needed
-    if [[ ! -d "$claude_skills_dir" ]]; then
+    # Ensure parent directory exists
+    local skills_parent
+    skills_parent="$(dirname "$skills_dir")"
+    if [[ ! -d "$skills_parent" ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would create directory: $claude_skills_dir"
+            log_dry "Would create directory: $skills_parent"
         else
-            mkdir -p "$claude_skills_dir"
-            log_info "Created directory: $claude_skills_dir"
+            mkdir -p "$skills_parent"
+            log_info "Created directory: $skills_parent"
         fi
     fi
 
-    # Link each skill individually (Claude Code requires this)
+    # If skills path is a symlink, convert it to a real directory first.
+    # This prevents accidental operations on the symlink target.
+    if [[ -L "$skills_dir" ]]; then
+        log_warn "$tool_name skills path is a symlink: $skills_dir -> $(readlink "$skills_dir")"
+
+        if [[ $FORCE -eq 1 ]]; then
+            if ! backup_item "$skills_dir"; then
+                return 1
+            fi
+        elif [[ $INTERACTIVE -eq 1 ]]; then
+            prompt_user "$skills_dir"
+            action=$?
+            case "$action" in
+                0) # skip
+                    return 1
+                    ;;
+                1) # backup
+                    if ! backup_item "$skills_dir"; then
+                        return 1
+                    fi
+                    ;;
+                2) # force replace
+                    if [[ $DRY_RUN -eq 1 ]]; then
+                        log_dry "Would remove existing path: $skills_dir"
+                    else
+                        rm -rf "$skills_dir"
+                        log_info "Removed existing path: $skills_dir"
+                    fi
+                    ;;
+                3) # cancel
+                    log_info "Installation cancelled by user"
+                    exit 0
+                    ;;
+            esac
+        else
+            log_warn "Skipping $tool_name skills setup. Use --force or --interactive to migrate $skills_dir."
+            return 1
+        fi
+    elif [[ -e "$skills_dir" ]] && [[ ! -d "$skills_dir" ]]; then
+        log_warn "$tool_name skills path exists but is not a directory: $skills_dir"
+        if [[ $FORCE -eq 1 ]]; then
+            if ! backup_item "$skills_dir"; then
+                return 1
+            fi
+        elif [[ $INTERACTIVE -eq 1 ]]; then
+            prompt_user "$skills_dir"
+            action=$?
+            case "$action" in
+                0) # skip
+                    return 1
+                    ;;
+                1) # backup
+                    if ! backup_item "$skills_dir"; then
+                        return 1
+                    fi
+                    ;;
+                2) # force replace
+                    if [[ $DRY_RUN -eq 1 ]]; then
+                        log_dry "Would remove existing path: $skills_dir"
+                    else
+                        rm -rf "$skills_dir"
+                        log_info "Removed existing path: $skills_dir"
+                    fi
+                    ;;
+                3) # cancel
+                    log_info "Installation cancelled by user"
+                    exit 0
+                    ;;
+            esac
+        else
+            log_warn "Skipping $tool_name skills setup. Use --force or --interactive to replace $skills_dir."
+            return 1
+        fi
+    fi
+
+    if [[ ! -d "$skills_dir" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create directory: $skills_dir"
+        else
+            mkdir -p "$skills_dir"
+            log_info "Created directory: $skills_dir"
+        fi
+    fi
+
+    return 0
+}
+
+install_skills_individually() {
+    local tool_name="$1"
+    local tool_skills_dir="$2"
+    local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
+
+    log_info "Installing $tool_name skills (individually)..."
+
+    if ! prepare_skills_target_dir "$tool_name" "$tool_skills_dir"; then
+        return 0
+    fi
+
     if [[ -d "$src_skills_dir" ]]; then
         for skill_dir in "$src_skills_dir"/*; do
             if [[ -d "$skill_dir" ]]; then
                 local skill_name
                 skill_name=$(basename "$skill_dir")
-                link_file "ai-agent/skills/$skill_name" "$claude_skills_dir/$skill_name"
+                link_file "ai-agent/skills/$skill_name" "$tool_skills_dir/$skill_name"
             fi
         done
     fi
+}
+
+install_claude_skills() {
+    install_skills_individually "Claude Code" "$HOME/.claude/skills"
 }
 
 install_claude_config() {
@@ -477,6 +579,27 @@ install_claude_config() {
     # Note: settings.local.json contains machine-specific permissions
     # and is not automatically linked. Copy manually if needed:
     #   cp .claude/settings.local.json ~/.claude/
+}
+
+install_codex_skills() {
+    install_skills_individually "Codex" "$HOME/.codex/skills"
+}
+
+install_codex_config() {
+    log_info "Installing Codex config..."
+
+    local codex_dir="$HOME/.codex"
+
+    if [[ ! -d "$codex_dir" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create directory: $codex_dir"
+        else
+            mkdir -p "$codex_dir"
+            log_info "Created directory: $codex_dir"
+        fi
+    fi
+
+    install_codex_skills
 }
 
 install_serena_config() {
@@ -549,7 +672,7 @@ check_nvim_installed() {
 }
 
 get_nvim_version() {
-    nvim --version | head -1 | grep -oP '\d+\.\d+' | head -1
+    nvim --version | head -1 | grep -Eo '[0-9]+\.[0-9]+' | head -1
 }
 
 install_nvim_prerequisites() {
@@ -724,6 +847,7 @@ main() {
     install_home_configs
     install_xdg_configs
     install_claude_config
+    install_codex_config
     install_serena_config
 
     # OS-specific handling

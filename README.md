@@ -137,6 +137,14 @@ Options:
 
 **Note**: Claude Code requires each skill to be linked individually, not the entire skills directory. The script automatically creates separate symlinks for each subdirectory in `ai-agent/skills/`.
 
+### Codex Configuration
+
+| Source | Target | Description |
+|--------|--------|-------------|
+| `ai-agent/skills/<skill>/` | `~/.codex/skills/<skill>/` | **Each skill linked individually** |
+
+**Note**: Codex skills are linked individually for reliability. If `~/.codex/skills` is currently a symlink, run `./install.sh --interactive` or `./install.sh --force` once to migrate it to a real directory and then link each skill.
+
 ### Other Special Configurations
 
 | Source | Target | Description |
