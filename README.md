@@ -145,6 +145,15 @@ Options:
 
 **Note**: Codex skills are linked individually for reliability. If `~/.codex/skills` is currently a symlink, run `./install.sh --interactive` or `./install.sh --force` once to migrate it to a real directory and then link each skill.
 
+### Gemini CLI Configuration
+
+| Source | Target | Description |
+|--------|--------|-------------|
+| `ai-agent/GEMINI.md` | `~/.gemini/GEMINI.md` | Gemini CLI main config |
+| `ai-agent/skills/<skill>/` | `~/.gemini/skills/<skill>/` | **Each skill linked individually** |
+
+**Note**: Gemini CLI skills are linked individually for reliability. If `~/.gemini/skills` is currently a symlink, run `./install.sh --interactive` or `./install.sh --force` once to migrate it to a real directory and then link each skill.
+
 ### Other Special Configurations
 
 | Source | Target | Description |

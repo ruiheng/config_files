@@ -581,6 +581,31 @@ install_claude_config() {
     #   cp .claude/settings.local.json ~/.claude/
 }
 
+install_gemini_skills() {
+    install_skills_individually "Gemini CLI" "$HOME/.gemini/skills"
+}
+
+install_gemini_config() {
+    log_info "Installing Gemini CLI config..."
+
+    local gemini_dir="$HOME/.gemini"
+
+    if [[ ! -d "$gemini_dir" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create directory: $gemini_dir"
+        else
+            mkdir -p "$gemini_dir"
+            log_info "Created directory: $gemini_dir"
+        fi
+    fi
+
+    # Link the main GEMINI.md file
+    link_file "ai-agent/GEMINI.md" "$gemini_dir/GEMINI.md"
+
+    # Link skills individually for reliability
+    install_gemini_skills
+}
+
 install_codex_skills() {
     install_skills_individually "Codex" "$HOME/.codex/skills"
 }
@@ -847,6 +872,7 @@ main() {
     install_home_configs
     install_xdg_configs
     install_claude_config
+    install_gemini_config
     install_codex_config
     install_serena_config
 
