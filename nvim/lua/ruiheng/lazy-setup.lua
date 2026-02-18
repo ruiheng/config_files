@@ -541,7 +541,7 @@ require("lazy").setup({
 
     {
       'buffer-nexus',
-      dir = '/home/ruiheng/config_files/nvim/lua/buffer-nexus',
+      dir = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h') .. '/buffer-nexus',
       dependencies = {
         -- 'akinsho/bufferline.nvim',
         'nvim-telescope/telescope.nvim',
@@ -1292,7 +1292,7 @@ require("lazy").setup({
 
     {
       'jinja-mixied',
-      dir = '/home/ruiheng/config_files/nvim/jinja-mixed',
+      dir = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h') .. '/jinja-mixed',
     },
 
     --- colorschemes ----
