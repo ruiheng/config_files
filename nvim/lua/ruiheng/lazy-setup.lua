@@ -16,6 +16,7 @@ require("lazy").setup({
     {
       "folke/snacks.nvim",
       priority = 1000,
+      enabled = false,
       lazy = false,
       ---@type snacks.Config
       opts = {
@@ -26,8 +27,10 @@ require("lazy").setup({
         -- dashboard = { enabled = true },
         explorer = { enabled = true },
         indent = { enabled = true },
-        input = { enabled = true },
-        picker = { enabled = true },
+        input = { enabled = true,
+                  backdrop = true,
+                },
+        picker = { enabled = false },
         notifier = { enabled = true },
         quickfile = { enabled = true },
         scope = { enabled = true },
@@ -41,6 +44,7 @@ require("lazy").setup({
     {
       "folke/which-key.nvim",
       event = "VeryLazy",
+      enabled = false,
       opts = {
         delay = 500,
         filter = function(mapping)
