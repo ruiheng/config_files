@@ -572,6 +572,8 @@ install_claude_config() {
 
     # Link the main CLAUDE.md file
     link_file "ai-agent/CLAUDE.md" "$claude_dir/CLAUDE.md"
+    # CLAUDE.md uses @modules/* relative imports.
+    link_file "ai-agent/modules" "$claude_dir/modules"
 
     # Link skills individually (required by Claude Code)
     install_claude_skills
@@ -601,6 +603,8 @@ install_gemini_config() {
 
     # Link the main GEMINI.md file
     link_file "ai-agent/GEMINI.md" "$gemini_dir/GEMINI.md"
+    # GEMINI.md uses @modules/* relative imports.
+    link_file "ai-agent/modules" "$gemini_dir/modules"
 
     # Link skills individually for reliability
     install_gemini_skills
