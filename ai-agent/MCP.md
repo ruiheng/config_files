@@ -69,6 +69,7 @@
 | **Grep.app** | ✅ 全局配置 | GitHub 代码搜索 |
 | **Serena** | ✅ 全局配置 | 语义代码代理 |
 | **spec-workflow** | ✅ 全局配置 | 规格文档工作流 |
+| **chrome-devtools** | ✅ 已添加配置 | Chrome DevTools 浏览器调试 |
 
 ---
 
@@ -98,6 +99,14 @@
     "spec-workflow": {
       "command": "npx",
       "args": ["-y", "spec-workflow-mcp@latest"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "chrome-devtools-mcp@latest",
+        "--autoConnect",
+        "--channel=beta"
+      ]
     }
   }
 }
@@ -298,6 +307,25 @@ claude mcp add -s user spec-workflow -- npx -y spec-workflow-mcp@latest
 - 路径: `/docs/specs/*`
 
 **GitHub**: https://github.com/kingkongshot/specs-workflow-mcp
+
+---
+
+### 5. chrome-devtools - Chrome 浏览器调试
+
+**功能**: 通过 MCP 连接 Chrome DevTools 进行浏览器自动化与调试
+
+**全局配置**:
+```json
+// Gemini CLI
+"chrome-devtools": {
+  "command": "npx",
+  "args": [
+    "chrome-devtools-mcp@latest",
+    "--autoConnect",
+    "--channel=beta"
+  ]
+}
+```
 
 ---
 
