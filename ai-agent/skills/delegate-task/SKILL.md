@@ -7,6 +7,27 @@ description: Analyzes a task and produces a structured implementation brief for 
 
 Analyze the user's task and produce a structured implementation brief for another AI agent to execute.
 
+## Pre-Output Decomposition Check (Required)
+
+Before generating the final task brief, evaluate whether the request should be split into smaller independent tasks.
+
+Use this quick check:
+- Can parts be implemented independently with low coupling?
+- Can parts be validated independently with clear acceptance criteria?
+- Would splitting reduce risk or enable parallel execution?
+
+If the task is **not worth splitting**, proceed directly to "Output Format".
+
+If the task **is worth splitting**:
+1. Provide a short split recommendation (proposed sub-tasks and why).
+2. Ask the user to choose:
+   - keep as one delegated task, or
+   - split into multiple delegated tasks.
+3. Stop and wait for the user's decision.
+4. After the user's decision, rerun this skill and generate the final brief in the selected mode.
+
+Do not output the full final brief before the user decision when a split recommendation is made.
+
 ## Output Format
 
 Generate the following sections:
@@ -91,3 +112,4 @@ After completing the task, create a file named `review-request-{timestamp}.md` i
 5. **Git boundary** - Forbid git write operations; allow read-only git only when needed for context
 6. **Context matters** - Specify mandatory files first, then use incremental context acquisition
 7. **Review request** - Executor must generate review-request-{timestamp}.md file after completion
+8. **Decomposition gate** - If splitting is recommended, pause for user decision and only then produce the final brief
