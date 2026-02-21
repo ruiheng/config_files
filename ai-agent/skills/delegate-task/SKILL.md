@@ -49,13 +49,14 @@ Specific, testable conditions:
 - [ ] Criterion 2: [Specific observable outcome]
 
 ### Important Notes
-- **NO GIT OPERATIONS**: Do NOT run any git commands.
-- **ANALYZE BEFORE ACTING**: Read all files in "Context to Acquire" first.
+- **NO GIT WRITE OPERATIONS**: Do NOT run git commands that modify repository state (for example: `git add`, `git commit`, `git merge`, `git rebase`, `git reset`, `git checkout`).
+- **READ-ONLY GIT IS ALLOWED**: Use read-only git commands only when needed for context (for example: `git status`, `git log`, `git diff --name-only`).
+- **ANALYZE BEFORE ACTING**: Read all files in "Read Before Starting" first, then acquire remaining context incrementally as needed.
 - **ASK IF UNCLEAR**: Ask clarifying questions if needed.
 
 ### Post-Completion Requirement
 
-After completing the task, create a file named `review-request-{timestamp}.md` in the project root with the following content:
+After completing the task, create a file named `review-request-{timestamp}.md` in the project root with the following content. Use `YYYYMMDD-HHmmss` for `{timestamp}` to keep names unique:
 
 ```markdown
 # Review Request
@@ -75,7 +76,7 @@ After completing the task, create a file named `review-request-{timestamp}.md` i
 ```
 
 ### Language Guidelines
-- Use English for all output, including code comments
+- Use English by default for all output, including code comments. Switch to the user's local language only when English becomes a communication barrier.
 - Keep business/domain terms in original form (e.g., 白金会员, 代金券)
 - Use English for technical terms (e.g., constructor, polymorphism)
 
@@ -87,6 +88,6 @@ After completing the task, create a file named `review-request-{timestamp}.md` i
 2. **Components are logical groupings** - Not ordered steps
 3. **Be specific in criteria** - Concrete, observable outcomes
 4. **Language** - English primary; keep business terms in original form
-5. **Git prohibition** - Include clear no-git instruction
-6. **Context matters** - Specify files to read before starting
+5. **Git boundary** - Forbid git write operations; allow read-only git only when needed for context
+6. **Context matters** - Specify mandatory files first, then use incremental context acquisition
 7. **Review request** - Executor must generate review-request-{timestamp}.md file after completion

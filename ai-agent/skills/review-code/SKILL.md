@@ -36,19 +36,22 @@ The user should provide:
 ### Critical Issues
 Must fix before merge:
 - [ ] **[CATEGORY]**: Description | Suggestion: How to fix
+If none, write: `- None.`
 
 ### Design Concerns
 Architecture/decision questions:
 - **[Concern]**: Description | Suggestion: Alternative approach
+If none, write: `- None.`
 
 ### Minor Suggestions
 Optional improvements:
 - [ ] Description
+If none, write: `- None.`
 
 ### Security Check
-- [ ] No injection risks
-- [ ] No unsafe data exposure
-- [ ] Input validation appropriate
+- Injection risks: [PASS / FAIL / UNKNOWN] - [brief basis]
+- Unsafe data exposure: [PASS / FAIL / UNKNOWN] - [brief basis]
+- Input validation: [PASS / FAIL / UNKNOWN] - [brief basis]
 
 ### Verification Questions
 For the author:
@@ -63,3 +66,4 @@ For the author:
 4. Distinguish severity: Separate blockers from suggestions
 5. Assume good intent: Review the code, not the author
 6. Stay focused: Review what was asked, not what could be
+7. If no critical findings, explicitly state that and mention residual risks/testing gaps
