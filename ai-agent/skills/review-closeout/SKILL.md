@@ -46,37 +46,49 @@ Keep content with **inclusion-first** policy (prefer keeping over dropping):
 - Keep file paths / line references when present.
 - Do not invent new issues.
 
-## Output Template
+## Rendering Rules (No Empty Sections)
 
-Use this structure:
+Render output with **conditional sections**:
 
-```markdown
-### Review Closeout
+1. Build 5 section buckets in this fixed order:
+- `Critical Issues`
+- `Design Concerns`
+- `Minor Suggestions`
+- `Verification Questions`
+- `Remaining Check Alerts (FAIL/UNKNOWN Only)`
 
-#### Critical Issues
-- [item]
-
-#### Design Concerns
-- [item]
-
-#### Minor Suggestions
-- [item]
-
-#### Verification Questions
-- [item]
-
-#### Remaining Check Alerts (FAIL/UNKNOWN Only)
-- [item]
-```
-
-## Empty Result Behavior
-
-If all sections are empty after filtering, output exactly:
+2. Add items to each bucket using the extraction rules above.
+3. Remove empty items / placeholders (`None.` / PASS-only lines).
+4. **Only render a section when its bucket has at least 1 item.**
+5. **Never output a heading with no bullet items under it.**
+6. If all 5 buckets are empty, output exactly:
 
 ```markdown
 ### Review Closeout
 No actionable items.
 ```
+
+## Output Template (Conditional)
+
+Always start with:
+
+```markdown
+### Review Closeout
+```
+
+Then append only non-empty sections, for example:
+
+```markdown
+### Review Closeout
+
+#### Design Concerns
+- [item]
+
+#### Verification Questions
+- [item]
+```
+
+The above is just an example of sparse rendering; do not force missing sections to appear.
 
 ## Guidelines
 
@@ -84,3 +96,4 @@ No actionable items.
 2. Keep neutral tone and avoid chat framing.
 3. Do not include PASS-only status lines.
 4. Keep ordering stable: Critical -> Design -> Minor -> Questions -> Alerts.
+5. Output must be compact and copy/paste friendly; no empty sections.
