@@ -1,11 +1,11 @@
 ---
 name: delegate-task
-description: Analyzes a task and produces a structured implementation brief for another AI agent to execute. Also requires the executor to generate a review-request file for later review.
+description: Analyzes a task and produces a structured implementation brief file for another AI agent to execute.
 ---
 
 # Delegate Task
 
-Analyze the user's task and produce a structured implementation brief for another AI agent to execute.
+Analyze the user's task and produce a structured implementation brief file for another AI agent to execute.
 
 ## Pre-Output Decomposition Check (Required)
 
@@ -16,7 +16,7 @@ Use this quick check:
 - Can parts be validated independently with clear acceptance criteria?
 - Would splitting reduce risk or enable parallel execution?
 
-If the task is **not worth splitting**, proceed directly to "Output Format".
+If the task is **not worth splitting**, proceed directly to "Output File" and "Brief Format".
 
 If the task **is worth splitting**:
 1. Provide a short split recommendation (proposed sub-tasks and why).
@@ -28,7 +28,18 @@ If the task **is worth splitting**:
 
 Do not output the full final brief before the user decision when a split recommendation is made.
 
-## Output Format
+## Output File (Required)
+
+Create a file named `delegate-task-<unique>.md`.
+- `<unique>` can be any short unique suffix.
+- Default location is project root unless `output_path` is provided.
+- If a filename collision occurs, generate a new unique suffix.
+
+After writing the file:
+- Return only a short confirmation with the file path and a one-line summary.
+- Do not print the full brief inline unless the user explicitly asks.
+
+## Brief Format
 
 Generate the following sections:
 
@@ -96,3 +107,4 @@ If a review handoff document is needed, use the dedicated `review-request` skill
 6. **Context matters** - Specify mandatory files first, then use incremental context acquisition
 7. **Review request is optional** - Use the dedicated `review-request` skill only when a review handoff document is actually needed
 8. **Decomposition gate** - If splitting is recommended, pause for user decision and only then produce the final brief
+9. **File-first output** - Write the final brief to `delegate-task-<unique>.md`; avoid inline full-text output by default
