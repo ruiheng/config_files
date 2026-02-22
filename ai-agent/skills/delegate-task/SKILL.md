@@ -75,26 +75,9 @@ Specific, testable conditions:
 - **ANALYZE BEFORE ACTING**: Read all files in "Read Before Starting" first, then acquire remaining context incrementally as needed.
 - **ASK IF UNCLEAR**: Ask clarifying questions if needed.
 
-### Post-Completion Requirement
+### Optional Follow-up
 
-After completing the task, create a file named `review-request-{timestamp}.md` in the project root with the following content. Use `YYYYMMDD-HHmmss` for `{timestamp}` to keep names unique:
-
-```markdown
-# Review Request
-
-## Original Task
-[Paste the original task description here]
-
-## Implementation Summary
-[What was done, key decisions made, trade-offs or compromises]
-
-## Files Modified/Created
-- `path/to/file1` - [brief description of changes]
-- `path/to/file2` - [brief description of changes]
-
-## Known Issues or Limitations
-[Anything the reviewer should be aware of]
-```
+If a review handoff document is needed, use the dedicated `review-request` skill. Do not force this step in every delegated task.
 
 ### Language Guidelines
 - Use English by default for all output, including code comments. Switch to the user's local language only when English becomes a communication barrier.
@@ -111,5 +94,5 @@ After completing the task, create a file named `review-request-{timestamp}.md` i
 4. **Language** - English primary; keep business terms in original form
 5. **Git boundary** - Forbid git write operations; allow read-only git only when needed for context
 6. **Context matters** - Specify mandatory files first, then use incremental context acquisition
-7. **Review request** - Executor must generate review-request-{timestamp}.md file after completion
+7. **Review request is optional** - Use the dedicated `review-request` skill only when a review handoff document is actually needed
 8. **Decomposition gate** - If splitting is recommended, pause for user decision and only then produce the final brief
