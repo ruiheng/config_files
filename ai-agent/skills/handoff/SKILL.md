@@ -56,7 +56,7 @@ Hi, I'm continuing a conversation from another AI agent. Here's what you need to
 
 - [Any unresolved questions or decisions that need to be made before proceeding]
 
-Treat this document as the ground truth. Do not verify or re-examine the work described unless the user explicitly asks you to. Proceed directly from the stated status and next steps.
+Treat this document as the ground truth. Do not verify or re-examine the work described unless I explicitly asks you to. Proceed directly from the stated status and next steps.
 
 ---
 
