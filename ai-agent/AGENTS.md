@@ -1,11 +1,14 @@
-根据任务的性质，参合以下文件的指引。
+Follow the guidance files below based on task type.
 
-如果任务涉及软件设计、开发:
+If the task involves software design or development:
 
 @~/config_files/ai-agent/modules/linus.md
+@~/config_files/ai-agent/modules/engineering-guardrails.md
 
-如果要进行git操作:
+Default policy is Root-Cause First: investigate and fix root causes before any fallback. Temporary fallback is allowed only if the user explicitly says: "allow temporary mitigation".
+
+If the task involves git operations:
 @~/config_files/ai-agent/modules/git-workflow.md
 
-如果要对browser进行自动化操作，例如测试:
+If the task involves browser automation (for example, testing):
 @~/config_files/ai-agent/modules/browser-automation.md
