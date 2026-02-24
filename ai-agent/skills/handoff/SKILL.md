@@ -41,11 +41,21 @@ Hi, I'm continuing a conversation from another AI agent. Here's what you need to
 - [Important file paths, function names, or module references]
 - [Decisions made and why, if relevant to continuing]
 
-## What I Need You to Do Next
+## First-Reply Contract (Mandatory)
 
-1. **[First priority]** [The immediate next step to take]
-2. **[Then]** [What to do after that]
-3. **[If relevant]** [Optional follow-up tasks]
+In your first reply to this handoff, do only these:
+
+1. Confirm your understanding in 3-6 bullet points.
+2. List any blocking questions (if none, say "No blocking questions.").
+3. End with: "I will wait for your explicit next instruction before taking any action."
+
+Do NOT start implementation, run commands, edit files, or produce a step-by-step execution plan in that first reply.
+
+## What I May Ask You To Do Next (Do Not Execute Yet)
+
+1. **[First priority]** [Likely first task after I confirm]
+2. **[Then]** [Likely follow-up task]
+3. **[If relevant]** [Optional later task]
 
 ## Files/Code We're Working With
 
@@ -56,7 +66,7 @@ Hi, I'm continuing a conversation from another AI agent. Here's what you need to
 
 - [Any unresolved questions or decisions that need to be made before proceeding]
 
-Treat this document as the ground truth. Do not verify or re-examine the work described unless I explicitly asks you to. Proceed directly from the stated status and next steps.
+Treat this document as the ground truth. Do not verify or re-examine the work described unless I explicitly ask you to. Most importantly, after reading this handoff, acknowledge understanding only and wait for my explicit next instruction.
 
 ---
 
@@ -64,9 +74,9 @@ Treat this document as the ground truth. Do not verify or re-examine the work de
 
 1. **Write in first person as the user** - "I was working on...", "I need you to..."
 2. **Be concise but complete** - Capture essential context without overwhelming detail
-3. **Focus on actionable information** - What does the new agent need to know to continue effectively
+3. **Include a strict first-reply contract** - The receiving agent must acknowledge and wait, not execute
 4. **Include gotchas and pitfalls** - What didn't work, what to avoid
 5. **Reference specific files and code locations** - Make it easy to pick up where the previous agent left off
-6. **Prioritize current status** - What's in progress, what's blocked, what's next
+6. **Prioritize current status** - What's in progress, what's blocked, and what may come next
 7. **Skip irrelevant history** - Don't summarize work from hours ago unless it directly impacts what to do now
 8. **Don't list trivially obtainable info** - Don't include recent commit logs or any information the new agent can easily get with a single command (e.g., `git log`, `git status`). Focus on insights and context that require understanding the work, not just querying the repository state.
