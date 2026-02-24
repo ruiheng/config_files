@@ -44,6 +44,29 @@ These guardrails apply to all software design and development tasks. The goal is
 2. Avoid over-engineering and unrelated abstractions.
 3. Prefer fail-fast over silent masking on error paths.
 
+## 6) Adaptive Bug Localization (SHOULD)
+
+Choose the cheapest method that can produce high-confidence evidence.
+
+1. Start with fast inspection:
+- Repro steps
+- Relevant code path walkthrough
+- Invariant checks at key state transitions
+2. Escalate to instrumentation when needed:
+- Multiple plausible causes remain
+- Control flow or state is non-obvious (async, retries, caching, concurrency, cross-service boundaries)
+- Confidence in root cause is below high confidence
+3. Acceptable instrumentation:
+- Targeted logs at decision boundaries
+- Temporary assertions/checkpoints
+- Small repro-focused probes/tests
+4. Avoid blind guess-fix loops:
+- Do not submit another fix attempt without new evidence from inspection or instrumentation.
+5. Keep diagnostics disciplined:
+- Scope logs narrowly to the suspected path
+- Remove or downgrade temporary debug logs after verification
+- Summarize the evidence chain in the final report
+
 ## Default Output Order
 
 1. Root-cause analysis (hypotheses + evidence chain)
