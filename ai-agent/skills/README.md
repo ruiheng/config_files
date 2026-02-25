@@ -65,3 +65,23 @@ flowchart TD
   - Edge label `cmd: ...` means a skill command invocation.
   - `[[...]]` is a temporary document artifact.
   - `[/.../]` is direct report output (copy/paste).
+
+## Incremental Automation with Agent Deck
+
+The baseline flow above remains valid. `agent-deck` can be added gradually without switching to full automation.
+
+Current recommended operating mode:
+
+1. Keep `planner` as a long-lived session.
+2. Create `executor-<task_id>` and `reviewer-<task_id>` per task.
+3. Keep user confirmation as the gate before final acceptance/closeout.
+4. Keep long payloads file-based (`delegate-task`, `review-request`, `review-report`, `closeout`).
+
+Use skill:
+
+- `agent-deck` (`ai-agent/skills/agent-deck/SKILL.md`)
+
+References:
+
+- CLI reference: `ai-agent/skills/agent-deck/references/cli-reference.md`
+- Message templates: `ai-agent/skills/agent-deck/references/message-templates.md`
