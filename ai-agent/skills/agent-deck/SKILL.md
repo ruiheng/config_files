@@ -1,232 +1,347 @@
 ---
 name: agent-deck
-description: Operate agent-deck sessions safely in a human-led workflow. Use for basic session control, role handoff, and light automation across planner/executor/reviewer.
+description: Terminal session manager for AI coding agents. Use when user mentions "agent-deck", "session", "sub-agent", "MCP attach", "git worktree", or needs to (1) create/start/stop/restart/fork sessions, (2) attach/detach MCPs, (3) manage groups/profiles, (4) get session output, (5) configure agent-deck, (6) troubleshoot issues, (7) launch sub-agents, or (8) create/manage worktree sessions. Covers CLI commands, TUI shortcuts, config.toml options, and automation.
+compatibility: claude, opencode
 ---
 
-# Agent Deck Basics
+# Agent Deck
 
-Use this skill when tasks involve `agent-deck` session orchestration.
-This skill is intentionally conservative: human-led, low-automation, auditable.
+Terminal session manager for AI coding agents. Built with Go + Bubble Tea.
 
-## Scope
+**Version:** 0.8.98 | **Repo:** [github.com/asheshgoplani/agent-deck](https://github.com/asheshgoplani/agent-deck) | **Discord:** [discord.gg/e4xSs6NBN8](https://discord.gg/e4xSs6NBN8)
 
-- Workflow shape: one long-lived `planner`, per-task `executor` + `reviewer`.
-- Runtime shape: single shared workspace (no mandatory worktree isolation in this skill).
-- Automation level: only low-risk automation; keep user confirmation gates.
+## Script Path Resolution (IMPORTANT)
 
-## Source of Truth
+This skill includes helper scripts in its `scripts/` subdirectory. When Claude Code loads this skill, it shows a line like:
 
-- Command reference: `references/cli-reference.md`
-- Message templates: `references/message-templates.md`
-- If command details are uncertain, read that file first and follow it exactly.
+```
+Base directory for this skill: /path/to/.../skills/agent-deck
+```
 
-## Execution Environment (Required)
+**You MUST use that base directory path to resolve all script references.** Store it as `SKILL_DIR`:
 
-All `agent-deck` commands in this skill must be executed outside sandbox (host shell with real tmux/session context).
-Do not rely on sandboxed shell execution for `agent-deck` detection or control.
+```bash
+# Set SKILL_DIR to the base directory shown when this skill was loaded
+SKILL_DIR="/path/shown/in/base-directory-line"
 
-## Operating Principles
+# Then run scripts as:
+$SKILL_DIR/scripts/launch-subagent.sh "Title" "Prompt" --wait
+```
 
-1. Human remains the final decision-maker.
-2. Do not auto-merge or auto-delete sessions.
-3. Prefer file artifacts for long context (`delegate-task`, `review-request`, `review-report`, `closeout`).
-4. Use `agent-deck session send` for short control messages and pointers to artifact files.
-4.1 Prefer JSON message format from `references/message-templates.md` for machine-readable session coordination.
-4.2 Never send artifact body text via `session send`; send pointer-only control messages.
-4.3 `session send` payload should be JSON control messages whenever protocol fields are available.
-4.4 Prefer `scripts/dispatch-control-message.sh` to collapse multi-step control operations into one command.
-5. Keep role boundaries strict:
-- `planner`: planning and orchestration
-- `executor`: implementation
-- `reviewer`: review loop and stop recommendation
-6. If host-side `agent-deck session current --json` fails, treat it as missing session context and ask for explicit metadata (`task_id`, `planner_session`).
+**Common mistake:** Do NOT use `<project-root>/scripts/launch-subagent.sh`. The scripts live inside the skill's own directory (plugin cache or project skills folder), NOT in the user's project root.
 
-## Naming and Metadata Convention
+**For plugin users**, the path looks like: `~/.claude/plugins/cache/agent-deck/agent-deck/<hash>/skills/agent-deck/scripts/`
+**For local development**, the path looks like: `<repo>/skills/agent-deck/scripts/`
 
-Use a stable task id:
+## Quick Start
 
-`task_id = YYYYMMDD-HHMM-<slug>`
+```bash
+# Launch TUI
+agent-deck
 
-Use it everywhere:
+# Create and start a session
+agent-deck add -t "Project" -c claude /path/to/project
+agent-deck session start "Project"
 
-- Executor session: `executor-<task_id>`
-- Reviewer session: `reviewer-<task_id>`
-- Branch: `task/<task_id>`
-- Artifacts directory: `.agent-artifacts/<task_id>/`
-
-Minimum message header fields for cross-session communication:
-
-- `Task-ID`
-- `planner_session` (required; immutable per task)
-- `From-Session`
-- `To-Session`
-- `Round` (for review iterations)
-- `Action`
-- `Artifact-Path` (if applicable)
+# Send message and get output
+agent-deck session send "Project" "Analyze this codebase"
+agent-deck session output "Project"
+```
 
 ## Essential Commands
 
-Commonly used commands (see `references/cli-reference.md` for full flags):
+| Command | Purpose |
+|---------|---------|
+| `agent-deck` | Launch interactive TUI |
+| `agent-deck add -t "Name" -c claude /path` | Create session |
+| `agent-deck session start/stop/restart <name>` | Control session |
+| `agent-deck session send <name> "message"` | Send message |
+| `agent-deck session output <name>` | Get last response |
+| `agent-deck session current [-q\|--json]` | Auto-detect current session |
+| `agent-deck session fork <name>` | Fork Claude conversation |
+| `agent-deck mcp list` | List available MCPs |
+| `agent-deck mcp attach <name> <mcp>` | Attach MCP (then restart) |
+| `agent-deck status` | Quick status summary |
+| `agent-deck add --worktree <branch>` | Create session in git worktree |
+| `agent-deck worktree list` | List worktrees with sessions |
+| `agent-deck worktree cleanup` | Find orphaned worktrees/sessions |
+
+**Status:** `●` running | `◐` waiting | `○` idle | `✕` error
+
+## Sub-Agent Launch
+
+**Use when:** User says "launch sub-agent", "create sub-agent", "spawn agent"
 
 ```bash
-agent-deck list
-agent-deck status -v
-
-agent-deck launch . --title "<session>" --group "<group>" --cmd "<tool>" --message "<msg>"
-agent-deck session send "<session>" "<message>"
-agent-deck session output "<session>"
-agent-deck session show "<session>" --json
-
-agent-deck skill list
-agent-deck skill attach "<session>" "<skill>" --restart
-agent-deck skill attached "<session>"
+$SKILL_DIR/scripts/launch-subagent.sh "Title" "Prompt" [--mcp name] [--wait]
 ```
 
-Preferred dispatch helper:
+The script auto-detects current session/profile and creates a child session.
+
+### Retrieval Modes
+
+| Mode | Command | Use When |
+|------|---------|----------|
+| **Fire & forget** | (no --wait) | Default. Tell user: "Ask me to check when ready" |
+| **On-demand** | `agent-deck session output "Title"` | User asks to check |
+| **Blocking** | `--wait` flag | Need immediate result |
+
+### Recommended MCPs
+
+| Task Type | MCPs |
+|-----------|------|
+| Web research | `exa`, `firecrawl` |
+| Code documentation | `context7` |
+| Complex reasoning | `sequential-thinking` |
+
+## Consult Another Agent (Codex, Gemini)
+
+**Use when:** User says "consult with codex", "ask gemini", "get codex's opinion", "what does codex think", "consult another agent", "brainstorm with codex/gemini", "get a second opinion"
+
+**IMPORTANT:** You MUST use the `--tool` flag to specify which agent. Without it, the script defaults to Claude.
+
+### Quick Reference
 
 ```bash
-scripts/dispatch-control-message.sh \
-  --task-id "<task_id>" \
-  --planner-session "<planner_session>" \
-  --to-session "<session>" \
-  --action "<action>" \
-  --artifact-path "<artifact_path>" \
-  --group "<group>" \
-  --cmd "<tool>"
+# Consult Codex (MUST include --tool codex)
+$SKILL_DIR/scripts/launch-subagent.sh "Consult Codex" "Your question here" --tool codex --wait --timeout 120
+
+# Consult Gemini (MUST include --tool gemini)
+$SKILL_DIR/scripts/launch-subagent.sh "Consult Gemini" "Your question here" --tool gemini --wait --timeout 120
 ```
 
-Path resolution rule:
-- Resolve `scripts/dispatch-control-message.sh` relative to this skill directory.
+**DO NOT** try to create Codex/Gemini sessions manually with `agent-deck add`. Always use the script above. It handles tool-specific initialization, readiness detection, and output retrieval automatically.
 
-## Human-Led Three-Role Flow (Single Workspace)
-
-### 1) Planner Creates Task and Starts Executor
-
-Planner prepares:
-
-- `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`
-
-Then launch executor:
+### Full Options
 
 ```bash
-agent-deck launch . \
-  --title "executor-<task_id>" \
-  --group "<group>" \
-  --cmd "<tool>" \
-  --message "Task-ID: <task_id>. Planner session is <planner_session>. Read and follow .agent-artifacts/<task_id>/delegate-task-<task_id>.md."
+$SKILL_DIR/scripts/launch-subagent.sh "Title" "Prompt" \
+  --tool codex|gemini \     # REQUIRED for non-Claude agents
+  --path /project/dir \     # Working directory (auto-inherits parent path if omitted)
+  --wait \                  # Block until response is ready
+  --timeout 180 \           # Seconds to wait (default: 300)
+  --mcp exa                 # Attach MCP servers (can repeat)
 ```
 
-Notes:
+### Supported Tools
 
-- `<tool>` can be `codex`, `claude`, `gemini`, etc.
-- Default tool should be the current agent tool unless user specifies otherwise.
+| Tool | Flag | Notes |
+|------|------|-------|
+| Claude | `--tool claude` | Default, no flag needed |
+| Codex | `--tool codex` | Requires `codex` CLI installed |
+| Gemini | `--tool gemini` | Requires `gemini` CLI installed |
 
-### 2) Executor Preflight Before Coding
+### How It Works
 
-Executor should verify tracked workspace cleanliness before branch work:
+1. Script auto-detects current session and profile
+2. Creates a child session with the specified tool in the parent's project directory
+3. Waits for the tool to initialize (handles Codex approval prompts automatically)
+4. Sends the question/prompt
+5. With `--wait`: polls until the agent responds, then returns the full output
+6. Without `--wait`: returns immediately, check output later with `agent-deck session output "Title"`
+
+### Examples
 
 ```bash
-git status --porcelain
+# Code review from Codex
+$SKILL_DIR/scripts/launch-subagent.sh "Codex Review" "Read cmd/main.go and suggest improvements" --tool codex --wait --timeout 180
+
+# Architecture feedback from Gemini
+$SKILL_DIR/scripts/launch-subagent.sh "Gemini Arch" "Review the project structure and suggest better patterns" --tool gemini --wait --timeout 180
+
+# Both in parallel (consult both, compare answers)
+$SKILL_DIR/scripts/launch-subagent.sh "Ask Codex" "Best way to handle errors in Go?" --tool codex --wait --timeout 120 &
+$SKILL_DIR/scripts/launch-subagent.sh "Ask Gemini" "Best way to handle errors in Go?" --tool gemini --wait --timeout 120 &
+wait
 ```
 
-Policy:
+### Cleanup
 
-- Untracked files are allowed.
-- Tracked uncommitted changes are not allowed for task start.
-
-Practical check:
+After getting the response, remove the consultation session:
 
 ```bash
-git status --porcelain | rg -v '^\?\?' || true
+agent-deck remove "Consult Codex"
+# Or remove multiple at once:
+agent-deck remove "Codex Review" && agent-deck remove "Gemini Arch"
 ```
 
-Then create/switch task branch:
+## TUI Keyboard Shortcuts
+
+### Navigation
+| Key | Action |
+|-----|--------|
+| `j/k` or `↑/↓` | Move up/down |
+| `h/l` or `←/→` | Collapse/expand groups |
+| `Enter` | Attach to session |
+
+### Session Actions
+| Key | Action |
+|-----|--------|
+| `n` | New session |
+| `r/R` | Restart (reloads MCPs) |
+| `m` | MCP Manager |
+| `s` | Skills Manager (Claude) |
+| `f/F` | Fork Claude session |
+| `d` | Delete |
+| `M` | Move to group |
+
+### Search & Filter
+| Key | Action |
+|-----|--------|
+| `/` | Local search |
+| `G` | Global search (all Claude conversations) |
+| `!@#$` | Filter by status (running/waiting/idle/error) |
+
+### Global
+| Key | Action |
+|-----|--------|
+| `?` | Help overlay |
+| `Ctrl+Q` | Detach (keep tmux running) |
+| `q` | Quit |
+
+## MCP Management
+
+**Default:** Do NOT attach MCPs unless user explicitly requests.
 
 ```bash
-git switch -c "task/<task_id>" || git switch "task/<task_id>"
+# List available
+agent-deck mcp list
+
+# Attach and restart
+agent-deck mcp attach <session> <mcp-name>
+agent-deck session restart <session>
+
+# Or attach on create
+agent-deck add -t "Task" -c claude --mcp exa /path
 ```
 
-### 3) Executor Starts Reviewer and Sends Review Request
+**Scopes:**
+- **LOCAL** (default) - `.mcp.json` in project, affects only that session
+- **GLOBAL** (`--global`) - Claude config, affects all projects
 
-Executor creates:
+## Worktree Workflows
 
-- `.agent-artifacts/<task_id>/review-request-r1.md`
+### Create Session in Git Worktree
 
-Then start reviewer session:
+When working on a feature that needs isolation from main branch:
 
 ```bash
-agent-deck launch . \
-  --title "reviewer-<task_id>" \
-  --group "<group>" \
-  --cmd "<tool>" \
-  --message "Task-ID: <task_id>. Read and follow .agent-artifacts/<task_id>/review-request-r1.md. Report findings back to executor-<task_id>."
+# Create session with new worktree and branch
+agent-deck add /path/to/repo -t "Feature Work" -c claude --worktree feature/my-feature --new-branch
+
+# Create session in existing branch's worktree
+agent-deck add . --worktree develop -c claude
 ```
 
-Review loop communication stays file-based (`review-report-rN.md`) with short `session send` pointers.
-
-After executor dispatches `review_requested`:
-
-- Executor enters waiting state.
-- Reviewer is responsible for sending the next control message (`rework_required` to executor, or stop recommendation path).
-- Executor should not continuously poll reviewer output unless user explicitly asks for a status check.
-
-### 4) Reviewer Loop and Stop
-
-Reviewer drives loop recommendations, but does not finalize without user confirmation.
-
-Suggested stop conditions:
-
-- No `must-fix` issues remain, or
-- Iteration cap reached (default max: 3 rounds), or
-- Progress stalls in repeated rounds
-
-On stop, reviewer waits for explicit user decision, then follows the corresponding branch.
-
-User-decision branches after stop recommendation:
-
-1. User chooses closeout:
-- Reviewer runs `review-closeout` and delivers closeout to planner.
-
-2. User chooses another iteration:
-- Reviewer sends a control message to `executor-<task_id>` with action `user_requested_iteration`.
-- Executor resumes implementation and later sends a new review request.
-
-### 5) Planner Receives Closeout
-
-Planner receives the closeout first, but must wait for explicit user confirmation before finalizing task closure.
-
-After user confirms acceptance, planner should run one **batch closeout step**:
-
-1. Merge `task/<task_id>` into the integration branch (follow repo/user merge policy).
-2. Record task progress (status, merged branch, residual concerns).
-3. Plan and dispatch the next task if needed.
-
-## Attach Skills Per Role
-
-Suggested role-skill mapping:
-
-- Planner: `delegate-task`, `handoff`
-- Executor: `review-request`
-- Reviewer: `review-code`, `review-closeout`
-
-Use:
+### List and Manage Worktrees
 
 ```bash
-agent-deck skill attach "<session>" "<skill>" --restart
+# List all worktrees and their associated sessions
+agent-deck worktree list
+
+# Show detailed info for a session's worktree
+agent-deck worktree info "My Session"
+
+# Find orphaned worktrees/sessions (dry-run)
+agent-deck worktree cleanup
+
+# Actually clean up orphans
+agent-deck worktree cleanup --force
 ```
 
-## Do / Do Not
+### When to Use Worktrees
 
-Do:
+| Use Case | Benefit |
+|----------|---------|
+| **Parallel agent work** | Multiple agents on same repo, different branches |
+| **Feature isolation** | Keep main branch clean while agent experiments |
+| **Code review** | Agent reviews PR in worktree while main work continues |
+| **Hotfix work** | Quick branch off main without disrupting feature work |
 
-- keep artifacts in `.agent-artifacts/<task_id>/`
-- include task id in every cross-session message
-- use `session output` as a durable handoff source
+## Configuration
 
-Do not:
+**File:** `~/.agent-deck/config.toml`
 
-- send large review documents inline in a single `session send`
-- auto-merge branches
-- run planner closeout batch (merge/progress/next-task) before user confirmation
-- keep proactive reviewer-output polling loops after review dispatch
-- auto-remove sessions without user confirmation
+```toml
+[claude]
+config_dir = "~/.claude-work"    # Custom Claude profile
+dangerous_mode = true            # --dangerously-skip-permissions
+
+[logs]
+max_size_mb = 10                 # Max before truncation
+max_lines = 10000                # Lines to keep
+
+[mcps.exa]
+command = "npx"
+args = ["-y", "exa-mcp-server"]
+env = { EXA_API_KEY = "key" }
+description = "Web search"
+```
+
+See [config-reference.md](references/config-reference.md) for all options.
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Session shows error | `agent-deck session start <name>` |
+| MCPs not loading | `agent-deck session restart <name>` |
+| Flag not working | Put flags BEFORE arguments: `-m "msg" name` not `name -m "msg"` |
+
+### Get Help
+
+- **Discord:** [discord.gg/e4xSs6NBN8](https://discord.gg/e4xSs6NBN8) for quick questions and community support
+- **GitHub Issues:** For bug reports and feature requests
+
+### Report a Bug
+
+If something isn't working, create a GitHub issue with context:
+
+```bash
+# Gather debug info
+agent-deck version
+agent-deck status --json
+cat ~/.agent-deck/config.toml | grep -v "KEY\|TOKEN\|SECRET"  # Sanitized config
+
+# Create issue at:
+# https://github.com/asheshgoplani/agent-deck/issues/new
+```
+
+**Include:**
+1. What you tried (command/action)
+2. What happened vs expected
+3. Output of commands above
+4. Relevant log: `tail -100 ~/.agent-deck/logs/agentdeck_<session>_*.log`
+
+See [troubleshooting.md](references/troubleshooting.md) for detailed diagnostics.
+
+## Session Sharing
+
+Share Claude sessions between developers for collaboration or handoff.
+
+**Use when:** User says "share session", "export session", "send to colleague", "import session"
+
+```bash
+# Export current session to file (session-share is a sibling skill)
+$SKILL_DIR/../session-share/scripts/export.sh
+# Output: ~/session-shares/session-<date>-<title>.json
+
+# Import received session
+$SKILL_DIR/../session-share/scripts/import.sh ~/Downloads/session-file.json
+```
+
+**See:** [session-share skill](../session-share/SKILL.md) for full documentation.
+
+## Critical Rules
+
+1. **Flags before arguments:** `session start -m "Hello" name` (not `name -m "Hello"`)
+2. **Restart after MCP attach:** Always run `session restart` after `mcp attach`
+3. **Never poll from other agents** - can interfere with target session
+
+## References
+
+- [cli-reference.md](references/cli-reference.md) - Complete CLI command reference
+- [config-reference.md](references/config-reference.md) - All config.toml options
+- [tui-reference.md](references/tui-reference.md) - TUI features and shortcuts
+- [troubleshooting.md](references/troubleshooting.md) - Common issues and bug reporting
+- [session-share skill](../session-share/SKILL.md) - Export/import sessions for collaboration

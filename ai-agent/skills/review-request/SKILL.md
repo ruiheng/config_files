@@ -91,13 +91,13 @@ Agent Deck mode (context-first, compatibility-safe):
 - If detection fails (for example `not in a tmux session`), continue with explicit/context metadata only.
 
 In Agent Deck mode:
-- This skill depends on `agent-deck` skill script:
-  - `scripts/dispatch-control-message.sh` (from the `agent-deck` skill directory, not this skill directory)
+- This skill depends on `agent-deck-workflow` skill script:
+  - `scripts/dispatch-control-message.sh` (from the `agent-deck-workflow` skill directory, not this skill directory)
 - Required dependency behavior:
-  1. ensure `agent-deck` skill is available/loaded
-  2. resolve `agent-deck` skill directory
-  3. invoke `<agent_deck_skill_dir>/scripts/dispatch-control-message.sh`
-  4. if unresolved, stop and ask user to attach/install `agent-deck` skill
+  1. ensure `agent-deck-workflow` skill is available/loaded
+  2. resolve `agent-deck-workflow` skill directory
+  3. invoke `<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh`
+  4. if unresolved, stop and ask user to attach/install `agent-deck-workflow` skill
 
 In Agent Deck mode, resolve context by priority:
 - `task_id`:
@@ -137,7 +137,7 @@ Create parent directories if missing.
 Then dispatch to reviewer using the helper script (host shell, outside sandbox):
 
 ```bash
-AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"
 "$AGENT_DECK_DISPATCH_SCRIPT" \
   --task-id "<task_id>" \
   --planner-session "<planner_session>" \

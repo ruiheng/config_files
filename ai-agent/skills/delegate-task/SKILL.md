@@ -41,13 +41,13 @@ Agent Deck mode (host detection-first):
 - If detection fails (for example `not in a tmux session`), ask for explicit metadata.
 
 In Agent Deck mode:
-- This skill depends on `agent-deck` skill script:
-  - `scripts/dispatch-control-message.sh` (from the `agent-deck` skill directory, not this skill directory)
+- This skill depends on `agent-deck-workflow` skill script:
+  - `scripts/dispatch-control-message.sh` (from the `agent-deck-workflow` skill directory, not this skill directory)
 - Required dependency behavior:
-  1. ensure `agent-deck` skill is available/loaded
-  2. resolve `agent-deck` skill directory
-  3. invoke `<agent_deck_skill_dir>/scripts/dispatch-control-message.sh`
-  4. if unresolved, stop and ask user to attach/install `agent-deck` skill
+  1. ensure `agent-deck-workflow` skill is available/loaded
+  2. resolve `agent-deck-workflow` skill directory
+  3. invoke `<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh`
+  4. if unresolved, stop and ask user to attach/install `agent-deck-workflow` skill
 - Resolve `planner_session` by priority:
   1. explicit input `planner_session`
   2. existing Agent Deck metadata in context
@@ -88,7 +88,7 @@ After writing the file:
 - In Agent Deck mode, run one dispatch helper command in host shell (outside sandbox). Do not replace this with many manual sub-steps.
 
 ```bash
-AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"
 "$AGENT_DECK_DISPATCH_SCRIPT" \
   --task-id "<task_id>" \
   --planner-session "<planner_session>" \

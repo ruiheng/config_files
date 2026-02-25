@@ -92,13 +92,13 @@ In Agent Deck mode, resolve:
 - `round`: explicit input -> parse from file suffix `-r<round>.md` -> ask if missing
 
 In Agent Deck mode:
-- This skill depends on `agent-deck` skill script:
-  - `scripts/dispatch-control-message.sh` (from the `agent-deck` skill directory, not this skill directory)
+- This skill depends on `agent-deck-workflow` skill script:
+  - `scripts/dispatch-control-message.sh` (from the `agent-deck-workflow` skill directory, not this skill directory)
 - Required dependency behavior:
-  1. ensure `agent-deck` skill is available/loaded
-  2. resolve `agent-deck` skill directory
-  3. invoke `<agent_deck_skill_dir>/scripts/dispatch-control-message.sh`
-  4. if unresolved, stop and ask user to attach/install `agent-deck` skill
+  1. ensure `agent-deck-workflow` skill is available/loaded
+  2. resolve `agent-deck-workflow` skill directory
+  3. invoke `<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh`
+  4. if unresolved, stop and ask user to attach/install `agent-deck-workflow` skill
 
 Execution flow in Agent Deck mode:
 1. Write the full review report to `.agent-artifacts/<task_id>/review-report-r<round>.md`.
@@ -126,7 +126,7 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
 ```
 
 ```bash
-AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"
 "$AGENT_DECK_DISPATCH_SCRIPT" \
   --task-id "<task_id>" \
   --planner-session "<planner_session>" \
@@ -171,7 +171,7 @@ User-facing output requirement for `stop_recommended`:
 If user chooses to continue iteration after `stop_recommended`, dispatch to executor:
 
 ```bash
-AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"
 "$AGENT_DECK_DISPATCH_SCRIPT" \
   --task-id "<task_id>" \
   --planner-session "<planner_session>" \
