@@ -44,9 +44,17 @@ ehthumbs.db
 Thumbs.db
 
 
+# AI agents and related
 .claude
 .gemini
 .serena
+
+# my workflow
+delegate-task-*.md
+review-request-*.md
+.agent-artifacts/
+
+# nvim related
 
 .nvimlog
 

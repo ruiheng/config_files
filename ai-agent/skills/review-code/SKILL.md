@@ -76,6 +76,128 @@ For the implementer/author:
 - [Q1] Question
 ```
 
+## Agent Deck Mode (Context-First)
+
+Enter Agent Deck mode if any is true:
+- `task_id` or `planner_session` is explicitly provided
+- input/report context contains Agent Deck metadata
+- user asks for agent-deck flow
+
+`agent-deck session current --json` is best-effort only. Run it in host shell (outside sandbox).
+If it fails, continue with explicit/context metadata.
+
+In Agent Deck mode, resolve:
+- `task_id`: explicit input -> parse from review-request/report path `.agent-artifacts/<task_id>/...` -> parse from `Agent Deck Context` section -> ask if missing
+- `planner_session`: explicit input -> parse from `Agent Deck Context` section -> host-shell detection from `agent-deck session current --json` -> ask if missing
+- `round`: explicit input -> parse from file suffix `-r<round>.md` -> ask if missing
+
+In Agent Deck mode:
+- This skill depends on `agent-deck` skill script:
+  - `scripts/dispatch-control-message.sh` (from the `agent-deck` skill directory, not this skill directory)
+- Required dependency behavior:
+  1. ensure `agent-deck` skill is available/loaded
+  2. resolve `agent-deck` skill directory
+  3. invoke `<agent_deck_skill_dir>/scripts/dispatch-control-message.sh`
+  4. if unresolved, stop and ask user to attach/install `agent-deck` skill
+
+Execution flow in Agent Deck mode:
+1. Write the full review report to `.agent-artifacts/<task_id>/review-report-r<round>.md`.
+2. Keep the same report content/format quality bar.
+3. Select control action:
+   - `rework_required` if result is `NEEDS_REVISION`, any must-fix issue exists, or completeness gate has FAIL.
+   - `stop_recommended` if no must-fix remains and stop is recommended.
+4. For `rework_required`: build JSON control payload and dispatch to executor via helper script (host shell, outside sandbox).
+5. For `stop_recommended`: do not dispatch to executor automatically; output user-facing stop recommendation and wait for explicit user decision.
+
+If review result indicates rework needed (for example `NEEDS_REVISION`, critical issues exist, or completeness gate fails):
+
+```json
+{
+  "schema_version": "1.0",
+  "task_id": "<task_id>",
+  "planner_session": "<planner_session>",
+  "from_session": "reviewer-<task_id>",
+  "to_session": "executor-<task_id>",
+  "round": "<round>",
+  "action": "rework_required",
+  "artifact_path": ".agent-artifacts/<task_id>/review-report-r<round>.md",
+  "note": "Must-fix items remain. Address the review findings and submit the next review request."
+}
+```
+
+```bash
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+"$AGENT_DECK_DISPATCH_SCRIPT" \
+  --task-id "<task_id>" \
+  --planner-session "<planner_session>" \
+  --from-session "reviewer-<task_id>" \
+  --to-session "executor-<task_id>" \
+  --round "<round>" \
+  --action "rework_required" \
+  --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
+  --note "Must-fix items remain. Address the review findings and submit the next review request." \
+  --no-ensure-session \
+  --no-start-session
+```
+
+If no must-fix remains and stop is recommended:
+
+```json
+{
+  "schema_version": "1.0",
+  "task_id": "<task_id>",
+  "planner_session": "<planner_session>",
+  "from_session": "reviewer-<task_id>",
+  "to_session": "user",
+  "round": "<round>",
+  "action": "stop_recommended",
+  "artifact_path": ".agent-artifacts/<task_id>/review-report-r<round>.md",
+  "note": "Stop condition met. User confirmation is required before closeout."
+}
+```
+
+User-facing output requirement for `stop_recommended`:
+- Do not print raw JSON as the primary user-facing content.
+- Do not print raw JSON at all unless the user explicitly requests the control payload.
+- Provide a concise Markdown summary for the user:
+  - review result (`APPROVED` / stop recommended)
+  - review report path
+  - key residual concerns/questions (if any)
+  - verification commands and outcomes
+  - explicit decision prompt with two choices:
+    1. proceed to `review-closeout` (then notify planner)
+    2. continue another implementation iteration (then notify executor)
+
+If user chooses to continue iteration after `stop_recommended`, dispatch to executor:
+
+```bash
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+"$AGENT_DECK_DISPATCH_SCRIPT" \
+  --task-id "<task_id>" \
+  --planner-session "<planner_session>" \
+  --from-session "reviewer-<task_id>" \
+  --to-session "executor-<task_id>" \
+  --round "<round>" \
+  --action "user_requested_iteration" \
+  --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
+  --note "User requested another implementation iteration. Address the requested follow-ups and submit a new review request." \
+  --no-ensure-session \
+  --no-start-session
+```
+
+Required interaction behavior in Agent Deck mode:
+- Do not stop at "printing JSON only".
+- For `rework_required`, dispatch automatically after report generation when required metadata is resolved.
+- For `stop_recommended`, present user-facing summary and explicit branch choices; do not auto-forward to executor.
+- Treat control JSON as internal protocol data; do not print raw JSON in user-facing output unless user explicitly requests the payload.
+- Do not ask user ambiguous forwarding questions; ask only the branch decision (`closeout` vs `continue iteration`).
+- Report helper output summary only (for example `dispatch_ok ...`).
+- After dispatch:
+  - for `rework_required`, reviewer waits for executor's next review request.
+  - for `stop_recommended`, reviewer waits for explicit user decision.
+    - if user confirms closeout: run `review-closeout`
+    - if user asks to continue iteration: dispatch `user_requested_iteration` to executor and then wait
+
 ## Guidelines
 
 1. Be specific: Reference line numbers or function names
@@ -89,3 +211,4 @@ For the implementer/author:
 9. Avoid second-person pronouns (`you`, `your`, `你`, `你的`); use neutral references such as `author`, `implementer`, or `submission`
 10. Treat missing scope/focus/evidence as review blockers when they prevent reliable judgment
 11. Never invent test results, risk assumptions, or implementation details not present in the input
+12. In Agent Deck mode, reviewer must proactively dispatch `rework_required` after producing a blocking report; for `stop_recommended`, wait for user decision and branch accordingly

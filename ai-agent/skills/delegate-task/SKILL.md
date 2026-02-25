@@ -35,9 +35,75 @@ Create a file named `delegate-task-<unique>.md`.
 - Default location is project root unless `output_path` is provided.
 - If a filename collision occurs, generate a new unique suffix.
 
+Agent Deck mode (host detection-first):
+- Run `agent-deck session current --json` in host shell (outside sandbox).
+- If detection succeeds, use detected session metadata.
+- If detection fails (for example `not in a tmux session`), ask for explicit metadata.
+
+In Agent Deck mode:
+- This skill depends on `agent-deck` skill script:
+  - `scripts/dispatch-control-message.sh` (from the `agent-deck` skill directory, not this skill directory)
+- Required dependency behavior:
+  1. ensure `agent-deck` skill is available/loaded
+  2. resolve `agent-deck` skill directory
+  3. invoke `<agent_deck_skill_dir>/scripts/dispatch-control-message.sh`
+  4. if unresolved, stop and ask user to attach/install `agent-deck` skill
+- Resolve `planner_session` by priority:
+  1. explicit input `planner_session`
+  2. existing Agent Deck metadata in context
+  3. host-shell detection from `agent-deck session current --json`
+  4. ask one short clarification question if still missing
+- Resolve `task_id` by priority:
+  1. explicit input `task_id`
+  2. a task id already present in user request/context
+  3. generate one (`YYYYMMDD-HHMM-<slug>`)
+- Write to `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`.
+- Create parent directories if missing.
+- Default executor session is `executor-<task_id>` unless `executor_session` is explicitly provided.
+- Resolve execution parameters by priority:
+  1. explicit `executor_session` / `executor_tool` / `group`
+  2. values inferable from workflow context
+  3. defaults: `executor-<task_id>`, current tool, current group
+
 After writing the file:
 - Return only a short confirmation with the file path and a one-line summary.
 - Do not print the full brief inline unless the user explicitly asks.
+- In Agent Deck mode, construct one JSON control payload for `agent-deck session send` (internal protocol, not user-facing output):
+- Control payload schema reference (internal only; do not print to user by default):
+
+```json
+{
+  "schema_version": "1.0",
+  "task_id": "<task_id>",
+  "planner_session": "<planner_session>",
+  "from_session": "<planner_session>",
+  "to_session": "executor-<task_id>",
+  "round": 1,
+  "action": "execute_delegate_task",
+  "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
+  "note": "Read and follow the delegate task file."
+}
+```
+
+- In Agent Deck mode, run one dispatch helper command in host shell (outside sandbox). Do not replace this with many manual sub-steps.
+
+```bash
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+"$AGENT_DECK_DISPATCH_SCRIPT" \
+  --task-id "<task_id>" \
+  --planner-session "<planner_session>" \
+  --to-session "executor-<task_id>" \
+  --action "execute_delegate_task" \
+  --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
+  --note "Read and follow the delegate task file." \
+  --group "<group>" \
+  --cmd "<executor_tool>"
+```
+
+Required reporting in Agent Deck mode:
+- Report the helper output line(s) only (for example `dispatch_ok ...` and session summary).
+- Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.
+- If the helper fails, include stderr summary and stop (do not claim launch/send succeeded).
 
 ## Brief Format
 
@@ -81,14 +147,25 @@ Specific, testable conditions:
 - [ ] Criterion 2: [Specific observable outcome]
 
 ### Important Notes
-- **NO GIT WRITE OPERATIONS**: Do NOT run git commands that modify repository state (for example: `git add`, `git commit`, `git merge`, `git rebase`, `git reset`, `git checkout`).
-- **READ-ONLY GIT IS ALLOWED**: Use read-only git commands only when needed for context (for example: `git status`, `git log`, `git diff --name-only`).
+- **GIT OPERATIONS MUST FOLLOW WORKFLOW MODE**:
+  - In Agent Deck delegated execution, executor should create/use a task branch and create a delivery commit before triggering review handoff.
+  - Outside Agent Deck mode, follow explicit user/repo git constraints for this task.
 - **ANALYZE BEFORE ACTING**: Read all files in "Read Before Starting" first, then acquire remaining context incrementally as needed.
 - **ASK IF UNCLEAR**: Ask clarifying questions if needed.
 
-### Optional Follow-up
+### Agent Deck Context (Include When Agent Deck Mode Is On)
+- **Task ID**: `<task_id>`
+- **Planner Session**: `<planner_session>`
+- **Default Executor Session**: `executor-<task_id>`
+- **Artifact Root**: `.agent-artifacts/<task_id>/`
 
-If a review handoff document is needed, use the dedicated `review-request` skill. Do not force this step in every delegated task.
+### Review Loop (Required In Agent Deck Mode)
+
+- In Agent Deck mode, after implementation + verification are complete and the executor has created its first delivery commit, the executor must invoke the `review-request` skill.
+- The `review-request` output is used to hand off to `reviewer-<task_id>` via the Agent Deck control message flow.
+- After `review-request` dispatch succeeds, executor should enter waiting state for reviewer response and should not keep polling reviewer output unless user explicitly asks.
+- Skip this step only when the user explicitly instructs to skip review for this task.
+- Do not silently finish a delegated task in Agent Deck mode without triggering the first review handoff.
 
 ### Language Guidelines
 - Use English by default for all output, including code comments. Switch to the user's local language only when English becomes a communication barrier.
@@ -105,6 +182,6 @@ If a review handoff document is needed, use the dedicated `review-request` skill
 4. **Language** - English primary; keep business terms in original form
 5. **Git boundary** - Forbid git write operations; allow read-only git only when needed for context
 6. **Context matters** - Specify mandatory files first, then use incremental context acquisition
-7. **Review request is optional** - Use the dedicated `review-request` skill only when a review handoff document is actually needed
+7. **Review handoff is required in Agent Deck mode** - After first delivery commit, invoke `review-request` unless the user explicitly waives review
 8. **Decomposition gate** - If splitting is recommended, pause for user decision and only then produce the final brief
 9. **File-first output** - Write the final brief to `delegate-task-<unique>.md`; avoid inline full-text output by default

@@ -27,9 +27,10 @@ This document describes the multi-agent workflow built around the skills in this
 7. Reviewer runs `review-code` and outputs a full review report (with PASS/FAIL/UNKNOWN checks).
 8. User sends the full review report back to Executor for fixes.
 9. Repeat steps 4-8 until the user decides quality is acceptable.
-10. After acceptance, Reviewer runs `review-closeout` to produce a concise closeout summary (direct output, no file).
-11. User sends the closeout summary to Planner for final planning context.
-12. Executor and Reviewer can be fully exited.
+10. After acceptance, Reviewer runs `review-closeout` to produce a concise closeout summary (direct output, no file) with planner follow-up recommendation.
+11. User sends the closeout summary to Planner.
+12. Planner waits for explicit user confirmation, then batches: merge task branch, update progress records, and plan next task.
+13. Executor and Reviewer can be fully exited.
 
 ## Flow Diagram
 
@@ -76,6 +77,7 @@ Current recommended operating mode:
 2. Create `executor-<task_id>` and `reviewer-<task_id>` per task.
 3. Keep user confirmation as the gate before final acceptance/closeout.
 4. Keep long payloads file-based (`delegate-task`, `review-request`, `review-report`, `closeout`).
+5. Keep planner closeout actions user-confirmed and batched (merge/progress/next-task in one step).
 
 Use skill:
 

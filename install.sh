@@ -395,6 +395,9 @@ install_home_configs() {
             link_file "gitconfig.ruiheng.win" "$HOME/.gitconfig"
             ;;
     esac
+
+    # Global gitignore
+    link_file ".gitignore" "$HOME/.gitignore"
 }
 
 install_xdg_configs() {

@@ -20,6 +20,11 @@ This skill is intentionally conservative: human-led, low-automation, auditable.
 - Message templates: `references/message-templates.md`
 - If command details are uncertain, read that file first and follow it exactly.
 
+## Execution Environment (Required)
+
+All `agent-deck` commands in this skill must be executed outside sandbox (host shell with real tmux/session context).
+Do not rely on sandboxed shell execution for `agent-deck` detection or control.
+
 ## Operating Principles
 
 1. Human remains the final decision-maker.
@@ -27,10 +32,14 @@ This skill is intentionally conservative: human-led, low-automation, auditable.
 3. Prefer file artifacts for long context (`delegate-task`, `review-request`, `review-report`, `closeout`).
 4. Use `agent-deck session send` for short control messages and pointers to artifact files.
 4.1 Prefer JSON message format from `references/message-templates.md` for machine-readable session coordination.
+4.2 Never send artifact body text via `session send`; send pointer-only control messages.
+4.3 `session send` payload should be JSON control messages whenever protocol fields are available.
+4.4 Prefer `scripts/dispatch-control-message.sh` to collapse multi-step control operations into one command.
 5. Keep role boundaries strict:
 - `planner`: planning and orchestration
 - `executor`: implementation
 - `reviewer`: review loop and stop recommendation
+6. If host-side `agent-deck session current --json` fails, treat it as missing session context and ask for explicit metadata (`task_id`, `planner_session`).
 
 ## Naming and Metadata Convention
 
@@ -72,6 +81,22 @@ agent-deck skill list
 agent-deck skill attach "<session>" "<skill>" --restart
 agent-deck skill attached "<session>"
 ```
+
+Preferred dispatch helper:
+
+```bash
+scripts/dispatch-control-message.sh \
+  --task-id "<task_id>" \
+  --planner-session "<planner_session>" \
+  --to-session "<session>" \
+  --action "<action>" \
+  --artifact-path "<artifact_path>" \
+  --group "<group>" \
+  --cmd "<tool>"
+```
+
+Path resolution rule:
+- Resolve `scripts/dispatch-control-message.sh` relative to this skill directory.
 
 ## Human-Led Three-Role Flow (Single Workspace)
 
@@ -139,6 +164,12 @@ agent-deck launch . \
 
 Review loop communication stays file-based (`review-report-rN.md`) with short `session send` pointers.
 
+After executor dispatches `review_requested`:
+
+- Executor enters waiting state.
+- Reviewer is responsible for sending the next control message (`rework_required` to executor, or stop recommendation path).
+- Executor should not continuously poll reviewer output unless user explicitly asks for a status check.
+
 ### 4) Reviewer Loop and Stop
 
 Reviewer drives loop recommendations, but does not finalize without user confirmation.
@@ -149,15 +180,26 @@ Suggested stop conditions:
 - Iteration cap reached (default max: 3 rounds), or
 - Progress stalls in repeated rounds
 
-On stop, reviewer waits for user confirmation, then runs closeout flow.
+On stop, reviewer waits for explicit user decision, then follows the corresponding branch.
+
+User-decision branches after stop recommendation:
+
+1. User chooses closeout:
+- Reviewer runs `review-closeout` and delivers closeout to planner.
+
+2. User chooses another iteration:
+- Reviewer sends a control message to `executor-<task_id>` with action `user_requested_iteration`.
+- Executor resumes implementation and later sends a new review request.
 
 ### 5) Planner Receives Closeout
 
-After user confirms acceptance:
+Planner receives the closeout first, but must wait for explicit user confirmation before finalizing task closure.
 
-- closeout summary is sent back to planner
-- planner updates progress and schedules next task
-- merge action remains user-controlled in this skill
+After user confirms acceptance, planner should run one **batch closeout step**:
+
+1. Merge `task/<task_id>` into the integration branch (follow repo/user merge policy).
+2. Record task progress (status, merged branch, residual concerns).
+3. Plan and dispatch the next task if needed.
 
 ## Attach Skills Per Role
 
@@ -185,4 +227,6 @@ Do not:
 
 - send large review documents inline in a single `session send`
 - auto-merge branches
+- run planner closeout batch (merge/progress/next-task) before user confirmation
+- keep proactive reviewer-output polling loops after review dispatch
 - auto-remove sessions without user confirmation

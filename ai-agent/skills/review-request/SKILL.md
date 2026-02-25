@@ -82,6 +82,85 @@ Create a file named `review-request-<unique>.md`.
 - Default location is project root unless `output_path` is provided.
 - If a filename collision occurs, generate a new unique suffix.
 
+Agent Deck mode (context-first, compatibility-safe):
+- Enter Agent Deck mode if any is true:
+  1. `task_id` or `planner_session` is explicitly provided
+  2. review/delegate context already carries Agent Deck metadata
+  3. user asks for agent-deck flow
+- Run `agent-deck session current --json` in host shell (outside sandbox) to detect session context when possible.
+- If detection fails (for example `not in a tmux session`), continue with explicit/context metadata only.
+
+In Agent Deck mode:
+- This skill depends on `agent-deck` skill script:
+  - `scripts/dispatch-control-message.sh` (from the `agent-deck` skill directory, not this skill directory)
+- Required dependency behavior:
+  1. ensure `agent-deck` skill is available/loaded
+  2. resolve `agent-deck` skill directory
+  3. invoke `<agent_deck_skill_dir>/scripts/dispatch-control-message.sh`
+  4. if unresolved, stop and ask user to attach/install `agent-deck` skill
+
+In Agent Deck mode, resolve context by priority:
+- `task_id`:
+  1. explicit input
+  2. parse from current branch `task/<task_id>`
+  3. parse from delegated context/file path in this workflow
+  4. ask one short clarification question if still missing
+- `planner_session`:
+  1. explicit input
+  2. `Agent Deck Context` from delegated task/session context
+  3. host-shell detection from `agent-deck session current --json`
+  4. ask one short clarification question if still missing
+- `round`:
+  1. explicit input
+  2. infer from context; default to `1` when first review is implied
+
+Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
+Create parent directories if missing.
+
+- In Agent Deck mode, after writing the file, construct one JSON control payload for executor -> reviewer handoff (internal protocol, not user-facing output):
+- Control payload schema reference (internal only; do not print to user by default):
+
+```json
+{
+  "schema_version": "1.0",
+  "task_id": "<task_id>",
+  "planner_session": "<planner_session>",
+  "from_session": "executor-<task_id>",
+  "to_session": "reviewer-<task_id>",
+  "round": "<round>",
+  "action": "review_requested",
+  "artifact_path": ".agent-artifacts/<task_id>/review-request-r<round>.md",
+  "note": "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>."
+}
+```
+
+Then dispatch to reviewer using the helper script (host shell, outside sandbox):
+
+```bash
+AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_skill_dir>/scripts/dispatch-control-message.sh"
+"$AGENT_DECK_DISPATCH_SCRIPT" \
+  --task-id "<task_id>" \
+  --planner-session "<planner_session>" \
+  --from-session "executor-<task_id>" \
+  --to-session "reviewer-<task_id>" \
+  --round "<round>" \
+  --action "review_requested" \
+  --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
+  --note "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>." \
+  --group "<group>" \
+  --cmd "<reviewer_tool>"
+```
+
+For concise logs, report helper output summary only.
+- Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.
+
+Post-dispatch executor behavior (required in Agent Deck mode):
+- After successful dispatch, executor must enter waiting state for reviewer response.
+- Do not proactively monitor reviewer session output in a loop.
+- Do not ask user whether executor should "keep watching reviewer output".
+- Resume implementation only after receiving reviewer feedback control message (for example `rework_required` or `user_requested_iteration`) or explicit user instruction.
+- If user requests status while waiting, perform at most one explicit status check and report it.
+
 ## Output Template
 
 Use this exact structure:
@@ -93,6 +172,11 @@ Use this exact structure:
 - Type: [uncommitted | commit | branch]
 - Target: [working tree | commit hash | branch name]
 - Base (if branch): [base branch or N/A]
+
+## Agent Deck Context (Optional)
+- Task ID: [<task_id> when available]
+- Planner Session: [<planner_session> when available]
+- Round: [<round> when available]
 
 ## Original Task
 [Original task text from explicit input or active session context (optionally from `delegate_task_path` if provided). Use `Not provided` only after explicit clarification that no task text is available.]
@@ -131,3 +215,5 @@ Use this exact structure:
 6. Always include `Review Focus` and `Verification Evidence` fields, even when values are `Not provided`.
 7. In delegated workflows, `Original Task` should be inherited from active delegated-task context whenever possible.
 8. Prefer workflow continuity over re-onboarding questions; avoid asking for scope when recent context already implies the completed task scope.
+9. In Agent Deck mode, include `Agent Deck Context` whenever values can be inferred reliably.
+10. In Agent Deck mode, after dispatching to reviewer, enter waiting state and avoid proactive polling unless user explicitly asks.

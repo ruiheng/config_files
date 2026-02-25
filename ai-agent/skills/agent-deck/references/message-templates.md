@@ -58,7 +58,7 @@ Field rules:
   "round": "<n>",
   "action": "review_requested",
   "artifact_path": ".agent-artifacts/<task_id>/review-request-r<n>.md",
-  "note": "Read the review-request file and produce a full review report. If must-fix issues remain, return actionable items. If no must-fix remains, recommend stop and wait for user confirmation."
+  "note": "Read the review-request file and produce a full review report. Then proactively send the next control message. If must-fix issues remain, send rework guidance to executor. If no must-fix remains, recommend stop and wait for user confirmation."
 }
 ```
 
@@ -94,6 +94,27 @@ Field rules:
 }
 ```
 
+Usage note:
+
+- This is primarily a user-facing decision payload.
+- In many setups, reviewer should present a readable summary to user and wait; no cross-session dispatch is required at this step.
+
+## Reviewer -> Executor (User Requests Another Iteration)
+
+```json
+{
+  "schema_version": "1.0",
+  "task_id": "<task_id>",
+  "planner_session": "<planner_session>",
+  "from_session": "reviewer-<task_id>",
+  "to_session": "executor-<task_id>",
+  "round": "<n>",
+  "action": "user_requested_iteration",
+  "artifact_path": ".agent-artifacts/<task_id>/review-report-r<n>.md",
+  "note": "User requested another implementation iteration. Address requested follow-ups and submit a new review request."
+}
+```
+
 ## Reviewer -> Planner (After User Acceptance)
 
 ```json
@@ -106,7 +127,7 @@ Field rules:
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-  "note": "Task review loop is complete after user confirmation. Update planning records and schedule next task."
+  "note": "Task review loop is complete after user confirmation. Planner should batch closeout actions: merge task branch, update progress records, and plan next task."
 }
 ```
 
@@ -114,3 +135,4 @@ Protocol note:
 
 - `planner_session` is immutable for one `task_id`.
 - Executor and reviewer must carry forward the same `planner_session` value in every round.
+- After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
