@@ -211,3 +211,4 @@ show_marks yes
 bindsym $mod+Control+s exec gnome-system-monitor
 
 exec vmware-user-suid-wrapper
+exec fcitx5 -d
