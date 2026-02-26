@@ -35,24 +35,24 @@ Create a file named `delegate-task-<unique>.md`.
 - Default location is project root unless `output_path` is provided.
 - If a filename collision occurs, generate a new unique suffix.
 
-Agent Deck mode (host detection-first):
-- Run `agent-deck session current --json` in host shell (outside sandbox).
-- If detection succeeds, use detected session metadata.
-- If detection fails (for example `not in a tmux session`), ask for explicit metadata.
+Agent Deck mode (explicit-metadata-first):
+- Do not depend on `agent-deck session current` inference.
+- Use explicit input and workflow context metadata; ask for missing required fields when unresolved.
 
 In Agent Deck mode:
-- This skill depends on `agent-deck-workflow` skill script:
+- This skill depends on `agent-deck-workflow-mcp`:
+  - MCP tool: `dispatch_control_message` (server: `ai-agent/mcp/agent-deck-workflow-mcp/server.mjs`)
+- Script fallback dependency:
   - `scripts/dispatch-control-message.sh` (from the `agent-deck-workflow` skill directory, not this skill directory)
 - Required dependency behavior:
-  1. ensure `agent-deck-workflow` skill is available/loaded
-  2. resolve `agent-deck-workflow` skill directory
+  1. prefer MCP tool dispatch via `agent-deck-workflow-mcp`
+  2. if MCP server/tool is unavailable, resolve `agent-deck-workflow` skill directory
   3. invoke `<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh`
-  4. if unresolved, stop and ask user to attach/install `agent-deck-workflow` skill
+  4. if both MCP and script dependency are unavailable, stop and ask user to attach/install required components
 - Resolve `planner_session` by priority:
   1. explicit input `planner_session`
   2. existing Agent Deck metadata in context
-  3. host-shell detection from `agent-deck session current --json`
-  4. ask one short clarification question if still missing
+  3. ask one short clarification question if still missing
 - Resolve `task_id` by priority:
   1. explicit input `task_id`
   2. a task id already present in user request/context
@@ -85,11 +85,27 @@ After writing the file:
 }
 ```
 
-- In Agent Deck mode, run one dispatch helper command in host shell (outside sandbox). Do not replace this with many manual sub-steps.
+- In Agent Deck mode, dispatch in this order:
+  1. Preferred: call MCP tool `dispatch_control_message` with explicit arguments.
+  2. Fallback: run one dispatch helper command in host shell (outside sandbox). Do not replace this with many manual sub-steps.
+
+MCP dispatch arguments (preferred):
+
+```json
+{
+  "task_id": "<task_id>",
+  "planner_session": "<planner_session>",
+  "to_session": "executor-<task_id>",
+  "action": "execute_delegate_task",
+  "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
+  "note": "Read and follow the delegate task file.",
+  "group": "<group>",
+  "cmd": "<executor_tool>"
+}
+```
 
 ```bash
-AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"
-"$AGENT_DECK_DISPATCH_SCRIPT" \
+"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
   --planner-session "<planner_session>" \
   --to-session "executor-<task_id>" \
@@ -101,9 +117,11 @@ AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-con
 ```
 
 Required reporting in Agent Deck mode:
-- Report the helper output line(s) only (for example `dispatch_ok ...` and session summary).
+- Report dispatch output summary only (from MCP result or helper output).
+- For script fallback dispatch in escalated mode, set `prefix_rule` to `["<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"]` so approval can be reused across different task arguments.
+- Validation check: approval dialog reusable option must be script-path prefix. If it shows full task-specific command, cancel and retry with correct `prefix_rule`.
 - Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.
-- If the helper fails, include stderr summary and stop (do not claim launch/send succeeded).
+- If MCP dispatch fails and script fallback also fails, include stderr/error summary and stop (do not claim launch/send succeeded).
 
 ## Brief Format
 
@@ -149,6 +167,7 @@ Specific, testable conditions:
 ### Important Notes
 - **GIT OPERATIONS MUST FOLLOW WORKFLOW MODE**:
   - In Agent Deck delegated execution, executor should create/use a task branch and create a delivery commit before triggering review handoff.
+  - In Agent Deck delegated execution, task-scoped git write operations by executor (branch create/switch, stage, commit) are pre-authorized and do not require per-commit user approval.
   - Outside Agent Deck mode, follow explicit user/repo git constraints for this task.
 - **ANALYZE BEFORE ACTING**: Read all files in "Read Before Starting" first, then acquire remaining context incrementally as needed.
 - **ASK IF UNCLEAR**: Ask clarifying questions if needed.
@@ -180,7 +199,7 @@ Specific, testable conditions:
 2. **Components are logical groupings** - Not ordered steps
 3. **Be specific in criteria** - Concrete, observable outcomes
 4. **Language** - English primary; keep business terms in original form
-5. **Git boundary** - Forbid git write operations; allow read-only git only when needed for context
+5. **Git boundary** - In Agent Deck delegated mode, explicitly allow task-scoped executor git writes (including commit) without per-commit user approval; otherwise follow explicit user/repo constraints
 6. **Context matters** - Specify mandatory files first, then use incremental context acquisition
 7. **Review handoff is required in Agent Deck mode** - After first delivery commit, invoke `review-request` unless the user explicitly waives review
 8. **Decomposition gate** - If splitting is recommended, pause for user decision and only then produce the final brief

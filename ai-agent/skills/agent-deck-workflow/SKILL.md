@@ -14,22 +14,31 @@ For generic `agent-deck` CLI/TUI operations, troubleshooting, and full command r
 - Workflow shape: one long-lived `planner`, per-task `executor` + `reviewer`.
 - Runtime shape: single shared workspace.
 - Governance: human-led; user confirmation gates are mandatory at stop/closeout points.
+- Git approval exception: in delegated executor flow, task-scoped executor commits are allowed without per-commit user approval; this workflow rule overrides generic git-approval defaults.
 
 ## Execution Environment (Required)
 
 All `agent-deck` commands in this workflow must run outside sandbox (host shell with real tmux/session context).
 
-## Skill-Local Script Dependency (Required)
+## Dispatch Transport (Required)
 
-This workflow uses skill-local helper script:
+Dispatch must be explicit-parameter based. Do not depend on `agent-deck session current` inference.
 
-- `scripts/dispatch-control-message.sh`
+Priority order:
 
-Path rules:
+1. Prefer MCP tool `dispatch_control_message` from `agent-deck-workflow-mcp` (`ai-agent/mcp/agent-deck-workflow-mcp/server.mjs`).
+2. Fallback to skill-local helper script only when MCP is unavailable:
+   - `scripts/dispatch-control-message.sh`
+
+Fallback script path rules:
 
 1. Resolve script path relative to this skill directory.
 2. Never assume project-root `scripts/...` path.
 3. If skill directory cannot be resolved, stop and ask user to attach/install this skill.
+4. Invoke the script directly (for example `"<skill_dir>/scripts/dispatch-control-message.sh" ...`), not via temporary shell variable wrappers.
+5. When escalation approval is required, prefer a stable script-path prefix approval so future dispatches do not re-prompt every time.
+6. For escalated dispatch execution, request approval with `prefix_rule` set to the script path only (for example `["<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"]`), not the full command with task-specific args.
+7. Validation check: in the approval dialog, reusable approval option must match script-path prefix. If it shows full task-specific command, cancel and retry with correct `prefix_rule`.
 
 ## Relationship with Official Skill
 
@@ -68,6 +77,7 @@ Use JSON control messages for agent-to-agent communication.
 ### 2) Executor Implements and Requests Review
 
 - Executor performs implementation and first delivery commit.
+- In delegated execution, executor task-scoped git writes (branch create/switch, stage, commit) do not require per-commit user approval.
 - Executor dispatches `review_requested` to reviewer.
 - After dispatch, executor enters waiting state.
 - Executor must not proactively poll reviewer output unless user explicitly asks.
