@@ -154,9 +154,6 @@ When you see code, immediately perform a three-tier judgment:
 * `resolve-library-id` - Resolve a library name to its Context7 ID.
 * `query-docs` - Get the latest official documentation.
 
-**Real-World Code Search**
-* Search for practical usage examples on GitHub using Grep.app MCP.
-
 **Specification Documentation Tool**
 * Use `specs-workflow` when writing requirements and design documents:
     * Check progress: `action.type="check"`

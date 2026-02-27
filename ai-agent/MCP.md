@@ -66,7 +66,6 @@
 | MCP 服务器 | 状态 | 说明 |
 |-----------|------|------|
 | **Context7** | ✅ 全局配置 | 文档查询工具 |
-| **Grep.app** | ✅ 全局配置 | GitHub 代码搜索 |
 | **Serena** | ✅ 全局配置 | 语义代码代理 |
 | **spec-workflow** | ✅ 全局配置 | 规格文档工作流 |
 | **chrome-devtools** | ✅ 已添加配置 | Chrome DevTools 浏览器调试 |
@@ -86,10 +85,6 @@
   "mcpServers": {
     "context7": {
       "url": "https://mcp.context7.com/mcp",
-      "type": "http"
-    },
-    "grep": {
-      "url": "https://mcp.grep.app",
       "type": "http"
     },
     "serena": {
@@ -128,7 +123,7 @@ cd /tmp && gemini mcp list
 
 ```bash
 # HTTP 传输的 MCP
-claude mcp add -s user grep --transport http https://mcp.grep.app
+claude mcp add -s user context7 --transport http https://mcp.context7.com/mcp
 
 # stdio 传输的 MCP
 claude mcp add -s user serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd
@@ -140,7 +135,7 @@ claude mcp add -s user spec-workflow -- npx -y spec-workflow-mcp@latest
 claude mcp list
 ```
 
-**已配置的 MCP**: browsermcp, context7, grep, serena, spec-workflow
+**已配置的 MCP**: browsermcp, context7, serena, spec-workflow
 
 ---
 
@@ -153,9 +148,6 @@ claude mcp list
 ```toml
 [mcp_servers.context7]
 url = "https://mcp.context7.com/mcp"
-
-[mcp_servers.grep]
-url = "https://mcp.grep.app"
 
 [mcp_servers.serena]
 command = "uvx"
@@ -205,33 +197,7 @@ claude mcp add -s user context7 --transport http https://mcp.context7.com/mcp
 
 ---
 
-### 2. Grep.app - GitHub 代码搜索
-
-**功能**: 在 GitHub 上搜索实际的代码使用示例
-
-**全局配置**:
-```json
-// Gemini CLI
-"grep": {
-  "url": "https://mcp.grep.app",
-  "type": "http"
-}
-```
-
-```toml
-# Codex CLI
-[mcp_servers.grep]
-url = "https://mcp.grep.app"
-```
-
-```bash
-# Claude Code
-claude mcp add -s user grep --transport http https://mcp.grep.app
-```
-
----
-
-### 3. Serena - 语义代码代理
+### 2. Serena - 语义代码代理
 
 **功能**: 提供类似 IDE 的语义代码检索和编辑工具
 
@@ -270,7 +236,7 @@ claude mcp add -s user serena -- uvx --from git+https://github.com/oraios/serena
 
 ---
 
-### 4. spec-workflow - 规格文档工作流
+### 3. spec-workflow - 规格文档工作流
 
 **功能**: 管理需求、设计和实现文档的规范工作流
 
@@ -310,7 +276,7 @@ claude mcp add -s user spec-workflow -- npx -y spec-workflow-mcp@latest
 
 ---
 
-### 5. chrome-devtools - Chrome 浏览器调试
+### 4. chrome-devtools - Chrome 浏览器调试
 
 **功能**: 通过 MCP 连接 Chrome DevTools 进行浏览器自动化与调试
 

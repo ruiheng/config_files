@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "grep": {
-      "url": "https://mcp.grep.app",
-      "type": "http"
-    },
     "context7": {
       "url": "https://mcp.context7.com/mcp",
       "type": "http"
