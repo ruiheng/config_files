@@ -127,7 +127,7 @@ Usage note:
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-  "note": "Task review loop is complete after user confirmation. Planner should batch closeout actions: merge task branch, update progress records, and plan next task."
+  "note": "Task review loop is complete after user confirmation. Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional."
 }
 ```
 
@@ -136,3 +136,4 @@ Protocol note:
 - `planner_session` is immutable for one `task_id`.
 - Executor and reviewer must carry forward the same `planner_session` value in every round.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
+- Self-handoff guard: if reviewer detects `planner_session` equals current session, do not dispatch `closeout_delivered`; stop and wait for user instruction.

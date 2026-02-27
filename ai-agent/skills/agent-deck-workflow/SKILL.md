@@ -59,6 +59,19 @@ Use JSON control messages for agent-to-agent communication.
 - JSON is internal protocol data by default.
 - Do not print raw control JSON in user-facing output unless user explicitly asks for payload.
 
+## Role Inference (Allowed)
+
+Role inference is valid in this workflow and should be used when explicit role assignment is absent.
+
+Role inference priority:
+1. explicit user instruction
+2. control-message `action` + `to_session`
+3. task context/artifact path/branch convention (`task/<task_id>`)
+4. currently invoked workflow skill
+
+Role is task-scoped, not agent-scoped. One agent may switch roles across tasks (or even within one task) when workflow signals are consistent.
+If role signals conflict, stop and ask one short clarification question before acting.
+
 ## Human-Led Three-Role Flow
 
 ### 1) Planner Starts Task
@@ -102,7 +115,7 @@ Then perform one batch closeout step:
 
 1. Merge `task/<task_id>` into integration branch (follow repo/user policy).
 2. Record progress (status, merged branch, residual concerns).
-3. Plan and dispatch next task if needed.
+3. Optionally plan and dispatch next task if needed.
 
 ## Role-Skill Mapping
 

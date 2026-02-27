@@ -88,8 +88,7 @@ After writing the file:
 - In Agent Deck mode, run one dispatch helper command in host shell (outside sandbox). Do not replace this with many manual sub-steps.
 
 ```bash
-AGENT_DECK_DISPATCH_SCRIPT="<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh"
-"$AGENT_DECK_DISPATCH_SCRIPT" \
+"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
   --planner-session "<planner_session>" \
   --to-session "executor-<task_id>" \
