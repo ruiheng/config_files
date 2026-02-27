@@ -84,7 +84,7 @@ Create a file named `review-request-<unique>.md`.
 
 Agent Deck mode (context-first, compatibility-safe):
 - Enter Agent Deck mode if any is true:
-  1. `task_id` or `planner_session` is explicitly provided
+  1. `task_id` or `planner_session_id` is explicitly provided
   2. review/delegate context already carries Agent Deck metadata
   3. user asks for agent-deck flow
 - Run `agent-deck session current --json` in host shell (outside sandbox) to detect session context when possible.
@@ -105,8 +105,8 @@ In Agent Deck mode, resolve context by priority:
   2. parse from current branch `task/<task_id>`
   3. parse from delegated context/file path in this workflow
   4. ask one short clarification question if still missing
-- `planner_session`:
-  1. explicit input
+- `planner_session_id`:
+  1. explicit input (`planner_session_id`, or `planner_session` as compatibility alias)
   2. `Agent Deck Context` from delegated task/session context
   3. host-shell detection from `agent-deck session current --json`
   4. ask one short clarification question if still missing
@@ -124,9 +124,10 @@ Create parent directories if missing.
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "executor-<task_id>",
-  "to_session": "reviewer-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<executor_session_id>",
+  "to_session_id": "<reviewer_session_id>",
   "round": "<round>",
   "action": "review_requested",
   "artifact_path": ".agent-artifacts/<task_id>/review-request-r<round>.md",
@@ -139,9 +140,9 @@ Then dispatch to reviewer using the helper script (host shell, outside sandbox):
 ```bash
 "<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
-  --planner-session "<planner_session>" \
-  --from-session "executor-<task_id>" \
-  --to-session "reviewer-<task_id>" \
+  --planner-session "<planner_session_id>" \
+  --from-session "<executor_session_id>" \
+  --to-session "<reviewer_session_id>" \
   --round "<round>" \
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
@@ -174,7 +175,7 @@ Use this exact structure:
 
 ## Agent Deck Context (Optional)
 - Task ID: [<task_id> when available]
-- Planner Session: [<planner_session> when available]
+- Planner Session ID: [<planner_session_id> when available]
 - Round: [<round> when available]
 
 ## Original Task

@@ -26,7 +26,7 @@ Provide one of the following:
 
 Agent Deck mode (context-first, compatibility-safe):
 - Enter Agent Deck mode if any is true:
-  1. `task_id` or `planner_session` is explicitly provided
+  1. `task_id` or `planner_session_id` is explicitly provided
   2. input/report context already carries Agent Deck metadata
   3. user asks for agent-deck flow
 - Run `agent-deck session current --json` in host shell (outside sandbox) to detect session context when possible.
@@ -43,13 +43,13 @@ In Agent Deck mode:
 
 In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-report path `.agent-artifacts/<task_id>/...` -> ask if missing
-- `planner_session`: explicit input -> parse from review context/metadata -> host-shell detection from `agent-deck session current --json` -> ask if missing
-- `current_session`: host-shell detection from `agent-deck session current --json` when available
+- `planner_session_id`: explicit input -> parse from review context/metadata -> host-shell detection from `agent-deck session current --json` (`id`) -> ask if missing
+- `current_session_id`: host-shell detection from `agent-deck session current --json` (`id`) when available
 
 If both values are resolved:
 1. write the closeout markdown to `.agent-artifacts/<task_id>/closeout-<task_id>.md`
 2. apply self-handoff guard:
-   - if `current_session` is known and equals `planner_session`, do not dispatch `closeout_delivered`
+   - if `current_session_id` is known and equals `planner_session_id`, do not dispatch `closeout_delivered`
    - output a user-facing note that planner is the current session and stop after closeout output (wait for user instruction)
 3. when self-handoff guard does not trigger, construct one JSON control payload for reviewer -> planner handoff (internal protocol, not user-facing output)
 4. include explicit planner follow-up recommendation in closeout output:
@@ -60,9 +60,9 @@ If both values are resolved:
 ```bash
 "<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
-  --planner-session "<planner_session>" \
-  --from-session "reviewer-<task_id>" \
-  --to-session "<planner_session>" \
+  --planner-session "<planner_session_id>" \
+  --from-session "<reviewer_session_id>" \
+  --to-session "<planner_session_id>" \
   --round "final" \
   --action "closeout_delivered" \
   --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
@@ -79,9 +79,10 @@ For concise logs, report helper output summary only.
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "<planner_session>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "<planner_session_id>",
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
@@ -176,4 +177,4 @@ In Agent Deck mode, append this final section after all extracted buckets:
 4. Keep ordering stable: Critical -> Design -> Minor -> Questions -> Alerts.
 5. Output must be compact and copy/paste friendly; no empty sections.
 6. In Agent Deck mode, include planner follow-up recommendation as actionable guidance, but do not claim planner actions were executed.
-7. In Agent Deck mode, if `planner_session` equals detected `current_session`, do not dispatch `closeout_delivered`; stop and wait for user instruction.
+7. In Agent Deck mode, if `planner_session_id` equals detected `current_session_id`, do not dispatch `closeout_delivered`; stop and wait for user instruction.

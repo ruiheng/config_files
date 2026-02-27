@@ -48,8 +48,8 @@ In Agent Deck mode:
   2. resolve `agent-deck-workflow` skill directory
   3. invoke `<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh`
   4. if unresolved, stop and ask user to attach/install `agent-deck-workflow` skill
-- Resolve `planner_session` by priority:
-  1. explicit input `planner_session`
+- Resolve `planner_session_id` by priority:
+  1. explicit input `planner_session_id` (or `planner_session` as compatibility alias)
   2. existing Agent Deck metadata in context
   3. host-shell detection from `agent-deck session current --json`
   4. ask one short clarification question if still missing
@@ -75,9 +75,10 @@ After writing the file:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "<planner_session>",
-  "to_session": "executor-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<planner_session_id>",
+  "to_session_id": "<executor_session_id>",
   "round": 1,
   "action": "execute_delegate_task",
   "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
@@ -90,7 +91,7 @@ After writing the file:
 ```bash
 "<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
-  --planner-session "<planner_session>" \
+  --planner-session "<planner_session_id>" \
   --to-session "executor-<task_id>" \
   --action "execute_delegate_task" \
   --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
@@ -155,7 +156,7 @@ Specific, testable conditions:
 
 ### Agent Deck Context (Include When Agent Deck Mode Is On)
 - **Task ID**: `<task_id>`
-- **Planner Session**: `<planner_session>`
+- **Planner Session ID**: `<planner_session_id>`
 - **Default Executor Session**: `executor-<task_id>`
 - **Artifact Root**: `.agent-artifacts/<task_id>/`
 

@@ -79,7 +79,7 @@ For the implementer/author:
 ## Agent Deck Mode (Context-First)
 
 Enter Agent Deck mode if any is true:
-- `task_id` or `planner_session` is explicitly provided
+- `task_id` or `planner_session_id` is explicitly provided
 - input/report context contains Agent Deck metadata
 - user asks for agent-deck flow
 
@@ -88,7 +88,7 @@ If it fails, continue with explicit/context metadata.
 
 In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-request/report path `.agent-artifacts/<task_id>/...` -> parse from `Agent Deck Context` section -> ask if missing
-- `planner_session`: explicit input -> parse from `Agent Deck Context` section -> host-shell detection from `agent-deck session current --json` -> ask if missing
+- `planner_session_id`: explicit input (`planner_session_id`, or `planner_session` as compatibility alias) -> parse from `Agent Deck Context` section -> host-shell detection from `agent-deck session current --json` (`id`) -> ask if missing
 - `round`: explicit input -> parse from file suffix `-r<round>.md` -> ask if missing
 
 In Agent Deck mode:
@@ -115,9 +115,10 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "executor-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "<executor_session_id>",
   "round": "<round>",
   "action": "rework_required",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<round>.md",
@@ -128,9 +129,9 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
 ```bash
 "<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
-  --planner-session "<planner_session>" \
-  --from-session "reviewer-<task_id>" \
-  --to-session "executor-<task_id>" \
+  --planner-session "<planner_session_id>" \
+  --from-session "<reviewer_session_id>" \
+  --to-session "<executor_session_id>" \
   --round "<round>" \
   --action "rework_required" \
   --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
@@ -145,9 +146,10 @@ If no must-fix remains and stop is recommended:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "user",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "user",
   "round": "<round>",
   "action": "stop_recommended",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<round>.md",
@@ -172,9 +174,9 @@ If user chooses to continue iteration after `stop_recommended`, dispatch to exec
 ```bash
 "<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
-  --planner-session "<planner_session>" \
-  --from-session "reviewer-<task_id>" \
-  --to-session "executor-<task_id>" \
+  --planner-session "<planner_session_id>" \
+  --from-session "<reviewer_session_id>" \
+  --to-session "<executor_session_id>" \
   --round "<round>" \
   --action "user_requested_iteration" \
   --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \

@@ -11,9 +11,10 @@ All messages should follow this JSON shape:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "<source_session>",
-  "to_session": "<target_session>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<source_session_id>",
+  "to_session_id": "<target_session_id>",
   "round": "<number_or_final>",
   "action": "<action_name>",
   "artifact_path": "<path_or_empty>",
@@ -25,7 +26,8 @@ Field rules:
 
 - `schema_version`: protocol version, currently `1.0`
 - `task_id`: stable id (`YYYYMMDD-HHMM-<slug>`)
-- `planner_session`: required, must be preserved across all rounds/messages
+- `planner_session_id`: required, must be preserved across all rounds/messages
+- `required_skills`: required list of skills receiver must load before acting; include `agent-deck-workflow` for workflow control messages
 - `round`: integer for loop rounds; use `"final"` for closeout
 - `action`: machine-friendly snake_case verb phrase
 - `artifact_path`: required when a file is the source of truth; empty string only when not applicable
@@ -36,9 +38,10 @@ Field rules:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "<planner_session>",
-  "to_session": "executor-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<planner_session_id>",
+  "to_session_id": "<executor_session_id>",
   "round": 1,
   "action": "execute_delegate_task",
   "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
@@ -52,9 +55,10 @@ Field rules:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "executor-<task_id>",
-  "to_session": "reviewer-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<executor_session_id>",
+  "to_session_id": "<reviewer_session_id>",
   "round": "<n>",
   "action": "review_requested",
   "artifact_path": ".agent-artifacts/<task_id>/review-request-r<n>.md",
@@ -68,9 +72,10 @@ Field rules:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "executor-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "<executor_session_id>",
   "round": "<n>",
   "action": "rework_required",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<n>.md",
@@ -84,9 +89,10 @@ Field rules:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "user",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "user",
   "round": "<n>",
   "action": "stop_recommended",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<n>.md",
@@ -105,9 +111,10 @@ Usage note:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "executor-<task_id>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "<executor_session_id>",
   "round": "<n>",
   "action": "user_requested_iteration",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<n>.md",
@@ -121,9 +128,10 @@ Usage note:
 {
   "schema_version": "1.0",
   "task_id": "<task_id>",
-  "planner_session": "<planner_session>",
-  "from_session": "reviewer-<task_id>",
-  "to_session": "<planner_session>",
+  "planner_session_id": "<planner_session_id>",
+  "required_skills": ["agent-deck-workflow"],
+  "from_session_id": "<reviewer_session_id>",
+  "to_session_id": "<planner_session_id>",
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
@@ -133,7 +141,7 @@ Usage note:
 
 Protocol note:
 
-- `planner_session` is immutable for one `task_id`.
-- Executor and reviewer must carry forward the same `planner_session` value in every round.
+- `planner_session_id` is immutable for one `task_id`.
+- Executor and reviewer must carry forward the same `planner_session_id` value in every round.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
-- Self-handoff guard: if reviewer detects `planner_session` equals current session, do not dispatch `closeout_delivered`; stop and wait for user instruction.
+- Self-handoff guard: if reviewer detects `planner_session_id` equals current session id, do not dispatch `closeout_delivered`; stop and wait for user instruction.
