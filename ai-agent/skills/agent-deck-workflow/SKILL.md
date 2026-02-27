@@ -115,7 +115,11 @@ Then perform one batch closeout step:
 
 1. Merge `task/<task_id>` into integration branch (follow repo/user policy).
 2. Record progress (status, merged branch, residual concerns).
-3. Optionally plan and dispatch next task if needed.
+3. Optional hygiene: prune stale task branches with keep-N policy:
+   - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N>` (preview)
+   - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N> --apply` (execute)
+   - Policy: keep newest N `task/` branches; for older ones, delete only if they are ancestors of current base (default `HEAD`).
+4. Optionally plan and dispatch next task if needed.
 
 ## Role-Skill Mapping
 
