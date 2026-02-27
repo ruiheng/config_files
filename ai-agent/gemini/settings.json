@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "grep": {
+      "url": "https://mcp.grep.app",
+      "type": "http"
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp",
+      "type": "http"
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--project-from-cwd"
+      ]
+    },
+    "spec-workflow": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "spec-workflow-mcp@latest"
+      ]
+    }
+  }
+}

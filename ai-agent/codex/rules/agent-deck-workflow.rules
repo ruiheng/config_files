@@ -1,0 +1,4 @@
+prefix_rule(
+    pattern=["/home/ruiheng/config_files/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"],
+    decision="allow",
+)

@@ -373,6 +373,38 @@ readonly OS="$(detect_os)"
 # Installation Functions
 # =============================================================================
 
+migrate_legacy_symlink_source() {
+    local dst="$1"
+    local legacy_src="$2"
+    local new_src="$3"
+
+    # Only migrate existing symlinks that still point to the old source path.
+    if [[ ! -L "$dst" ]]; then
+        return 0
+    fi
+
+    local current_target
+    current_target="$(readlink "$dst")"
+    if [[ "$current_target" != /* ]]; then
+        current_target="$(cd "$(dirname "$dst")/$current_target" 2>/dev/null && pwd || echo "$current_target")"
+    fi
+
+    local legacy_src_normalized
+    legacy_src_normalized="$(cd "$(dirname "$legacy_src")" 2>/dev/null && pwd)/$(basename "$legacy_src")"
+
+    if [[ "$current_target" != "$legacy_src_normalized" ]]; then
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would migrate legacy symlink: $dst -> $new_src"
+        return 0
+    fi
+
+    rm "$dst"
+    log_info "Removed legacy symlink: $dst"
+}
+
 install_home_configs() {
     log_info "Installing home directory dotfiles..."
 
@@ -397,7 +429,8 @@ install_home_configs() {
     esac
 
     # Global gitignore
-    link_file ".gitignore" "$HOME/.gitignore"
+    migrate_legacy_symlink_source "$HOME/.gitignore" "$SCRIPT_DIR/.gitignore" "$SCRIPT_DIR/gitignore"
+    link_file "gitignore" "$HOME/.gitignore"
 }
 
 install_xdg_configs() {
@@ -581,9 +614,9 @@ install_claude_config() {
     # Link skills individually (required by Claude Code)
     install_claude_skills
 
-    # Note: settings.local.json contains machine-specific permissions
-    # and is not automatically linked. Copy manually if needed:
-    #   cp .claude/settings.local.json ~/.claude/
+    # Link local permissions template (contains workflow approval allowlist)
+    migrate_legacy_symlink_source "$claude_dir/settings.local.json" "$SCRIPT_DIR/ai-agent/.claude/settings.local.json" "$SCRIPT_DIR/ai-agent/claude/settings.local.json"
+    link_file "ai-agent/claude/settings.local.json" "$claude_dir/settings.local.json"
 }
 
 install_gemini_skills() {
@@ -611,6 +644,10 @@ install_gemini_config() {
 
     # Link skills individually for reliability
     install_gemini_skills
+
+    # Link shell policy rules for workflow automation approvals
+    migrate_legacy_symlink_source "$gemini_dir/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/.gemini/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/gemini/policies/agent-deck-workflow.toml"
+    link_file "ai-agent/gemini/policies/agent-deck-workflow.toml" "$gemini_dir/policies/agent-deck-workflow.toml"
 }
 
 install_codex_skills() {
@@ -632,6 +669,10 @@ install_codex_config() {
     fi
 
     install_codex_skills
+
+    # Link Codex escalation rules for workflow automation approvals
+    migrate_legacy_symlink_source "$codex_dir/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/.codex/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/codex/rules/agent-deck-workflow.rules"
+    link_file "ai-agent/codex/rules/agent-deck-workflow.rules" "$codex_dir/rules/agent-deck-workflow.rules"
 }
 
 install_serena_config() {

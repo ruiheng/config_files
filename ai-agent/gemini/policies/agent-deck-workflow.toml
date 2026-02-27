@@ -1,0 +1,7 @@
+[[policy]]
+name = "allow_agent_deck_workflow_dispatch"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = "/home/ruiheng/config_files/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"
+priority = 100
