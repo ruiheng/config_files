@@ -138,7 +138,7 @@ Create parent directories if missing.
 Then dispatch to reviewer using the helper script (host shell, outside sandbox):
 
 ```bash
-"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
+<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session "<planner_session_id>" \
   --from-session "<executor_session_id>" \

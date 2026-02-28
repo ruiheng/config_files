@@ -127,7 +127,7 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
 ```
 
 ```bash
-"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
+<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session "<planner_session_id>" \
   --from-session "<reviewer_session_id>" \
@@ -171,7 +171,7 @@ User-facing output requirement for `stop_recommended`:
 If user chooses to continue iteration after `stop_recommended`, dispatch to executor:
 
 ```bash
-"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
+<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session "<planner_session_id>" \
   --from-session "<reviewer_session_id>" \

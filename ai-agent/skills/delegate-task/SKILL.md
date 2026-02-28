@@ -75,7 +75,7 @@ Generate these sections in the brief:
 - Use one helper command (host shell, outside sandbox). Do not expand into many manual sub-steps.
 
 ```bash
-"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
+<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session "<planner_session_id>" \
   --to-session "<executor_session>" \

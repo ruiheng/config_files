@@ -59,7 +59,7 @@ If both values are resolved:
 5. dispatch to planner via helper script:
 
 ```bash
-"<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
+<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session "<planner_session_id>" \
   --from-session "<reviewer_session_id>" \
