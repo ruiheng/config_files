@@ -28,6 +28,10 @@ If the task **is worth splitting**:
 
 Do not output the full final brief before the user decision when a split recommendation is made.
 
+Execution mode quick gates (required):
+- Unless there is explicit evidence that parallel execution is safe, you MUST use serial mode.
+- In serial mode, if there is an already delegated in-progress task, you MUST stop and wait for its closeout before generating or dispatching the next delegate task.
+
 ## Output File (Required)
 
 Create a file named `delegate-task-<unique>.md`.
@@ -186,3 +190,5 @@ Specific, testable conditions:
 7. **Review handoff is required in Agent Deck mode** - After first delivery commit, invoke `review-request` unless the user explicitly waives review
 8. **Decomposition gate** - If splitting is recommended, pause for user decision and only then produce the final brief
 9. **File-first output** - Write the final brief to `delegate-task-<unique>.md`; avoid inline full-text output by default
+10. **Split execution mode** - For split work, default to serial delegation unless parallel isolation is explicitly confirmed; if unsure, ask before parallel dispatch
+11. **No pre-generated serial backlog files** - In serial split mode, only create the current next delegate brief; create subsequent briefs only after prior sub-task completion
