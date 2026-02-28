@@ -91,6 +91,12 @@ In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-request/report path `.agent-artifacts/<task_id>/...` -> parse from `Agent Deck Context` section -> ask if missing
 - `planner_session_id`: explicit input (`planner_session_id`, or `planner_session` as compatibility alias) -> parse from `Agent Deck Context` section -> ask if missing
 - `round`: explicit input -> parse from file suffix `-r<round>.md` -> ask if missing
+- `workflow_policy` (optional): explicit input -> review-request context -> delegated-task context -> default human-gated policy
+
+Default policy when missing:
+- `mode = "human_gated"`
+- `auto_accept_if_no_must_fix = false`
+- `auto_dispatch_next_task = false`
 
 In Agent Deck mode:
 - This skill depends on `agent-deck-workflow` skill script:
@@ -108,7 +114,9 @@ Execution flow in Agent Deck mode:
    - `rework_required` if result is `NEEDS_REVISION`, any must-fix issue exists, or completeness gate has FAIL.
    - `stop_recommended` if no must-fix remains and stop is recommended.
 4. For `rework_required`: build JSON control payload and dispatch to executor via helper script (host shell, outside sandbox).
-5. For `stop_recommended`: do not dispatch to executor automatically; output user-facing stop recommendation and wait for explicit user decision.
+5. For `stop_recommended`:
+   - If `workflow_policy.auto_accept_if_no_must_fix` is `true`, auto-accept and proceed directly to `review-closeout` (no user-decision wait).
+   - Otherwise, output user-facing stop recommendation and wait for explicit user decision.
 
 If review result indicates rework needed (for example `NEEDS_REVISION`, critical issues exist, or completeness gate fails):
 
@@ -122,7 +130,8 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
   "round": "<round>",
   "action": "rework_required",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<round>.md",
-  "note": "Must-fix items remain. Address the review findings and submit the next review request."
+  "note": "Must-fix items remain. Address the review findings and submit the next review request.",
+  "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
 }
 ```
 
@@ -136,6 +145,7 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
   --action "rework_required" \
   --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
   --note "Must-fix items remain. Address the review findings and submit the next review request." \
+  --workflow-policy-json '<workflow_policy_json_optional>' \
   --no-ensure-session \
   --no-start-session
 ```
@@ -152,7 +162,8 @@ If no must-fix remains and stop is recommended:
   "round": "<round>",
   "action": "stop_recommended",
   "artifact_path": ".agent-artifacts/<task_id>/review-report-r<round>.md",
-  "note": "Stop condition met. User confirmation is required before closeout."
+  "note": "Stop condition met. User confirmation is required before closeout.",
+  "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
 }
 ```
 
@@ -177,6 +188,7 @@ User-facing output requirement for `stop_recommended`:
   5. `### Decision Needed`:
      1. proceed to `review-closeout` (then notify planner)
      2. continue another implementation iteration (then notify executor)
+- If `workflow_policy.auto_accept_if_no_must_fix` is `true`, skip the decision prompt and state `Auto-accepted by workflow policy`.
 
 If user chooses to continue iteration after `stop_recommended`, dispatch to executor:
 
@@ -190,6 +202,7 @@ If user chooses to continue iteration after `stop_recommended`, dispatch to exec
   --action "user_requested_iteration" \
   --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
   --note "User requested another implementation iteration. Address the requested follow-ups and submit a new review request." \
+  --workflow-policy-json '<workflow_policy_json_optional>' \
   --no-ensure-session \
   --no-start-session
 ```
@@ -197,15 +210,18 @@ If user chooses to continue iteration after `stop_recommended`, dispatch to exec
 Required interaction behavior in Agent Deck mode:
 - Do not stop at "printing JSON only".
 - For `rework_required`, dispatch automatically after report generation when required metadata is resolved.
-- For `stop_recommended`, present user-facing summary and explicit branch choices; do not auto-forward to executor.
+- For `stop_recommended` with `auto_accept_if_no_must_fix = false`, present user-facing summary and explicit branch choices; do not auto-forward to executor.
+- For `stop_recommended` with `auto_accept_if_no_must_fix = true`, run `review-closeout` directly and continue unattended flow.
 - Treat control JSON as internal protocol data; do not print raw JSON in user-facing output unless user explicitly requests the payload.
 - Do not ask user ambiguous forwarding questions; ask only the branch decision (`closeout` vs `continue iteration`).
 - Report helper output summary only (for example `dispatch_ok ...`).
+- Preserve `workflow_policy` unchanged in outbound dispatches for the same `task_id`.
 - After dispatch:
   - for `rework_required`, reviewer waits for executor's next review request.
-  - for `stop_recommended`, reviewer waits for explicit user decision.
+  - for `stop_recommended` with `auto_accept_if_no_must_fix = false`, reviewer waits for explicit user decision.
     - if user confirms closeout: run `review-closeout`
     - if user asks to continue iteration: dispatch `user_requested_iteration` to executor and then wait
+  - for `stop_recommended` with `auto_accept_if_no_must_fix = true`, reviewer runs `review-closeout` immediately.
 
 ## Guidelines
 

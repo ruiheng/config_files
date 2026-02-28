@@ -16,6 +16,25 @@ For generic `agent-deck` CLI/TUI operations, troubleshooting, and full command r
 - Governance: human-led; user confirmation gates are mandatory at stop/closeout points.
 - Git approval exception: in delegated executor flow, task-scoped executor commits are allowed without per-commit user approval; this workflow rule overrides generic git-approval defaults.
 
+## Automation Policy Override (Optional)
+
+Default behavior is human-gated.
+
+Planner may optionally include a `workflow_policy` override (in delegate artifact and control payload) for a specific `task_id`, for example:
+
+```json
+{
+  "mode": "unattended",
+  "auto_accept_if_no_must_fix": true,
+  "auto_dispatch_next_task": true
+}
+```
+
+Rules:
+- If `workflow_policy` is absent, use default human-gated behavior.
+- If `workflow_policy` is present, executor and reviewer must carry it forward unchanged for the same `task_id`.
+- `workflow_policy` only relaxes stop/dispatch gates described below; safety checks and must-fix handling remain unchanged.
+
 ## Execution Environment (Required)
 
 All `agent-deck` commands in this workflow must run outside sandbox (host shell with real tmux/session context).
@@ -98,6 +117,7 @@ Reviewer evaluates and chooses one of two outcomes:
 2. `stop_recommended`
 - Provide user-friendly summary (not raw JSON) and wait for user decision.
 - No automatic dispatch to executor in this step.
+- Exception: if `workflow_policy.auto_accept_if_no_must_fix` is `true`, reviewer may auto-accept and proceed to closeout without waiting for user decision.
 
 User decision branches after `stop_recommended`:
 
@@ -107,7 +127,7 @@ User decision branches after `stop_recommended`:
 2. User chooses another iteration.
 - Reviewer dispatches `user_requested_iteration` to executor.
 
-### 4) Planner Closeout Batch (After User Confirmation)
+### 4) Planner Closeout Batch (After Closeout Acceptance)
 
 Planner receives closeout but must wait for explicit user confirmation before finalizing.
 
@@ -120,6 +140,8 @@ Then perform one batch closeout step:
    - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N> --apply` (execute)
    - Policy: keep newest N `task/` branches; for older ones, delete only if they are ancestors of current base (default `HEAD`).
 4. Optionally plan and dispatch next task if needed.
+
+If `workflow_policy.auto_dispatch_next_task` is `true`, planner should dispatch the next queued task automatically after merge + progress update (still respecting serial-mode constraints).
 
 ## Role-Skill Mapping
 

@@ -17,7 +17,8 @@ All messages should follow this JSON shape:
   "round": "<number_or_final>",
   "action": "<action_name>",
   "artifact_path": "<path_or_empty>",
-  "note": "<short_instruction_or_summary>"
+  "note": "<short_instruction_or_summary>",
+  "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
 }
 ```
 
@@ -29,6 +30,7 @@ Field rules:
 - `round`: integer for loop rounds; use `"final"` for closeout
 - `action`: machine-friendly snake_case verb phrase
 - `artifact_path`: required when a file is the source of truth; empty string only when not applicable
+- `workflow_policy`: optional override object; include only when overriding default human-gated behavior
 
 ## Planner -> Executor (Task Start)
 
@@ -127,7 +129,7 @@ Usage note:
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-  "note": "Task review loop is complete after user confirmation. Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional."
+  "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional."
 }
 ```
 
@@ -135,5 +137,6 @@ Protocol note:
 
 - `planner_session_id` is immutable for one `task_id`.
 - Executor and reviewer must carry forward the same `planner_session_id` value in every round.
+- If `workflow_policy` is present, carry it forward unchanged for the same `task_id`.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
 - Self-handoff guard: if reviewer detects `planner_session_id` equals current session id, do not dispatch `closeout_delivered`; stop and wait for user instruction.

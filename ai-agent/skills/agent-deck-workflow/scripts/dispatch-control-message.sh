@@ -16,6 +16,7 @@ Usage:
     [--to-session-id <id|title>]
     [--round <n|final>]
     [--note <text>]
+    [--workflow-policy-json <json_object>]
     [--group <group>]
     [--cmd <tool>]
     [--path <project_path>]
@@ -64,6 +65,7 @@ to_session_ref=""
 action=""
 artifact_path=""
 note="Read and follow the artifact file."
+workflow_policy_json=""
 group=""
 cmd=""
 message_file=""
@@ -78,6 +80,7 @@ while [[ $# -gt 0 ]]; do
     --artifact-path) artifact_path="$2"; shift 2 ;;
     --round) round="$2"; shift 2 ;;
     --note) note="$2"; shift 2 ;;
+    --workflow-policy-json) workflow_policy_json="$2"; shift 2 ;;
     --group) group="$2"; shift 2 ;;
     --cmd) cmd="$2"; shift 2 ;;
     --path) path="$2"; shift 2 ;;
@@ -102,6 +105,11 @@ fi
 
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck not found in PATH"
 command -v jq >/dev/null 2>&1 || die "jq is required"
+
+if [[ -n "$workflow_policy_json" ]]; then
+  printf '%s' "$workflow_policy_json" | jq -e 'type == "object"' >/dev/null 2>&1 \
+    || die "--workflow-policy-json must be a valid JSON object"
+fi
 
 ad() {
   if [[ -n "$profile" ]]; then
@@ -175,6 +183,12 @@ cat >"$message_file" <<EOF
   "note": "$(json_escape "$note")"
 }
 EOF
+
+if [[ -n "$workflow_policy_json" ]]; then
+  tmp_payload="$(mktemp)"
+  jq --argjson workflow_policy "$workflow_policy_json" '. + {workflow_policy: $workflow_policy}' "$message_file" >"$tmp_payload"
+  mv "$tmp_payload" "$message_file"
+fi
 
 started=0
 if (( start_session )); then

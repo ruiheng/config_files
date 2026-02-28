@@ -111,6 +111,10 @@ In Agent Deck mode, resolve context by priority:
   1. explicit input (`planner_session_id`, or `planner_session` as compatibility alias)
   2. `Agent Deck Context` from delegated task/session context
   3. ask one short clarification question if still missing
+- `workflow_policy` (optional):
+  1. explicit input
+  2. delegated-task context/artifact
+  3. omit when not set
 - `round`:
   1. explicit input
   2. infer from context; default to `1` when first review is implied
@@ -131,7 +135,8 @@ Create parent directories if missing.
   "round": "<round>",
   "action": "review_requested",
   "artifact_path": ".agent-artifacts/<task_id>/review-request-r<round>.md",
-  "note": "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>."
+  "note": "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>.",
+  "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
 }
 ```
 
@@ -147,11 +152,13 @@ Then dispatch to reviewer using the helper script (host shell, outside sandbox):
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
   --note "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>." \
+  --workflow-policy-json '<workflow_policy_json_optional>' \
   --cmd "<reviewer_tool>"
 ```
 
 For concise logs, report helper output summary only.
 - Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.
+- If `workflow_policy` is present, include it in dispatch payload and preserve it unchanged.
 
 Post-dispatch executor behavior (required in Agent Deck mode):
 - After successful dispatch, executor must enter waiting state for reviewer response.
@@ -176,6 +183,7 @@ Use this exact structure:
 - Task ID: [<task_id> when available]
 - Planner Session ID: [<planner_session_id> when available]
 - Round: [<round> when available]
+- Workflow Policy: [<workflow_policy_json> when available]
 
 ## Original Task
 [Original task text from explicit input or active session context (optionally from `delegate_task_path` if provided). Use `Not provided` only after explicit clarification that no task text is available.]

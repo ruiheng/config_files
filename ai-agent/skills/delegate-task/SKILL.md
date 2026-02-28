@@ -46,6 +46,7 @@ Agent Deck mode:
   - `planner_session_id`: detected current session id -> explicit input (`planner_session_id` or compatibility alias `planner_session`) -> context -> ask
   - `executor_session`: explicit input -> context -> default `executor-<task_id>`
   - `executor_tool`: explicit input -> context -> default current AI tool
+  - `workflow_policy` (optional override): explicit input -> context -> omit when not set
 - In Agent Deck mode, write to:
   - `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`
 
@@ -65,7 +66,8 @@ Generate these sections in the brief:
 7. `Important Notes`:
    - In Agent Deck delegated execution, executor task-scoped git writes (branch/switch, stage, commit) are pre-authorized.
    - In Agent Deck delegated execution, after first delivery commit the executor must invoke `review-request` unless user explicitly waives review.
-8. `Agent Deck Context` (only when Agent Deck mode is on): task id, planner session id, default executor session, artifact root.
+8. `Workflow Policy` (optional): include only when overriding default human-gated workflow behavior.
+9. `Agent Deck Context` (only when Agent Deck mode is on): task id, planner session id, default executor session, artifact root.
 
 ## 4) Agent-Deck Dispatch (When Agent Deck Mode Is On)
 
@@ -82,6 +84,7 @@ Generate these sections in the brief:
   --action "execute_delegate_task" \
   --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
   --note "Read and follow the delegate task file." \
+  --workflow-policy-json '<workflow_policy_json_optional>' \
   --cmd "<executor_tool>"
 ```
 
@@ -90,6 +93,7 @@ Control payload requirements:
 - Follow `agent-deck-workflow/references/message-templates.md`.
 - Use `*_session_id` fields.
 - Include `required_skills`.
+- If `workflow_policy` is set, include it in payload and carry it forward unchanged for the same `task_id`.
 
 ## 5) User-Facing Output Contract
 

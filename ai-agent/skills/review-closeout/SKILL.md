@@ -46,6 +46,7 @@ In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-report path `.agent-artifacts/<task_id>/...` -> ask if missing
 - `planner_session_id`: explicit input -> parse from review context/metadata -> ask if missing
 - `current_session_id`: host-shell detection from `agent-deck session current --json` (`id`) when available
+- `workflow_policy` (optional): explicit input -> review/report context -> default human-gated policy
 
 If both values are resolved:
 1. write the closeout markdown to `.agent-artifacts/<task_id>/closeout-<task_id>.md`
@@ -54,8 +55,9 @@ If both values are resolved:
    - output a user-facing note that planner is the current session and stop after closeout output (wait for user instruction)
 3. when self-handoff guard does not trigger, construct one JSON control payload for reviewer -> planner handoff (internal protocol, not user-facing output)
 4. include explicit planner follow-up recommendation in closeout output:
-   - required after user confirmation: merge task branch, update progress
+   - required after closeout acceptance (user confirmation or policy): merge task branch, update progress
    - optional recommendation: plan next task
+   - if `workflow_policy.auto_dispatch_next_task` is `true`: auto-dispatch next queued task after merge + progress update (respect serial constraints)
 5. dispatch to planner via helper script:
 
 ```bash
@@ -67,7 +69,8 @@ If both values are resolved:
   --round "final" \
   --action "closeout_delivered" \
   --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
-  --note "Task review loop is complete after user confirmation. Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional." \
+  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional." \
+  --workflow-policy-json '<workflow_policy_json_optional>' \
   --no-ensure-session \
   --no-start-session
 ```
@@ -86,7 +89,8 @@ For concise logs, report helper output summary only.
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-  "note": "Task review loop is complete after user confirmation. Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional."
+  "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional.",
+  "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
 }
 ```
 
@@ -136,7 +140,7 @@ Render output with **conditional sections**:
 No actionable items.
 ```
 
-   - when Agent Deck mode is ON, output `No actionable items.` and still append `Planner Follow-up Recommendation (After User Confirmation)`.
+   - when Agent Deck mode is ON, output `No actionable items.` and still append `Planner Follow-up Recommendation (After Closeout Acceptance)`.
 
 ## Output Template (Conditional)
 
@@ -163,10 +167,11 @@ The above is just an example of sparse rendering; do not force missing sections 
 In Agent Deck mode, append this final section after all extracted buckets:
 
 ```markdown
-#### Planner Follow-up Recommendation (After User Confirmation)
+#### Planner Follow-up Recommendation (After Closeout Acceptance)
 - Required: merge `task/<task_id>` into the target integration branch (follow repo/user merge policy).
 - Required: update planner progress records with execution status and residual concerns.
 - Optional recommendation: plan and dispatch the next task when appropriate.
+- If `workflow_policy.auto_dispatch_next_task` is `true`, dispatch next queued task automatically after required closeout actions.
 ```
 
 ## Guidelines
@@ -178,3 +183,4 @@ In Agent Deck mode, append this final section after all extracted buckets:
 5. Output must be compact and copy/paste friendly; no empty sections.
 6. In Agent Deck mode, include planner follow-up recommendation as actionable guidance, but do not claim planner actions were executed.
 7. In Agent Deck mode, if `planner_session_id` equals detected `current_session_id`, do not dispatch `closeout_delivered`; stop and wait for user instruction.
+8. If `workflow_policy` is present, preserve it unchanged in outbound `closeout_delivered` payload.
