@@ -35,6 +35,7 @@ Examples:
 
 Notes:
   - If the target session does not exist and --group is omitted, the script uses the current session's group.
+  - Newly created target sessions are always created with planner as parent.
 EOF
 }
 
@@ -132,6 +133,9 @@ resolve_current_group() {
 }
 
 created=0
+planner_session_id="$(resolve_session_id "$planner_session_ref")"
+[[ -n "$planner_session_id" ]] || die "failed to resolve planner session id from ref: $planner_session_ref"
+
 if (( ensure_session )); then
   if ! ad session show "$to_session_ref" --json >/dev/null 2>&1; then
     if [[ -z "$group" ]]; then
@@ -139,16 +143,15 @@ if (( ensure_session )); then
     fi
     [[ -n "$group" ]] || die "session missing and failed to resolve group from current session; pass --group explicitly"
     [[ -n "$cmd" ]] || die "session missing and --cmd not provided for creation"
-    ad add "$path" --title "$to_session_ref" --group "$group" --cmd "$cmd" >/dev/null
+    # Force a stable tree shape: all task sessions are children of planner.
+    ad add "$path" --title "$to_session_ref" --group "$group" --cmd "$cmd" --parent "$planner_session_id" >/dev/null
     created=1
   fi
 fi
 
-planner_session_id="$(resolve_session_id "$planner_session_ref")"
 from_session_id="$(resolve_session_id "$from_session_ref")"
 to_session_id="$(resolve_session_id "$to_session_ref")"
 
-[[ -n "$planner_session_id" ]] || die "failed to resolve planner session id from ref: $planner_session_ref"
 [[ -n "$from_session_id" ]] || die "failed to resolve from session id from ref: $from_session_ref"
 [[ -n "$to_session_id" ]] || die "failed to resolve to session id from ref: $to_session_ref"
 
