@@ -159,14 +159,24 @@ If no must-fix remains and stop is recommended:
 User-facing output requirement for `stop_recommended`:
 - Do not print raw JSON as the primary user-facing content.
 - Do not print raw JSON at all unless the user explicitly requests the control payload.
-- Provide a concise Markdown summary for the user:
-  - review result (`APPROVED` / stop recommended)
-  - review report path
-  - key residual concerns/questions (if any)
-  - verification commands and outcomes
-  - explicit decision prompt with two choices:
-    1. proceed to `review-closeout` (then notify planner)
-    2. continue another implementation iteration (then notify executor)
+- Do not start with workflow/meta chatter such as `Used <skill>`.
+- Provide a decision-ready Markdown summary using this structure:
+  1. `### Review Decision`:
+     - verdict (`APPROVED` + `stop_recommended`)
+     - one-sentence rationale
+     - report path
+  2. `### Key Findings Snapshot`:
+     - list actionable findings from the report with file references (`path:line`) when available
+     - if no must-fix findings exist, state `Must-fix findings: none`
+  3. `### Residual Risk`:
+     - remaining concerns/questions that are optional or follow-up items
+     - if none, state `Residual risk: none identified`
+  4. `### Verification Summary`:
+     - commands run and pass/fail outcome
+     - include test scope size when available (for example `35 tests, OK`)
+  5. `### Decision Needed`:
+     1. proceed to `review-closeout` (then notify planner)
+     2. continue another implementation iteration (then notify executor)
 
 If user chooses to continue iteration after `stop_recommended`, dispatch to executor:
 
@@ -211,3 +221,4 @@ Required interaction behavior in Agent Deck mode:
 10. Treat missing scope/focus/evidence as review blockers when they prevent reliable judgment
 11. Never invent test results, risk assumptions, or implementation details not present in the input
 12. In Agent Deck mode, reviewer must proactively dispatch `rework_required` after producing a blocking report; for `stop_recommended`, wait for user decision and branch accordingly
+13. For `stop_recommended`, provide a concrete findings snapshot (with file references when available), not a one-line generic summary
