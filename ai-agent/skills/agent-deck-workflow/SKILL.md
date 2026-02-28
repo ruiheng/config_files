@@ -129,7 +129,9 @@ User decision branches after `stop_recommended`:
 
 ### 4) Planner Closeout Batch (After Closeout Acceptance)
 
-Planner receives closeout but must wait for explicit user confirmation before finalizing.
+Planner receives closeout and finalizes after closeout acceptance:
+- default: explicit user confirmation
+- unattended override: policy-based acceptance when enabled
 
 Then perform one batch closeout step:
 

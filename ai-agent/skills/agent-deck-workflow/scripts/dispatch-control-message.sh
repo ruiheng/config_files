@@ -37,6 +37,7 @@ Examples:
 Notes:
   - If the target session does not exist and --group is omitted, the script uses the current session's group.
   - Newly created target sessions are always created with planner as parent.
+  - For action=closeout_delivered, task-session archive+cleanup is performed automatically after dispatch.
 EOF
 }
 
@@ -212,4 +213,35 @@ if [[ -n "$id" || -n "$status" ]]; then
   echo "session id=${id} status=${status}"
 else
   echo "$show_json"
+fi
+
+# Automatic post-closeout cleanup:
+# Once closeout is delivered to planner, archive provider resume metadata and remove task sessions.
+if [[ "$action" == "closeout_delivered" ]]; then
+  cleanup_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  cleanup_script="${cleanup_script_dir}/archive-and-remove-task-sessions.sh"
+  if [[ ! -x "$cleanup_script" ]]; then
+    echo "cleanup_warn missing_script=${cleanup_script}"
+    exit 0
+  fi
+
+  cleanup_cmd=(
+    "$cleanup_script"
+    --task-id "$task_id"
+    --planner-session "$planner_session_ref"
+    --executor-session "executor-${task_id}"
+    --reviewer-session "$from_session_ref"
+    --apply
+  )
+  if [[ -n "$profile" ]]; then
+    cleanup_cmd+=(--profile "$profile")
+  fi
+
+  if cleanup_output="$("${cleanup_cmd[@]}" 2>&1)"; then
+    echo "cleanup_ok task_id=${task_id}"
+    echo "$cleanup_output"
+  else
+    echo "cleanup_warn task_id=${task_id} status=failed"
+    echo "$cleanup_output"
+  fi
 fi
