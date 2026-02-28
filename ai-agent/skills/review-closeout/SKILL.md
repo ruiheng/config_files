@@ -31,6 +31,7 @@ Agent Deck mode (context-first, compatibility-safe):
   3. user asks for agent-deck flow
 - Run `agent-deck session current --json` in host shell (outside sandbox) to detect session context when possible.
 - If detection fails (for example `not in a tmux session`), continue with explicit/context metadata only.
+- Do not use current-session detection to derive `planner_session_id`.
 
 In Agent Deck mode:
 - This skill depends on `agent-deck-workflow` skill script:
@@ -43,7 +44,7 @@ In Agent Deck mode:
 
 In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-report path `.agent-artifacts/<task_id>/...` -> ask if missing
-- `planner_session_id`: explicit input -> parse from review context/metadata -> host-shell detection from `agent-deck session current --json` (`id`) -> ask if missing
+- `planner_session_id`: explicit input -> parse from review context/metadata -> ask if missing
 - `current_session_id`: host-shell detection from `agent-deck session current --json` (`id`) when available
 
 If both values are resolved:

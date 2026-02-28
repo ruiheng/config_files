@@ -85,10 +85,11 @@ Enter Agent Deck mode if any is true:
 
 `agent-deck session current --json` is best-effort only. Run it in host shell (outside sandbox).
 If it fails, continue with explicit/context metadata.
+Do not use current-session detection to derive `planner_session_id`.
 
 In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-request/report path `.agent-artifacts/<task_id>/...` -> parse from `Agent Deck Context` section -> ask if missing
-- `planner_session_id`: explicit input (`planner_session_id`, or `planner_session` as compatibility alias) -> parse from `Agent Deck Context` section -> host-shell detection from `agent-deck session current --json` (`id`) -> ask if missing
+- `planner_session_id`: explicit input (`planner_session_id`, or `planner_session` as compatibility alias) -> parse from `Agent Deck Context` section -> ask if missing
 - `round`: explicit input -> parse from file suffix `-r<round>.md` -> ask if missing
 
 In Agent Deck mode:

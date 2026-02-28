@@ -15,12 +15,13 @@ Before generating the document, determine one scope:
 3. **Branch**
 
 Workflow continuity rule:
-- In an ongoing implementation session, if scope is not explicitly provided, inherit the scope of the **most recently completed task in this workflow**.
+- In an ongoing implementation session, if scope is not explicitly provided, inherit the scope from the active delegated task for the current `task_id`.
 - The inherited scope can be `uncommitted`, `commit`, or `branch` depending on what was actually delivered.
 - Do not force a scope-selection question when one scope is clearly implied by recent workflow context.
 - Ask a clarification question only when:
-  - multiple scopes are similarly plausible, or
+  - multiple scopes are similarly plausible for the same `task_id`, or
   - no reliable scope can be inferred.
+- Do not infer scope from unrelated or previously completed tasks with different `task_id`.
 
 ## Inputs
 
@@ -89,6 +90,7 @@ Agent Deck mode (context-first, compatibility-safe):
   3. user asks for agent-deck flow
 - Run `agent-deck session current --json` in host shell (outside sandbox) to detect session context when possible.
 - If detection fails (for example `not in a tmux session`), continue with explicit/context metadata only.
+- Do not use current-session detection to derive `planner_session_id`.
 
 In Agent Deck mode:
 - This skill depends on `agent-deck-workflow` skill script:
@@ -108,8 +110,7 @@ In Agent Deck mode, resolve context by priority:
 - `planner_session_id`:
   1. explicit input (`planner_session_id`, or `planner_session` as compatibility alias)
   2. `Agent Deck Context` from delegated task/session context
-  3. host-shell detection from `agent-deck session current --json`
-  4. ask one short clarification question if still missing
+  3. ask one short clarification question if still missing
 - `round`:
   1. explicit input
   2. infer from context; default to `1` when first review is implied

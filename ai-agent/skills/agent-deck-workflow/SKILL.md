@@ -65,7 +65,7 @@ Role inference is valid in this workflow and should be used when explicit role a
 
 Role inference priority:
 1. explicit user instruction
-2. control-message `action` + `to_session`
+2. control-message `action` + `to_session_id`
 3. task context/artifact path/branch convention (`task/<task_id>`)
 4. currently invoked workflow skill
 

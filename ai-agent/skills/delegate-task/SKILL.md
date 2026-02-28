@@ -44,7 +44,8 @@ Agent Deck mode:
 - Resolve by priority:
   - `task_id`: explicit input -> context -> generate `YYYYMMDD-HHMM-<slug>`
   - `planner_session_id`: detected current session id -> explicit input (`planner_session_id` or compatibility alias `planner_session`) -> context -> ask
-  - `executor_session` / `executor_tool`: explicit input -> context -> defaults
+  - `executor_session`: explicit input -> context -> default `executor-<task_id>`
+  - `executor_tool`: explicit input -> context -> default current AI tool
 - In Agent Deck mode, write to:
   - `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`
 
@@ -77,7 +78,7 @@ Generate these sections in the brief:
 "<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh" \
   --task-id "<task_id>" \
   --planner-session "<planner_session_id>" \
-  --to-session "<executor_session_or_default>" \
+  --to-session "<executor_session>" \
   --action "execute_delegate_task" \
   --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
   --note "Read and follow the delegate task file." \
