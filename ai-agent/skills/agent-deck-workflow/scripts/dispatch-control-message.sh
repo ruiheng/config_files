@@ -161,7 +161,6 @@ fi
 mkdir -p "$(dirname "$message_file")"
 cat >"$message_file" <<EOF
 {
-  "schema_version": "1.0",
   "task_id": "$(json_escape "$task_id")",
   "planner_session_id": "$(json_escape "$planner_session_id")",
   "required_skills": ["agent-deck-workflow"],

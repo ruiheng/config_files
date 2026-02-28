@@ -9,7 +9,6 @@ All messages should follow this JSON shape:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -24,7 +23,6 @@ All messages should follow this JSON shape:
 
 Field rules:
 
-- `schema_version`: protocol version, currently `1.0`
 - `task_id`: stable id (`YYYYMMDD-HHMM-<slug>`)
 - `planner_session_id`: required, must be preserved across all rounds/messages
 - `required_skills`: required list of skills receiver must load before acting; include `agent-deck-workflow` for workflow control messages
@@ -36,7 +34,6 @@ Field rules:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -53,7 +50,6 @@ Field rules:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -70,7 +66,6 @@ Field rules:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -87,7 +82,6 @@ Field rules:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -109,7 +103,6 @@ Usage note:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -126,7 +119,6 @@ Usage note:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],

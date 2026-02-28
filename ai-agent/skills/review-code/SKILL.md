@@ -114,7 +114,6 @@ If review result indicates rework needed (for example `NEEDS_REVISION`, critical
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
@@ -145,7 +144,6 @@ If no must-fix remains and stop is recommended:
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],

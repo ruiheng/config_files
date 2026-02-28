@@ -78,7 +78,6 @@ For concise logs, report helper output summary only.
 
 ```json
 {
-  "schema_version": "1.0",
   "task_id": "<task_id>",
   "planner_session_id": "<planner_session_id>",
   "required_skills": ["agent-deck-workflow"],
