@@ -147,7 +147,6 @@ Then dispatch to reviewer using the helper script (host shell, outside sandbox):
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
   --note "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>." \
-  --group "<group>" \
   --cmd "<reviewer_tool>"
 ```
 

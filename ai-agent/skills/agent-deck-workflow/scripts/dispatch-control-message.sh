@@ -31,8 +31,10 @@ Examples:
     --to-session-id executor-20260225-1916-expiry-semantics \
     --action execute_delegate_task \
     --artifact-path .agent-artifacts/20260225-1916-expiry-semantics/delegate-task-20260225-1916-expiry-semantics.md \
-    --group lyceum \
     --cmd codex
+
+Notes:
+  - If the target session does not exist and --group is omitted, the script uses the current session's group.
 EOF
 }
 
@@ -119,10 +121,23 @@ resolve_session_id() {
   printf '%s' "$shown" | jq -r '.id // empty'
 }
 
+resolve_current_group() {
+  local current
+  current="$(ad session current --json 2>/dev/null || true)"
+  if [[ -z "$current" ]]; then
+    echo ""
+    return 0
+  fi
+  printf '%s' "$current" | jq -r '.group // empty'
+}
+
 created=0
 if (( ensure_session )); then
   if ! ad session show "$to_session_ref" --json >/dev/null 2>&1; then
-    [[ -n "$group" ]] || die "session missing and --group not provided for creation"
+    if [[ -z "$group" ]]; then
+      group="$(resolve_current_group)"
+    fi
+    [[ -n "$group" ]] || die "session missing and failed to resolve group from current session; pass --group explicitly"
     [[ -n "$cmd" ]] || die "session missing and --cmd not provided for creation"
     ad add "$path" --title "$to_session_ref" --group "$group" --cmd "$cmd" >/dev/null
     created=1
