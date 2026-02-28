@@ -390,7 +390,12 @@ migrate_legacy_symlink_source() {
     fi
 
     local legacy_src_normalized
-    legacy_src_normalized="$(cd "$(dirname "$legacy_src")" 2>/dev/null && pwd)/$(basename "$legacy_src")"
+    if [[ -e "$legacy_src" ]]; then
+        legacy_src_normalized="$(cd "$(dirname "$legacy_src")" 2>/dev/null && pwd)/$(basename "$legacy_src")"
+    else
+        # Keep absolute legacy path as-is so broken legacy links can still be migrated.
+        legacy_src_normalized="$legacy_src"
+    fi
 
     if [[ "$current_target" != "$legacy_src_normalized" ]]; then
         return 0
