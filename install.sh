@@ -373,6 +373,47 @@ readonly OS="$(detect_os)"
 # Installation Functions
 # =============================================================================
 
+suggest_lsof_install() {
+    echo ""
+    log_info "agent-deck requires 'lsof'. Install it with:"
+    echo ""
+    case "$OS" in
+        linux|wsl)
+            echo "  # Debian/Ubuntu:"
+            echo "  sudo apt install lsof"
+            ;;
+        macos)
+            echo "  # Using Homebrew:"
+            echo "  brew install lsof"
+            ;;
+        *)
+            echo "  Install 'lsof' using your system package manager."
+            ;;
+    esac
+    echo ""
+}
+
+check_agent_deck_prerequisites() {
+    log_info "Checking agent-deck prerequisites..."
+
+    # agent-deck depends on lsof on supported Unix-like hosts.
+    case "$OS" in
+        linux|wsl|macos)
+            if ! command -v lsof &>/dev/null; then
+                log_error "Missing required command: lsof"
+                suggest_lsof_install
+                return 1
+            fi
+            log_ok "Found required command: lsof"
+            ;;
+        *)
+            log_warn "Skipping lsof check on unsupported OS: $OS"
+            ;;
+    esac
+
+    return 0
+}
+
 migrate_legacy_symlink_source() {
     local dst="$1"
     local legacy_src="$2"
@@ -917,6 +958,10 @@ main() {
 
     log_info "Source directory: $SCRIPT_DIR"
     log_info "Target home: $HOME"
+
+    if ! check_agent_deck_prerequisites; then
+        exit 1
+    fi
 
     # Initialize git submodules first
     init_submodules
