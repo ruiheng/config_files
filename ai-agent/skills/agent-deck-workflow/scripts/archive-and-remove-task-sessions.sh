@@ -32,6 +32,7 @@ Outputs:
 Notes:
   - Default mode is archive-only (no deletion).
   - Provider resume IDs are read from agent-deck state DB (`instances.tool_data`).
+  - If expected provider ID is missing in DB, fallback reads `~/.agent-deck/hooks/<instance_id>.json`.
   - Archive always includes raw `session show --json` payload for future recovery.
   - Use catalog files for quick lookup without navigating per-task directories.
   - Deletion guard is tool-aware in --apply mode:
@@ -155,6 +156,57 @@ extract_provider_resume_ids() {
   fi
 }
 
+extract_provider_resume_ids_from_hook_file() {
+  local session_id="$1"
+  local tool_name="$2"
+  local hook_file
+  local expected_key
+  local detected_key
+  local hook_session_id
+  local hook_ts
+
+  if [[ -z "$session_id" ]]; then
+    echo "{}"
+    return 0
+  fi
+
+  expected_key="$(expected_provider_key_for_tool "$tool_name")"
+  if [[ -z "$expected_key" ]]; then
+    echo "{}"
+    return 0
+  fi
+
+  hook_file="$HOME/.agent-deck/hooks/${session_id}.json"
+  if [[ ! -f "$hook_file" ]]; then
+    echo "{}"
+    return 0
+  fi
+
+  hook_session_id="$(jq -r '.session_id // empty' "$hook_file" 2>/dev/null || true)"
+  if [[ -z "$hook_session_id" ]]; then
+    echo "{}"
+    return 0
+  fi
+
+  hook_ts="$(jq -r '.ts // empty' "$hook_file" 2>/dev/null || true)"
+  detected_key="${expected_key%_session_id}_detected_at"
+
+  jq -nc \
+    --arg expected_key "$expected_key" \
+    --arg detected_key "$detected_key" \
+    --arg hook_session_id "$hook_session_id" \
+    --arg hook_ts "$hook_ts" \
+    '{
+      ($expected_key): $hook_session_id
+    } + (
+      if ($hook_ts | test("^[0-9]+$")) then
+        {($detected_key): ($hook_ts | tonumber)}
+      else
+        {}
+      end
+    )'
+}
+
 has_provider_resume_session_id() {
   local provider_resume_ids="$1"
   jq -e '
@@ -216,6 +268,9 @@ process_session() {
   local entry
   local session_id
   local provider_resume_ids
+  local provider_resume_ids_db="{}"
+  local provider_resume_ids_hook="{}"
+  local provider_resume_source="state_db_tool_data"
   local has_provider_resume_id=false
   local tool_name=""
   local expected_provider_key=""
@@ -228,14 +283,35 @@ process_session() {
   shown="$(ad session show "$ref" --json 2>/dev/null || true)"
   session_id="$(jq -r 'if type == "object" then .id // empty else empty end' <<<"$shown" 2>/dev/null || true)"
   tool_name="$(jq -r 'if type == "object" then .tool // "" else "" end' <<<"$shown" 2>/dev/null || true)"
-  provider_resume_ids="$(extract_provider_resume_ids "$session_id" "$state_db_path")"
-  if ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$provider_resume_ids"; then
-    provider_resume_ids="{}"
+  expected_provider_key="$(expected_provider_key_for_tool "$tool_name")"
+
+  provider_resume_ids_db="$(extract_provider_resume_ids "$session_id" "$state_db_path")"
+  if ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$provider_resume_ids_db"; then
+    provider_resume_ids_db="{}"
   fi
+  provider_resume_ids="$provider_resume_ids_db"
+
+  if [[ -n "$expected_provider_key" ]]; then
+    if ! has_expected_provider_resume_id "$provider_resume_ids" "$expected_provider_key"; then
+      provider_resume_ids_hook="$(extract_provider_resume_ids_from_hook_file "$session_id" "$tool_name")"
+      if ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$provider_resume_ids_hook"; then
+        provider_resume_ids_hook="{}"
+      fi
+      if has_expected_provider_resume_id "$provider_resume_ids_hook" "$expected_provider_key"; then
+        provider_resume_ids="$(jq -cn --argjson db "$provider_resume_ids_db" --argjson hook "$provider_resume_ids_hook" '$db + $hook')"
+        if has_provider_resume_session_id "$provider_resume_ids_db"; then
+          provider_resume_source="state_db_tool_data+hook_status_file"
+        else
+          provider_resume_source="hook_status_file"
+        fi
+      fi
+    fi
+  fi
+
   if has_provider_resume_session_id "$provider_resume_ids"; then
     has_provider_resume_id=true
   fi
-  expected_provider_key="$(expected_provider_key_for_tool "$tool_name")"
+
   if [[ -n "$expected_provider_key" ]]; then
     provider_guard_required=true
   fi
@@ -255,6 +331,7 @@ process_session() {
       --arg expected_provider_key "$expected_provider_key" \
       --argjson provider_guard_required "$provider_guard_required" \
       --argjson provider_guard_passed "$provider_guard_passed" \
+      --arg provider_resume_source "$provider_resume_source" \
       --arg delete_status "$delete_status" \
       --arg delete_block_reason "$delete_block_reason" \
       --argjson apply_flag "$apply" \
@@ -268,7 +345,7 @@ process_session() {
         provider_guard_expected_key: (if $expected_provider_key == "" then null else $expected_provider_key end),
         provider_guard_required: $provider_guard_required,
         provider_guard_passed: $provider_guard_passed,
-        provider_resume_source: "state_db_tool_data",
+        provider_resume_source: $provider_resume_source,
         raw_session_show: (if $raw_show == "" then null else $raw_show end),
         delete_applied: ($apply_flag == 1),
         deleted: false,
@@ -307,6 +384,7 @@ process_session() {
     --arg expected_provider_key "$expected_provider_key" \
     --argjson provider_guard_required "$provider_guard_required" \
     --argjson provider_guard_passed "$provider_guard_passed" \
+    --arg provider_resume_source "$provider_resume_source" \
     --arg delete_status "$delete_status" \
     --arg delete_block_reason "$delete_block_reason" \
     --argjson apply_flag "$apply" \
@@ -326,7 +404,7 @@ process_session() {
       provider_guard_expected_key: (if $expected_provider_key == "" then null else $expected_provider_key end),
       provider_guard_required: $provider_guard_required,
       provider_guard_passed: $provider_guard_passed,
-      provider_resume_source: "state_db_tool_data",
+      provider_resume_source: $provider_resume_source,
       session_show: $shown,
       delete_applied: ($apply_flag == 1),
       deleted: $deleted,
