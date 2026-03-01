@@ -32,6 +32,9 @@ ALL_SKIP=0
 ALL_BACKUP=0
 ALL_REPLACE=0
 
+# Optional integration flags
+AGENT_DECK_AVAILABLE=0
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -414,6 +417,68 @@ check_agent_deck_prerequisites() {
     return 0
 }
 
+is_agent_deck_related_skill() {
+    local skill_name="$1"
+    case "$skill_name" in
+        agent-deck|agent-deck-workflow)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+setup_agent_deck_integration() {
+    if ! command -v agent-deck &>/dev/null; then
+        AGENT_DECK_AVAILABLE=0
+        log_warn "agent-deck not found; skipping agent-deck related skills and policy/rule links"
+        return 0
+    fi
+
+    AGENT_DECK_AVAILABLE=1
+    log_ok "Found agent-deck"
+
+    if ! check_agent_deck_prerequisites; then
+        return 1
+    fi
+
+    local has_hooks_cmd=0
+    if agent-deck hooks status >/dev/null 2>&1; then
+        has_hooks_cmd=1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        if [[ $has_hooks_cmd -eq 1 ]]; then
+            log_dry "Would run: agent-deck hooks install"
+        else
+            log_warn "agent-deck hooks command not available; skipping Claude hook install"
+        fi
+        log_dry "Would run: agent-deck codex-hooks install"
+        return 0
+    fi
+
+    if [[ $has_hooks_cmd -eq 1 ]]; then
+        if agent-deck hooks install >/dev/null 2>&1; then
+            log_ok "Configured agent-deck Claude hooks"
+        else
+            log_warn "Failed to configure agent-deck Claude hooks (continue)"
+            log_info "You can retry manually: agent-deck hooks install"
+        fi
+    else
+        log_warn "agent-deck hooks command not available; skipping Claude hook install"
+    fi
+
+    if agent-deck codex-hooks install >/dev/null 2>&1; then
+        log_ok "Configured agent-deck Codex hooks"
+    else
+        log_warn "Failed to configure agent-deck Codex hooks (continue)"
+        log_info "You can retry manually: agent-deck codex-hooks install"
+    fi
+
+    return 0
+}
+
 migrate_legacy_symlink_source() {
     local dst="$1"
     local legacy_src="$2"
@@ -627,6 +692,13 @@ install_skills_individually() {
             if [[ -d "$skill_dir" ]]; then
                 local skill_name
                 skill_name=$(basename "$skill_dir")
+
+                if is_agent_deck_related_skill "$skill_name" && [[ $AGENT_DECK_AVAILABLE -eq 0 ]]; then
+                    log_warn "Skipping $tool_name skill '$skill_name' (agent-deck not installed)"
+                    skipped=$((skipped + 1))
+                    continue
+                fi
+
                 link_file "ai-agent/skills/$skill_name" "$tool_skills_dir/$skill_name"
             fi
         done
@@ -692,8 +764,12 @@ install_gemini_config() {
     install_gemini_skills
 
     # Link shell policy rules for workflow automation approvals
-    migrate_legacy_symlink_source "$gemini_dir/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/.gemini/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/gemini/policies/agent-deck-workflow.toml"
-    link_file "ai-agent/gemini/policies/agent-deck-workflow.toml" "$gemini_dir/policies/agent-deck-workflow.toml"
+    if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
+        migrate_legacy_symlink_source "$gemini_dir/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/.gemini/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/gemini/policies/agent-deck-workflow.toml"
+        link_file "ai-agent/gemini/policies/agent-deck-workflow.toml" "$gemini_dir/policies/agent-deck-workflow.toml"
+    else
+        log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
+    fi
 }
 
 install_codex_skills() {
@@ -717,8 +793,12 @@ install_codex_config() {
     install_codex_skills
 
     # Link Codex escalation rules for workflow automation approvals
-    migrate_legacy_symlink_source "$codex_dir/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/.codex/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/codex/rules/agent-deck-workflow.rules"
-    link_file "ai-agent/codex/rules/agent-deck-workflow.rules" "$codex_dir/rules/agent-deck-workflow.rules"
+    if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
+        migrate_legacy_symlink_source "$codex_dir/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/.codex/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/codex/rules/agent-deck-workflow.rules"
+        link_file "ai-agent/codex/rules/agent-deck-workflow.rules" "$codex_dir/rules/agent-deck-workflow.rules"
+    else
+        log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
+    fi
 }
 
 install_serena_config() {
@@ -959,7 +1039,7 @@ main() {
     log_info "Source directory: $SCRIPT_DIR"
     log_info "Target home: $HOME"
 
-    if ! check_agent_deck_prerequisites; then
+    if ! setup_agent_deck_integration; then
         exit 1
     fi
 
