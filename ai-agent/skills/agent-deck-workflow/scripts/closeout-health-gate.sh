@@ -103,6 +103,23 @@ count_worker_sessions() {
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cleanup_script="${script_dir}/archive-and-remove-task-sessions.sh"
 [[ -x "$cleanup_script" ]] || die "cleanup script not found or not executable: $cleanup_script"
+notify_script="${script_dir}/notify-workflow-event.sh"
+
+notify_event() {
+  local event="$1"
+  local severity="$2"
+  local title="$3"
+  local message="$4"
+  if [[ -x "$notify_script" ]]; then
+    "$notify_script" \
+      --event "$event" \
+      --task-id "$task_id" \
+      --title "$title" \
+      --message "$message" \
+      --severity "$severity" \
+      --artifact-root "$artifact_root" >/dev/null 2>&1 || true
+  fi
+}
 
 cleanup_cmd=(
   "$cleanup_script"
@@ -215,12 +232,28 @@ jq -n \
 cp "$health_file" "$latest_file"
 
 if [[ "$health_ok" == "true" ]]; then
+  notify_event \
+    "health_gate_ok" \
+    "info" \
+    "Health gate passed: ${task_id}" \
+    "Cleanup succeeded and worker sessions are within cap (${worker_session_count}/${max_worker_sessions})."
   echo "health_ok task_id=${task_id} worker_sessions=${worker_session_count}/${max_worker_sessions} file=${health_file}"
   exit 0
 fi
 
+notify_event \
+  "health_gate_fail" \
+  "error" \
+  "Health gate failed: ${task_id}" \
+  "Reasons: ${reasons_csv:-unknown}. Worker sessions ${worker_session_count}/${max_worker_sessions}."
+
 echo "health_fail task_id=${task_id} reasons=${reasons_csv:-unknown} worker_sessions=${worker_session_count}/${max_worker_sessions} file=${health_file}"
 if (( strict )); then
+  notify_event \
+    "unattended_halt" \
+    "error" \
+    "Unattended halted: ${task_id}" \
+    "Auto-dispatch halted due to health gate failure."
   exit 3
 fi
 exit 0

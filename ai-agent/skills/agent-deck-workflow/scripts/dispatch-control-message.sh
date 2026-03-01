@@ -120,6 +120,33 @@ ad() {
   fi
 }
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+notify_script="${script_dir}/notify-workflow-event.sh"
+
+artifact_root=".agent-artifacts"
+if [[ "$artifact_path" == *"/${task_id}/"* ]]; then
+  artifact_root="${artifact_path%%/${task_id}/*}"
+  if [[ -z "$artifact_root" ]]; then
+    artifact_root="."
+  fi
+fi
+
+notify_event() {
+  local event="$1"
+  local severity="$2"
+  local title="$3"
+  local message="$4"
+  if [[ -x "$notify_script" ]]; then
+    "$notify_script" \
+      --event "$event" \
+      --task-id "$task_id" \
+      --title "$title" \
+      --message "$message" \
+      --severity "$severity" \
+      --artifact-root "$artifact_root" >/dev/null 2>&1 || true
+  fi
+}
+
 resolve_session_id() {
   local ref="$1"
   local shown
@@ -215,22 +242,53 @@ else
   echo "$show_json"
 fi
 
+dispatch_event="action_dispatched"
+dispatch_severity="info"
+dispatch_title="Workflow dispatch: ${task_id}"
+dispatch_message="${action} ${from_session_ref} -> ${to_session_ref}"
+case "$action" in
+  execute_delegate_task)
+    dispatch_event="delegate_dispatched"
+    dispatch_title="Task delegated: ${task_id}"
+    dispatch_message="Planner dispatched task to executor session ${to_session_ref}."
+    ;;
+  review_requested)
+    dispatch_event="review_requested"
+    dispatch_title="Review requested: ${task_id}"
+    dispatch_message="Executor requested review from session ${to_session_ref}."
+    ;;
+  rework_required)
+    dispatch_event="rework_required"
+    dispatch_severity="warn"
+    dispatch_title="Rework required: ${task_id}"
+    dispatch_message="Reviewer requested executor rework."
+    ;;
+  stop_recommended)
+    dispatch_event="stop_recommended"
+    dispatch_severity="warn"
+    dispatch_title="Stop recommended: ${task_id}"
+    dispatch_message="Reviewer recommends stop and waits for user decision."
+    ;;
+  user_requested_iteration)
+    dispatch_event="user_requested_iteration"
+    dispatch_title="Iteration requested: ${task_id}"
+    dispatch_message="User requested another implementation iteration."
+    ;;
+  closeout_delivered)
+    dispatch_event="closeout_delivered"
+    dispatch_title="Closeout delivered: ${task_id}"
+    dispatch_message="Reviewer delivered closeout to planner."
+    ;;
+esac
+notify_event "$dispatch_event" "$dispatch_severity" "$dispatch_title" "$dispatch_message"
+
 # Automatic post-closeout cleanup:
 # Once closeout is delivered to planner, archive provider resume metadata and remove task sessions.
 if [[ "$action" == "closeout_delivered" ]]; then
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   health_gate_script="${script_dir}/closeout-health-gate.sh"
   if [[ ! -x "$health_gate_script" ]]; then
     echo "health_gate_warn missing_script=${health_gate_script}"
     exit 0
-  fi
-
-  artifact_root=".agent-artifacts"
-  if [[ "$artifact_path" == *"/${task_id}/"* ]]; then
-    artifact_root="${artifact_path%%/${task_id}/*}"
-    if [[ -z "$artifact_root" ]]; then
-      artifact_root="."
-    fi
   fi
 
   unattended_mode=0

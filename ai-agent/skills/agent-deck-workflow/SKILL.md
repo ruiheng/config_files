@@ -46,6 +46,7 @@ This workflow uses skill-local helper script:
 
 - `scripts/dispatch-control-message.sh`
 - `scripts/closeout-health-gate.sh`
+- `scripts/notify-workflow-event.sh`
 
 Path rules:
 
