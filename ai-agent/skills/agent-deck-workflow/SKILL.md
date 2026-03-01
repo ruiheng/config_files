@@ -48,6 +48,11 @@ This workflow uses skill-local helper script:
 - `scripts/closeout-health-gate.sh`
 - `scripts/notify-workflow-event.sh`
 
+Dispatch-notification noise control:
+- `ADWF_DISPATCH_NOTIFY=milestone` (default): notify key milestones only (`execute_delegate_task`, `rework_required`, `stop_recommended`, `closeout_delivered`)
+- `ADWF_DISPATCH_NOTIFY=all`: notify every dispatch action
+- `ADWF_DISPATCH_NOTIFY=none`: suppress dispatch notifications
+
 Path rules:
 
 1. Resolve script path relative to this skill directory.

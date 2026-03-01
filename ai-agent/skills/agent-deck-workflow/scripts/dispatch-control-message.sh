@@ -38,6 +38,10 @@ Notes:
   - If the target session does not exist and --group is omitted, the script uses the current session's group.
   - Newly created target sessions are always created with planner as parent.
   - For action=closeout_delivered, post-closeout health gate (cleanup + guard checks) is performed automatically after dispatch.
+  - Dispatch notifications are filtered by ADWF_DISPATCH_NOTIFY:
+      milestone (default): notify only key workflow milestones.
+      all: notify all dispatch actions.
+      none: suppress dispatch notifications.
 EOF
 }
 
@@ -145,6 +149,40 @@ notify_event() {
       --severity "$severity" \
       --artifact-root "$artifact_root" >/dev/null 2>&1 || true
   fi
+}
+
+should_notify_dispatch() {
+  local action_name="$1"
+  local mode="${ADWF_DISPATCH_NOTIFY:-milestone}"
+  case "$mode" in
+    none)
+      return 1
+      ;;
+    all)
+      return 0
+      ;;
+    milestone|"")
+      case "$action_name" in
+        execute_delegate_task|rework_required|stop_recommended|closeout_delivered)
+          return 0
+          ;;
+        *)
+          return 1
+          ;;
+      esac
+      ;;
+    *)
+      # Unknown mode: fail safe to milestone behavior.
+      case "$action_name" in
+        execute_delegate_task|rework_required|stop_recommended|closeout_delivered)
+          return 0
+          ;;
+        *)
+          return 1
+          ;;
+      esac
+      ;;
+  esac
 }
 
 resolve_session_id() {
@@ -280,7 +318,9 @@ case "$action" in
     dispatch_message="Reviewer delivered closeout to planner."
     ;;
 esac
-notify_event "$dispatch_event" "$dispatch_severity" "$dispatch_title" "$dispatch_message"
+if should_notify_dispatch "$action"; then
+  notify_event "$dispatch_event" "$dispatch_severity" "$dispatch_title" "$dispatch_message"
+fi
 
 # Automatic post-closeout cleanup:
 # Once closeout is delivered to planner, archive provider resume metadata and remove task sessions.
