@@ -37,7 +37,7 @@ Examples:
 Notes:
   - If the target session does not exist and --group is omitted, the script uses the current session's group.
   - Newly created target sessions are always created with planner as parent.
-  - For action=closeout_delivered, task-session archive+cleanup is performed automatically after dispatch.
+  - For action=closeout_delivered, post-closeout health gate (cleanup + guard checks) is performed automatically after dispatch.
 EOF
 }
 
@@ -218,30 +218,53 @@ fi
 # Automatic post-closeout cleanup:
 # Once closeout is delivered to planner, archive provider resume metadata and remove task sessions.
 if [[ "$action" == "closeout_delivered" ]]; then
-  cleanup_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  cleanup_script="${cleanup_script_dir}/archive-and-remove-task-sessions.sh"
-  if [[ ! -x "$cleanup_script" ]]; then
-    echo "cleanup_warn missing_script=${cleanup_script}"
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  health_gate_script="${script_dir}/closeout-health-gate.sh"
+  if [[ ! -x "$health_gate_script" ]]; then
+    echo "health_gate_warn missing_script=${health_gate_script}"
     exit 0
   fi
 
-  cleanup_cmd=(
-    "$cleanup_script"
+  artifact_root=".agent-artifacts"
+  if [[ "$artifact_path" == *"/${task_id}/"* ]]; then
+    artifact_root="${artifact_path%%/${task_id}/*}"
+    if [[ -z "$artifact_root" ]]; then
+      artifact_root="."
+    fi
+  fi
+
+  unattended_mode=0
+  if [[ -n "$workflow_policy_json" ]]; then
+    if jq -e '(.mode // "") == "unattended" or (.auto_dispatch_next_task == true)' >/dev/null 2>&1 <<<"$workflow_policy_json"; then
+      unattended_mode=1
+    fi
+  fi
+
+  health_gate_cmd=(
+    "$health_gate_script"
     --task-id "$task_id"
     --planner-session "$planner_session_ref"
     --executor-session "executor-${task_id}"
     --reviewer-session "$from_session_ref"
-    --apply
+    --artifact-root "$artifact_root"
+    --max-worker-sessions 2
   )
   if [[ -n "$profile" ]]; then
-    cleanup_cmd+=(--profile "$profile")
+    health_gate_cmd+=(--profile "$profile")
+  fi
+  if (( unattended_mode )); then
+    health_gate_cmd+=(--strict)
   fi
 
-  if cleanup_output="$("${cleanup_cmd[@]}" 2>&1)"; then
-    echo "cleanup_ok task_id=${task_id}"
-    echo "$cleanup_output"
+  if health_output="$("${health_gate_cmd[@]}" 2>&1)"; then
+    echo "health_gate_ok task_id=${task_id} unattended=${unattended_mode}"
+    echo "$health_output"
   else
-    echo "cleanup_warn task_id=${task_id} status=failed"
-    echo "$cleanup_output"
+    echo "health_gate_warn task_id=${task_id} unattended=${unattended_mode} status=failed"
+    echo "$health_output"
+    if (( unattended_mode )); then
+      echo "unattended_halt task_id=${task_id} reason=health_gate_failed"
+      exit 4
+    fi
   fi
 fi

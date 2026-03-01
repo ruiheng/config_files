@@ -34,6 +34,7 @@ Rules:
 - If `workflow_policy` is absent, use default human-gated behavior.
 - If `workflow_policy` is present, executor and reviewer must carry it forward unchanged for the same `task_id`.
 - `workflow_policy` only relaxes stop/dispatch gates described below; safety checks and must-fix handling remain unchanged.
+- In unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`), post-closeout health gate is strict fail-closed. If cleanup/guard fails, halt auto-dispatch and wait for user intervention.
 
 ## Execution Environment (Required)
 
@@ -44,6 +45,7 @@ All `agent-deck` commands in this workflow must run outside sandbox (host shell 
 This workflow uses skill-local helper script:
 
 - `scripts/dispatch-control-message.sh`
+- `scripts/closeout-health-gate.sh`
 
 Path rules:
 
