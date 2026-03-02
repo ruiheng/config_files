@@ -7,7 +7,7 @@
       "Bash(gemini mcp list)",
       "Bash(gemini mcp add:*)",
       "Bash(codex mcp add:*)",
-      "Bash(/home/ruiheng/config_files/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh:*)"
+      "Bash(~/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh:*)"
     ]
   }
 }
