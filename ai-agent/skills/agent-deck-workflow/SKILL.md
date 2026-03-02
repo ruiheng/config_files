@@ -72,7 +72,7 @@ Path rules:
 
 - Do not modify the cloned official `agent-deck` skill for project-specific workflow behavior.
 - Do not require loading the official `agent-deck` skill in normal workflow execution.
-- Reuse files under `ai-agent/skills/agent-deck/references/` as optional reference material when command details are needed.
+- Reuse files under the sibling `agent-deck` skill `references/` directory as optional reference material when command details are needed.
 - Project workflow rules and role behavior are defined only by this `agent-deck-workflow` skill and related role skills.
 
 ## Task Metadata Convention
@@ -157,11 +157,11 @@ Then perform one batch closeout step:
 1. Merge `task/<task_id>` into integration branch (follow repo/user policy).
 2. Record progress (status, merged branch, residual concerns).
 3. Optional hygiene: prune stale task branches with keep-N policy:
-   - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N>` (preview)
-   - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N> --apply` (execute)
+   - `<agent_deck_workflow_skill_dir>/scripts/prune-task-branches.sh --keep <N>` (preview)
+   - `<agent_deck_workflow_skill_dir>/scripts/prune-task-branches.sh --keep <N> --apply` (execute)
    - Policy: keep newest N `task/` branches; for older ones, delete only if they are ancestors of current base (default `HEAD`).
 4. Aggregate recent UI confirmation packages and provide a deduped checklist summary to user:
-   - `ai-agent/skills/agent-deck-workflow/scripts/summarize-ui-confirmation-packages.sh` (writes `.agent-artifacts/ui-confirmation/summary.md` by default)
+   - `<agent_deck_workflow_skill_dir>/scripts/summarize-ui-confirmation-packages.sh` (writes `.agent-artifacts/ui-confirmation/summary.md` by default)
 5. Optionally plan and dispatch next task if needed.
 
 If `workflow_policy.auto_dispatch_next_task` is `true`, planner should dispatch the next queued task automatically after merge + progress update (still respecting serial-mode constraints).

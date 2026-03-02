@@ -6,7 +6,7 @@ usage() {
 Archive task-session resume metadata, then optionally remove executor/reviewer sessions.
 
 Usage:
-  ai-agent/skills/agent-deck-workflow/scripts/archive-and-remove-task-sessions.sh [options]
+  ./scripts/archive-and-remove-task-sessions.sh [options]
 
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)

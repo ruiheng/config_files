@@ -12,7 +12,7 @@ Policy:
    (default base is HEAD, meaning already fast-forward absorbed by current branch line).
 
 Usage:
-  ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh [options]
+  ./scripts/prune-task-branches.sh [options]
 
 Options:
   --keep N          Keep newest N task branches (default: 10)
@@ -23,13 +23,13 @@ Options:
 
 Examples:
   # Preview only
-  ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep 12
+  ./scripts/prune-task-branches.sh --keep 12
 
   # Delete with default base (HEAD)
-  ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep 12 --apply
+  ./scripts/prune-task-branches.sh --keep 12 --apply
 
   # Use an explicit base branch
-  ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep 12 --base master --apply
+  ./scripts/prune-task-branches.sh --keep 12 --base master --apply
 EOF
 }
 
