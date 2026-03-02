@@ -528,6 +528,7 @@ install_home_configs() {
 
     # Tmux config (file in tmux/ directory)
     link_file "tmux/tmux.conf" "$HOME/.tmux.conf"
+    link_file "tmux/plugins/tpm" "$HOME/.tmux/plugins/tpm"
 
     # Git config (OS-specific)
     case "$OS" in
@@ -542,6 +543,7 @@ install_home_configs() {
     # Global gitignore
     migrate_legacy_symlink_source "$HOME/.gitignore" "$SCRIPT_DIR/.gitignore" "$SCRIPT_DIR/gitignore"
     link_file "gitignore" "$HOME/.gitignore"
+    link_file "git-completion.sh" "$HOME/.git-completion.sh"
 }
 
 install_xdg_configs() {

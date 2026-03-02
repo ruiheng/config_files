@@ -20,5 +20,7 @@ autoload -U compinit
 compinit
 
 # for GIT
-source ~/config_files/git-completion.sh
+if [ -r "$HOME/.git-completion.sh" ]; then
+    source "$HOME/.git-completion.sh"
+fi
 #PS1='[%n@%m %c$(__git_ps1 " (%s)")]\$ '
