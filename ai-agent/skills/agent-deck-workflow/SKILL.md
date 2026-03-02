@@ -26,7 +26,8 @@ Planner may optionally include a `workflow_policy` override (in delegate artifac
 {
   "mode": "unattended",
   "auto_accept_if_no_must_fix": true,
-  "auto_dispatch_next_task": true
+  "auto_dispatch_next_task": true,
+  "ui_manual_confirmation": "auto"
 }
 ```
 
@@ -35,6 +36,11 @@ Rules:
 - If `workflow_policy` is present, executor and reviewer must carry it forward unchanged for the same `task_id`.
 - `workflow_policy` only relaxes stop/dispatch gates described below; safety checks and must-fix handling remain unchanged.
 - In unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`), post-closeout health gate is strict fail-closed. If cleanup/guard fails, halt auto-dispatch and wait for user intervention.
+- `ui_manual_confirmation` semantics:
+  - `auto` (default): reviewer heuristically detects UI-impacting changes and, in human-gated mode, asks for manual UI confirmation before closeout.
+  - `required`: always require manual UI confirmation in human-gated mode.
+  - `skip`: skip manual UI confirmation requirement for this task.
+  - In unattended mode, reviewer may still auto-closeout per policy (no forced human block), but UI confirmation package should still be recorded in closeout.
 
 ## Execution Environment (Required)
 
@@ -47,6 +53,7 @@ This workflow uses skill-local helper script:
 - `scripts/dispatch-control-message.sh`
 - `scripts/closeout-health-gate.sh`
 - `scripts/notify-workflow-event.sh`
+- `scripts/summarize-ui-confirmation-packages.sh` (planner-side summary helper)
 
 Dispatch-notification noise control:
 - `ADWF_DISPATCH_NOTIFY=milestone` (default): notify key milestones only (`execute_delegate_task`, `rework_required`, `stop_recommended`, `closeout_delivered`)
@@ -126,6 +133,7 @@ Reviewer evaluates and chooses one of two outcomes:
 - Provide user-friendly summary (not raw JSON) and wait for user decision.
 - No automatic dispatch to executor in this step.
 - Exception: if `workflow_policy.auto_accept_if_no_must_fix` is `true`, reviewer may auto-accept and proceed to closeout without waiting for user decision.
+- In human-gated mode, if UI manual confirmation is required (`auto` detection or `required` override), reviewer should request manual UI confirmation before closeout.
 
 User decision branches after `stop_recommended`:
 
@@ -149,7 +157,9 @@ Then perform one batch closeout step:
    - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N>` (preview)
    - `ai-agent/skills/agent-deck-workflow/scripts/prune-task-branches.sh --keep <N> --apply` (execute)
    - Policy: keep newest N `task/` branches; for older ones, delete only if they are ancestors of current base (default `HEAD`).
-4. Optionally plan and dispatch next task if needed.
+4. Aggregate recent UI confirmation packages and provide a deduped checklist summary to user:
+   - `ai-agent/skills/agent-deck-workflow/scripts/summarize-ui-confirmation-packages.sh` (writes `.agent-artifacts/ui-confirmation/summary.md` by default)
+5. Optionally plan and dispatch next task if needed.
 
 If `workflow_policy.auto_dispatch_next_task` is `true`, planner should dispatch the next queued task automatically after merge + progress update (still respecting serial-mode constraints).
 

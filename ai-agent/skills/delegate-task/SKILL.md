@@ -46,7 +46,9 @@ Agent Deck mode:
   - `planner_session_id`: detected current session id -> explicit input (`planner_session_id` or compatibility alias `planner_session`) -> context -> ask
   - `executor_session`: explicit input -> context -> default `executor-<task_id>`
   - `executor_tool`: explicit input -> context -> default current AI tool
-  - `workflow_policy` (optional override): explicit input -> context -> omit when not set
+- `workflow_policy` (optional override): explicit input -> context -> omit when not set
+  - Supported UI gate override key:
+    - `ui_manual_confirmation`: `"auto"` (default) | `"required"` | `"skip"`
 - In Agent Deck mode, write to:
   - `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`
 
@@ -67,6 +69,7 @@ Generate these sections in the brief:
    - In Agent Deck delegated execution, executor task-scoped git writes (branch/switch, stage, commit) are pre-authorized.
    - In Agent Deck delegated execution, after first delivery commit the executor must invoke `review-request` unless user explicitly waives review.
 8. `Workflow Policy` (optional): include only when overriding default human-gated workflow behavior.
+   - For UI-related tasks, planner may set `ui_manual_confirmation` to override reviewer behavior.
 9. `Agent Deck Context` (only when Agent Deck mode is on): task id, planner session id, default executor session, artifact root.
 
 ## 4) Agent-Deck Dispatch (When Agent Deck Mode Is On)

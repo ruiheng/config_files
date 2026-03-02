@@ -33,6 +33,24 @@ Do not fabricate evidence or assumptions.
 - **Compatibility/Regression Risk**: Backward compatibility and unintended behavior changes
 - **Verification Coverage**: Whether provided tests/evidence support the claimed behavior
 
+## UI-Change Detection and Human Confirmation
+
+In non-unattended workflow, reviewer should intelligently detect whether the submission includes user-facing UI changes.
+
+Heuristics (non-exhaustive):
+- Frontend/template/style assets changed (`*.tsx`, `*.jsx`, `*.vue`, `*.svelte`, `*.html`, `*.css`, `*.scss`, `*.less`)
+- UI route/page/component files changed
+- Design tokens/theme/layout/visual copy changes
+- Browser-tool validation was required to verify behavior
+
+Policy and override rules:
+- Default (`workflow_policy` absent): in human-gated mode, if UI change is detected and no must-fix remains, require human UI confirmation before closeout.
+- Upstream override is allowed through `workflow_policy.ui_manual_confirmation`:
+  - `"auto"` (default): apply heuristic detection
+  - `"required"`: always require human UI confirmation
+  - `"skip"`: do not require human UI confirmation for this task
+- Unattended mode keeps existing behavior: auto-closeout is allowed when policy permits; reviewer does not block on human UI confirmation.
+
 ## What NOT to Review
 
 - Syntax validity (linters handle this)
@@ -74,6 +92,13 @@ If none, write: `- None.`
 ### Verification Questions
 For the implementer/author:
 - [Q1] Question
+
+### UI Manual Confirmation Package
+- UI impact: [none detected | detected]
+- Changed UI surfaces: [routes/pages/components]
+- Manual check steps (human-run): [short checklist]
+- Expected visible outcomes: [what user should see]
+- Notes: [optional, no screenshot/recording required]
 ```
 
 ## Agent Deck Mode (Context-First)
@@ -97,6 +122,7 @@ Default policy when missing:
 - `mode = "human_gated"`
 - `auto_accept_if_no_must_fix = false`
 - `auto_dispatch_next_task = false`
+- `ui_manual_confirmation = "auto"`
 
 In Agent Deck mode:
 - This skill depends on `agent-deck-workflow` skill script:
@@ -117,6 +143,7 @@ Execution flow in Agent Deck mode:
 5. For `stop_recommended`:
    - If `workflow_policy.auto_accept_if_no_must_fix` is `true`, auto-accept and proceed directly to `review-closeout` (no user-decision wait).
    - Otherwise, output user-facing stop recommendation and wait for explicit user decision.
+   - In human-gated mode, if UI manual confirmation is required (by heuristic or override), explicitly request human UI confirmation before closeout.
 
 If review result indicates rework needed (for example `NEEDS_REVISION`, critical issues exist, or completeness gate fails):
 
@@ -185,7 +212,10 @@ User-facing output requirement for `stop_recommended`:
   4. `### Verification Summary`:
      - commands run and pass/fail outcome
      - include test scope size when available (for example `35 tests, OK`)
-  5. `### Decision Needed`:
+  5. `### UI Confirmation Gate`:
+     - state whether human UI confirmation is required and why (`detected` / `required` / `skip` / `unattended`)
+     - include concise manual confirmation package (checklist and expected outcomes only; no screenshot requirement)
+  6. `### Decision Needed`:
      1. proceed to `review-closeout` (then notify planner)
      2. continue another implementation iteration (then notify executor)
 - If `workflow_policy.auto_accept_if_no_must_fix` is `true`, skip the decision prompt and state `Auto-accepted by workflow policy`.
@@ -238,3 +268,5 @@ Required interaction behavior in Agent Deck mode:
 11. Never invent test results, risk assumptions, or implementation details not present in the input
 12. In Agent Deck mode, reviewer must proactively dispatch `rework_required` after producing a blocking report; for `stop_recommended`, wait for user decision and branch accordingly
 13. For `stop_recommended`, provide a concrete findings snapshot (with file references when available), not a one-line generic summary
+14. For UI-related tasks, include `UI Manual Confirmation Package` in the review report and stop recommendation summary.
+15. In human-gated mode, do not assume UI confirmation was completed unless user explicitly confirms.

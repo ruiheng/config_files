@@ -31,6 +31,7 @@ Field rules:
 - `action`: machine-friendly snake_case verb phrase
 - `artifact_path`: required when a file is the source of truth; empty string only when not applicable
 - `workflow_policy`: optional override object; include only when overriding default human-gated behavior
+  - UI override key (optional): `ui_manual_confirmation` with values `"auto" | "required" | "skip"`
 
 ## Planner -> Executor (Task Start)
 
@@ -140,3 +141,4 @@ Protocol note:
 - If `workflow_policy` is present, carry it forward unchanged for the same `task_id`.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
 - Self-handoff guard: if reviewer detects `planner_session_id` equals current session id, do not dispatch `closeout_delivered`; stop and wait for user instruction.
+- For UI-related tasks, reviewer should keep UI manual confirmation package in artifacts and closeout content for future re-check, regardless of whether current round already got human confirmation.

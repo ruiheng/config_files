@@ -10,6 +10,7 @@ Extract a closeout summary from a full review report.
 ## Purpose
 
 Use this skill when a full review report already exists and only the remaining follow-up items are needed for handoff/closure.
+For UI-related tasks, carry forward a human-run UI confirmation package into closeout so it can be re-checked later.
 
 ## Input
 
@@ -58,6 +59,7 @@ If both values are resolved:
    - required after closeout acceptance (user confirmation or policy): merge task branch, update progress
    - optional recommendation: plan next task
    - if `workflow_policy.auto_dispatch_next_task` is `true`: auto-dispatch next queued task after merge + progress update (respect serial constraints)
+   - include `UI Manual Confirmation Package` section in closeout whenever UI-related package content exists in the review report (even if already human-confirmed)
 5. dispatch to planner via helper script:
 
 ```bash
@@ -103,6 +105,7 @@ Keep content with **inclusion-first** policy (prefer keeping over dropping):
 - `Design Concerns`
 - `Minor Suggestions`
 - `Verification Questions`
+- `UI Manual Confirmation Package`
 
 2. **Request/Security checks**:
 - Remove `PASS` lines.
@@ -121,18 +124,19 @@ Keep content with **inclusion-first** policy (prefer keeping over dropping):
 
 Render output with **conditional sections**:
 
-1. Build 5 section buckets in this fixed order:
+1. Build section buckets in this fixed order:
 - `Critical Issues`
 - `Design Concerns`
 - `Minor Suggestions`
 - `Verification Questions`
+- `UI Manual Confirmation Package`
 - `Remaining Check Alerts (FAIL/UNKNOWN Only)`
 
 2. Add items to each bucket using the extraction rules above.
 3. Remove empty items / placeholders (`None.` / PASS-only lines).
 4. **Only render a section when its bucket has at least 1 item.**
 5. **Never output a heading with no bullet items under it.**
-6. If all 5 buckets are empty:
+6. If all buckets are empty:
    - when Agent Deck mode is OFF, output exactly:
 
 ```markdown
@@ -164,9 +168,17 @@ Then append only non-empty sections, for example:
 
 The above is just an example of sparse rendering; do not force missing sections to appear.
 
-In Agent Deck mode, append this final section after all extracted buckets:
+In Agent Deck mode, append planner follow-up recommendation after all extracted buckets.
+If UI package content exists, append `UI Manual Confirmation Package` before planner follow-up.
 
 ```markdown
+#### UI Manual Confirmation Package (Only when UI package content exists)
+- UI impact: [detected | none detected]
+- Changed UI surfaces: [routes/pages/components]
+- Manual check steps (human-run): [short checklist]
+- Expected visible outcomes: [what user should see]
+- Notes: [optional]
+
 #### Planner Follow-up Recommendation (After Closeout Acceptance)
 - Required: merge `task/<task_id>` into the target integration branch (follow repo/user merge policy).
 - Required: update planner progress records with execution status and residual concerns.
@@ -184,3 +196,4 @@ In Agent Deck mode, append this final section after all extracted buckets:
 6. In Agent Deck mode, include planner follow-up recommendation as actionable guidance, but do not claim planner actions were executed.
 7. In Agent Deck mode, if `planner_session_id` equals detected `current_session_id`, do not dispatch `closeout_delivered`; stop and wait for user instruction.
 8. If `workflow_policy` is present, preserve it unchanged in outbound `closeout_delivered` payload.
+9. For UI-related tasks, include `UI Manual Confirmation Package` in closeout output even when the current round is already human-confirmed.
