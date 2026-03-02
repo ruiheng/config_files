@@ -7,7 +7,9 @@ description: Human-led planner/executor/reviewer workflow protocol on top of age
 
 Use this skill for the three-role workflow protocol (planner, executor, reviewer).
 
-For generic `agent-deck` CLI/TUI operations, troubleshooting, and full command reference, use the official `agent-deck` skill.
+This workflow does not require loading the official `agent-deck` skill by default.
+Use this skill (`agent-deck-workflow`) as the primary source of workflow behavior and control-message protocol.
+The cloned official `agent-deck` skill is kept as a local reference library (`references/`) only.
 
 ## Scope
 
@@ -66,11 +68,12 @@ Path rules:
 2. Never assume project-root `scripts/...` path.
 3. If skill directory cannot be resolved, stop and ask user to attach/install this skill.
 
-## Relationship with Official Skill
+## Relationship with Official Skill Clone
 
-- Official `agent-deck` skill: generic command manual and operational reference.
-- This `agent-deck-workflow` skill: role protocol, branching rules, and message contract for this project.
-- If both skills are present, prefer this skill for workflow decisions and official skill for generic command lookup.
+- Do not modify the cloned official `agent-deck` skill for project-specific workflow behavior.
+- Do not require loading the official `agent-deck` skill in normal workflow execution.
+- Reuse files under `ai-agent/skills/agent-deck/references/` as optional reference material when command details are needed.
+- Project workflow rules and role behavior are defined only by this `agent-deck-workflow` skill and related role skills.
 
 ## Task Metadata Convention
 

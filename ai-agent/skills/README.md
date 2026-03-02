@@ -81,25 +81,23 @@ Current recommended operating mode:
 
 Use skills:
 
-- Official generic skill (vendored snapshot): `agent-deck` (`ai-agent/skills/agent-deck/SKILL.md`)
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
+- Official docs bundle (reference-only, not a loaded skill): `ai-agent/skills/agent-deck/references/`
 
 Project workflow references:
 
 - Message templates: `ai-agent/skills/agent-deck-workflow/references/message-templates.md`
 
-Official skill sync policy:
+Official reference sync policy:
 
 - `install.sh` should not fetch network content at install time.
-- Official `agent-deck` skill is stored as a pinned local snapshot under `ai-agent/skills/agent-deck/`.
+- Official `agent-deck` references are stored as a pinned local snapshot under `ai-agent/skills/agent-deck/references/`.
 - Update explicitly when needed:
   - `ai-agent/scripts/sync-official-agent-deck-skill.sh <ref>`
 - After sync, review diff and commit the snapshot update.
+- Keep `ai-agent/skills/agent-deck/` as reference-only (no `SKILL.md`) to avoid prompt conflicts and context overhead.
 
 Migration note (from old local `agent-deck` workflow skill):
 
 - Old local workflow skill name `agent-deck` has been renamed to `agent-deck-workflow`.
-- If old symlinks still exist in tool skill directories, remove them to avoid name collision with official skill:
-  - `~/.codex/skills/agent-deck`
-  - `~/.claude/skills/agent-deck`
-  - `~/.gemini/skills/agent-deck`
+- Keep only `agent-deck-workflow` as the runnable workflow skill.
