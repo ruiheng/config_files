@@ -45,8 +45,32 @@ Use this priority chain for each field:
 Session identity nuance:
 - `planner_session_id` must come from explicit/context workflow metadata.
 - `current_session_id` is used for sender identity verification and role safety checks.
+- Before identity comparisons, resolve all session refs/titles to UUIDs:
+  - explicit refs: `agent-deck session show <ref> --json | jq -r '.id'`
+  - current session: `agent-deck session current --json | jq -r '.id'`
 - Exception (`delegate-task` only): planner sender legitimately equals current session, so `planner_session_id` may start from detected `current_session_id`.
 - In all other skills, `current_session_id` is not a replacement source for `planner_session_id`.
+
+### Role vs Session Identity
+
+- A session may hold multiple roles for the same task.
+- `*_session_id` fields identify which session currently holds each role mapping.
+- When `from_session_id == to_session_id`, this represents inter-role communication within one session.
+- Dispatch is skipped only when the target session is the current session (local continuation); otherwise dispatch proceeds.
+
+### Session-Role Mapping Example
+
+```mermaid
+graph LR
+  S1["Session UUID-1<br/>Planner + Reviewer"]
+  S2["Session UUID-2<br/>Executor"]
+
+  S1 -->|execute_delegate_task| S2
+  S2 -->|review_requested| S1
+  S1 -->|rework_required| S2
+  S2 -->|review_requested| S1
+  S1 -->|closeout_delivered<br/>from=to=UUID-1| S1
+```
 
 ### Dispatch Helper Usage
 
@@ -216,6 +240,7 @@ If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch nex
 - Planner: `delegate-task`, `handoff`
 - Executor: `review-request`
 - Reviewer: `review-code`, `review-closeout`
+- Roles are task-scoped; one AI/session may assume multiple roles when workflow context explicitly assigns them.
 
 ## Do / Do Not
 

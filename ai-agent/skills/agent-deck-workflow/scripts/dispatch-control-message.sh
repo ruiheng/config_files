@@ -262,6 +262,16 @@ fi
 to_session_id="$(resolve_session_id "$to_session_ref")"
 [[ -n "$to_session_id" ]] || die "failed to resolve to session id from ref: $to_session_ref"
 
+if [[ "$from_session_id" == "$to_session_id" ]]; then
+  if [[ -n "$current_session_id" && "$current_session_id" == "$from_session_id" ]]; then
+    echo "Receiver is this session; skipping dispatch. Continue locally."
+    exit 0
+  fi
+  if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
+    echo "DEBUG: inter-role dispatch within session ${from_session_id} (current=${current_session_id})" >&2
+  fi
+fi
+
 if [[ -z "$message_file" ]]; then
   safe_from="${from_session_id//[^a-zA-Z0-9_.-]/_}"
   safe_to="${to_session_id//[^a-zA-Z0-9_.-]/_}"
