@@ -137,7 +137,7 @@ Usage note:
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-  "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional."
+  "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run <agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional."
 }
 ```
 

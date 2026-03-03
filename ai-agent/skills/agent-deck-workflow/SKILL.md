@@ -72,15 +72,21 @@ graph LR
   S1 -->|closeout_delivered<br/>from=to=UUID-1| S1
 ```
 
-### Dispatch Helper Usage
+### Dispatch Helper Usage (Workflow Helpers)
 
-Use only this helper from this skill directory:
+Use workflow helpers only from this skill directory:
 - `scripts/dispatch-control-message.sh`
+- `scripts/planner-closeout-batch.sh`
+- `scripts/closeout-health-gate.sh`
+- `scripts/archive-and-remove-task-sessions.sh`
+- `scripts/notify-workflow-event.sh`
+- `scripts/summarize-ui-confirmation-packages.sh`
 
 Path rules:
-1. resolve script path relative to this skill directory
-2. do not assume project-root `scripts/...`
-3. stop and ask user to attach/install this skill if unresolved
+1. resolve helper path relative to this skill directory
+2. use `<agent_deck_workflow_skill_dir>/scripts/<helper>.sh` form in commands and user-facing recommendations
+3. do not run bare `scripts/...` or project-root `scripts/...` for workflow helpers
+4. stop and ask user to attach/install this skill if unresolved
 
 Canonical CLI flags are `--*-session-id`:
 - `--planner-session-id`
@@ -222,7 +228,7 @@ Reviewer chooses one branch:
 ### 4) Planner Closeout Batch (After Acceptance)
 
 After closeout acceptance (explicit user or unattended policy):
-1. run `scripts/planner-closeout-batch.sh` for required closeout actions
+1. run `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh` for required closeout actions
 2. required in script: merge `task/<task_id>` into integration branch
 3. required in script: update progress record
 4. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
@@ -266,7 +272,7 @@ Do:
 - keep long context file-based (`delegate-task`, `review-request`, `review-report`, `closeout`)
 - keep cross-session messages short and pointer-based
 - keep human confirmation gates in human-gated mode
-- run planner required closeout actions via `scripts/planner-closeout-batch.sh`
+- run planner required closeout actions via `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh`
 
 Do not:
 - auto-merge before acceptance
