@@ -95,6 +95,21 @@ Tool-routing rule:
   --cmd "<executor_tool>"
 ```
 
+Typical `--cmd` values (copy-ready):
+
+```bash
+--cmd "codex"
+--cmd "claude"
+--cmd "gemini"
+--cmd "codex --model gpt-5-codex --approval-mode on-request"
+--cmd "claude --model sonnet --permission-mode acceptEdits"
+--cmd "gemini --model gemini-2.5-pro --yolo"
+```
+
+Rules:
+- Always quote `--cmd` when it contains spaces.
+- `--cmd` only applies when creating a missing target session; existing sessions keep their original tool command.
+
 Control payload requirements:
 - Semantic rules: `agent-deck-workflow/references/message-templates.md`
 - Full JSON appendix: `agent-deck-workflow/references/internal-protocol/message-templates.md`

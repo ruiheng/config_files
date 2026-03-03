@@ -112,6 +112,21 @@ Dispatch to reviewer with canonical flags:
   --cmd "<reviewer_tool>"
 ```
 
+Typical `--cmd` values (copy-ready):
+
+```bash
+--cmd "codex"
+--cmd "claude"
+--cmd "gemini"
+--cmd "codex --model gpt-5-codex --approval-mode on-request"
+--cmd "claude --model sonnet --permission-mode acceptEdits"
+--cmd "gemini --model gemini-2.5-pro --yolo"
+```
+
+Rules:
+- Always quote `--cmd` when it contains spaces.
+- `--cmd` only applies when creating a missing target session; existing sessions keep their original tool command.
+
 Identity rules:
 - `review_requested` sender must be active executor session id.
 - If detected current session id differs from resolved `executor_session_id`, stop and ask for clarification.
