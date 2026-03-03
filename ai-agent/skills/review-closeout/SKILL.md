@@ -47,13 +47,15 @@ In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-report path `.agent-artifacts/<task_id>/...` -> ask if missing
 - `planner_session_id`: explicit input -> parse from review context/metadata -> ask if missing
 - `current_session_id`: host-shell detection from `agent-deck session current --json` (`id`) when available
+- `reviewer_session_id`: explicit input -> `current_session_id` -> parse from review context/metadata -> ask if missing
 - `workflow_policy` (optional): explicit input -> review/report context -> default human-gated policy
 
-If both values are resolved:
+If required values are resolved:
 1. write the closeout markdown to `.agent-artifacts/<task_id>/closeout-<task_id>.md`
 2. apply self-handoff guard:
    - if `current_session_id` is known and equals `planner_session_id`, do not dispatch `closeout_delivered`
    - output a user-facing note that planner is the current session and stop after closeout output (wait for user instruction)
+   - if `current_session_id` is known and differs from resolved `reviewer_session_id`, stop and ask for clarification before dispatch (do not send with guessed sender id)
 3. when self-handoff guard does not trigger, construct one JSON control payload for reviewer -> planner handoff (internal protocol, not user-facing output)
 4. include explicit planner follow-up recommendation in closeout output:
    - required after closeout acceptance (user confirmation or policy): merge task branch, update progress

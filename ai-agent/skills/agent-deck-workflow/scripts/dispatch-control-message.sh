@@ -35,6 +35,9 @@ Examples:
     --cmd codex
 
 Notes:
+  - Sender identity is always derived from the current agent-deck session.
+  - --from-session (or --from-session-id) is optional and used only as an assertion;
+    if provided, it must match the current session id.
   - If the target session does not exist and --group is omitted, the script uses the current session's group.
   - Newly created target sessions are always created with planner as parent.
   - For action=closeout_delivered, post-closeout health gate (cleanup + guard checks) is performed automatically after dispatch.
@@ -103,10 +106,6 @@ done
 [[ -n "$to_session_ref" ]] || die "--to-session (or --to-session-id) is required"
 [[ -n "$action" ]] || die "--action is required"
 [[ -n "$artifact_path" ]] || die "--artifact-path is required"
-
-if [[ -z "$from_session_ref" ]]; then
-  from_session_ref="$planner_session_ref"
-fi
 
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck not found in PATH"
 command -v jq >/dev/null 2>&1 || die "jq is required"
@@ -206,9 +205,33 @@ resolve_current_group() {
   printf '%s' "$current" | jq -r '.group // empty'
 }
 
+resolve_current_session_json() {
+  ad session current --json 2>/dev/null || true
+}
+
 created=0
 planner_session_id="$(resolve_session_id "$planner_session_ref")"
 [[ -n "$planner_session_id" ]] || die "failed to resolve planner session id from ref: $planner_session_ref"
+
+current_session_json="$(resolve_current_session_json)"
+[[ -n "$current_session_json" ]] || die "failed to resolve current agent-deck session; run inside the sender session context"
+
+current_session_id="$(printf '%s' "$current_session_json" | jq -r '.id // empty')"
+current_session_title="$(printf '%s' "$current_session_json" | jq -r '.title // empty')"
+[[ -n "$current_session_id" ]] || die "current agent-deck session id is empty"
+
+if [[ -n "$from_session_ref" ]]; then
+  asserted_from_session_id="$(resolve_session_id "$from_session_ref")"
+  [[ -n "$asserted_from_session_id" ]] || die "failed to resolve from session id from ref: $from_session_ref"
+  if [[ "$asserted_from_session_id" != "$current_session_id" ]]; then
+    die "--from-session assertion mismatch: expected current session id ${current_session_id}, got ${asserted_from_session_id}"
+  fi
+fi
+
+from_session_id="$current_session_id"
+if [[ -z "$from_session_ref" ]]; then
+  from_session_ref="${current_session_title:-$current_session_id}"
+fi
 
 if (( ensure_session )); then
   if ! ad session show "$to_session_ref" --json >/dev/null 2>&1; then
@@ -223,10 +246,7 @@ if (( ensure_session )); then
   fi
 fi
 
-from_session_id="$(resolve_session_id "$from_session_ref")"
 to_session_id="$(resolve_session_id "$to_session_ref")"
-
-[[ -n "$from_session_id" ]] || die "failed to resolve from session id from ref: $from_session_ref"
 [[ -n "$to_session_id" ]] || die "failed to resolve to session id from ref: $to_session_ref"
 
 if [[ -z "$message_file" ]]; then

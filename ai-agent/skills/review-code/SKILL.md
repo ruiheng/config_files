@@ -115,6 +115,9 @@ Do not use current-session detection to derive `planner_session_id`.
 In Agent Deck mode, resolve:
 - `task_id`: explicit input -> parse from review-request/report path `.agent-artifacts/<task_id>/...` -> parse from `Agent Deck Context` section -> ask if missing
 - `planner_session_id`: explicit input (`planner_session_id`, or `planner_session` as compatibility alias) -> parse from `Agent Deck Context` section -> ask if missing
+- `current_session_id`: best-effort from `agent-deck session current --json` (`id`) when available
+- `reviewer_session_id`: explicit input -> `current_session_id` -> parse from inbound review-request control payload (`to_session_id`) -> ask if missing
+- `executor_session_id`: explicit input -> parse from inbound review-request control payload (`from_session_id`) -> default `executor-<task_id>`
 - `round`: explicit input -> parse from file suffix `-r<round>.md` -> ask if missing
 - `workflow_policy` (optional): explicit input -> review-request context -> delegated-task context -> default human-gated policy
 
@@ -252,6 +255,10 @@ Required interaction behavior in Agent Deck mode:
     - if user confirms closeout: run `review-closeout`
     - if user asks to continue iteration: dispatch `user_requested_iteration` to executor and then wait
   - for `stop_recommended` with `auto_accept_if_no_must_fix = true`, reviewer runs `review-closeout` immediately.
+
+Sender identity rule (required):
+- For reviewer-originated dispatch actions (`rework_required`, `user_requested_iteration`, `closeout_delivered` via `review-closeout`), `from_session_id` must be `reviewer_session_id`.
+- If `current_session_id` is known and differs from `reviewer_session_id`, stop and ask for clarification before dispatch.
 
 ## Guidelines
 

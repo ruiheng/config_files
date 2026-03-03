@@ -26,12 +26,19 @@ Field rules:
 
 - `task_id`: stable id (`YYYYMMDD-HHMM-<slug>`)
 - `planner_session_id`: required, must be preserved across all rounds/messages
+- `from_session_id`: required, must be the real sender session id for this message
 - `required_skills`: required list of skills receiver must load before acting; include `agent-deck-workflow` for workflow control messages
 - `round`: integer for loop rounds; use `"final"` for closeout
 - `action`: machine-friendly snake_case verb phrase
 - `artifact_path`: required when a file is the source of truth; empty string only when not applicable
 - `workflow_policy`: optional override object; include only when overriding default human-gated behavior
   - UI override key (optional): `ui_manual_confirmation` with values `"auto" | "required" | "skip"`
+
+Sender invariants:
+- `execute_delegate_task`: sender is planner (`from_session_id = planner_session_id`).
+- `review_requested`: sender is executor.
+- `rework_required` / `user_requested_iteration` / `closeout_delivered`: sender is reviewer.
+- Never default sender to planner for non-planner actions.
 
 ## Planner -> Executor (Task Start)
 

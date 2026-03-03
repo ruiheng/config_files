@@ -111,6 +111,15 @@ In Agent Deck mode, resolve context by priority:
   1. explicit input (`planner_session_id`, or `planner_session` as compatibility alias)
   2. `Agent Deck Context` from delegated task/session context
   3. ask one short clarification question if still missing
+- `executor_session_id`:
+  1. explicit input
+  2. current Agent Deck session id (`agent-deck session current --json`)
+  3. parse from delegated/review context
+  4. ask one short clarification question if still missing
+- `reviewer_session_id`:
+  1. explicit input
+  2. delegated-task `Agent Deck Context` (`reviewer_session_id` when present)
+  3. default `reviewer-<task_id>`
 - `workflow_policy` (optional):
   1. explicit input
   2. delegated-task context/artifact
@@ -166,6 +175,10 @@ Reviewer tool consistency rule (required):
 - Ask user to choose one:
   1. keep existing reviewer session/tool
   2. use a new reviewer session with the requested tool
+
+Sender identity rule (required):
+- For `review_requested`, `from_session_id` must be the active executor session id.
+- If current Agent Deck session id is known and differs from resolved `executor_session_id`, stop and ask for clarification before dispatch.
 
 For concise logs, report helper output summary only.
 - Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.
