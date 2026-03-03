@@ -6,14 +6,11 @@ usage() {
 Usage:
   dispatch-control-message.sh
     --task-id <id>
-    --planner-session <id|title>
-    --to-session <id|title>
+    --planner-session-id <id|title>
+    --to-session-id <id|title>
     --action <name>
     --artifact-path <path>
-    [--from-session <id|title>]
-    [--planner-session-id <id|title>]
     [--from-session-id <id|title>]
-    [--to-session-id <id|title>]
     [--round <n|final>]
     [--note <text>]
     [--workflow-policy-json <json_object>]
@@ -24,6 +21,7 @@ Usage:
     [--message-file <path>]
     [--no-ensure-session]
     [--no-start-session]
+    [--dry-run]
 
 Examples:
   dispatch-control-message.sh \
@@ -36,24 +34,19 @@ Examples:
 
 Notes:
   - Sender identity is always derived from the current agent-deck session.
-  - --from-session (or --from-session-id) is optional and used only as an assertion;
+  - --from-session-id is optional and used only as an assertion;
     if provided, it must match the current session id.
   - If the target session does not exist and --group is omitted, the script uses the current session's group.
   - Newly created target sessions are always created with planner as parent.
   - For action=closeout_delivered, post-closeout health gate (cleanup + guard checks) is performed automatically after dispatch.
+  - --artifact-path must be under .agent-artifacts/ and cannot contain path traversal.
+  - --dry-run validates inputs and writes payload file but does not create/start/send sessions.
   - Dispatch notifications are filtered by ADWF_DISPATCH_NOTIFY:
       milestone (default): notify only key workflow milestones.
       all: notify all dispatch actions.
       none: suppress dispatch notifications.
+  - Set ADWF_DEBUG=1 for diagnostic logs.
 EOF
-}
-
-json_escape() {
-  local s="$1"
-  s="${s//\\/\\\\}"
-  s="${s//\"/\\\"}"
-  s="${s//$'\n'/\\n}"
-  printf '%s' "$s"
 }
 
 die() {
@@ -61,11 +54,26 @@ die() {
   exit 2
 }
 
+debug() {
+  if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
+    echo "DEBUG: $*" >&2
+  fi
+}
+
+validate_artifact_path() {
+  local p="$1"
+  [[ -n "$p" ]] || die "--artifact-path is required"
+  [[ "$p" != /* ]] || die "--artifact-path must be a relative path under .agent-artifacts/"
+  [[ "$p" == .agent-artifacts/* ]] || die "--artifact-path must start with .agent-artifacts/"
+  [[ "$p" != *"../"* && "$p" != "../"* && "$p" != *"/.." ]] || die "--artifact-path must not contain path traversal"
+}
+
 profile=""
 path="."
 round="1"
 ensure_session=1
 start_session=1
+dry_run=0
 task_id=""
 planner_session_ref=""
 from_session_ref=""
@@ -81,9 +89,9 @@ message_file=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="$2"; shift 2 ;;
-    --planner-session|--planner-session-id) planner_session_ref="$2"; shift 2 ;;
-    --from-session|--from-session-id) from_session_ref="$2"; shift 2 ;;
-    --to-session|--to-session-id) to_session_ref="$2"; shift 2 ;;
+    --planner-session-id) planner_session_ref="$2"; shift 2 ;;
+    --from-session-id) from_session_ref="$2"; shift 2 ;;
+    --to-session-id) to_session_ref="$2"; shift 2 ;;
     --action) action="$2"; shift 2 ;;
     --artifact-path) artifact_path="$2"; shift 2 ;;
     --round) round="$2"; shift 2 ;;
@@ -96,16 +104,17 @@ while [[ $# -gt 0 ]]; do
     --message-file) message_file="$2"; shift 2 ;;
     --no-ensure-session) ensure_session=0; shift 1 ;;
     --no-start-session) start_session=0; shift 1 ;;
+    --dry-run) dry_run=1; shift 1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
   esac
 done
 
 [[ -n "$task_id" ]] || die "--task-id is required"
-[[ -n "$planner_session_ref" ]] || die "--planner-session (or --planner-session-id) is required"
-[[ -n "$to_session_ref" ]] || die "--to-session (or --to-session-id) is required"
+[[ -n "$planner_session_ref" ]] || die "--planner-session-id is required"
+[[ -n "$to_session_ref" ]] || die "--to-session-id is required"
 [[ -n "$action" ]] || die "--action is required"
-[[ -n "$artifact_path" ]] || die "--artifact-path is required"
+validate_artifact_path "$artifact_path"
 
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck not found in PATH"
 command -v jq >/dev/null 2>&1 || die "jq is required"
@@ -113,6 +122,11 @@ command -v jq >/dev/null 2>&1 || die "jq is required"
 if [[ -n "$workflow_policy_json" ]]; then
   printf '%s' "$workflow_policy_json" | jq -e 'type == "object"' >/dev/null 2>&1 \
     || die "--workflow-policy-json must be a valid JSON object"
+fi
+
+if (( dry_run )); then
+  ensure_session=0
+  start_session=0
 fi
 
 ad() {
@@ -127,12 +141,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 notify_script="${script_dir}/notify-workflow-event.sh"
 
 artifact_root=".agent-artifacts"
-if [[ "$artifact_path" == *"/${task_id}/"* ]]; then
-  artifact_root="${artifact_path%%/${task_id}/*}"
-  if [[ -z "$artifact_root" ]]; then
-    artifact_root="."
-  fi
-fi
 
 notify_event() {
   local event="$1"
@@ -187,6 +195,7 @@ should_notify_dispatch() {
 resolve_session_id() {
   local ref="$1"
   local shown
+  debug "resolve_session_id ref=${ref}"
   shown="$(ad session show "$ref" --json 2>/dev/null || true)"
   if [[ -z "$shown" ]]; then
     echo ""
@@ -197,6 +206,7 @@ resolve_session_id() {
 
 resolve_current_group() {
   local current
+  debug "resolve_current_group"
   current="$(ad session current --json 2>/dev/null || true)"
   if [[ -z "$current" ]]; then
     echo ""
@@ -206,6 +216,7 @@ resolve_current_group() {
 }
 
 resolve_current_session_json() {
+  debug "resolve_current_session_json"
   ad session current --json 2>/dev/null || true
 }
 
@@ -214,7 +225,7 @@ planner_session_id="$(resolve_session_id "$planner_session_ref")"
 [[ -n "$planner_session_id" ]] || die "failed to resolve planner session id from ref: $planner_session_ref"
 
 current_session_json="$(resolve_current_session_json)"
-[[ -n "$current_session_json" ]] || die "failed to resolve current agent-deck session; run inside the sender session context"
+[[ -n "$current_session_json" ]] || die "failed to resolve current agent-deck session; check tmux/session context with: agent-deck session current --json"
 
 current_session_id="$(printf '%s' "$current_session_json" | jq -r '.id // empty')"
 current_session_title="$(printf '%s' "$current_session_json" | jq -r '.title // empty')"
@@ -224,7 +235,7 @@ if [[ -n "$from_session_ref" ]]; then
   asserted_from_session_id="$(resolve_session_id "$from_session_ref")"
   [[ -n "$asserted_from_session_id" ]] || die "failed to resolve from session id from ref: $from_session_ref"
   if [[ "$asserted_from_session_id" != "$current_session_id" ]]; then
-    die "--from-session assertion mismatch: expected current session id ${current_session_id}, got ${asserted_from_session_id}"
+    die "--from-session-id assertion mismatch: expected current session id ${current_session_id}, got ${asserted_from_session_id}"
   fi
 fi
 
@@ -234,6 +245,7 @@ if [[ -z "$from_session_ref" ]]; then
 fi
 
 if (( ensure_session )); then
+  debug "ensure_session enabled to_ref=${to_session_ref}"
   if ! ad session show "$to_session_ref" --json >/dev/null 2>&1; then
     if [[ -z "$group" ]]; then
       group="$(resolve_current_group)"
@@ -241,6 +253,7 @@ if (( ensure_session )); then
     [[ -n "$group" ]] || die "session missing and failed to resolve group from current session; pass --group explicitly"
     [[ -n "$cmd" ]] || die "session missing and --cmd not provided for creation"
     # Force a stable tree shape: all task sessions are children of planner.
+    debug "creating session title=${to_session_ref} group=${group} parent=${planner_session_id} cmd=${cmd}"
     ad add "$path" --title "$to_session_ref" --group "$group" --cmd "$cmd" --parent "$planner_session_id" >/dev/null
     created=1
   fi
@@ -256,19 +269,27 @@ if [[ -z "$message_file" ]]; then
 fi
 
 mkdir -p "$(dirname "$message_file")"
-cat >"$message_file" <<EOF
-{
-  "task_id": "$(json_escape "$task_id")",
-  "planner_session_id": "$(json_escape "$planner_session_id")",
-  "required_skills": ["agent-deck-workflow"],
-  "from_session_id": "$(json_escape "$from_session_id")",
-  "to_session_id": "$(json_escape "$to_session_id")",
-  "round": "$(json_escape "$round")",
-  "action": "$(json_escape "$action")",
-  "artifact_path": "$(json_escape "$artifact_path")",
-  "note": "$(json_escape "$note")"
-}
-EOF
+# Build payload with jq --arg for robust JSON escaping (tabs, CR, control chars, etc.).
+jq -n \
+  --arg task_id "$task_id" \
+  --arg planner_session_id "$planner_session_id" \
+  --arg from_session_id "$from_session_id" \
+  --arg to_session_id "$to_session_id" \
+  --arg round "$round" \
+  --arg action "$action" \
+  --arg artifact_path "$artifact_path" \
+  --arg note "$note" \
+  '{
+    task_id: $task_id,
+    planner_session_id: $planner_session_id,
+    required_skills: ["agent-deck-workflow"],
+    from_session_id: $from_session_id,
+    to_session_id: $to_session_id,
+    round: $round,
+    action: $action,
+    artifact_path: $artifact_path,
+    note: $note
+  }' >"$message_file"
 
 if [[ -n "$workflow_policy_json" ]]; then
   tmp_payload="$(mktemp)"
@@ -278,12 +299,25 @@ fi
 
 started=0
 if (( start_session )); then
+  debug "starting to_session_id=${to_session_id}"
   if ad session start "$to_session_id" >/dev/null 2>&1; then
     started=1
   fi
 fi
 
-ad session send "$to_session_id" "$(cat "$message_file")" >/dev/null
+if (( dry_run )); then
+  echo "dry_run_ok to=${to_session_id} created=${created} started=${started} payload=${message_file}"
+  exit 0
+fi
+
+payload_json="$(cat "$message_file")"
+if ! ad session send "$to_session_id" "$payload_json" >/dev/null 2>&1; then
+  echo "dispatch_error action=${action} to=${to_session_id}" >&2
+  echo "diagnostic_hint check_sender='agent-deck session current --json'" >&2
+  echo "diagnostic_hint check_target='agent-deck session show ${to_session_ref} --json'" >&2
+  echo "diagnostic_hint check_artifact='${artifact_path}'" >&2
+  exit 5
+fi
 show_json="$(ad session show "$to_session_id" --json)"
 
 id=""
@@ -361,9 +395,9 @@ if [[ "$action" == "closeout_delivered" ]]; then
   health_gate_cmd=(
     "$health_gate_script"
     --task-id "$task_id"
-    --planner-session "$planner_session_ref"
-    --executor-session "executor-${task_id}"
-    --reviewer-session "$from_session_ref"
+    --planner-session-id "$planner_session_id"
+    --executor-session-id "executor-${task_id}"
+    --reviewer-session-id "$from_session_id"
     --artifact-root "$artifact_root"
     --max-worker-sessions 2
   )

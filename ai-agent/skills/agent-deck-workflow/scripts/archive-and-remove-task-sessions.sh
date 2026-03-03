@@ -10,9 +10,9 @@ Usage:
 
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)
-  --planner-session <id|title>   Planner session ref (default: planner)
-  --executor-session <id|title>  Executor session ref (default: executor-<task_id>)
-  --reviewer-session <id|title>  Reviewer session ref (default: reviewer-<task_id>)
+  --planner-session-id <id|title>   Planner session ref (default: planner)
+  --executor-session-id <id|title>  Executor session ref (default: executor-<task_id>)
+  --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
   --apply                        Remove executor/reviewer sessions after archiving
@@ -31,20 +31,28 @@ Outputs:
 
 Notes:
   - Default mode is archive-only (no deletion).
-  - Provider resume IDs are read from agent-deck state DB (`instances.tool_data`).
-  - If expected provider ID is missing in DB, fallback reads `~/.agent-deck/hooks/<instance_id>.json`.
-  - For Codex sessions, if DB/hook still has no ID, fallback probes live process open files from the session tmux pane process tree.
+  - Provider session-id detection is automatic; script probes multiple sources internally.
+  - Set ADWF_DEBUG=1 to print probe-source diagnostics.
   - Archive always includes raw `session show --json` payload for future recovery.
   - Use catalog files for quick lookup without navigating per-task directories.
   - Deletion guard is tool-aware in --apply mode:
     - codex/claude/gemini/opencode sessions require matching provider session id.
     - other tools (for example shell) are not blocked by provider-id guard.
+  - If deletion is blocked, script prints:
+      manual_close_required ... reason=missing_provider_session_id
+      manual_close_suggestion command='agent-deck remove <session_id>'
 EOF
 }
 
 die() {
   echo "ERROR: $*" >&2
   exit 2
+}
+
+debug() {
+  if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
+    echo "DEBUG: $*" >&2
+  fi
 }
 
 task_id=""
@@ -58,9 +66,9 @@ apply=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="${2:-}"; shift 2 ;;
-    --planner-session) planner_session_ref="${2:-}"; shift 2 ;;
-    --executor-session) executor_session_ref="${2:-}"; shift 2 ;;
-    --reviewer-session) reviewer_session_ref="${2:-}"; shift 2 ;;
+    --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
+    --executor-session-id) executor_session_ref="${2:-}"; shift 2 ;;
+    --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --apply) apply=1; shift 1 ;;
@@ -123,6 +131,7 @@ extract_provider_resume_ids() {
 
   tool_data="$(sqlite3 -batch -noheader "$db_path" "SELECT tool_data FROM instances WHERE id = '$session_id' LIMIT 1;" 2>/dev/null || true)"
   if [[ -z "$tool_data" ]]; then
+    debug "provider_id_source=db session_id=${session_id} result=empty"
     echo "{}"
     return 0
   fi
@@ -146,13 +155,16 @@ extract_provider_resume_ids() {
   ' <<<"$tool_data" 2>/dev/null || true)"
 
   if [[ -z "$extracted" ]]; then
+    debug "provider_id_source=db session_id=${session_id} result=invalid_json"
     echo "{}"
     return 0
   fi
 
   if jq -e 'type == "object"' >/dev/null 2>&1 <<<"$extracted"; then
+    debug "provider_id_source=db session_id=${session_id} result=ok"
     jq -c '.' <<<"$extracted"
   else
+    debug "provider_id_source=db session_id=${session_id} result=non_object"
     echo "{}"
   fi
 }
@@ -179,12 +191,14 @@ extract_provider_resume_ids_from_hook_file() {
 
   hook_file="$HOME/.agent-deck/hooks/${session_id}.json"
   if [[ ! -f "$hook_file" ]]; then
+    debug "provider_id_source=hook session_id=${session_id} result=missing_file"
     echo "{}"
     return 0
   fi
 
   hook_session_id="$(jq -r '.session_id // empty' "$hook_file" 2>/dev/null || true)"
   if [[ -z "$hook_session_id" ]]; then
+    debug "provider_id_source=hook session_id=${session_id} result=missing_session_id"
     echo "{}"
     return 0
   fi
@@ -259,6 +273,10 @@ extract_codex_session_id_from_proc_fd() {
   local fd_dir="/proc/${pid}/fd"
   local fd target sid
   [[ -d "$fd_dir" ]] || return 1
+  [[ -r "$fd_dir" ]] || {
+    debug "provider_id_source=proc_fd pid=${pid} result=permission_denied"
+    return 1
+  }
   for fd in "$fd_dir"/*; do
     [[ -e "$fd" ]] || continue
     target="$(readlink "$fd" 2>/dev/null || true)"
@@ -275,7 +293,10 @@ extract_codex_session_id_from_proc_fd() {
 extract_codex_session_id_from_lsof_pid() {
   local pid="$1"
   local sid
-  command -v lsof >/dev/null 2>&1 || return 1
+  if ! command -v lsof >/dev/null 2>&1; then
+    debug "provider_id_source=lsof pid=${pid} result=missing_binary"
+    return 1
+  fi
   while IFS= read -r line; do
     sid="$(extract_codex_session_id_from_path "$line" || true)"
     if [[ -n "$sid" ]]; then
@@ -308,7 +329,10 @@ collect_process_tree_pids() {
 extract_codex_session_id_from_tmux_process_tree() {
   local tmux_session_name="$1"
   local pane_pid pid sid
-  command -v tmux >/dev/null 2>&1 || return 1
+  if ! command -v tmux >/dev/null 2>&1; then
+    debug "provider_id_source=tmux_tree session=${tmux_session_name} result=missing_tmux"
+    return 1
+  fi
   pane_pid="$(tmux list-panes -t "$tmux_session_name" -F '#{pane_pid}' 2>/dev/null | head -n1 | tr -d '[:space:]')"
   [[ "$pane_pid" =~ ^[0-9]+$ ]] || return 1
   while IFS= read -r pid; do
@@ -337,6 +361,7 @@ extract_provider_resume_ids_from_process_probe() {
 
   sid="$(extract_codex_session_id_from_tmux_process_tree "$tmux_session_name" || true)"
   if [[ -z "$sid" ]]; then
+    debug "provider_id_source=process_probe tool=${tool_name} tmux=${tmux_session_name} result=not_found"
     echo "{}"
     return 0
   fi
@@ -371,6 +396,7 @@ mkdir -p "$catalog_dir"
 profile_name="$(resolve_profile_name)"
 state_db_path="$HOME/.agent-deck/profiles/${profile_name}/state.db"
 if [[ ! -f "$state_db_path" ]]; then
+  debug "provider_id_source=db result=state_db_missing profile=${profile_name}"
   state_db_path=""
 fi
 
@@ -409,6 +435,7 @@ process_session() {
   tool_name="$(jq -r 'if type == "object" then .tool // "" else "" end' <<<"$shown" 2>/dev/null || true)"
   tmux_session_name="$(jq -r 'if type == "object" then .tmux_session // "" else "" end' <<<"$shown" 2>/dev/null || true)"
   expected_provider_key="$(expected_provider_key_for_tool "$tool_name")"
+  debug "session_probe role=${role} ref=${ref} tool=${tool_name:-unknown} expected_provider_key=${expected_provider_key:-none}"
 
   provider_resume_ids_db="$(extract_provider_resume_ids "$session_id" "$state_db_path")"
   if ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$provider_resume_ids_db"; then
@@ -429,6 +456,8 @@ process_session() {
         else
           provider_resume_source="hook_status_file"
         fi
+      else
+        debug "provider_id_source=hook session_id=${session_id} result=missing_expected_key expected_key=${expected_provider_key}"
       fi
     fi
 
@@ -444,6 +473,8 @@ process_session() {
         else
           provider_resume_source="${provider_resume_source}+process_open_files"
         fi
+      else
+        debug "provider_id_source=process_probe session_id=${session_id} result=missing_expected_key expected_key=${expected_provider_key}"
       fi
     fi
   fi
@@ -629,5 +660,6 @@ echo "catalog_ok file=${catalog_file} latest=${latest_catalog_file} index=${cata
 if (( blocked_delete_count > 0 )); then
   echo "delete_guard_blocked count=${blocked_delete_count} reason=missing_provider_session_id"
   echo "delete_guard_action=manual_close_required"
+  echo "delete_guard_hint set ADWF_DEBUG=1 and rerun for provider-id source diagnostics"
   exit 3
 fi

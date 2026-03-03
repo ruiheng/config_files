@@ -5,24 +5,107 @@ description: Human-led planner/executor/reviewer workflow protocol on top of age
 
 # Agent Deck Workflow
 
-Use this skill for the three-role workflow protocol (planner, executor, reviewer).
+Use this skill as the single source of truth for three-role workflow protocol:
+`planner` (long-lived), `executor` (per-task), `reviewer` (per-task).
 
 This workflow does not require loading the official `agent-deck` skill by default.
-Use this skill (`agent-deck-workflow`) as the primary source of workflow behavior and control-message protocol.
-The cloned official `agent-deck` skill is kept as a local reference library (`references/`) only.
+The cloned official `agent-deck` skill is a local reference library (`references/`) only.
+
+## Terminology
+
+- `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
+- `*_session_id`: Agent Deck session UUID (from `agent-deck session show --json`)
+- `*_session_ref`: Human-friendly session reference (`title` or `id`)
+- `workflow_policy`: optional per-task automation override; absent means human-gated defaults
 
 ## Scope
 
 - Workflow shape: one long-lived `planner`, per-task `executor` + `reviewer`.
 - Runtime shape: single shared workspace.
-- Governance: human-led; user confirmation gates are mandatory at stop/closeout points.
-- Git approval exception: in delegated executor flow, task-scoped executor commits are allowed without per-commit user approval; this workflow rule overrides generic git-approval defaults.
+- Governance: human-led; user confirmation gates remain required at stop/closeout points unless policy override is present.
+- Git approval exception: in delegated executor flow, task-scoped executor commits are allowed without per-commit user approval.
+
+## Shared Protocol (For All Workflow Skills)
+
+### Agent Deck Mode Detection
+
+Enter Agent Deck mode when any condition matches:
+1. explicit `task_id` or `planner_session_id`
+2. inbound context/artifact already carries Agent Deck metadata
+3. user explicitly asks for agent-deck workflow
+
+`agent-deck session current --json` is best-effort context only and must run in host shell.
+If it fails, continue with explicit/context metadata.
+
+### Context Resolution Priority
+
+Use this priority chain for each field:
+`explicit input -> parsed workflow context/artifact -> deterministic default -> ask one short clarification question`
+
+Session identity nuance:
+- `planner_session_id` must come from explicit/context workflow metadata.
+- `current_session_id` is used for sender identity verification and role safety checks.
+- Exception (`delegate-task` only): planner sender legitimately equals current session, so `planner_session_id` may start from detected `current_session_id`.
+- In all other skills, `current_session_id` is not a replacement source for `planner_session_id`.
+
+### Dispatch Helper Usage
+
+Use only this helper from this skill directory:
+- `scripts/dispatch-control-message.sh`
+
+Path rules:
+1. resolve script path relative to this skill directory
+2. do not assume project-root `scripts/...`
+3. stop and ask user to attach/install this skill if unresolved
+
+Canonical CLI flags are `--*-session-id`:
+- `--planner-session-id`
+- `--from-session-id`
+- `--to-session-id`
+
+### Control Message Contract
+
+- Semantic contract: `references/message-templates.md`
+- Internal JSON appendix: `references/internal-protocol/message-templates.md`
+
+Control JSON is internal protocol data by default.
+User-facing responses should provide readable decisions and artifact pointers, not raw JSON payloads.
+
+### Error Handling and Diagnostics
+
+If dispatch helper fails, report concise stderr summary and run these checks:
+1. Is `agent-deck-workflow` skill path resolvable?
+2. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
+3. Is command running in correct tmux/session context? (`agent-deck session current --json`)
+4. Is artifact path valid and under `.agent-artifacts/`?
+
+If closeout cleanup fails, include:
+1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
+2. health report path (`.agent-artifacts/workflow-health/health-<task_id>.json`)
+3. exact manual action to unblock (for example `agent-deck remove <session_id>`)
+
+### Reviewer Decision Flow
+
+```mermaid
+graph TD
+  A[Review complete] --> B{Must-fix exists?}
+  B -->|Yes| C[dispatch rework_required]
+  B -->|No| D{auto_accept_if_no_must_fix?}
+  D -->|Yes| E[run review-closeout and dispatch closeout_delivered]
+  D -->|No| F{UI manual confirmation required?}
+  F -->|Yes| G[request user UI confirmation]
+  F -->|No| H[present stop_recommended]
+  G --> H
+  H --> I{User decision}
+  I -->|Closeout| E
+  I -->|Iterate| J[dispatch user_requested_iteration]
+```
 
 ## Automation Policy Override (Optional)
 
 Default behavior is human-gated.
 
-Planner may optionally include a `workflow_policy` override (in delegate artifact and control payload) for a specific `task_id`, for example:
+Planner may include per-task `workflow_policy`, for example:
 
 ```json
 {
@@ -34,80 +117,51 @@ Planner may optionally include a `workflow_policy` override (in delegate artifac
 ```
 
 Rules:
-- If `workflow_policy` is absent, use default human-gated behavior.
-- If `workflow_policy` is present, executor and reviewer must carry it forward unchanged for the same `task_id`.
-- `workflow_policy` only relaxes stop/dispatch gates described below; safety checks and must-fix handling remain unchanged.
-- In unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`), post-closeout health gate is strict fail-closed. If cleanup/guard fails, halt auto-dispatch and wait for user intervention.
-- `ui_manual_confirmation` semantics:
-  - `auto` (default): reviewer heuristically detects UI-impacting changes and, in human-gated mode, asks for manual UI confirmation before closeout.
-  - `required`: always require manual UI confirmation in human-gated mode.
-  - `skip`: skip manual UI confirmation requirement for this task.
-  - In unattended mode, reviewer may still auto-closeout per policy (no forced human block), but UI confirmation package should still be recorded in closeout.
+- If absent, apply human-gated defaults.
+- If present, executor and reviewer carry it forward unchanged for the same `task_id`.
+- Safety checks and must-fix handling remain unchanged.
+- Unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`) enables strict post-closeout health gate.
+
+`ui_manual_confirmation`:
+- `auto` (default): detect likely UI impact heuristically
+- `required`: always require manual UI confirmation in human-gated mode
+- `skip`: skip manual UI confirmation requirement
 
 ## Execution Environment (Required)
 
-All `agent-deck` commands in this workflow must run outside sandbox (host shell with real tmux/session context).
+All `agent-deck` commands must run in host shell (outside sandbox) to keep real tmux/session context.
 
 ## Skill-Local Script Dependency (Required)
 
-This workflow uses skill-local helper script:
-
+Workflow helpers in this skill:
 - `scripts/dispatch-control-message.sh`
 - `scripts/closeout-health-gate.sh`
+- `scripts/archive-and-remove-task-sessions.sh`
 - `scripts/notify-workflow-event.sh`
-- `scripts/summarize-ui-confirmation-packages.sh` (planner-side summary helper)
+- `scripts/summarize-ui-confirmation-packages.sh` (planner summary helper)
 
-Dispatch-notification noise control:
-- `ADWF_DISPATCH_NOTIFY=milestone` (default): notify key milestones only (`execute_delegate_task`, `rework_required`, `stop_recommended`, `closeout_delivered`)
-- `ADWF_DISPATCH_NOTIFY=all`: notify every dispatch action
-- `ADWF_DISPATCH_NOTIFY=none`: suppress dispatch notifications
+Dispatch notification filtering:
+- `ADWF_DISPATCH_NOTIFY=milestone` (default)
+- `ADWF_DISPATCH_NOTIFY=all`
+- `ADWF_DISPATCH_NOTIFY=none`
 
-Path rules:
-
-1. Resolve script path relative to this skill directory.
-2. Never assume project-root `scripts/...` path.
-3. If skill directory cannot be resolved, stop and ask user to attach/install this skill.
+Debug logging:
+- `ADWF_DEBUG=1` enables helper-script diagnostic logs.
 
 ## Relationship with Official Skill Clone
 
-- Do not modify the cloned official `agent-deck` skill for project-specific workflow behavior.
-- Do not require loading the official `agent-deck` skill in normal workflow execution.
-- Reuse files under the sibling `agent-deck` skill `references/` directory as optional reference material when command details are needed.
-- Project workflow rules and role behavior are defined only by this `agent-deck-workflow` skill and related role skills.
+- Do not modify cloned official `agent-deck` skill for project-specific behavior.
+- Do not require loading official `agent-deck` skill in normal execution.
+- Use clone `references/` only when command details are needed.
 
 ## Task Metadata Convention
 
-Use stable task id:
-
-`task_id = YYYYMMDD-HHMM-<slug>`
-
-Resource naming:
+Use stable naming:
 
 - Executor session: `executor-<task_id>`
 - Reviewer session: `reviewer-<task_id>`
 - Branch: `task/<task_id>`
 - Artifacts root: `.agent-artifacts/<task_id>/`
-
-## Control Message Contract
-
-Use JSON control messages for agent-to-agent communication.
-
-- Message templates: `references/message-templates.md`
-- JSON is internal protocol data by default.
-- Do not print raw control JSON in user-facing output unless user explicitly asks for payload.
-
-## Role Inference (Allowed)
-
-Role inference is valid in this workflow and should be used when explicit role assignment is absent.
-
-Role inference priority:
-1. explicit user instruction
-2. control-message `action` + `to_session_id`
-3. task context/artifact path/branch convention (`task/<task_id>`)
-4. currently invoked workflow skill
-
-Role is task-scoped, not agent-scoped. One agent may switch roles across tasks (or even within one task) when workflow signals are consistent.
-If role signals conflict, stop and ask one short clarification question before acting.
 
 ## Human-Led Three-Role Flow
 
@@ -118,53 +172,44 @@ If role signals conflict, stop and ask one short clarification question before a
 
 ### 2) Executor Implements and Requests Review
 
-- Executor performs implementation and first delivery commit.
-- In delegated execution, executor task-scoped git writes (branch create/switch, stage, commit) do not require per-commit user approval.
+- Executor implements and commits first delivery.
 - Executor dispatches `review_requested` to reviewer.
-- After dispatch, executor enters waiting state.
-- Executor must not proactively poll reviewer output unless user explicitly asks.
+- Executor enters waiting state and does not proactively poll reviewer unless user asks.
 
 ### 3) Reviewer Loop
 
-Reviewer evaluates and chooses one of two outcomes:
+Reviewer chooses one branch:
 
 1. `rework_required`
-- Dispatch to executor.
-- Executor resumes implementation and later sends next review request.
+- dispatch to executor
+- executor fixes and sends next `review_requested`
 
 2. `stop_recommended`
-- Provide user-friendly summary (not raw JSON) and wait for user decision.
-- No automatic dispatch to executor in this step.
-- Exception: if `workflow_policy.auto_accept_if_no_must_fix` is `true`, reviewer may auto-accept and proceed to closeout without waiting for user decision.
-- In human-gated mode, if UI manual confirmation is required (`auto` detection or `required` override), reviewer should request manual UI confirmation before closeout.
+- provide user-facing summary and wait for user decision
+- if `workflow_policy.auto_accept_if_no_must_fix=true`, reviewer may skip waiting and run closeout
+- in human-gated mode, request manual UI confirmation when required by policy
 
-User decision branches after `stop_recommended`:
+### 4) Planner Closeout Batch (After Acceptance)
 
-1. User chooses closeout.
-- Reviewer runs `review-closeout` and dispatches `closeout_delivered` to planner.
+After closeout acceptance (explicit user or unattended policy):
+1. merge `task/<task_id>` into integration branch
+2. update progress record
+3. optional hygiene: prune stale task branches (`scripts/prune-task-branches.sh`)
+4. summarize recent UI confirmation packages (`scripts/summarize-ui-confirmation-packages.sh`)
+5. optional: dispatch next task
 
-2. User chooses another iteration.
-- Reviewer dispatches `user_requested_iteration` to executor.
+If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
 
-### 4) Planner Closeout Batch (After Closeout Acceptance)
+## Example: Complete Task Flow
 
-Planner receives closeout and finalizes after closeout acceptance:
-- default: explicit user confirmation
-- unattended override: policy-based acceptance when enabled
-
-Then perform one batch closeout step:
-
-1. Merge `task/<task_id>` into integration branch (follow repo/user policy).
-2. Record progress (status, merged branch, residual concerns).
-3. Optional hygiene: prune stale task branches with keep-N policy:
-   - `<agent_deck_workflow_skill_dir>/scripts/prune-task-branches.sh --keep <N>` (preview)
-   - `<agent_deck_workflow_skill_dir>/scripts/prune-task-branches.sh --keep <N> --apply` (execute)
-   - Policy: keep newest N `task/` branches; for older ones, delete only if they are ancestors of current base (default `HEAD`).
-4. Aggregate recent UI confirmation packages and provide a deduped checklist summary to user:
-   - `<agent_deck_workflow_skill_dir>/scripts/summarize-ui-confirmation-packages.sh` (writes `.agent-artifacts/ui-confirmation/summary.md` by default)
-5. Optionally plan and dispatch next task if needed.
-
-If `workflow_policy.auto_dispatch_next_task` is `true`, planner should dispatch the next queued task automatically after merge + progress update (still respecting serial-mode constraints).
+1. User asks: "Add login rate limiting".
+2. Planner runs `delegate-task`; artifact `.agent-artifacts/<task_id>/delegate-task-<task_id>.md` is generated.
+3. Planner dispatches `execute_delegate_task` to `executor-<task_id>`.
+4. Executor implements, commits, runs `review-request`, and dispatches `review_requested`.
+5. Reviewer runs `review-code` and dispatches `rework_required` (if must-fix exists).
+6. Executor fixes and sends another `review_requested`.
+7. Reviewer approves, user confirms, reviewer runs `review-closeout` and dispatches `closeout_delivered`.
+8. Planner merges branch and updates progress.
 
 ## Role-Skill Mapping
 
@@ -175,14 +220,12 @@ If `workflow_policy.auto_dispatch_next_task` is `true`, planner should dispatch 
 ## Do / Do Not
 
 Do:
-
-- Keep long context file-based (`delegate-task`, `review-request`, `review-report`, `closeout`).
-- Keep cross-session messages short and pointer-based.
-- Keep human confirmation gates on stop/closeout.
+- keep long context file-based (`delegate-task`, `review-request`, `review-report`, `closeout`)
+- keep cross-session messages short and pointer-based
+- keep human confirmation gates in human-gated mode
 
 Do not:
-
-- Auto-merge before user confirmation.
-- Send large report bodies inline via `session send`.
-- Keep proactive polling loops after dispatch.
-- Treat protocol JSON as default user-facing output.
+- auto-merge before acceptance
+- send large report bodies inline via `session send`
+- run proactive polling loops after dispatch
+- treat protocol JSON as default user-facing content

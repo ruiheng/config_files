@@ -16,13 +16,13 @@ Usage:
 
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)
-  --planner-session <id|title>   Planner session ref (default: planner)
-  --executor-session <id|title>  Executor session ref (default: executor-<task_id>)
-  --reviewer-session <id|title>  Reviewer session ref (default: reviewer-<task_id>)
+  --planner-session-id <id|title>   Planner session ref (default: planner)
+  --executor-session-id <id|title>  Executor session ref (default: executor-<task_id>)
+  --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
   --max-worker-sessions <n>      Max allowed lingering worker sessions (default: 2)
-  --strict                       Exit non-zero if health gate fails
+  --strict                       Fail-closed mode. Exit 3 when health gate fails.
   -h, --help                     Show help
 
 Outputs:
@@ -31,12 +31,27 @@ Outputs:
   - Latest health pointer:
       <artifact-root>/workflow-health/latest.json
   - Summary lines for cleanup and gate result.
+
+Exit codes:
+  0: health passed, or health failed in non-strict mode
+  2: usage/argument/runtime dependency error
+  3: health failed in strict mode
+
+Recommendation:
+  - Use --strict for unattended workflow mode.
+  - Set ADWF_DEBUG=1 for diagnostic logs.
 EOF
 }
 
 die() {
   echo "ERROR: $*" >&2
   exit 2
+}
+
+debug() {
+  if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
+    echo "DEBUG: $*" >&2
+  fi
 }
 
 task_id=""
@@ -51,9 +66,9 @@ strict=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="${2:-}"; shift 2 ;;
-    --planner-session) planner_session_ref="${2:-}"; shift 2 ;;
-    --executor-session) executor_session_ref="${2:-}"; shift 2 ;;
-    --reviewer-session) reviewer_session_ref="${2:-}"; shift 2 ;;
+    --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
+    --executor-session-id) executor_session_ref="${2:-}"; shift 2 ;;
+    --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --max-worker-sessions) max_worker_sessions="${2:-}"; shift 2 ;;
@@ -124,9 +139,9 @@ notify_event() {
 cleanup_cmd=(
   "$cleanup_script"
   --task-id "$task_id"
-  --planner-session "$planner_session_ref"
-  --executor-session "$executor_session_ref"
-  --reviewer-session "$reviewer_session_ref"
+  --planner-session-id "$planner_session_ref"
+  --executor-session-id "$executor_session_ref"
+  --reviewer-session-id "$reviewer_session_ref"
   --artifact-root "$artifact_root"
   --apply
 )
@@ -135,6 +150,7 @@ if [[ -n "$profile" ]]; then
 fi
 
 set +e
+debug "cleanup_cmd=${cleanup_cmd[*]}"
 cleanup_output="$("${cleanup_cmd[@]}" 2>&1)"
 cleanup_rc=$?
 set -e
@@ -256,4 +272,5 @@ if (( strict )); then
     "Auto-dispatch halted due to health gate failure."
   exit 3
 fi
+echo "health_non_strict_continue task_id=${task_id} strict=0"
 exit 0

@@ -7,160 +7,103 @@ description: Generates a review-request document for code review from uncommitte
 
 Generate a copy/paste-friendly review handoff document for later code review.
 
+Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+This skill only defines review-request-specific behavior.
+
 ## Required Scope Selection
 
 Before generating the document, determine one scope:
-1. **Uncommitted changes**
-2. **Specific commit**
-3. **Branch**
+1. `uncommitted changes`
+2. `specific commit`
+3. `branch`
 
 Workflow continuity rule:
-- In an ongoing implementation session, if scope is not explicitly provided, inherit the scope from the active delegated task for the current `task_id`.
-- The inherited scope can be `uncommitted`, `commit`, or `branch` depending on what was actually delivered.
-- Do not force a scope-selection question when one scope is clearly implied by recent workflow context.
-- Ask a clarification question only when:
-  - multiple scopes are similarly plausible for the same `task_id`, or
-  - no reliable scope can be inferred.
-- Do not infer scope from unrelated or previously completed tasks with different `task_id`.
+- In an ongoing implementation session, if scope is not explicit, inherit from active delegated task for current `task_id`.
+- Ask a clarification question only when multiple scopes are equally plausible or no reliable scope can be inferred.
 
 ## Inputs
 
 - Scope type: `uncommitted` | `commit` | `branch`
 - Scope value:
-  - `uncommitted`: no value required
+  - `uncommitted`: no value
   - `commit`: commit hash
   - `branch`: branch name
 - Optional:
   - `base_branch` (for branch scope)
-  - `original_task` (free text)
-  - `delegate_task_path` (path to `delegate-task-<unique>.md`)
+  - `original_task`
+  - `delegate_task_path`
   - `output_path` (default: project root)
 
 ## Original Task Source (Required)
 
-Populate `## Original Task` using this priority order:
-1. `original_task` input (if explicitly provided)
-2. Current session context (the delegated task currently being executed in this agent conversation)
-3. `delegate_task_path` (if explicitly provided), extract task objective from that file
-4. If none are available, ask one short clarification question before finalizing
-
-Do not default to `Not provided` when delegated-task context is already available in the same workflow.
+Populate `## Original Task` by priority:
+1. explicit `original_task`
+2. active delegated-task context in current session
+3. `delegate_task_path`
+4. ask one short clarification question
 
 ## Data Collection (Read-Only)
 
 Use read-only git commands only.
 
-- **Uncommitted**:
+- Uncommitted:
   - `git status --short`
   - `git diff --name-status`
   - `git diff --cached --name-status`
   - `git ls-files --others --exclude-standard`
-- **Commit**:
+- Commit:
   - `git show --name-status --format=fuller <commit>`
-- **Branch**:
-  - Determine comparison base:
-    - Use `base_branch` if provided
-    - Otherwise prefer `main`; fallback to `master`
+- Branch:
+  - choose base: `base_branch` -> `main` -> `master`
   - `git log --oneline <base>..<branch>`
   - `git diff --name-status <base>...<branch>`
 
 ## Scope Hygiene and Noise Control (Required)
 
-Before writing the document, classify changes into:
-- **In-Scope**: directly related to the original task and intended for this review.
-- **Noise/Out-of-Scope**: unrelated local files, scratch artifacts, environment files, temporary outputs, or other incidental working-tree changes.
+Classify changes into:
+- In-scope: directly related to original task
+- Noise/out-of-scope: unrelated local files, temporary artifacts, env files
 
 Rules:
-1. In `Files Modified/Created`, include **In-Scope files only**.
-2. Do **not** list every unrelated untracked file one by one.
-3. For uncommitted scope, summarize unrelated working-tree noise in one short optional section with count + up to 3 examples.
-4. If there is uncertainty about relevance, ask a short clarification question before finalizing.
+1. `Files Modified/Created` includes in-scope files only.
+2. Do not list unrelated noise file-by-file.
+3. For uncommitted scope, summarize unrelated noise with count + up to 3 examples.
+4. Ask one short clarification question if relevance is uncertain.
 
 ## Output File
 
-Create a file named `review-request-<unique>.md`.
-- `<unique>` can be any short unique suffix.
-- Default location is project root unless `output_path` is provided.
-- If a filename collision occurs, generate a new unique suffix.
+Create `review-request-<unique>.md`.
+- Default path: project root unless `output_path` provided.
+- If collision occurs, regenerate unique suffix.
 
-Agent Deck mode (context-first, compatibility-safe):
-- Enter Agent Deck mode if any is true:
-  1. `task_id` or `planner_session_id` is explicitly provided
-  2. review/delegate context already carries Agent Deck metadata
-  3. user asks for agent-deck flow
-- Run `agent-deck session current --json` in host shell (outside sandbox) to detect session context when possible.
-- If detection fails (for example `not in a tmux session`), continue with explicit/context metadata only.
-- Do not use current-session detection to derive `planner_session_id`.
+## Agent Deck Mode
 
-In Agent Deck mode:
-- This skill depends on `agent-deck-workflow` skill script:
-  - `scripts/dispatch-control-message.sh` (from the `agent-deck-workflow` skill directory, not this skill directory)
-- Required dependency behavior:
-  1. ensure `agent-deck-workflow` skill is available/loaded
-  2. resolve `agent-deck-workflow` skill directory
-  3. invoke `<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh`
-  4. if unresolved, stop and ask user to attach/install `agent-deck-workflow` skill
+Follow shared protocol in `agent-deck-workflow/SKILL.md`:
+- `Agent Deck Mode Detection`
+- `Context Resolution Priority`
+- `Dispatch Helper Usage`
+- `Error Handling and Diagnostics`
 
-In Agent Deck mode, resolve context by priority:
-- `task_id`:
-  1. explicit input
-  2. parse from current branch `task/<task_id>`
-  3. parse from delegated context/file path in this workflow
-  4. ask one short clarification question if still missing
-- `planner_session_id`:
-  1. explicit input (`planner_session_id`, or `planner_session` as compatibility alias)
-  2. `Agent Deck Context` from delegated task/session context
-  3. ask one short clarification question if still missing
-- `executor_session_id`:
-  1. explicit input
-  2. current Agent Deck session id (`agent-deck session current --json`)
-  3. parse from delegated/review context
-  4. ask one short clarification question if still missing
-- `reviewer_session_id`:
-  1. explicit input
-  2. delegated-task `Agent Deck Context` (`reviewer_session_id` when present)
-  3. default `reviewer-<task_id>`
-- `workflow_policy` (optional):
-  1. explicit input
-  2. delegated-task context/artifact
-  3. omit when not set
-- `reviewer_tool`:
-  1. explicit input
-  2. delegated-task `Agent Deck Context` (`reviewer_tool`)
-  3. default current AI tool
-- `round`:
-  1. explicit input
-  2. infer from context; default to `1` when first review is implied
+Skill-specific context resolution:
+- `task_id`: explicit -> branch `task/<task_id>` -> delegated context/path -> ask
+- `planner_session_id`: explicit/context -> ask
+- `executor_session_id`: explicit -> current session id -> delegated context -> ask
+- `reviewer_session_id`: explicit -> delegated context -> default `reviewer-<task_id>`
+- `workflow_policy` (optional): explicit -> delegated context -> omit
+- `reviewer_tool`: explicit -> delegated context -> default current AI tool
+- `round`: explicit -> infer from context -> default `1`
 
 Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
-Create parent directories if missing.
+Create parent directories when missing.
 
-- In Agent Deck mode, after writing the file, construct one JSON control payload for executor -> reviewer handoff (internal protocol, not user-facing output):
-- Control payload schema reference (internal only; do not print to user by default):
-
-```json
-{
-  "task_id": "<task_id>",
-  "planner_session_id": "<planner_session_id>",
-  "required_skills": ["agent-deck-workflow"],
-  "from_session_id": "<executor_session_id>",
-  "to_session_id": "<reviewer_session_id>",
-  "round": "<round>",
-  "action": "review_requested",
-  "artifact_path": ".agent-artifacts/<task_id>/review-request-r<round>.md",
-  "note": "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>.",
-  "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
-}
-```
-
-Then dispatch to reviewer using the helper script (host shell, outside sandbox):
+Dispatch to reviewer with canonical flags:
 
 ```bash
 <agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
-  --planner-session "<planner_session_id>" \
-  --from-session "<executor_session_id>" \
-  --to-session "<reviewer_session_id>" \
+  --planner-session-id "<planner_session_id>" \
+  --from-session-id "<executor_session_id>" \
+  --to-session-id "<reviewer_session_id>" \
   --round "<round>" \
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
@@ -169,27 +112,16 @@ Then dispatch to reviewer using the helper script (host shell, outside sandbox):
   --cmd "<reviewer_tool>"
 ```
 
-Reviewer tool consistency rule (required):
-- If `reviewer_session_id` already exists, check its configured tool (`agent-deck session show <reviewer_session_id> --json`).
-- If existing tool differs from resolved `reviewer_tool`, do not silently continue.
-- Ask user to choose one:
+Identity rules:
+- `review_requested` sender must be active executor session id.
+- If detected current session id differs from resolved `executor_session_id`, stop and ask for clarification.
+- If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
-  2. use a new reviewer session with the requested tool
+  2. create/use new reviewer session with requested tool
 
-Sender identity rule (required):
-- For `review_requested`, `from_session_id` must be the active executor session id.
-- If current Agent Deck session id is known and differs from resolved `executor_session_id`, stop and ask for clarification before dispatch.
-
-For concise logs, report helper output summary only.
-- Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.
-- If `workflow_policy` is present, include it in dispatch payload and preserve it unchanged.
-
-Post-dispatch executor behavior (required in Agent Deck mode):
-- After successful dispatch, executor must enter waiting state for reviewer response.
-- Do not proactively monitor reviewer session output in a loop.
-- Do not ask user whether executor should "keep watching reviewer output".
-- Resume implementation only after receiving reviewer feedback control message (for example `rework_required` or `user_requested_iteration`) or explicit user instruction.
-- If user requests status while waiting, perform at most one explicit status check and report it.
+Post-dispatch behavior:
+- Executor enters waiting state.
+- Executor does not proactively poll reviewer unless user explicitly asks.
 
 ## Output Template
 
@@ -238,13 +170,10 @@ Use this exact structure:
 
 ## Quality Bar
 
-1. Keep it concise and copy/paste friendly.
-2. Use neutral language; avoid chat framing and second-person wording.
-3. File list should be complete for the **in-scope review target**, not for all local noise.
-4. Prefer factual statements over speculation.
-5. Do not dump raw untracked-file inventories unless explicitly requested.
-6. Always include `Review Focus` and `Verification Evidence` fields, even when values are `Not provided`.
-7. In delegated workflows, `Original Task` should be inherited from active delegated-task context whenever possible.
-8. Prefer workflow continuity over re-onboarding questions; avoid asking for scope when recent context already implies the completed task scope.
-9. In Agent Deck mode, include `Agent Deck Context` whenever values can be inferred reliably.
-10. In Agent Deck mode, after dispatching to reviewer, enter waiting state and avoid proactive polling unless user explicitly asks.
+1. Keep concise and copy/paste friendly.
+2. Use neutral language.
+3. File list is complete for in-scope target, not full local noise.
+4. Prefer facts over speculation.
+5. Keep raw control JSON internal unless user asks.
+6. Always include `Review Focus` and `Verification Evidence` fields.
+7. Preserve `workflow_policy` unchanged when present.
