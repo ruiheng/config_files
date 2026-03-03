@@ -137,7 +137,7 @@ Usage note:
   "round": "final",
   "action": "closeout_delivered",
   "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-  "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional."
+  "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional."
 }
 ```
 
@@ -147,5 +147,7 @@ Protocol note:
 - Executor and reviewer must carry forward the same `planner_session_id` value in every round.
 - If `workflow_policy` is present, carry it forward unchanged for the same `task_id`.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
-- Self-handoff guard: if reviewer detects `planner_session_id` equals current session id, do not dispatch `closeout_delivered`; stop and wait for user instruction.
+- Roles are task-scoped; if workflow context explicitly assigns both reviewer and planner roles to one session, `closeout_delivered` may target the same session id.
+- Skip dispatch only when target session equals current session (local continuation); otherwise dispatch may proceed even if `from_session_id == to_session_id`.
 - For UI-related tasks, reviewer should keep UI manual confirmation package in artifacts and closeout content for future re-check, regardless of whether current round already got human confirmation.
+- Planner closeout ordering is strict: required actions (`merge`, `progress update`) must complete first; notification/next-task dispatch failures are optional and must not block required completion.

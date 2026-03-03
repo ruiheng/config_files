@@ -108,6 +108,11 @@ If closeout cleanup fails, include:
 2. health report path (`.agent-artifacts/workflow-health/health-<task_id>.json`)
 3. exact manual action to unblock (for example `agent-deck remove <session_id>`)
 
+Planner closeout execution rule:
+1. required actions (`merge`, `progress update`) are hard requirements
+2. optional actions (`notify`, `next-task dispatch`, hygiene summaries) are best-effort
+3. optional-action failures must not roll back or block required closeout completion
+
 ### Reviewer Decision Flow
 
 ```mermaid
@@ -159,6 +164,7 @@ All `agent-deck` commands must run in host shell (outside sandbox) to keep real 
 
 Workflow helpers in this skill:
 - `scripts/dispatch-control-message.sh`
+- `scripts/planner-closeout-batch.sh`
 - `scripts/closeout-health-gate.sh`
 - `scripts/archive-and-remove-task-sessions.sh`
 - `scripts/notify-workflow-event.sh`
@@ -216,13 +222,25 @@ Reviewer chooses one branch:
 ### 4) Planner Closeout Batch (After Acceptance)
 
 After closeout acceptance (explicit user or unattended policy):
-1. merge `task/<task_id>` into integration branch
-2. update progress record
-3. optional hygiene: prune stale task branches (`scripts/prune-task-branches.sh`)
-4. summarize recent UI confirmation packages (`scripts/summarize-ui-confirmation-packages.sh`)
-5. optional: dispatch next task
+1. run `scripts/planner-closeout-batch.sh` for required closeout actions
+2. required in script: merge `task/<task_id>` into integration branch
+3. required in script: update progress record
+4. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
+5. optional in script: dispatch next task
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
+
+Recommended planner invocation:
+
+```bash
+<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh \
+  --task-id "<task_id>" \
+  --integration-branch "<integration_branch>" \
+  --run-health-gate
+```
+
+If next-task dispatch is configured, pass it as `--next-dispatch-cmd "<command>"`.
+Even when that command fails, required closeout actions remain completed.
 
 ## Example: Complete Task Flow
 
@@ -248,9 +266,11 @@ Do:
 - keep long context file-based (`delegate-task`, `review-request`, `review-report`, `closeout`)
 - keep cross-session messages short and pointer-based
 - keep human confirmation gates in human-gated mode
+- run planner required closeout actions via `scripts/planner-closeout-batch.sh`
 
 Do not:
 - auto-merge before acceptance
 - send large report bodies inline via `session send`
 - run proactive polling loops after dispatch
 - treat protocol JSON as default user-facing content
+- block `merge + progress update` on optional notify/dispatch failures

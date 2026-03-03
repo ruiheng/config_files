@@ -34,17 +34,22 @@ Every workflow message carries these semantics:
 - `rework_required`: reviewer blocks and returns must-fix findings.
 - `stop_recommended`: reviewer reports no must-fix items and asks user to choose closeout vs next iteration.
 - `user_requested_iteration`: reviewer forwards user's iteration decision to executor.
-- `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance.
+- `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance. Planner then runs `scripts/planner-closeout-batch.sh` for required closeout actions.
 
 ## Policy Propagation
 
 If `workflow_policy` exists, executor/reviewer preserve it unchanged for the same `task_id`.
 
-## Self-Handoff Guard
+## Same-Session Role Overlap
 
-If reviewer detects current session id equals `planner_session_id`, do not dispatch `closeout_delivered`; stop and wait for user instruction.
+Roles are task-scoped. If workflow context explicitly assigns both reviewer and planner roles to the same session, `closeout_delivered` may target the same session id.
+Dispatch should be skipped only when the target session is also the current session (local continuation).
 
 ## User-Facing Rule
 
 Control payload is internal transport data.
 Default user output should be human-readable decision summaries plus artifact paths.
+
+Planner closeout ordering rule:
+- required actions (`merge`, `progress update`) are hard requirements
+- optional actions (`notify`, `next-task dispatch`) are best-effort and must not block required completion

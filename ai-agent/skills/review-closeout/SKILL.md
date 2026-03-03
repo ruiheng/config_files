@@ -15,6 +15,11 @@ This skill only defines closeout-specific behavior.
 Use this skill when a full review report exists and only remaining follow-up items are needed.
 For UI-related tasks, carry forward human-run UI confirmation package into closeout output.
 
+Role intent:
+- Required role: reviewer role for the current task.
+- Role is task-scoped: the same AI/session may also hold planner role when workflow context explicitly assigns both.
+- Dispatch eligibility must come from resolved reviewer context, not session title naming.
+
 ## Input
 
 Provide one of:
@@ -40,16 +45,19 @@ Skill-specific context resolution:
 - `task_id`: explicit -> review-report path `.agent-artifacts/<task_id>/...` -> ask
 - `planner_session_id`: explicit/context -> ask
 - `current_session_id`: best-effort from `agent-deck session current --json`
-- `reviewer_session_id`: explicit -> `current_session_id` -> review context -> ask
+- `reviewer_session_id`: explicit -> review context -> ask
 - `workflow_policy` (optional): explicit -> review/report context -> default human-gated
 
 If required values are resolved:
 1. write closeout to `.agent-artifacts/<task_id>/closeout-<task_id>.md`
-2. apply self-handoff guard:
-   - if `current_session_id == planner_session_id`, keep closeout output and wait for user instruction
-   - if detected current session id differs from resolved `reviewer_session_id`, ask clarification before dispatch
-3. when guard passes, dispatch `closeout_delivered` to planner
-4. include planner follow-up recommendation in closeout output
+2. normalize identity values before any comparison:
+   - resolve `planner_session_id` / `reviewer_session_id` refs to UUID via `agent-deck session show ... --json`
+   - use detected `current_session_id` UUID from `agent-deck session current --json`
+   - if normalization fails for required identity, do not dispatch automatically; ask one short clarification question
+3. dispatch mode:
+   - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session dispatch and continue locally
+   - otherwise dispatch `closeout_delivered` to planner
+4. include planner follow-up recommendation in closeout output (explicitly recommend `scripts/planner-closeout-batch.sh`)
 
 Dispatch example:
 
@@ -62,7 +70,7 @@ Dispatch example:
   --round "final" \
   --action "closeout_delivered" \
   --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
-  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should complete required closeout actions: merge task branch and update progress records. Planning next task is optional." \
+  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --no-ensure-session \
   --no-start-session
@@ -140,8 +148,8 @@ If UI package content exists, include UI package before planner follow-up.
 - Notes: [optional]
 
 #### Planner Follow-up Recommendation (After Closeout Acceptance)
-- Required: merge `task/<task_id>` into target integration branch.
-- Required: update planner progress records with execution status and residual concerns.
+- Required: run `scripts/planner-closeout-batch.sh --task-id <task_id> --integration-branch <integration_branch>`.
+- Required by script: merge `task/<task_id>` into target integration branch and update planner progress records.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.
 ```
