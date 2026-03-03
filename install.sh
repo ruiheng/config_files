@@ -737,6 +737,9 @@ install_claude_config() {
     # Link local permissions template (contains workflow approval allowlist)
     migrate_legacy_symlink_source "$claude_dir/settings.local.json" "$SCRIPT_DIR/ai-agent/.claude/settings.local.json" "$SCRIPT_DIR/ai-agent/claude/settings.local.json"
     link_file "ai-agent/claude/settings.local.json" "$claude_dir/settings.local.json"
+
+    # Link statusline script
+    link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
 }
 
 install_gemini_skills() {
