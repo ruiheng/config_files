@@ -51,7 +51,10 @@ Agent Deck mode:
   - `planner_session_id`: detected current session id -> explicit -> context -> ask
   - `executor_session_id`: explicit -> context -> default `executor-<task_id>`
   - `executor_tool`: explicit -> context -> default current AI tool
-  - `reviewer_tool`: explicit -> context -> default `executor_tool`
+  - `reviewer_tool`: explicit -> context -> map from `executor_tool`:
+    - `executor_tool=codex` -> `claude`
+    - `executor_tool=claude` -> `codex`
+    - otherwise -> `claude`
   - `workflow_policy` (optional): explicit -> context -> omit when not set
 - In Agent Deck mode write to:
   - `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`

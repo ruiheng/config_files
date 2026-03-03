@@ -1,4 +1,9 @@
 prefix_rule(
+    pattern=["agent-deck"],
+    decision="allow",
+)
+
+prefix_rule(
     pattern=["~/.codex/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"],
     decision="allow",
 )

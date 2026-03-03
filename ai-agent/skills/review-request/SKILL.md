@@ -90,7 +90,11 @@ Skill-specific context resolution:
 - `executor_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_id`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `workflow_policy` (optional): explicit -> delegated context -> omit
-- `reviewer_tool`: explicit -> delegated context -> default current AI tool
+- `executor_tool`: explicit -> delegated context -> default current AI tool
+- `reviewer_tool`: explicit -> delegated context -> map from `executor_tool`:
+  - `executor_tool=codex` -> `claude`
+  - `executor_tool=claude` -> `codex`
+  - otherwise -> `claude`
 - `round`: explicit -> infer from context -> default `1`
 
 Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
