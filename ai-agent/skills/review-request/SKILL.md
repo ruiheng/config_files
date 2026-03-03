@@ -115,6 +115,10 @@ In Agent Deck mode, resolve context by priority:
   1. explicit input
   2. delegated-task context/artifact
   3. omit when not set
+- `reviewer_tool`:
+  1. explicit input
+  2. delegated-task `Agent Deck Context` (`reviewer_tool`)
+  3. default current AI tool
 - `round`:
   1. explicit input
   2. infer from context; default to `1` when first review is implied
@@ -155,6 +159,13 @@ Then dispatch to reviewer using the helper script (host shell, outside sandbox):
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --cmd "<reviewer_tool>"
 ```
+
+Reviewer tool consistency rule (required):
+- If `reviewer_session_id` already exists, check its configured tool (`agent-deck session show <reviewer_session_id> --json`).
+- If existing tool differs from resolved `reviewer_tool`, do not silently continue.
+- Ask user to choose one:
+  1. keep existing reviewer session/tool
+  2. use a new reviewer session with the requested tool
 
 For concise logs, report helper output summary only.
 - Do not print raw JSON payload in user-facing output unless user explicitly requests the control payload.

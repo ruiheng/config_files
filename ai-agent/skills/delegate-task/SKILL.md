@@ -46,6 +46,7 @@ Agent Deck mode:
   - `planner_session_id`: detected current session id -> explicit input (`planner_session_id` or compatibility alias `planner_session`) -> context -> ask
   - `executor_session`: explicit input -> context -> default `executor-<task_id>`
   - `executor_tool`: explicit input -> context -> default current AI tool
+  - `reviewer_tool`: explicit input -> context -> default `executor_tool`
 - `workflow_policy` (optional override): explicit input -> context -> omit when not set
   - Supported UI gate override key:
     - `ui_manual_confirmation`: `"auto"` (default) | `"required"` | `"skip"`
@@ -70,7 +71,11 @@ Generate these sections in the brief:
    - In Agent Deck delegated execution, after first delivery commit the executor must invoke `review-request` unless user explicitly waives review.
 8. `Workflow Policy` (optional): include only when overriding default human-gated workflow behavior.
    - For UI-related tasks, planner may set `ui_manual_confirmation` to override reviewer behavior.
-9. `Agent Deck Context` (only when Agent Deck mode is on): task id, planner session id, default executor session, artifact root.
+9. `Agent Deck Context` (only when Agent Deck mode is on): task id, planner session id, default executor session, artifact root, `executor_tool`, `reviewer_tool`.
+
+Tool-routing rule (required):
+- If user explicitly specifies executor/reviewer tool preferences (for example `claude`, `codex`, `gemini`), persist them in the delegate brief `Agent Deck Context`.
+- Executor and reviewer steps must inherit these preferences unless the user overrides later.
 
 ## 4) Agent-Deck Dispatch (When Agent Deck Mode Is On)
 
@@ -105,6 +110,7 @@ After writing/dispatching:
 - Return a short confirmation:
   - delegate file path
   - one-line summary
+  - selected tool routing (`executor_tool`, `reviewer_tool`) in Agent Deck mode
   - helper output summary (for example `dispatch_ok ...`) in Agent Deck mode
 - Do not print the full brief inline unless user asks.
 - Do not print raw JSON control payload unless user asks.
