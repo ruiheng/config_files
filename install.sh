@@ -734,9 +734,17 @@ install_claude_config() {
     # Link skills individually (required by Claude Code)
     install_claude_skills
 
-    # Link local permissions template (contains workflow approval allowlist)
-    migrate_legacy_symlink_source "$claude_dir/settings.local.json" "$SCRIPT_DIR/ai-agent/.claude/settings.local.json" "$SCRIPT_DIR/ai-agent/claude/settings.local.json"
-    link_file "ai-agent/claude/settings.local.json" "$claude_dir/settings.local.json"
+    # Install workflow permission init script to ~/.local/bin
+    local bin_dir="$HOME/.local/bin"
+    if [[ ! -d "$bin_dir" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create directory: $bin_dir"
+        else
+            mkdir -p "$bin_dir"
+            log_info "Created directory: $bin_dir"
+        fi
+    fi
+    link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
 
     # Link statusline script
     link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
