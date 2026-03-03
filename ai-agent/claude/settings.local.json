@@ -9,7 +9,7 @@
       "Bash(codex mcp add:*)",
       "Bash(agent-deck)",
       "Bash(agent-deck:*)",
-      "Bash(~/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh:*)"
+      "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh:*)"
     ]
   }
 }
