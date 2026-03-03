@@ -61,6 +61,7 @@ configure_claude() {
               "Bash(agent-deck)",
               "Bash(agent-deck *)",
               "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+              "Bash(*/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
               "Write(/.agent-artifacts/**)"
             ]'
 
@@ -79,6 +80,7 @@ configure_claude() {
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
       "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+      "Bash(*/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -95,6 +97,7 @@ EOF
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
       "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+      "Bash(*/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -117,7 +120,14 @@ configure_codex() {
 
     mkdir -p "$rules_dir"
 
-    cat > "$rules_file" << 'EOF'
+    # Resolve the real path of the skill scripts
+    local skill_scripts_symlink="$HOME/.claude/skills/agent-deck-workflow/scripts"
+    local skill_scripts_real=""
+    if [[ -L "$skill_scripts_symlink" ]]; then
+        skill_scripts_real="$(readlink -f "$skill_scripts_symlink" 2>/dev/null || true)"
+    fi
+
+    cat > "$rules_file" << EOF
 # Agent Deck Workflow - Auto-approve rules
 # These commands are required for the workflow to function
 
@@ -134,21 +144,49 @@ prefix_rule(
     ],
 )
 
-# Allow workflow dispatch script
+# Allow workflow scripts (symlink path)
 prefix_rule(
-    pattern = ["bash"],
+    pattern = ["$HOME/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"],
     decision = "allow",
-    justification = "Workflow dispatch script",
-    match = [
-        "bash ~/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh",
-    ],
+    justification = "Workflow dispatch script (symlink)",
 )
+
+prefix_rule(
+    pattern = ["$HOME/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh"],
+    decision = "allow",
+    justification = "Workflow closeout script (symlink)",
+)
+EOF
+
+    # Add real path rules if symlink was resolved
+    if [[ -n "$skill_scripts_real" ]]; then
+        cat >> "$rules_file" << EOF
+
+# Allow workflow scripts (real path)
+prefix_rule(
+    pattern = ["${skill_scripts_real}/dispatch-control-message.sh"],
+    decision = "allow",
+    justification = "Workflow dispatch script (real path)",
+)
+
+prefix_rule(
+    pattern = ["${skill_scripts_real}/planner-closeout-batch.sh"],
+    decision = "allow",
+    justification = "Workflow closeout script (real path)",
+)
+EOF
+    fi
+
+    cat >> "$rules_file" << 'EOF'
 
 # Note: Codex file write permissions are controlled separately
 # and may still require manual approval for .agent-artifacts writes
 EOF
 
     log_ok "Created $rules_file"
+    if [[ -n "$skill_scripts_real" ]]; then
+        log_info "Included both symlink and real paths for workflow scripts"
+    fi
     log_warn "Note: Codex file write permissions may still require manual approval"
 }
 
