@@ -46,6 +46,7 @@ Thumbs.db
 
 # AI agents and related
 .claude
+.codex
 .gemini
 .serena
 
