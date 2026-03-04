@@ -47,6 +47,7 @@ Skill-specific context resolution:
 - `current_session_id`: best-effort from `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> review context -> ask
 - `workflow_policy` (optional): explicit -> review/report context -> default human-gated
+- `special_requirements` (optional fallback): explicit -> review/report context -> omit
 
 If required values are resolved:
 1. write closeout to `.agent-artifacts/<task_id>/closeout-<task_id>.md`
@@ -72,6 +73,7 @@ Dispatch example:
   --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
   --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run <agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
+  --special-requirements-json '<special_requirements_json_optional>' \
   --no-ensure-session \
   --no-start-session
 ```
@@ -162,3 +164,4 @@ If UI package content exists, include UI package before planner follow-up.
 4. Keep section order stable.
 5. Keep output compact and copy/paste friendly.
 6. Preserve `workflow_policy` unchanged when dispatching.
+7. Preserve `special_requirements` unchanged when dispatching.

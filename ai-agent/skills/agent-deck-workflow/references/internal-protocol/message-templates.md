@@ -23,7 +23,8 @@ All messages should follow this JSON shape:
     "planner_session_id": "<planner_session_id>",
     "from_session_id": "<source_session_id>",
     "to_session_id": "<target_session_id>",
-    "workflow_policy": { "<optional_policy_fields>": "<optional_values>" }
+    "workflow_policy": { "<optional_policy_fields>": "<optional_values>" },
+    "special_requirements": "<optional_json_value>"
   }
 }
 ```
@@ -41,6 +42,7 @@ Field rules:
 - `context.to_session_id`: required target session id.
 - `context.workflow_policy`: optional override object; include only when overriding default human-gated behavior.
   - UI override key (optional): `ui_manual_confirmation` with values `"auto" | "required" | "skip"`.
+- `context.special_requirements`: optional free-form JSON value for user requirements not covered by structured fields; carry unchanged across all rounds and roles.
 
 Sender invariants:
 - `execute_delegate_task`: sender is planner (`context.from_session_id = context.planner_session_id`).
@@ -190,6 +192,7 @@ Protocol note:
 - `context.planner_session_id` is immutable for one `task_id`.
 - Executor and reviewer must carry forward the same `context.planner_session_id` value in every round.
 - If `context.workflow_policy` is present, carry it forward unchanged for the same `task_id`.
+- If `context.special_requirements` is present, carry it forward unchanged for the same `task_id`.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
 - Roles are task-scoped; if workflow context explicitly assigns both reviewer and planner roles to one session, `closeout_delivered` may target the same session id.
 - Skip dispatch only when target session equals current session (local continuation); otherwise dispatch may proceed even if `context.from_session_id == context.to_session_id`.

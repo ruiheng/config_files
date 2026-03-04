@@ -90,6 +90,7 @@ Skill-specific context resolution:
 - `executor_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_id`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `workflow_policy` (optional): explicit -> delegated context -> omit
+- `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `executor_tool`: explicit -> delegated context -> default current AI tool
   - if `executor_tool` resolves to `claude` without `--permission-mode`, normalize to `claude --permission-mode acceptEdits`
 - `reviewer_tool`: explicit -> delegated context -> map from `executor_tool`:
@@ -114,6 +115,7 @@ Dispatch to reviewer with canonical flags:
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
   --note "Read the review-request file and produce a full review report. Then proactively send the next control message to executor-<task_id>." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
+  --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<reviewer_tool>"
 ```
 
@@ -160,6 +162,7 @@ Use this exact structure:
 - Planner Session ID: [<planner_session_id> when available]
 - Round: [<round> when available]
 - Workflow Policy: [<workflow_policy_json> when available]
+- Special Requirements: [<special_requirements_json> when available]
 
 ## Original Task
 [Original task text from explicit input or active session context (optionally from `delegate_task_path` if provided). Use `Not provided` only after explicit clarification that no task text is available.]
@@ -197,3 +200,4 @@ Use this exact structure:
 5. Keep raw control JSON internal unless user asks.
 6. Always include `Review Focus` and `Verification Evidence` fields.
 7. Preserve `workflow_policy` unchanged when present.
+8. Preserve `special_requirements` unchanged when present.

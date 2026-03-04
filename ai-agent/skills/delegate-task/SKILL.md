@@ -57,6 +57,7 @@ Agent Deck mode:
     - `executor_tool` starts with `claude` -> `codex`
     - otherwise -> `claude --permission-mode acceptEdits`
   - `workflow_policy` (optional): explicit -> context -> omit when not set
+  - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 - In Agent Deck mode write to:
   - `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`
 
@@ -78,6 +79,7 @@ Generate sections:
    - after first delivery commit, executor runs `review-request` unless user waives review
 8. `Workflow Policy` (optional, only when overriding default human-gated behavior)
 9. `Agent Deck Context` (only in Agent Deck mode): `task_id`, `planner_session_id`, default `executor_session_id`, artifact root, `executor_tool`, `reviewer_tool`
+10. `Special Requirements` (optional fallback; only when needed): free-form constraints/instructions that must be preserved across executor/reviewer/planner messages
 
 Tool-routing rule:
 - If user specifies executor/reviewer tool preference (for example `claude`, `codex`, `gemini`), persist in delegate brief context.
@@ -96,6 +98,7 @@ Tool-routing rule:
   --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
   --note "Read and follow the delegate task file." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
+  --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<executor_tool>"
 ```
 

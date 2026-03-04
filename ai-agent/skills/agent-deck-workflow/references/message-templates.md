@@ -12,6 +12,7 @@ Every workflow message carries these semantics:
 - execution intent (`execution.action`, `execution.artifact_path`, optional `execution.note`)
 - workflow context (`context.task_id`, `context.round`, `context.planner_session_id`, `context.from_session_id`, `context.to_session_id`)
 - optional policy override (`context.workflow_policy`)
+- optional fallback requirements (`context.special_requirements`)
 
 `preconditions.must_fully_load_skills` must include `agent-deck-workflow` for workflow control messages.
 
@@ -35,6 +36,7 @@ Every workflow message carries these semantics:
 ## Policy Propagation
 
 If `context.workflow_policy` exists, executor/reviewer preserve it unchanged for the same `task_id`.
+If `context.special_requirements` exists, planner/executor/reviewer preserve it unchanged for the same `task_id`.
 
 ## Same-Session Role Overlap
 

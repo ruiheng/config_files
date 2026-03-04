@@ -17,6 +17,7 @@ The cloned official `agent-deck` skill is a local reference library (`references
 - `*_session_id`: Agent Deck session UUID (from `agent-deck session show --json`)
 - `*_session_ref`: Human-friendly session reference (`title` or `id`)
 - `workflow_policy`: optional per-task automation override; absent means human-gated defaults
+- `special_requirements`: optional free-form fallback requirements from user/planner; carry unchanged across all roles for the same `task_id`
 
 ## Scope
 
@@ -154,6 +155,7 @@ Planner may include per-task `workflow_policy`, for example:
 Rules:
 - If absent, apply human-gated defaults.
 - If present, executor and reviewer carry it forward unchanged for the same `task_id`.
+- If `special_requirements` is present in context, planner/executor/reviewer carry it forward unchanged for the same `task_id`.
 - Safety checks and must-fix handling remain unchanged.
 - Unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`) enables strict post-closeout health gate.
 

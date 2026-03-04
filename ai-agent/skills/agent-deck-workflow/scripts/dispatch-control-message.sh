@@ -14,6 +14,7 @@ Usage:
     [--round <n|final>]
     [--note <text>]
     [--workflow-policy-json <json_object>]
+    [--special-requirements-json <json_value>]
     [--group <group>]
     [--cmd <tool>]
     [--path <project_path>]
@@ -41,6 +42,7 @@ Notes:
   - For action=closeout_delivered, post-closeout health gate (cleanup + guard checks) is performed automatically after dispatch.
   - --artifact-path must be under .agent-artifacts/ and cannot contain path traversal.
   - --dry-run validates inputs and writes payload file but does not create/start/send sessions.
+  - --special-requirements-json is optional free-form JSON carried as context.special_requirements.
   - Dispatch notifications are filtered by ADWF_DISPATCH_NOTIFY:
       milestone (default): notify only key workflow milestones.
       all: notify all dispatch actions.
@@ -82,6 +84,7 @@ action=""
 artifact_path=""
 note="Load required skills, then execute action."
 workflow_policy_json=""
+special_requirements_json=""
 group=""
 cmd=""
 message_file=""
@@ -97,6 +100,7 @@ while [[ $# -gt 0 ]]; do
     --round) round="$2"; shift 2 ;;
     --note) note="$2"; shift 2 ;;
     --workflow-policy-json) workflow_policy_json="$2"; shift 2 ;;
+    --special-requirements-json) special_requirements_json="$2"; shift 2 ;;
     --group) group="$2"; shift 2 ;;
     --cmd) cmd="$2"; shift 2 ;;
     --path) path="$2"; shift 2 ;;
@@ -122,6 +126,11 @@ command -v jq >/dev/null 2>&1 || die "jq is required"
 if [[ -n "$workflow_policy_json" ]]; then
   printf '%s' "$workflow_policy_json" | jq -e 'type == "object"' >/dev/null 2>&1 \
     || die "--workflow-policy-json must be a valid JSON object"
+fi
+
+if [[ -n "$special_requirements_json" ]]; then
+  printf '%s' "$special_requirements_json" | jq -e 'type != "null"' >/dev/null 2>&1 \
+    || die "--special-requirements-json must be valid non-null JSON"
 fi
 
 if (( dry_run )); then
@@ -315,6 +324,12 @@ jq -n \
 if [[ -n "$workflow_policy_json" ]]; then
   tmp_payload="$(mktemp)"
   jq --argjson workflow_policy "$workflow_policy_json" '.context += {workflow_policy: $workflow_policy}' "$message_file" >"$tmp_payload"
+  mv "$tmp_payload" "$message_file"
+fi
+
+if [[ -n "$special_requirements_json" ]]; then
+  tmp_payload="$(mktemp)"
+  jq --argjson special_requirements "$special_requirements_json" '.context += {special_requirements: $special_requirements}' "$message_file" >"$tmp_payload"
   mv "$tmp_payload" "$message_file"
 fi
 

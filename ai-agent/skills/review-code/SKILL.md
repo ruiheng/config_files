@@ -123,6 +123,7 @@ Skill-specific context resolution:
 - `executor_session_id`: explicit -> inbound payload `context.from_session_id` -> default `executor-<task_id>`
 - `round`: explicit -> parse from `-r<round>.md` -> ask
 - `workflow_policy` (optional): explicit -> request/delegate context -> human-gated defaults
+- `special_requirements` (optional fallback): explicit -> inbound payload `context.special_requirements` -> request/delegate context -> omit
 
 Important identity clarification:
 - `current_session_id` is for sender validation and safety checks.
@@ -158,6 +159,7 @@ Dispatch example (`rework_required`):
   --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
   --note "Must-fix items remain. Address the review findings and submit the next review request." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
+  --special-requirements-json '<special_requirements_json_optional>' \
   --no-ensure-session \
   --no-start-session
 ```
@@ -175,6 +177,7 @@ Dispatch example (`user_requested_iteration` after user chooses iterate):
   --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
   --note "User requested another implementation iteration. Address the requested follow-ups and submit a new review request." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
+  --special-requirements-json '<special_requirements_json_optional>' \
   --no-ensure-session \
   --no-start-session
 ```
@@ -193,6 +196,7 @@ Required interaction behavior:
 - For `rework_required`, dispatch automatically after report generation.
 - For `stop_recommended` with manual decision, wait for explicit user choice.
 - Preserve `workflow_policy` unchanged in outbound dispatches.
+- Preserve `special_requirements` unchanged in outbound dispatches.
 - Keep control JSON internal unless user explicitly asks.
 
 Sender identity rule:
