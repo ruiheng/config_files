@@ -201,6 +201,7 @@ Use stable naming:
 - Reviewer session: `reviewer-<task_id>`
 - Branch: `task/<task_id>`
 - Artifacts root: `.agent-artifacts/<task_id>/`
+- `.agent-artifacts/` stores inter-agent communication records and workflow state artifacts; ignore it in normal coding/docs work, and inspect it only for postmortem or workflow-debug investigations.
 
 ## Human-Led Three-Role Flow
 
