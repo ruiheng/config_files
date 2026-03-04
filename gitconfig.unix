@@ -35,10 +35,11 @@
 	#proxy = socks5://192.168.222.1:2080
 	#proxy = http://127.0.0.1:7777
 	#proxy = http://192.168.0.205:7777
-# vi: set ft=gitconfig noet :
 [cola]
 	spellcheck = false
 [pull]
 	ff = only
 [init]
 	defaultBranch = master
+
+# vi: set ft=gitconfig noet :
