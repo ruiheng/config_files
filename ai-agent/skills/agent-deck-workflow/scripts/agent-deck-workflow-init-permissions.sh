@@ -260,7 +260,9 @@ main() {
     log_info "Next steps:"
     echo "  1. Restart your AI agent session to load new permissions"
     echo "  2. Run 'agent-deck workflow init' to set up workflow state"
-    echo "  3. Start using /agent-deck-workflow skill"
+    echo "  3. Use Claude launch command with permission mode:"
+    echo "     --cmd \"claude --permission-mode acceptEdits\""
+    echo "  4. Start using /agent-deck-workflow skill"
     echo ""
 }
 

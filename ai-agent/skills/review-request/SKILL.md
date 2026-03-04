@@ -91,10 +91,11 @@ Skill-specific context resolution:
 - `reviewer_session_id`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `workflow_policy` (optional): explicit -> delegated context -> omit
 - `executor_tool`: explicit -> delegated context -> default current AI tool
+  - if `executor_tool` resolves to `claude` without `--permission-mode`, normalize to `claude --permission-mode acceptEdits`
 - `reviewer_tool`: explicit -> delegated context -> map from `executor_tool`:
-  - `executor_tool=codex` -> `claude`
-  - `executor_tool=claude` -> `codex`
-  - otherwise -> `claude`
+  - `executor_tool=codex` -> `claude --permission-mode acceptEdits`
+  - `executor_tool` starts with `claude` -> `codex`
+  - otherwise -> `claude --permission-mode acceptEdits`
 - `round`: explicit -> infer from context -> default `1`
 
 Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
@@ -120,7 +121,7 @@ Typical `--cmd` values (copy-ready):
 
 ```bash
 --cmd "codex"
---cmd "claude"
+--cmd "claude --permission-mode acceptEdits"
 --cmd "gemini"
 --cmd "codex --model gpt-5-codex --approval-mode on-request"
 --cmd "claude --model sonnet --permission-mode acceptEdits"

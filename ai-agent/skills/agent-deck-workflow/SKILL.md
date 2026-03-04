@@ -165,6 +165,7 @@ Rules:
 ## Execution Environment (Required)
 
 All `agent-deck` commands must run in host shell (outside sandbox) to keep real tmux/session context.
+When workflow commands create Claude sessions via `--cmd`, use `claude --permission-mode acceptEdits` (not bare `claude`).
 
 ## Skill-Local Script Dependency (Required)
 

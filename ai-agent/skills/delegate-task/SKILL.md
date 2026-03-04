@@ -51,10 +51,11 @@ Agent Deck mode:
   - `planner_session_id`: detected current session id -> explicit -> context -> ask
   - `executor_session_id`: explicit -> context -> default `executor-<task_id>`
   - `executor_tool`: explicit -> context -> default current AI tool
+    - if `executor_tool` resolves to `claude` without `--permission-mode`, normalize to `claude --permission-mode acceptEdits`
   - `reviewer_tool`: explicit -> context -> map from `executor_tool`:
-    - `executor_tool=codex` -> `claude`
-    - `executor_tool=claude` -> `codex`
-    - otherwise -> `claude`
+    - `executor_tool=codex` -> `claude --permission-mode acceptEdits`
+    - `executor_tool` starts with `claude` -> `codex`
+    - otherwise -> `claude --permission-mode acceptEdits`
   - `workflow_policy` (optional): explicit -> context -> omit when not set
 - In Agent Deck mode write to:
   - `.agent-artifacts/<task_id>/delegate-task-<task_id>.md`
@@ -102,7 +103,7 @@ Typical `--cmd` values (copy-ready):
 
 ```bash
 --cmd "codex"
---cmd "claude"
+--cmd "claude --permission-mode acceptEdits"
 --cmd "gemini"
 --cmd "codex --model gpt-5-codex --approval-mode on-request"
 --cmd "claude --model sonnet --permission-mode acceptEdits"
