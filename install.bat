@@ -345,7 +345,7 @@ exit /b 0
 call :log_info "Installing home directory dotfiles..."
 
 :: Git config (Windows version)
-call :link_file "gitconfig.ruiheng.win" "%USERPROFILE%\.gitconfig"
+call :link_file "gitconfig.win" "%USERPROFILE%\.gitconfig"
 
 exit /b 0
 

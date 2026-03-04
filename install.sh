@@ -533,10 +533,12 @@ install_home_configs() {
     # Git config (OS-specific)
     case "$OS" in
         linux|wsl|macos)
-            link_file "gitconfig.ruiheng.unix" "$HOME/.gitconfig"
+            migrate_legacy_symlink_source "$HOME/.gitconfig" "$SCRIPT_DIR/gitconfig.ruiheng.unix" "$SCRIPT_DIR/gitconfig.unix"
+            link_file "gitconfig.unix" "$HOME/.gitconfig"
             ;;
         windows)
-            link_file "gitconfig.ruiheng.win" "$HOME/.gitconfig"
+            migrate_legacy_symlink_source "$HOME/.gitconfig" "$SCRIPT_DIR/gitconfig.ruiheng.win" "$SCRIPT_DIR/gitconfig.win"
+            link_file "gitconfig.win" "$HOME/.gitconfig"
             ;;
     esac
 

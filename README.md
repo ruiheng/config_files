@@ -101,8 +101,8 @@ Options:
 | `zshrc` | `~/.zshrc` | Zsh configuration |
 | `screenrc` | `~/.screenrc` | GNU Screen configuration |
 | `tmux/tmux.conf` | `~/.tmux.conf` | Tmux configuration |
-| `gitconfig.ruiheng.unix` | `~/.gitconfig` | Git config (Unix/Linux/macOS) |
-| `gitconfig.ruiheng.win` | `~/.gitconfig` | Git config (Windows) |
+| `gitconfig.unix` | `~/.gitconfig` | Git config (Unix/Linux/macOS) |
+| `gitconfig.win` | `~/.gitconfig` | Git config (Windows) |
 
 ### XDG Config Directory (`~/.config/` or `%LOCALAPPDATA%`)
 
@@ -126,7 +126,7 @@ Options:
 | Source | Target | Description |
 |--------|--------|-------------|
 | `nvim/` | `%LOCALAPPDATA%\nvim` | Neovim configuration |
-| `gitconfig.ruiheng.win` | `%USERPROFILE%\.gitconfig` | Git configuration |
+| `gitconfig.win` | `%USERPROFILE%\.gitconfig` | Git configuration |
 
 ### Claude Code Configuration
 
