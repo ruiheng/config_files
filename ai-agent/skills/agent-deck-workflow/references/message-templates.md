@@ -8,20 +8,16 @@ For full JSON payload templates (internal protocol appendix), see:
 ## Message Envelope
 
 Every workflow message carries these semantics:
-- task identity (`task_id`)
-- planner identity (`planner_session_id`, immutable within one task)
-- sender/receiver identity (`from_session_id`, `to_session_id`)
-- round marker (`round`, integer or `final`)
-- action type (`action`)
-- artifact pointer (`artifact_path`)
-- optional note (`note`)
-- optional policy override (`workflow_policy`)
+- precondition gate (`preconditions.must_fully_load_skills`)
+- execution intent (`execution.action`, `execution.artifact_path`, optional `execution.note`)
+- workflow context (`context.task_id`, `context.round`, `context.planner_session_id`, `context.from_session_id`, `context.to_session_id`)
+- optional policy override (`context.workflow_policy`)
 
-`required_skills` should include `agent-deck-workflow` for workflow control messages.
+`preconditions.must_fully_load_skills` must include `agent-deck-workflow` for workflow control messages.
 
 ## Sender Invariants
 
-- `execute_delegate_task`: sender is planner (`from_session_id = planner_session_id`)
+- `execute_delegate_task`: sender is planner (`context.from_session_id = context.planner_session_id`)
 - `review_requested`: sender is executor
 - `rework_required`: sender is reviewer
 - `user_requested_iteration`: sender is reviewer
@@ -38,7 +34,7 @@ Every workflow message carries these semantics:
 
 ## Policy Propagation
 
-If `workflow_policy` exists, executor/reviewer preserve it unchanged for the same `task_id`.
+If `context.workflow_policy` exists, executor/reviewer preserve it unchanged for the same `task_id`.
 
 ## Same-Session Role Overlap
 

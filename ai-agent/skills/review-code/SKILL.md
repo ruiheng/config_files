@@ -119,8 +119,8 @@ Skill-specific context resolution:
 - `task_id`: explicit -> review path `.agent-artifacts/<task_id>/...` -> Agent Deck context -> ask
 - `planner_session_id`: explicit/context only -> ask
 - `current_session_id`: best-effort from `agent-deck session current --json`
-- `reviewer_session_id`: explicit -> `current_session_id` -> inbound payload `to_session_id` -> ask
-- `executor_session_id`: explicit -> inbound payload `from_session_id` -> default `executor-<task_id>`
+- `reviewer_session_id`: explicit -> `current_session_id` -> inbound payload `context.to_session_id` -> ask
+- `executor_session_id`: explicit -> inbound payload `context.from_session_id` -> default `executor-<task_id>`
 - `round`: explicit -> parse from `-r<round>.md` -> ask
 - `workflow_policy` (optional): explicit -> request/delegate context -> human-gated defaults
 

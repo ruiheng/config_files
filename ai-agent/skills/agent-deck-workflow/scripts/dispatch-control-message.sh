@@ -80,7 +80,7 @@ from_session_ref=""
 to_session_ref=""
 action=""
 artifact_path=""
-note="Read and follow the artifact file."
+note="Load required skills, then execute action."
 workflow_policy_json=""
 group=""
 cmd=""
@@ -290,20 +290,26 @@ jq -n \
   --arg artifact_path "$artifact_path" \
   --arg note "$note" \
   '{
-    task_id: $task_id,
-    planner_session_id: $planner_session_id,
-    required_skills: ["agent-deck-workflow"],
-    from_session_id: $from_session_id,
-    to_session_id: $to_session_id,
-    round: $round,
-    action: $action,
-    artifact_path: $artifact_path,
-    note: $note
-  }' >"$message_file"
+    preconditions: {
+      must_fully_load_skills: ["agent-deck-workflow"]
+    },
+    execution: {
+      action: $action,
+      artifact_path: $artifact_path
+    },
+    context: {
+      task_id: $task_id,
+      round: $round,
+      planner_session_id: $planner_session_id,
+      from_session_id: $from_session_id,
+      to_session_id: $to_session_id
+    }
+  }
+  | if ($note | length) > 0 then .execution.note = $note else . end' >"$message_file"
 
 if [[ -n "$workflow_policy_json" ]]; then
   tmp_payload="$(mktemp)"
-  jq --argjson workflow_policy "$workflow_policy_json" '. + {workflow_policy: $workflow_policy}' "$message_file" >"$tmp_payload"
+  jq --argjson workflow_policy "$workflow_policy_json" '.context += {workflow_policy: $workflow_policy}' "$message_file" >"$tmp_payload"
   mv "$tmp_payload" "$message_file"
 fi
 
