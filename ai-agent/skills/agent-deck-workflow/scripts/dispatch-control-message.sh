@@ -259,6 +259,11 @@ if (( ensure_session )); then
   fi
 fi
 
+if (( created )); then
+  debug "new session created; waiting 3s before continuing"
+  sleep 3
+fi
+
 to_session_id="$(resolve_session_id "$to_session_ref")"
 [[ -n "$to_session_id" ]] || die "failed to resolve to session id from ref: $to_session_ref"
 
