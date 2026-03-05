@@ -13,3 +13,11 @@ decision = "allow"
 toolName = "run_shell_command"
 commandPrefix = "~/.gemini/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"
 priority = 100
+
+[[policy]]
+name = "allow_agent_deck_workflow_dispatch_shared_agents_path"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = "~/.agents/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"
+priority = 100

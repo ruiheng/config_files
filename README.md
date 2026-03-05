@@ -150,9 +150,9 @@ Options:
 | Source | Target | Description |
 |--------|--------|-------------|
 | `ai-agent/GEMINI.md` | `~/.gemini/GEMINI.md` | Gemini CLI main config |
-| `ai-agent/skills/<skill>/` | `~/.gemini/skills/<skill>/` | **Each skill linked individually** |
+| `ai-agent/skills/<skill>/` | `~/.agents/skills/<skill>/` or `~/.gemini/skills/<skill>/` | **Linked individually (path depends on environment)** |
 
-**Note**: Gemini CLI skills are linked individually for reliability. If `~/.gemini/skills` is currently a symlink, run `./install.sh --interactive` or `./install.sh --force` once to migrate it to a real directory and then link each skill.
+**Note**: If `~/.agents/skills` exists, installer uses it as the shared Gemini skills path and skips `~/.gemini/skills` to avoid duplicate skill conflict warnings. If `~/.agents/skills` does not exist, installer links skills under `~/.gemini/skills`.
 
 ### Other Special Configurations
 

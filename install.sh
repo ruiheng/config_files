@@ -752,7 +752,67 @@ install_claude_config() {
     link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
 }
 
+cleanup_gemini_duplicate_skill_links() {
+    local gemini_skills_dir="$1"
+    local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
+
+    if [[ ! -d "$gemini_skills_dir" ]]; then
+        return 0
+    fi
+
+    for skill_dir in "$src_skills_dir"/*; do
+        if [[ -d "$skill_dir" ]]; then
+            local skill_name
+            skill_name=$(basename "$skill_dir")
+            local target_link="$gemini_skills_dir/$skill_name"
+
+            # Remove only symlink entries to avoid deleting user-managed directories/files.
+            if [[ -L "$target_link" ]]; then
+                if [[ $DRY_RUN -eq 1 ]]; then
+                    log_dry "Would remove duplicate Gemini skill link: $target_link"
+                else
+                    rm "$target_link"
+                    log_info "Removed duplicate Gemini skill link: $target_link"
+                fi
+            fi
+        fi
+    done
+}
+
+has_shared_gemini_skill_conflicts() {
+    local agents_skills_dir="$1"
+    local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
+
+    if [[ ! -d "$agents_skills_dir" ]] && [[ ! -L "$agents_skills_dir" ]]; then
+        return 1
+    fi
+
+    for skill_dir in "$src_skills_dir"/*; do
+        if [[ -d "$skill_dir" ]]; then
+            local skill_name
+            skill_name=$(basename "$skill_dir")
+            if [[ -f "$agents_skills_dir/$skill_name/SKILL.md" ]]; then
+                return 0
+            fi
+        fi
+    done
+
+    return 1
+}
+
 install_gemini_skills() {
+    local agents_skills_dir="$HOME/.agents/skills"
+    local gemini_skills_dir="$HOME/.gemini/skills"
+
+    # Newer Gemini setup may load skills from ~/.agents/skills.
+    # Installing duplicates in ~/.gemini/skills triggers skill conflict warnings.
+    if has_shared_gemini_skill_conflicts "$agents_skills_dir"; then
+        log_info "Detected shared Gemini skills path: $agents_skills_dir"
+        log_warn "Skipping Gemini skill links under $gemini_skills_dir to avoid duplicate skill conflicts"
+        cleanup_gemini_duplicate_skill_links "$gemini_skills_dir"
+        return 0
+    fi
+
     install_skills_individually "Gemini CLI" "$HOME/.gemini/skills"
 }
 
