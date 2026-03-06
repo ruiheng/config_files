@@ -96,8 +96,8 @@ Canonical CLI flags are `--*-session-id`:
 
 ### Control Message Contract
 
-- Semantic contract: `references/message-templates.md`
-- Internal JSON appendix: `references/internal-protocol/message-templates.md`
+- Semantic contract: `references/control-message-semantics.md`
+- Internal JSON appendix: `references/internal-protocol/control-message-json-protocol.md`
 
 Control JSON is internal protocol data by default.
 User-facing responses should provide readable decisions and artifact pointers, not raw JSON payloads.

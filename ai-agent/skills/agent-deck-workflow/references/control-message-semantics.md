@@ -3,7 +3,7 @@
 This file documents message semantics for workflow behavior.
 
 For full JSON payload templates (internal protocol appendix), see:
-- `references/internal-protocol/message-templates.md`
+- `references/internal-protocol/control-message-json-protocol.md`
 
 ## Message Envelope
 

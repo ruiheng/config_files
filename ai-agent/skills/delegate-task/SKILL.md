@@ -118,8 +118,8 @@ Rules:
 - `--cmd` only applies when creating a missing target session; existing sessions keep their original tool command.
 
 Control payload requirements:
-- Semantic rules: `agent-deck-workflow/references/message-templates.md`
-- Full JSON appendix: `agent-deck-workflow/references/internal-protocol/message-templates.md`
+- Semantic rules: `agent-deck-workflow/references/control-message-semantics.md`
+- Full JSON appendix: `agent-deck-workflow/references/internal-protocol/control-message-json-protocol.md`
 - Use `*_session_id` fields.
 
 ## 5) User-Facing Output Contract

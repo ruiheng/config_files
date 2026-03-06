@@ -86,7 +86,8 @@ Use skills:
 
 Project workflow references:
 
-- Message templates: `ai-agent/skills/agent-deck-workflow/references/message-templates.md`
+- Message semantics: `ai-agent/skills/agent-deck-workflow/references/control-message-semantics.md`
+- JSON protocol templates: `ai-agent/skills/agent-deck-workflow/references/internal-protocol/control-message-json-protocol.md`
 
 Official reference sync policy:
 
