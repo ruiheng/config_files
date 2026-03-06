@@ -15,6 +15,7 @@ Every workflow message carries these semantics:
 - optional fallback requirements (`context.special_requirements`)
 
 `preconditions.must_fully_load_skills` must include `agent-deck-workflow` for workflow control messages.
+For reviewer-facing actions (especially `review_requested`), `execution.note` should explicitly direct receiver to follow `agent-deck-workflow/SKILL.md` control-message instructions before dispatching follow-up actions.
 
 ## Sender Invariants
 

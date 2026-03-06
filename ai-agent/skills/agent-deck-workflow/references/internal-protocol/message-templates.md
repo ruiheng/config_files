@@ -34,7 +34,7 @@ Field rules:
 - `preconditions.must_fully_load_skills`: required list of skills receiver must fully load before acting.
 - `execution.action`: machine-friendly snake_case verb phrase.
 - `execution.artifact_path`: required when a file is the source of truth; empty string only when not applicable.
-- `execution.note`: optional short instruction; omit when not needed.
+- `execution.note`: optional short instruction; omit when not needed. When present, prefer explicit wording to follow `agent-deck-workflow/SKILL.md` control-message rules.
 - `context.task_id`: stable id (`YYYYMMDD-HHMM-<slug>`).
 - `context.round`: integer for loop rounds; use `"final"` for closeout.
 - `context.planner_session_id`: required, immutable within one task.
@@ -82,7 +82,7 @@ Sender invariants:
   "execution": {
     "action": "review_requested",
     "artifact_path": ".agent-artifacts/<task_id>/review-request-r<n>.md",
-    "note": "Read the review-request file and produce a full review report. Then proactively send the next control message. If must-fix issues remain, send rework guidance to executor. If no must-fix remains, recommend stop and wait for user confirmation."
+    "note": "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then proactively dispatch the next control message via <agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required; if no must-fix remains, send stop_recommended (or continue closeout path when policy allows)."
   },
   "context": {
     "task_id": "<task_id>",

@@ -1,6 +1,6 @@
 ---
 name: agent-deck-workflow
-description: Human-led planner/executor/reviewer workflow protocol on top of agent-deck. Use for role handoff rules, control-message semantics, review-loop branching, and closeout policy.
+description: Human-led planner/executor/reviewer workflow protocol on top of agent-deck. This skill includes required instructions for composing/sending workflow control messages, plus role handoff rules, review-loop branching, and closeout policy.
 ---
 
 # Agent Deck Workflow
