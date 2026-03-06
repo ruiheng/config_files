@@ -18,7 +18,7 @@ git commit -m "fix: resolve layout offset calculation"
 
 ## Commit Approval
 
-All commits must be approved by the user before creating.
+User approval is required before creating commits by default.
 
 ## Branch Strategy
 
