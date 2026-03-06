@@ -27,7 +27,7 @@ For reviewer-facing actions (especially `review_requested`), `execution.note` sh
 
 ## Action Semantics
 
-- `execute_delegate_task`: planner starts delegated implementation.
+- `execute_delegate_task`: planner starts delegated implementation. Executor must create/switch to `task/<task_id>` before any code change.
 - `review_requested`: executor asks reviewer to run full review.
 - `rework_required`: reviewer blocks and returns must-fix findings.
 - `stop_recommended`: reviewer reports no must-fix items and asks user to choose closeout vs next iteration.
