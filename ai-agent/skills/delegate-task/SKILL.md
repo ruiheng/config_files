@@ -90,7 +90,7 @@ Tool-routing rule:
 - Use one helper command in host shell.
 
 ```bash
-<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session-id "<planner_session_id>" \
   --to-session-id "<executor_session_id>" \

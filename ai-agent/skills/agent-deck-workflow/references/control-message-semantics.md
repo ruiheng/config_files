@@ -32,7 +32,7 @@ For reviewer-facing actions (especially `review_requested`), `execution.note` sh
 - `rework_required`: reviewer blocks and returns must-fix findings.
 - `stop_recommended`: reviewer reports no must-fix items and asks user to choose closeout vs next iteration.
 - `user_requested_iteration`: reviewer forwards user's iteration decision to executor.
-- `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance. Planner then runs `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh` for required closeout actions.
+- `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance. Planner then runs `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions.
 
 ## Policy Propagation
 

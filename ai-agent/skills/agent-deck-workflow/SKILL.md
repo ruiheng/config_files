@@ -85,7 +85,7 @@ Use workflow helpers only from this skill directory:
 
 Path rules:
 1. resolve helper path relative to this skill directory
-2. use `<agent_deck_workflow_skill_dir>/scripts/<helper>.sh` form in commands and user-facing recommendations
+2. use `~/.config/ai-agent/skills/agent-deck-workflow/scripts/<helper>.sh` form in commands and user-facing recommendations
 3. do not run bare `scripts/...` or project-root `scripts/...` for workflow helpers
 4. stop and ask user to attach/install this skill if unresolved
 
@@ -232,7 +232,7 @@ Reviewer chooses one branch:
 ### 4) Planner Closeout Batch (After Acceptance)
 
 After closeout acceptance (explicit user or unattended policy):
-1. run `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh` for required closeout actions
+1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions
 2. required in script: merge `task/<task_id>` into integration branch
 3. required in script: update progress record
 4. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
@@ -243,7 +243,7 @@ If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch nex
 Recommended planner invocation:
 
 ```bash
-<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh \
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh \
   --task-id "<task_id>" \
   --integration-branch "<integration_branch>" \
   --run-health-gate
@@ -276,7 +276,7 @@ Do:
 - keep long context file-based (`delegate-task`, `review-request`, `review-report`, `closeout`)
 - keep cross-session messages short and pointer-based
 - keep human confirmation gates in human-gated mode
-- run planner required closeout actions via `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh`
+- run planner required closeout actions via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`
 
 Do not:
 - auto-merge before acceptance

@@ -149,7 +149,7 @@ Execution flow in Agent Deck mode:
 Dispatch example (`rework_required`):
 
 ```bash
-<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session-id "<planner_session_id>" \
   --from-session-id "<reviewer_session_id>" \
@@ -167,7 +167,7 @@ Dispatch example (`rework_required`):
 Dispatch example (`user_requested_iteration` after user chooses iterate):
 
 ```bash
-<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session-id "<planner_session_id>" \
   --from-session-id "<reviewer_session_id>" \

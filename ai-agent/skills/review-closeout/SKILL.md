@@ -58,12 +58,12 @@ If required values are resolved:
 3. dispatch mode:
    - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session dispatch and continue locally
    - otherwise dispatch `closeout_delivered` to planner
-4. include planner follow-up recommendation in closeout output (explicitly recommend `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh`)
+4. include planner follow-up recommendation in closeout output (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
 
 Dispatch example:
 
 ```bash
-<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session-id "<planner_session_id>" \
   --from-session-id "<reviewer_session_id>" \
@@ -71,7 +71,7 @@ Dispatch example:
   --round "final" \
   --action "closeout_delivered" \
   --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
-  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run <agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional." \
+  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --no-ensure-session \
@@ -150,7 +150,7 @@ If UI package content exists, include UI package before planner follow-up.
 - Notes: [optional]
 
 #### Planner Follow-up Recommendation (After Closeout Acceptance)
-- Required: run `<agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh --task-id <task_id> --integration-branch <integration_branch>`.
+- Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --integration-branch <integration_branch>`.
 - Required by script: merge `task/<task_id>` into target integration branch and update planner progress records.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.

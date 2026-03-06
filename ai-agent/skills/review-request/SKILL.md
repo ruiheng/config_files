@@ -105,7 +105,7 @@ Create parent directories when missing.
 Dispatch to reviewer with canonical flags:
 
 ```bash
-<agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh \
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
   --task-id "<task_id>" \
   --planner-session-id "<planner_session_id>" \
   --from-session-id "<executor_session_id>" \
@@ -113,7 +113,7 @@ Dispatch to reviewer with canonical flags:
   --round "<round>" \
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
-  --note "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then use <agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh to proactively send the next control message to executor-<task_id>." \
+  --note "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then use ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh to proactively send the next control message to executor-<task_id>." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<reviewer_tool>"

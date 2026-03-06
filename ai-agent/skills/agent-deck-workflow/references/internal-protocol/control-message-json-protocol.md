@@ -82,7 +82,7 @@ Sender invariants:
   "execution": {
     "action": "review_requested",
     "artifact_path": ".agent-artifacts/<task_id>/review-request-r<n>.md",
-    "note": "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then proactively dispatch the next control message via <agent_deck_workflow_skill_dir>/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required; if no must-fix remains, send stop_recommended (or continue closeout path when policy allows)."
+    "note": "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then proactively dispatch the next control message via ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required; if no must-fix remains, send stop_recommended (or continue closeout path when policy allows)."
   },
   "context": {
     "task_id": "<task_id>",
@@ -175,7 +175,7 @@ Usage note:
   "execution": {
     "action": "closeout_delivered",
     "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-    "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run <agent_deck_workflow_skill_dir>/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional."
+    "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional."
   },
   "context": {
     "task_id": "<task_id>",
