@@ -14,7 +14,7 @@ The cloned official `agent-deck` skill is a local reference library (`references
 ## Terminology
 
 - `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
-- `*_session_id`: Agent Deck session UUID (from `agent-deck session show --json`)
+- `*_session_id`: Agent Deck session UUID (resolve with `agent-deck session show <session_id_or_ref> --json | jq -r '.id'`)
 - `*_session_ref`: Human-friendly session reference (`title` or `id`)
 - `workflow_policy`: optional per-task automation override; absent means human-gated defaults
 - `special_requirements`: optional free-form fallback requirements from user/planner; carry unchanged across all roles for the same `task_id`
