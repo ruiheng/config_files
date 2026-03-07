@@ -92,11 +92,15 @@ Skill-specific context resolution:
 - `workflow_policy` (optional): explicit -> delegated context -> omit
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `executor_tool`: explicit -> delegated context -> default current AI tool
-  - if `executor_tool` resolves to `claude` without `--permission-mode`, normalize to `claude --permission-mode acceptEdits`
-- `reviewer_tool`: explicit -> delegated context -> map from `executor_tool`:
-  - `executor_tool=codex` -> `claude --permission-mode acceptEdits`
-  - `executor_tool` starts with `claude` -> `codex`
-  - otherwise -> `claude --permission-mode acceptEdits`
+  - if user/context provides a full command with arguments, preserve it unchanged
+  - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
+  - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --approval-mode on-request`
+  - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
+- `reviewer_tool`: explicit -> delegated context -> map from normalized `executor_tool`:
+  - if user/context provides a full reviewer command with arguments, preserve it unchanged
+  - `executor_tool` starts with `codex` -> `claude --model sonnet --permission-mode acceptEdits`
+  - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --approval-mode on-request`
+  - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
 - `round`: explicit -> infer from context -> default `1`
 
 Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
@@ -122,15 +126,13 @@ Dispatch to reviewer with canonical flags:
 Typical `--cmd` values (copy-ready):
 
 ```bash
---cmd "codex"
---cmd "claude --permission-mode acceptEdits"
---cmd "gemini"
---cmd "codex --model gpt-5-codex --approval-mode on-request"
+--cmd "codex --model gpt-5.4 --approval-mode on-request"
 --cmd "claude --model sonnet --permission-mode acceptEdits"
---cmd "gemini --model gemini-2.5-pro --yolo"
+--cmd "gemini --model gemini-2.5-pro"
 ```
 
 Rules:
+- Do not emit bare provider names like `claude`, `codex`, or `gemini` as default workflow session commands.
 - Always quote `--cmd` when it contains spaces.
 - `--cmd` only applies when creating a missing target session; existing sessions keep their original tool command.
 

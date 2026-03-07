@@ -186,7 +186,11 @@ Rules:
 ## Execution Environment (Required)
 
 All `agent-deck` commands must run in host shell (outside sandbox) to keep real tmux/session context.
-When workflow commands create Claude sessions via `--cmd`, use `claude --permission-mode acceptEdits` (not bare `claude`).
+When workflow commands create sessions via `--cmd`, do not use bare provider names.
+Use full recommended commands unless the user explicitly supplied a different full command:
+- Claude: `claude --model sonnet --permission-mode acceptEdits`
+- Codex: `codex --model gpt-5.4 --approval-mode on-request`
+- Gemini: `gemini --model gemini-2.5-pro`
 
 ## Skill-Local Script Dependency (Required)
 

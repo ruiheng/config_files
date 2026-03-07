@@ -51,11 +51,15 @@ Agent Deck mode:
   - `planner_session_id`: detected current session id -> explicit -> context -> ask
   - `executor_session_id`: explicit -> context -> default `executor-<task_id>`
   - `executor_tool`: explicit -> context -> default current AI tool
-    - if `executor_tool` resolves to `claude` without `--permission-mode`, normalize to `claude --permission-mode acceptEdits`
-  - `reviewer_tool`: explicit -> context -> map from `executor_tool`:
-    - `executor_tool=codex` -> `claude --permission-mode acceptEdits`
-    - `executor_tool` starts with `claude` -> `codex`
-    - otherwise -> `claude --permission-mode acceptEdits`
+    - if user/context provides a full command with arguments, preserve it unchanged
+    - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
+    - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --approval-mode on-request`
+    - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
+  - `reviewer_tool`: explicit -> context -> map from normalized `executor_tool`:
+    - if user/context provides a full reviewer command with arguments, preserve it unchanged
+    - `executor_tool` starts with `codex` -> `claude --model sonnet --permission-mode acceptEdits`
+    - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --approval-mode on-request`
+    - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
   - `workflow_policy` (optional): explicit -> context -> omit when not set
   - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 - In Agent Deck mode write to:
@@ -82,7 +86,8 @@ Generate sections:
 10. `Special Requirements` (optional fallback; only when needed): free-form constraints/instructions that must be preserved across executor/reviewer/planner messages
 
 Tool-routing rule:
-- If user specifies executor/reviewer tool preference (for example `claude`, `codex`, `gemini`), persist in delegate brief context.
+- If user specifies a full executor/reviewer command, persist it unchanged in delegate brief context.
+- If user specifies only provider preference (for example `claude`, `codex`, `gemini`), persist the normalized full command with recommended arguments.
 
 ## 4) Agent-Deck Dispatch (When Agent Deck Mode Is On)
 
@@ -105,15 +110,13 @@ Tool-routing rule:
 Typical `--cmd` values (copy-ready):
 
 ```bash
---cmd "codex"
---cmd "claude --permission-mode acceptEdits"
---cmd "gemini"
---cmd "codex --model gpt-5-codex --approval-mode on-request"
+--cmd "codex --model gpt-5.4 --approval-mode on-request"
 --cmd "claude --model sonnet --permission-mode acceptEdits"
---cmd "gemini --model gemini-2.5-pro --yolo"
+--cmd "gemini --model gemini-2.5-pro"
 ```
 
 Rules:
+- Do not emit bare provider names like `claude`, `codex`, or `gemini` as default workflow session commands.
 - Always quote `--cmd` when it contains spaces.
 - `--cmd` only applies when creating a missing target session; existing sessions keep their original tool command.
 
