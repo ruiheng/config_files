@@ -8,6 +8,8 @@
 
 set -euo pipefail
 
+INSTALLED_WORKFLOW_SCRIPTS="$HOME/.config/ai-agent/skills/agent-deck-workflow/scripts"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -60,8 +62,8 @@ configure_claude() {
             local new_permissions='[
               "Bash(agent-deck)",
               "Bash(agent-deck *)",
-              "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-              "Bash(*/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
+              "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+              "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
               "Write(/.agent-artifacts/**)"
             ]'
 
@@ -79,8 +81,8 @@ configure_claude() {
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
-      "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-      "Bash(*/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
+      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -96,8 +98,8 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
-      "Bash(*/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-      "Bash(*/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
+      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -121,9 +123,9 @@ configure_codex() {
     mkdir -p "$rules_dir"
 
     # Resolve the real path of the skill scripts
-    local skill_scripts_symlink="$HOME/.claude/skills/agent-deck-workflow/scripts"
+    local skill_scripts_symlink="$INSTALLED_WORKFLOW_SCRIPTS"
     local skill_scripts_real=""
-    if [[ -L "$skill_scripts_symlink" ]]; then
+    if [[ -e "$skill_scripts_symlink" ]]; then
         skill_scripts_real="$(readlink -f "$skill_scripts_symlink" 2>/dev/null || true)"
     fi
 
@@ -144,17 +146,17 @@ prefix_rule(
     ],
 )
 
-# Allow workflow scripts (symlink path)
+# Allow workflow scripts (installed path)
 prefix_rule(
-    pattern = ["$HOME/.claude/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"],
+    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS/dispatch-control-message.sh"],
     decision = "allow",
-    justification = "Workflow dispatch script (symlink)",
+    justification = "Workflow dispatch script (installed path)",
 )
 
 prefix_rule(
-    pattern = ["$HOME/.claude/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh"],
+    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS/planner-closeout-batch.sh"],
     decision = "allow",
-    justification = "Workflow closeout script (symlink)",
+    justification = "Workflow closeout script (installed path)",
 )
 EOF
 
@@ -213,7 +215,7 @@ action = "allow"
 description = "Agent deck commands"
 
 [[rules]]
-pattern = ".*/\\.claude/skills/agent-deck-workflow/scripts/dispatch-control-message\\.sh .*"
+pattern = ".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\\.sh .*"
 action = "allow"
 description = "Workflow dispatch script"
 
