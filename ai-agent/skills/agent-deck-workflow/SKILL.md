@@ -189,7 +189,7 @@ All `agent-deck` commands must run in host shell (outside sandbox) to keep real 
 When workflow commands create sessions via `--cmd`, do not use bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`
-- Codex: `codex --model gpt-5.4 --approval-mode on-request`
+- Codex: `codex --model gpt-5.4 --ask-for-approval on-request`
 - Gemini: `gemini --model gemini-2.5-pro`
 
 ## Skill-Local Script Dependency (Required)

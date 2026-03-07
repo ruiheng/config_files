@@ -53,12 +53,12 @@ Agent Deck mode:
   - `executor_tool`: explicit -> context -> default current AI tool
     - if user/context provides a full command with arguments, preserve it unchanged
     - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
-    - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --approval-mode on-request`
+    - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
     - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
   - `reviewer_tool`: explicit -> context -> map from normalized `executor_tool`:
     - if user/context provides a full reviewer command with arguments, preserve it unchanged
     - `executor_tool` starts with `codex` -> `claude --model sonnet --permission-mode acceptEdits`
-    - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --approval-mode on-request`
+    - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --ask-for-approval on-request`
     - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
   - `workflow_policy` (optional): explicit -> context -> omit when not set
   - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
@@ -110,7 +110,7 @@ Tool-routing rule:
 Typical `--cmd` values (copy-ready):
 
 ```bash
---cmd "codex --model gpt-5.4 --approval-mode on-request"
+--cmd "codex --model gpt-5.4 --ask-for-approval on-request"
 --cmd "claude --model sonnet --permission-mode acceptEdits"
 --cmd "gemini --model gemini-2.5-pro"
 ```
