@@ -289,6 +289,13 @@ prefix_rule(
     ],
 )
 
+# Allow shell formatting helper used in workflow wrappers
+prefix_rule(
+    pattern = ["printf"],
+    decision = "allow",
+    justification = "Shell printf helper commands",
+)
+
 # Allow workflow scripts (installed path, tilde form)
 prefix_rule(
     pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/dispatch-control-message.sh"],
