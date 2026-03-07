@@ -39,6 +39,113 @@ PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 
 log_info "Initializing agent-deck-workflow permissions for: $PROJECT_DIR"
 
+resolve_abs_path() {
+    local base_dir="$1"
+    local maybe_relative_path="$2"
+
+    if [[ -z "$maybe_relative_path" ]]; then
+        return 1
+    fi
+
+    if [[ "$maybe_relative_path" == /* ]]; then
+        printf '%s\n' "$maybe_relative_path"
+    else
+        (cd "$base_dir" && cd "$maybe_relative_path" && pwd -P)
+    fi
+}
+
+path_is_within() {
+    local candidate="$1"
+    local parent="$2"
+
+    case "$candidate" in
+        "$parent"|"$parent"/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+configure_codex_worktree_writable_roots() {
+    local codex_dir="$1"
+    local config_file="$codex_dir/config.toml"
+    local git_common_dir_raw=""
+    local git_common_dir=""
+
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        log_info "Skipping Codex worktree writable root detection on non-Linux host"
+        return 0
+    fi
+
+    if ! command -v git &>/dev/null; then
+        log_warn "git not found; skipping Codex worktree writable root detection"
+        return 0
+    fi
+
+    git_common_dir_raw="$(git -C "$PROJECT_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
+    if [[ -z "$git_common_dir_raw" ]]; then
+        log_info "Project is not a git repository; no extra Codex writable roots needed"
+        return 0
+    fi
+
+    git_common_dir="$(resolve_abs_path "$PROJECT_DIR" "$git_common_dir_raw" 2>/dev/null || true)"
+    if [[ -z "$git_common_dir" ]]; then
+        log_warn "Failed to resolve git common dir '$git_common_dir_raw'; skipping Codex writable root update"
+        return 0
+    fi
+
+    if path_is_within "$git_common_dir" "$PROJECT_DIR"; then
+        log_info "Git common dir is inside project; no extra Codex writable roots needed"
+        return 0
+    fi
+
+    mkdir -p "$codex_dir"
+
+    if ! command -v uv &>/dev/null; then
+        log_warn "uv not found; cannot safely edit $config_file as TOML"
+        log_info "Add this path manually under [sandbox_workspace_write].writable_roots: $git_common_dir"
+        return 0
+    fi
+
+    if [[ ! -f "$config_file" ]]; then
+        printf '%s\n' '[sandbox_workspace_write]' > "$config_file"
+        printf '%s\n' 'writable_roots = []' >> "$config_file"
+    fi
+
+    if ! uv run --with tomlkit python - "$config_file" "$git_common_dir" <<'PY2'
+from pathlib import Path
+import sys
+import tomlkit
+
+config_path, git_common_dir = sys.argv[1:]
+path = Path(config_path)
+doc = tomlkit.parse(path.read_text())
+
+table = doc.get("sandbox_workspace_write")
+if table is None or not isinstance(table, tomlkit.items.Table):
+    table = tomlkit.table()
+    doc["sandbox_workspace_write"] = table
+
+roots = table.get("writable_roots")
+if roots is None or not isinstance(roots, tomlkit.items.Array):
+    roots = tomlkit.array().multiline(True)
+    table["writable_roots"] = roots
+else:
+    roots.multiline(True)
+
+existing = [item for item in roots]
+if git_common_dir not in existing:
+    roots.append(git_common_dir)
+
+path.write_text(tomlkit.dumps(doc))
+PY2
+    then
+        log_warn "uv/tomlkit edit failed for $config_file"
+        log_info "Add this path manually under [sandbox_workspace_write].writable_roots: $git_common_dir"
+        return 0
+    fi
+
+    log_ok "Configured Codex writable roots for external git metadata: $git_common_dir"
+}
+
 # =============================================================================
 # Claude Code Configuration
 # =============================================================================
@@ -186,6 +293,7 @@ EOF
 EOF
 
     log_ok "Created $rules_file"
+    configure_codex_worktree_writable_roots "$codex_dir"
     if [[ -n "$skill_scripts_real" ]]; then
         log_info "Included both symlink and real paths for workflow scripts"
     fi
