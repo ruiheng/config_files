@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+NEW_SESSION_READY_DELAY_SECONDS=15
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -269,8 +271,8 @@ if (( ensure_session )); then
 fi
 
 if (( created )); then
-  debug "new session created; waiting 3s before continuing"
-  sleep 3
+  debug "new session created; waiting ${NEW_SESSION_READY_DELAY_SECONDS}s before continuing"
+  sleep "$NEW_SESSION_READY_DELAY_SECONDS"
 fi
 
 to_session_id="$(resolve_session_id "$to_session_ref")"
