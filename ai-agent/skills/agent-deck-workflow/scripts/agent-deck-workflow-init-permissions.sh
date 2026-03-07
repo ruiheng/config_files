@@ -162,6 +162,21 @@ configure_claude() {
     local settings_file="$claude_dir/settings.json"
     local installed_skills_read_permission_tilde="Read(${INSTALLED_SKILLS_DIR_TILDE}/**)"
     local installed_skills_read_permission_abs="Read(${INSTALLED_SKILLS_DIR}/**)"
+    local git_readonly_permissions_json
+
+    git_readonly_permissions_json=$(cat <<'EOF'
+  "Bash(git diff)",
+  "Bash(git diff *)",
+  "Bash(git show)",
+  "Bash(git show *)",
+  "Bash(git status)",
+  "Bash(git status *)",
+  "Bash(git log)",
+  "Bash(git log *)",
+  "Bash(git rev-parse)",
+  "Bash(git rev-parse *)",
+EOF
+)
 
     log_info "Configuring Claude Code permissions..."
 
@@ -180,6 +195,7 @@ configure_claude() {
 [
   "Bash(agent-deck)",
   "Bash(agent-deck *)",
+$git_readonly_permissions_json
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
@@ -205,6 +221,7 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
+$git_readonly_permissions_json
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
@@ -226,6 +243,7 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
+$git_readonly_permissions_json
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
