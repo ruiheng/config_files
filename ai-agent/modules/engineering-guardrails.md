@@ -36,19 +36,23 @@ These guardrails apply to all software design and development tasks. The goal is
 
 For routine workspace file inspection, use the built-in file-reading tool (`Read`), not `sed` or `awk`.
 
-## 5) Workflow Discipline (SHOULD)
+## 5) File Writing Discipline (MUST)
+
+For routine workspace file creation or overwrite, use the built-in file-writing tool (`Write`), not `cat`.
+
+## 6) Workflow Discipline (SHOULD)
 
 1. For non-trivial tasks, provide a short plan first; for trivial tasks, execute directly.
 2. If assumptions are invalidated or new constraints appear, stop and re-plan.
 3. Prefer minimal, focused changes; avoid unrelated edits.
 
-## 6) Simplicity and Scope (SHOULD)
+## 7) Simplicity and Scope (SHOULD)
 
 1. Deliver the smallest complete fix first, then optimize.
 2. Avoid over-engineering and unrelated abstractions.
 3. Prefer fail-fast over silent masking on error paths.
 
-## 7) Adaptive Bug Localization (SHOULD)
+## 8) Adaptive Bug Localization (SHOULD)
 
 Choose the cheapest method that can produce high-confidence evidence.
 
