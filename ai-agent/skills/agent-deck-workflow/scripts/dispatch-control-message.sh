@@ -64,6 +64,18 @@ debug() {
   fi
 }
 
+wait_for_new_session_ready() {
+  local remaining="$NEW_SESSION_READY_DELAY_SECONDS"
+
+  printf 'New session created; waiting %ss for target session readiness' "$NEW_SESSION_READY_DELAY_SECONDS" >&2
+  while (( remaining > 0 )); do
+    sleep 1
+    printf '.' >&2
+    remaining=$((remaining - 1))
+  done
+  printf '\n' >&2
+}
+
 validate_artifact_path() {
   local p="$1"
   [[ -n "$p" ]] || die "--artifact-path is required"
@@ -272,7 +284,7 @@ fi
 
 if (( created )); then
   debug "new session created; waiting ${NEW_SESSION_READY_DELAY_SECONDS}s before continuing"
-  sleep "$NEW_SESSION_READY_DELAY_SECONDS"
+  wait_for_new_session_ready
 fi
 
 to_session_id="$(resolve_session_id "$to_session_ref")"
