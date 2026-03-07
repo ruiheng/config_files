@@ -96,8 +96,27 @@ Canonical CLI flags are `--*-session-id`:
 
 ### Control Message Contract
 
-- Semantic contract: `references/control-message-semantics.md`
-- Internal JSON appendix: `references/internal-protocol/control-message-json-protocol.md`
+- Use this section as the routine source of truth during workflow execution; do not open `references/` for normal execution.
+- Control message envelope:
+  - `preconditions.must_fully_load_skills`: must include `agent-deck-workflow`
+  - `execution.action`: workflow action name
+  - `execution.artifact_path`: source-of-truth file path under `.agent-artifacts/`
+  - `execution.note`: optional short instruction; when present it should explicitly tell receiver what workflow action to take next
+  - `context.task_id`, `context.round`, `context.planner_session_id`, `context.from_session_id`, `context.to_session_id`: required context fields
+  - `context.workflow_policy`, `context.special_requirements`: optional pass-through fields; preserve unchanged within the same task
+- Sender invariants:
+  - `execute_delegate_task`: sender is planner
+  - `review_requested`: sender is executor
+  - `rework_required`, `user_requested_iteration`, `closeout_delivered`: sender is reviewer
+  - never default sender to planner for non-planner actions
+- Action contract:
+  - `execute_delegate_task`: planner starts delegated implementation
+  - `review_requested`: executor asks reviewer to run full review and reviewer must proactively send the next control message
+  - `rework_required`: reviewer blocks and sends must-fix follow-up to executor
+  - `stop_recommended`: reviewer reports no must-fix items and waits for user closeout vs iterate decision
+  - `user_requested_iteration`: reviewer forwards user's iterate decision to executor
+  - `closeout_delivered`: reviewer sends accepted closeout to planner
+- `references/control-message-semantics.md` and `references/internal-protocol/control-message-json-protocol.md` are optional protocol appendices for debugging/maintenance only.
 
 Control JSON is internal protocol data by default.
 User-facing responses should provide readable decisions and artifact pointers, not raw JSON payloads.
@@ -191,7 +210,7 @@ Debug logging:
 
 - Do not modify cloned official `agent-deck` skill for project-specific behavior.
 - Do not require loading official `agent-deck` skill in normal execution.
-- Use clone `references/` only when command details are needed.
+- Use official clone references only when command details are needed; skill-local `references/` files are optional appendices and are not required for routine execution.
 
 ## Task Metadata Convention
 
