@@ -153,6 +153,7 @@ PY2
 configure_claude() {
     local claude_dir="$PROJECT_DIR/.claude"
     local settings_file="$claude_dir/settings.json"
+    local installed_skills_read_permission="Read($HOME/.config/ai-agent/skills/**)"
 
     log_info "Configuring Claude Code permissions..."
 
@@ -166,13 +167,18 @@ configure_claude() {
 
         # Use jq to merge permissions
         if command -v jq &>/dev/null; then
-            local new_permissions='[
-              "Bash(agent-deck)",
-              "Bash(agent-deck *)",
-              "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-              "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
-              "Write(/.agent-artifacts/**)"
-            ]'
+            local new_permissions
+            new_permissions=$(cat <<EOF
+[
+  "Bash(agent-deck)",
+  "Bash(agent-deck *)",
+  "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
+  "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
+  "$installed_skills_read_permission",
+  "Write(/.agent-artifacts/**)"
+]
+EOF
+)
 
             jq --argjson perms "$new_permissions" '
                 .permissions.allow = ((.permissions.allow // []) + $perms | unique)
@@ -182,7 +188,7 @@ configure_claude() {
         else
             log_warn "jq not found, cannot merge automatically"
             log_info "Please manually add these permissions to $settings_file:"
-            cat << 'EOF'
+            cat <<EOF
 {
   "permissions": {
     "allow": [
@@ -190,6 +196,7 @@ configure_claude() {
       "Bash(agent-deck *)",
       "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
       "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
+      "$installed_skills_read_permission",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -199,7 +206,7 @@ EOF
         fi
     else
         log_info "Creating new settings.json"
-        cat > "$settings_file" << 'EOF'
+        cat > "$settings_file" <<EOF
 {
   "permissions": {
     "allow": [
@@ -207,6 +214,7 @@ EOF
       "Bash(agent-deck *)",
       "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
       "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
+      "$installed_skills_read_permission",
       "Write(/.agent-artifacts/**)"
     ]
   }
