@@ -5,10 +5,17 @@
 #
 # Usage: ./init-workflow-permissions.sh [project-dir]
 #
+# Maintenance rules:
+# - Any generated path under HOME must be emitted in both tilde and absolute forms.
+# - Never emit rules based on the current repository path; use installed paths only.
+#
 
 set -euo pipefail
 
-INSTALLED_WORKFLOW_SCRIPTS="$HOME/.config/ai-agent/skills/agent-deck-workflow/scripts"
+INSTALLED_SKILLS_DIR="$HOME/.config/ai-agent/skills"
+INSTALLED_SKILLS_DIR_TILDE="~/.config/ai-agent/skills"
+INSTALLED_WORKFLOW_SCRIPTS="$INSTALLED_SKILLS_DIR/agent-deck-workflow/scripts"
+INSTALLED_WORKFLOW_SCRIPTS_TILDE="$INSTALLED_SKILLS_DIR_TILDE/agent-deck-workflow/scripts"
 
 # Colors
 RED='\033[0;31m'
@@ -153,7 +160,8 @@ PY2
 configure_claude() {
     local claude_dir="$PROJECT_DIR/.claude"
     local settings_file="$claude_dir/settings.json"
-    local installed_skills_read_permission="Read($HOME/.config/ai-agent/skills/**)"
+    local installed_skills_read_permission_tilde="Read(${INSTALLED_SKILLS_DIR_TILDE}/**)"
+    local installed_skills_read_permission_abs="Read(${INSTALLED_SKILLS_DIR}/**)"
 
     log_info "Configuring Claude Code permissions..."
 
@@ -172,9 +180,12 @@ configure_claude() {
 [
   "Bash(agent-deck)",
   "Bash(agent-deck *)",
-  "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-  "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
-  "$installed_skills_read_permission",
+  "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
+  "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
+  "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
+  "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
+  "$installed_skills_read_permission_tilde",
+  "$installed_skills_read_permission_abs",
   "Write(/.agent-artifacts/**)"
 ]
 EOF
@@ -194,9 +205,12 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
-      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
-      "$installed_skills_read_permission",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
+      "$installed_skills_read_permission_tilde",
+      "$installed_skills_read_permission_abs",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -212,9 +226,12 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
-      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh *)",
-      "Bash(*/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh *)",
-      "$installed_skills_read_permission",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
+      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
+      "$installed_skills_read_permission_tilde",
+      "$installed_skills_read_permission_abs",
       "Write(/.agent-artifacts/**)"
     ]
   }
@@ -237,13 +254,6 @@ configure_codex() {
 
     mkdir -p "$rules_dir"
 
-    # Resolve the real path of the skill scripts
-    local skill_scripts_symlink="$INSTALLED_WORKFLOW_SCRIPTS"
-    local skill_scripts_real=""
-    if [[ -e "$skill_scripts_symlink" ]]; then
-        skill_scripts_real="$(readlink -f "$skill_scripts_symlink" 2>/dev/null || true)"
-    fi
-
     cat > "$rules_file" << EOF
 # Agent Deck Workflow - Auto-approve rules
 # These commands are required for the workflow to function
@@ -261,38 +271,32 @@ prefix_rule(
     ],
 )
 
-# Allow workflow scripts (installed path)
+# Allow workflow scripts (installed path, tilde form)
+prefix_rule(
+    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/dispatch-control-message.sh"],
+    decision = "allow",
+    justification = "Workflow dispatch script (installed path, tilde)",
+)
+
+prefix_rule(
+    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/planner-closeout-batch.sh"],
+    decision = "allow",
+    justification = "Workflow closeout script (installed path, tilde)",
+)
+
+# Allow workflow scripts (installed path, absolute form)
 prefix_rule(
     pattern = ["$INSTALLED_WORKFLOW_SCRIPTS/dispatch-control-message.sh"],
     decision = "allow",
-    justification = "Workflow dispatch script (installed path)",
+    justification = "Workflow dispatch script (installed path, absolute)",
 )
 
 prefix_rule(
     pattern = ["$INSTALLED_WORKFLOW_SCRIPTS/planner-closeout-batch.sh"],
     decision = "allow",
-    justification = "Workflow closeout script (installed path)",
+    justification = "Workflow closeout script (installed path, absolute)",
 )
 EOF
-
-    # Add real path rules if symlink was resolved
-    if [[ -n "$skill_scripts_real" ]]; then
-        cat >> "$rules_file" << EOF
-
-# Allow workflow scripts (real path)
-prefix_rule(
-    pattern = ["${skill_scripts_real}/dispatch-control-message.sh"],
-    decision = "allow",
-    justification = "Workflow dispatch script (real path)",
-)
-
-prefix_rule(
-    pattern = ["${skill_scripts_real}/planner-closeout-batch.sh"],
-    decision = "allow",
-    justification = "Workflow closeout script (real path)",
-)
-EOF
-    fi
 
     cat >> "$rules_file" << 'EOF'
 
@@ -302,9 +306,7 @@ EOF
 
     log_ok "Created $rules_file"
     configure_codex_worktree_writable_roots "$codex_dir"
-    if [[ -n "$skill_scripts_real" ]]; then
-        log_info "Included both symlink and real paths for workflow scripts"
-    fi
+    log_info "Included installed workflow script paths in tilde and absolute forms"
     log_warn "Note: Codex file write permissions may still require manual approval"
 }
 
@@ -331,9 +333,24 @@ action = "allow"
 description = "Agent deck commands"
 
 [[rules]]
-pattern = ".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\\.sh .*"
+pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\.sh .*"
 action = "allow"
-description = "Workflow dispatch script"
+description = "Workflow dispatch script (tilde)"
+
+[[rules]]
+pattern = ".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\.sh .*"
+action = "allow"
+description = "Workflow dispatch script (absolute)"
+
+[[rules]]
+pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch\.sh .*"
+action = "allow"
+description = "Workflow closeout script (tilde)"
+
+[[rules]]
+pattern = ".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch\.sh .*"
+action = "allow"
+description = "Workflow closeout script (absolute)"
 
 # Note: Gemini file write permissions are controlled separately
 # and may still require approval for .agent-artifacts writes
