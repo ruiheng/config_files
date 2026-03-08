@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NEW_SESSION_READY_DELAY_SECONDS=15
+NEW_SESSION_READY_DELAY_SECONDS=1
 
 usage() {
   cat <<'EOF'
