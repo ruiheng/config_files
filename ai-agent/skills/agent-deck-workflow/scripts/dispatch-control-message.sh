@@ -350,8 +350,11 @@ fi
 started=0
 if (( start_session )) && (( local_continuation == 0 )); then
   debug "starting to_session_id=${to_session_id}"
-  if ad session start "$to_session_id" >/dev/null 2>&1; then
+  start_output=""
+  if start_output="$(ad session start "$to_session_id" 2>&1)"; then
     started=1
+  elif [[ -n "$start_output" ]]; then
+    echo "start_warn to=${to_session_id} detail=${start_output}" >&2
   fi
 fi
 
@@ -364,9 +367,13 @@ if (( local_continuation )); then
   echo "dispatch_local_continue action=${action} to=${to_session_id} payload=${message_file}"
   show_json="$current_session_json"
 else
-  payload_json="$(cat "$message_file")"
-  if ! ad session send "$to_session_id" "$payload_json" >/dev/null 2>&1; then
+  payload_json="$(<"$message_file")"
+  send_output=""
+  if ! send_output="$(ad session send "$to_session_id" "$payload_json" 2>&1)"; then
     echo "dispatch_error action=${action} to=${to_session_id}" >&2
+    if [[ -n "$send_output" ]]; then
+      echo "dispatch_error_detail ${send_output}" >&2
+    fi
     echo "diagnostic_hint check_sender='agent-deck session current --json'" >&2
     echo "diagnostic_hint check_target='agent-deck session show ${to_session_ref} --json'" >&2
     echo "diagnostic_hint check_artifact='${artifact_path}'" >&2
