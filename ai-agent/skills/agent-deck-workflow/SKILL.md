@@ -116,6 +116,11 @@ Canonical CLI flags are `--*-session-id`:
   - `stop_recommended`: reviewer reports no must-fix items and waits for user closeout vs iterate decision
   - `user_requested_iteration`: reviewer forwards user's iterate decision to executor
   - `closeout_delivered`: reviewer sends accepted closeout to planner
+- Review disagreement policy:
+  - reviewer findings are advisory, not automatically binding on executor
+  - executor must evaluate reviewer findings critically and adopt only the changes that are technically justified
+  - when executor disagrees, the next `review_requested` artifact should state the disagreement and rationale clearly
+  - if executor and reviewer cannot converge, either role may stop and ask user for a decision
 - `references/control-message-semantics.md` and `references/internal-protocol/control-message-json-protocol.md` are optional protocol appendices for debugging/maintenance only.
 
 Control JSON is internal protocol data by default.
@@ -141,20 +146,13 @@ Planner closeout execution rule:
 
 ### Reviewer Decision Flow
 
-```mermaid
-graph TD
-  A[Review complete] --> B{Must-fix exists?}
-  B -->|Yes| C[dispatch rework_required]
-  B -->|No| D{auto_accept_if_no_must_fix?}
-  D -->|Yes| E[run review-closeout and dispatch closeout_delivered]
-  D -->|No| F{UI manual confirmation required?}
-  F -->|Yes| G[request user UI confirmation]
-  F -->|No| H[present stop_recommended]
-  G --> H
-  H --> I{User decision}
-  I -->|Closeout| E
-  I -->|Iterate| J[dispatch user_requested_iteration]
-```
+Reviewer decision rules:
+
+1. If must-fix items exist, dispatch `rework_required` to executor.
+2. If no must-fix items exist and `workflow_policy.auto_accept_if_no_must_fix=true`, run `review-closeout` and dispatch `closeout_delivered` to planner.
+3. Otherwise, present `stop_recommended` to user and wait for user decision. Do not send `stop_recommended` to planner.
+4. If user chooses closeout, run `review-closeout` and dispatch `closeout_delivered` to planner.
+5. If user chooses another iteration, dispatch `user_requested_iteration` to executor.
 
 ## Automation Policy Override (Optional)
 
@@ -245,10 +243,13 @@ Reviewer chooses one branch:
 
 1. `rework_required`
 - dispatch to executor
-- executor fixes and sends next `review_requested`
+- executor evaluates the findings critically, applies the technically justified changes, and may disagree with specific points
+- next `review_requested` should summarize any disagreement or partial adoption clearly
+- if executor and reviewer cannot converge, either may stop and ask user for a decision
 
 2. `stop_recommended`
-- provide user-facing summary and wait for user decision
+- provide user-facing summary to user and wait for user decision
+- do not send `stop_recommended` to planner; this is the user decision point
 - if `workflow_policy.auto_accept_if_no_must_fix=true`, reviewer may skip waiting and run closeout
 - in human-gated mode, request manual UI confirmation when required by policy
 

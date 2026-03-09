@@ -105,6 +105,7 @@ Skill-specific context resolution:
 
 Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
 Create parent directories when missing.
+When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why. Reviewer feedback is advisory input, not automatic instructions.
 
 Dispatch to reviewer with canonical flags:
 
@@ -117,7 +118,7 @@ Dispatch to reviewer with canonical flags:
   --round "<round>" \
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
-  --note "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. Read the review-request file and produce a full review report, then use ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh to proactively send the next control message to executor-<task_id>." \
+  --note "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. If must-fix issues remain, dispatch rework_required to executor. If no must-fix issues remain, present stop_recommended to user rather than planner, unless policy allows immediate closeout. Read the review-request file and produce a full review report, then use ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh for the required follow-up control message." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<reviewer_tool>"
@@ -172,6 +173,11 @@ Use this exact structure:
 ## Review Focus
 - [Primary risk/review angle 1]
 - [Primary risk/review angle 2]
+
+## Response to Previous Review (Optional)
+- Adopted findings: [brief summary or `N/A`]
+- Rejected findings and rationale: [brief summary or `N/A`]
+- Items needing user decision: [brief summary or `N/A`]
 
 ## Implementation Summary
 [Concise summary of what changed and why]

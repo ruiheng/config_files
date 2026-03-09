@@ -29,7 +29,7 @@ For reviewer-facing actions (especially `review_requested`), `execution.note` sh
 
 - `execute_delegate_task`: planner starts delegated implementation. Executor must create/switch to `task/<task_id>` before any code change.
 - `review_requested`: executor asks reviewer to run full review.
-- `rework_required`: reviewer blocks and returns must-fix findings.
+- `rework_required`: reviewer blocks and returns must-fix findings. Findings are advisory input for executor, not automatic commands; executor should apply them critically and may explain disagreement in the next review request.
 - `stop_recommended`: reviewer reports no must-fix items and asks user to choose closeout vs next iteration.
 - `user_requested_iteration`: reviewer forwards user's iteration decision to executor.
 - `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance. Planner then runs `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions.
@@ -38,6 +38,7 @@ For reviewer-facing actions (especially `review_requested`), `execution.note` sh
 
 If `context.workflow_policy` exists, executor/reviewer preserve it unchanged for the same `task_id`.
 If `context.special_requirements` exists, planner/executor/reviewer preserve it unchanged for the same `task_id`.
+If executor and reviewer cannot converge on review findings, either role may stop and ask user for a decision.
 
 ## Same-Session Role Overlap
 

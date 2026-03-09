@@ -104,7 +104,7 @@ Sender invariants:
   "execution": {
     "action": "rework_required",
     "artifact_path": ".agent-artifacts/<task_id>/review-report-r<n>.md",
-    "note": "Must-fix items remain. Address the issues in the report and send an updated review request for the next round."
+    "note": "Must-fix items remain. Evaluate the findings critically, apply the technically justified changes, and send an updated review request for the next round. If you disagree with specific findings, explain that disagreement and rationale clearly in the next review request. If convergence fails, stop and ask user for a decision."
   },
   "context": {
     "task_id": "<task_id>",
