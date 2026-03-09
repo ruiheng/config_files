@@ -117,7 +117,7 @@ Dispatch to reviewer with canonical flags:
   --round "<round>" \
   --action "review_requested" \
   --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
-  --note "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then use ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh to proactively send the next control message to executor-<task_id>." \
+  --note "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. Read the review-request file and produce a full review report, then use ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh to proactively send the next control message to executor-<task_id>." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<reviewer_tool>"

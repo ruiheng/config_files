@@ -82,7 +82,7 @@ Sender invariants:
   "execution": {
     "action": "review_requested",
     "artifact_path": ".agent-artifacts/<task_id>/review-request-r<n>.md",
-    "note": "Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow). Read the review-request file and produce a full review report, then proactively dispatch the next control message via ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required; if no must-fix remains, send stop_recommended (or continue closeout path when policy allows)."
+    "note": "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. Read the review-request file and produce a full review report, then proactively dispatch the next control message via ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required; if no must-fix remains, send stop_recommended (or continue closeout path when policy allows)."
   },
   "context": {
     "task_id": "<task_id>",
