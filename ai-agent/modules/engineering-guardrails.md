@@ -34,7 +34,7 @@ These guardrails apply to all software design and development tasks. The goal is
 
 ## 4) File Reading Discipline (MUST)
 
-For routine workspace file inspection, use the built-in file-reading tool (`Read`), not `sed` or `awk`.
+For routine workspace file inspection, use the built-in file-reading tool (`Read`), not `sed` or `awk`; if shell line slicing is truly necessary, use `head -n X | tail -n +Y` instead of `sed -n`.
 
 ## 5) File Writing Discipline (MUST)
 
