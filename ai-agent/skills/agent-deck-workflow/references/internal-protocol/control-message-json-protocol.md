@@ -60,7 +60,7 @@ Sender invariants:
   "execution": {
     "action": "execute_delegate_task",
     "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
-    "note": "Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit and prepare review request."
+    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit and prepare review request."
   },
   "context": {
     "task_id": "<task_id>",

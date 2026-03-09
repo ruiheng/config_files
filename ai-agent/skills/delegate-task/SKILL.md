@@ -101,7 +101,7 @@ Tool-routing rule:
   --to-session-id "<executor_session_id>" \
   --action "execute_delegate_task" \
   --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
-  --note "Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit and prepare review request." \
+  --note "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit and prepare review request." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<executor_tool>"
