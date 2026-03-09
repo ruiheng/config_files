@@ -60,7 +60,7 @@ Sender invariants:
   "execution": {
     "action": "execute_delegate_task",
     "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
-    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit and prepare review request."
+    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to reviewer."
   },
   "context": {
     "task_id": "<task_id>",
@@ -82,7 +82,7 @@ Sender invariants:
   "execution": {
     "action": "review_requested",
     "artifact_path": ".agent-artifacts/<task_id>/review-request-r<n>.md",
-    "note": "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. Read the review-request file and produce a full review report, then proactively dispatch the next control message via ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required; if no must-fix remains, send stop_recommended (or continue closeout path when policy allows)."
+    "note": "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. Read the review-request file and produce a full review report, then proactively dispatch the required follow-up control message via ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh. If must-fix issues remain, send rework_required to executor; if no must-fix remains, present stop_recommended to user rather than planner, unless policy allows immediate closeout."
   },
   "context": {
     "task_id": "<task_id>",
