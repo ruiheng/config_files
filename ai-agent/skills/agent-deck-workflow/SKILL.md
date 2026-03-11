@@ -115,7 +115,7 @@ Canonical CLI flags are `--*-session-id`:
   - `rework_required`: reviewer blocks and sends must-fix follow-up to executor
   - `stop_recommended`: reviewer reports no must-fix items and waits for user closeout vs iterate decision
   - `user_requested_iteration`: reviewer forwards user's iterate decision to executor
-  - `closeout_delivered`: reviewer sends accepted closeout to planner
+  - `closeout_delivered`: reviewer sends accepted closeout to planner; planner should treat the closeout and underlying review report as planning input for residual follow-up tracking, not as a default reason to reopen accepted review
 - Review disagreement policy:
   - reviewer findings are advisory, not automatically binding on executor
   - executor must evaluate reviewer findings critically and adopt only the changes that are technically justified
@@ -143,6 +143,13 @@ Planner closeout execution rule:
 1. required actions (`merge`, `progress update`) are hard requirements
 2. optional actions (`notify`, `next-task dispatch`, hygiene summaries) are best-effort
 3. optional-action failures must not roll back or block required closeout completion
+
+Planner post-acceptance interpretation rule:
+1. `closeout_delivered` means accepted review loop complete; normal closeout should proceed
+2. planner must inspect the closeout artifact and any referenced review report before finalizing follow-up planning
+3. non-blocking accepted findings (for example design concerns, minor suggestions, verification questions, or accepted `FAIL`/`UNKNOWN` checks) should be evaluated as inputs to progress/todo updates or next-task planning
+4. planner should decide whether each residual item needs explicit tracking, a queued next task/subtask, or no extra tracking
+5. planner should not reopen the accepted task by default unless the artifact clearly shows a must-fix issue was accepted by mistake or new contradictory evidence appears
 
 ### Reviewer Decision Flow
 
@@ -256,11 +263,13 @@ Reviewer chooses one branch:
 ### 4) Planner Closeout Batch (After Acceptance)
 
 After closeout acceptance (explicit user or unattended policy):
-1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions
-2. required in script: merge `task/<task_id>` into integration branch
-3. required in script: update progress record
-4. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
-5. optional in script: dispatch next task
+1. inspect `closeout-<task_id>.md` and any referenced `review-report-r<n>.md`
+2. decide whether residual accepted findings require follow-up tracking (`progress`, `todo`, next-task queue, or no action)
+3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions
+4. required in script: merge `task/<task_id>` into integration branch
+5. required in script: update progress record
+6. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
+7. optional in script: dispatch next task
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
 
@@ -300,6 +309,7 @@ Do:
 - keep long context file-based (`delegate-task`, `review-request`, `review-report`, `closeout`)
 - keep cross-session messages short and pointer-based
 - keep human confirmation gates in human-gated mode
+- treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
 - run planner required closeout actions via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`
 
 Do not:

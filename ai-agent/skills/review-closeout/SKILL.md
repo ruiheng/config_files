@@ -14,6 +14,7 @@ This skill only defines closeout-specific behavior.
 
 Use this skill when a full review report exists and only remaining follow-up items are needed.
 For UI-related tasks, carry forward human-run UI confirmation package into closeout output.
+Closeout should also give planner a compact summary of residual accepted findings that may need later tracking.
 
 Role intent:
 - Required role: reviewer role for the current task.
@@ -92,6 +93,11 @@ Inclusion-first policy:
 - `Verification Questions`
 - `UI Manual Confirmation Package`
 
+Planner handoff rule:
+- when closeout happens after acceptance, convert surviving non-blocking findings into planner-usable follow-up input instead of leaving them as raw review debris
+- preserve whether each item looks like `progress/todo`, `next task`, or `no extra tracking`
+- if the source review report path is known, include it explicitly so planner can inspect full context when needed
+
 2. Request/security checks:
 - drop `PASS`
 - keep `FAIL` and `UNKNOWN`
@@ -110,10 +116,11 @@ Inclusion-first policy:
 Bucket order:
 1. `Critical Issues`
 2. `Design Concerns`
-3. `Minor Suggestions`
-4. `Verification Questions`
-5. `UI Manual Confirmation Package`
-6. `Remaining Check Alerts (FAIL/UNKNOWN Only)`
+3. `Residual Follow-up For Planner`
+4. `Minor Suggestions`
+5. `Verification Questions`
+6. `UI Manual Confirmation Package`
+7. `Remaining Check Alerts (FAIL/UNKNOWN Only)`
 
 Rules:
 - render section only when it has at least one item
@@ -142,6 +149,12 @@ In Agent Deck mode, append planner follow-up recommendation.
 If UI package content exists, include UI package before planner follow-up.
 
 ```markdown
+#### Residual Follow-up For Planner (Only when any accepted non-blocking items remain)
+- Source review report: `.agent-artifacts/<task_id>/review-report-r<round>.md`
+- Track in progress/todo: [items worth recording for later follow-up, or `None`]
+- Consider as next task/subtask: [items worth queueing, or `None`]
+- No extra tracking needed: [items intentionally left as informational only, or `None`]
+
 #### UI Manual Confirmation Package (Only when UI package content exists)
 - UI impact: [detected | none detected]
 - Changed UI surfaces: [routes/pages/components]
@@ -152,6 +165,7 @@ If UI package content exists, include UI package before planner follow-up.
 #### Planner Follow-up Recommendation (After Closeout Acceptance)
 - Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --integration-branch <integration_branch>`.
 - Required by script: merge `task/<task_id>` into target integration branch and update planner progress records.
+- Before or during closeout, inspect the source review report and decide whether residual accepted findings should update progress/todo or next-task planning.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.
 ```
@@ -165,3 +179,4 @@ If UI package content exists, include UI package before planner follow-up.
 5. Keep output compact and copy/paste friendly.
 6. Preserve `workflow_policy` unchanged when dispatching.
 7. Preserve `special_requirements` unchanged when dispatching.
+8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case.
