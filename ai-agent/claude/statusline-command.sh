@@ -38,7 +38,7 @@ fi
 
 # Add context remaining if available
 if [ -n "$remaining" ]; then
-    status="$status $(printf '\033[33m')${remaining}%%$(printf '\033[0m')"
+    status="$status $(printf '\033[33m')${remaining}%$(printf '\033[0m')"
 fi
 
 echo "$status"
