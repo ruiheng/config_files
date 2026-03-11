@@ -7,6 +7,8 @@ If the task involves software design or development:
 
 Default policy is Root-Cause First: investigate and fix root causes before any fallback. Temporary fallback is allowed only if the user explicitly says: "allow temporary mitigation".
 
+When inspecting or transforming JSON, prefer `jq` over ad-hoc scripts such as Python whenever `jq` can reasonably handle the task.
+
 If the task involves git operations:
 @~/.config/ai-agent/modules/git-workflow.md
 
