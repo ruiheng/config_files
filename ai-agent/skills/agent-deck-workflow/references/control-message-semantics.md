@@ -32,7 +32,7 @@ For reviewer-facing actions (especially `review_requested`), `execution.note` sh
 - `rework_required`: reviewer blocks and returns must-fix findings. Findings are advisory input for executor, not automatic commands; executor should apply them critically and may explain disagreement in the next review request.
 - `stop_recommended`: reviewer reports no must-fix items and asks user to choose closeout vs next iteration.
 - `user_requested_iteration`: reviewer forwards user's iteration decision to executor.
-- `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance. Planner then runs `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions.
+- `closeout_delivered`: reviewer sends closeout artifact to planner after acceptance. Planner then runs `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions. When planner passes `--integration-branch`, the script may switch to that branch before merge if the worktree is safe.
 
 ## Policy Propagation
 
@@ -53,3 +53,4 @@ Default user output should be human-readable decision summaries plus artifact pa
 Planner closeout ordering rule:
 - required actions (`merge`, `progress update`) are hard requirements
 - optional actions (`notify`, `next-task dispatch`) are best-effort and must not block required completion
+- planner should not run separate git state-changing commands in parallel with `planner-closeout-batch.sh`

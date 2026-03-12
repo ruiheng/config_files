@@ -175,7 +175,7 @@ Usage note:
   "execution": {
     "action": "closeout_delivered",
     "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-    "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional."
+    "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions. When --integration-branch is supplied, the script is expected to switch there before merge if the worktree is safe. Planning next task is optional."
   },
   "context": {
     "task_id": "<task_id>",
@@ -198,3 +198,4 @@ Protocol note:
 - Skip dispatch only when target session equals current session (local continuation); otherwise dispatch may proceed even if `context.from_session_id == context.to_session_id`.
 - For UI-related tasks, reviewer should keep UI manual confirmation package in artifacts and closeout content for future re-check, regardless of whether current round already got human confirmation.
 - Planner closeout ordering is strict: required actions (`merge`, `progress update`) must complete first; notification/next-task dispatch failures are optional and must not block required completion.
+- Planner should not run separate git state-changing commands in parallel with `planner-closeout-batch.sh`; let the closeout script own integration-branch switching when `--integration-branch` is provided.

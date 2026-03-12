@@ -21,7 +21,7 @@ Usage:
 Options:
   --task-id <id>                   Required task id (YYYYMMDD-HHMM-<slug>)
   --task-branch <ref>              Task branch (default: task/<task_id>)
-  --integration-branch <ref>       Integration branch (default: current branch)
+  --integration-branch <ref>       Integration branch (default: current branch; script auto-switches when needed)
   --closeout-artifact <path>       Closeout artifact (default: .agent-artifacts/<task_id>/closeout-<task_id>.md)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
@@ -140,7 +140,6 @@ fi
 [[ -n "$integration_branch" ]] || die "failed to resolve current branch; pass --integration-branch"
 
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
-[[ "$current_branch" == "$integration_branch" ]] || die "current branch is '${current_branch:-detached}', expected integration branch '${integration_branch}'"
 [[ "$task_branch" != "$integration_branch" ]] || die "--task-branch must differ from integration branch"
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
@@ -151,6 +150,24 @@ if (( allow_dirty == 0 )); then
   if ! git diff --quiet || ! git diff --cached --quiet; then
     die "dirty worktree/index; commit or stash first (or pass --allow-dirty)"
   fi
+fi
+
+started_branch="${current_branch:-detached}"
+switched_integration_branch=0
+if [[ "$current_branch" != "$integration_branch" ]]; then
+  echo "auto_switch_integration_branch from=${started_branch} to=${integration_branch}"
+  set +e
+  switch_output="$(git switch "$integration_branch" 2>&1)"
+  switch_rc=$?
+  set -e
+  if (( switch_rc != 0 )); then
+    echo "$switch_output" >&2
+    die "failed to switch from '${started_branch}' to integration branch '${integration_branch}'"
+  fi
+  echo "$switch_output"
+  switched_integration_branch=1
+  current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+  [[ "$current_branch" == "$integration_branch" ]] || die "branch switch reported success but current branch is '${current_branch:-detached}', expected '${integration_branch}'"
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -215,17 +232,21 @@ progress_record="$(jq -nc \
   --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg integration_branch "$integration_branch" \
   --arg task_branch "$task_branch" \
+  --arg started_branch "$started_branch" \
   --arg merged_sha "$merged_sha" \
   --arg closeout_artifact "$closeout_artifact" \
   --arg status "required_complete" \
+  --argjson switched_integration_branch "$switched_integration_branch" \
   '{
     task_id: $task_id,
     timestamp: $timestamp,
     status: $status,
+    started_branch: $started_branch,
     integration_branch: $integration_branch,
     task_branch: $task_branch,
     merged_sha: $merged_sha,
-    closeout_artifact: $closeout_artifact
+    closeout_artifact: $closeout_artifact,
+    switched_integration_branch: $switched_integration_branch
   }'
 )"
 
@@ -339,12 +360,14 @@ tmp_state="$(mktemp)"
 jq -nc \
   --arg task_id "$task_id" \
   --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg started_branch "$started_branch" \
   --arg integration_branch "$integration_branch" \
   --arg task_branch "$task_branch" \
   --arg closeout_artifact "$closeout_artifact" \
   --arg progress_file "$progress_file" \
   --arg merged_sha "$merged_sha" \
   --arg merge_mode "$merge_mode" \
+  --argjson switched_integration_branch "$switched_integration_branch" \
   --arg prune_status "$prune_status" \
   --arg ui_summary_status "$ui_summary_status" \
   --arg health_gate_status "$health_gate_status" \
@@ -353,11 +376,13 @@ jq -nc \
   '{
     task_id: $task_id,
     updated_at: $updated_at,
+    started_branch: $started_branch,
     integration_branch: $integration_branch,
     task_branch: $task_branch,
     closeout_artifact: $closeout_artifact,
     progress_file: $progress_file,
     required_actions: {
+      switched_integration_branch: $switched_integration_branch,
       merge_mode: $merge_mode,
       merge_completed: true,
       merged_sha: $merged_sha,

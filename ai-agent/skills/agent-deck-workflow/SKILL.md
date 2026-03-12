@@ -143,6 +143,8 @@ Planner closeout execution rule:
 1. required actions (`merge`, `progress update`) are hard requirements
 2. optional actions (`notify`, `next-task dispatch`, hygiene summaries) are best-effort
 3. optional-action failures must not roll back or block required closeout completion
+4. when `--integration-branch` is provided, `planner-closeout-batch.sh` is responsible for switching to that branch before merge if the worktree is in a safe state
+5. planner should not run git state-changing commands in parallel with `planner-closeout-batch.sh`
 
 Planner post-acceptance interpretation rule:
 1. `closeout_delivered` means accepted review loop complete; normal closeout should proceed
@@ -266,10 +268,11 @@ After closeout acceptance (explicit user or unattended policy):
 1. inspect `closeout-<task_id>.md` and any referenced `review-report-r<n>.md`
 2. decide whether residual accepted findings require follow-up tracking (`progress`, `todo`, next-task queue, or no action)
 3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions
-4. required in script: merge `task/<task_id>` into integration branch
-5. required in script: update progress record
-6. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
-7. optional in script: dispatch next task
+4. if `--integration-branch` is provided and current branch differs, the script should switch to the integration branch itself; planner should not pre-stage a parallel `git switch`
+5. required in script: merge `task/<task_id>` into integration branch
+6. required in script: update progress record
+7. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
+8. optional in script: dispatch next task
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
 
@@ -310,10 +313,12 @@ Do:
 - keep cross-session messages short and pointer-based
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
+- let `planner-closeout-batch.sh` own integration-branch switching when `--integration-branch` is explicitly supplied
 - run planner required closeout actions via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`
 
 Do not:
 - auto-merge before acceptance
+- run `git switch` in parallel with planner closeout
 - send large report bodies inline via `session send`
 - run proactive polling loops after dispatch
 - treat protocol JSON as default user-facing content

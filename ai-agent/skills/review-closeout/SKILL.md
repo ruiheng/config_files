@@ -72,7 +72,7 @@ Dispatch example:
   --round "final" \
   --action "closeout_delivered" \
   --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
-  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions (merge task branch + update progress). Planning next task is optional." \
+  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions. When --integration-branch is supplied, the script is expected to switch there before merge if the worktree is safe. Planning next task is optional." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --no-ensure-session \
@@ -164,7 +164,7 @@ If UI package content exists, include UI package before planner follow-up.
 
 #### Planner Follow-up Recommendation (After Closeout Acceptance)
 - Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --integration-branch <integration_branch>`.
-- Required by script: merge `task/<task_id>` into target integration branch and update planner progress records.
+- Required by script: switch to the target integration branch when needed, then merge `task/<task_id>` and update planner progress records.
 - Before or during closeout, inspect the source review report and decide whether residual accepted findings should update progress/todo or next-task planning.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.
