@@ -1,6 +1,6 @@
 ---
 name: delegate-task
-description: Analyze a task and create a delegate brief for another AI agent.
+description: Use only for non-trivial implementation tasks that require meaningful code changes; do not use for simple tasks or documentation-only work.
 ---
 
 # Delegate Task
@@ -10,14 +10,27 @@ Create a concise, execution-ready brief file for another AI agent.
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 This skill only defines delegate-task-specific behavior.
 
+Use this skill only when delegation is justified. Default bias is not to delegate.
+If the task is simple, mostly mechanical, or documentation-only, do the work directly instead of invoking this skill.
+
 ## 1) Quick Check (Required)
 
 Before writing any delegate brief:
 
+- Reject delegation immediately when any of these are true:
+  - task is pure documentation, wording, summarization, or other non-code work
+  - task is a small or obvious code change that one agent can complete directly with low risk
+  - task is mostly file reading, inspection, or answering questions
+  - expected code change is narrow enough that splitting adds overhead instead of reducing risk
+- Delegate only when all of these are true:
+  - task requires meaningful code modification, not just docs or prompts
+  - task has enough complexity, scope, or validation burden that a separate executor is useful
+  - delegated execution creates a clearer ownership boundary or lowers delivery risk
 - Check whether splitting is useful:
   - components can be implemented independently
   - components can be validated independently
   - split reduces risk
+- If delegation is not clearly worthwhile, stop and do not create a delegate brief.
 - If splitting is recommended, ask user to choose:
   - keep one delegated task, or
   - split into multiple delegated tasks
