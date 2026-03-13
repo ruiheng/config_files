@@ -1,3 +1,8 @@
+Global rules:
+
+- For routine workspace file inspection, use the built-in file-reading tool instead of shell text slicers such as `sed` or `awk`.
+- If shell line slicing is truly necessary, use `head -n X | tail -n +Y` instead of `sed -n`.
+
 Follow the guidance files below based on task type.
 
 If the task involves software design or development:
