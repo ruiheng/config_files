@@ -372,9 +372,111 @@ detect_os() {
 
 readonly OS="$(detect_os)"
 
+detect_package_manager() {
+    if command -v apt-get &>/dev/null; then
+        echo "apt-get"
+    elif command -v brew &>/dev/null; then
+        echo "brew"
+    elif command -v dnf &>/dev/null; then
+        echo "dnf"
+    elif command -v pacman &>/dev/null; then
+        echo "pacman"
+    elif command -v zypper &>/dev/null; then
+        echo "zypper"
+    else
+        echo "unknown"
+    fi
+}
+
+readonly PACKAGE_MANAGER="$(detect_package_manager)"
+
 # =============================================================================
 # Installation Functions
 # =============================================================================
+
+install_package() {
+    local package_name="$1"
+    local -a install_cmd=()
+
+    case "$PACKAGE_MANAGER" in
+        apt-get)
+            install_cmd=(sudo apt-get install -y "$package_name")
+            ;;
+        brew)
+            install_cmd=(brew install "$package_name")
+            ;;
+        dnf)
+            install_cmd=(sudo dnf install -y "$package_name")
+            ;;
+        pacman)
+            install_cmd=(sudo pacman -S --noconfirm "$package_name")
+            ;;
+        zypper)
+            install_cmd=(sudo zypper --non-interactive install "$package_name")
+            ;;
+        *)
+            log_error "No supported package manager found for automatic install"
+            return 1
+            ;;
+    esac
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${install_cmd[*]}"
+        return 0
+    fi
+
+    log_info "Running: ${install_cmd[*]}"
+    if "${install_cmd[@]}"; then
+        return 0
+    fi
+
+    log_error "Package install failed: $package_name"
+    return 1
+}
+
+ensure_required_command() {
+    local command_name="$1"
+    local package_name="${2:-$1}"
+
+    if command -v "$command_name" &>/dev/null; then
+        log_ok "Found required command: $command_name"
+        return 0
+    fi
+
+    log_warn "Missing required command: $command_name"
+    if ! install_package "$package_name"; then
+        log_error "Please install '$package_name' manually and rerun the installer"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
+    fi
+
+    if command -v "$command_name" &>/dev/null; then
+        log_ok "Installed required command: $command_name"
+        return 0
+    fi
+
+    log_error "Command still unavailable after install: $command_name"
+    return 1
+}
+
+install_required_tools() {
+    local required_tools=(
+        tmux
+        jq
+    )
+    local tool_name
+
+    log_info "Checking required CLI tools..."
+
+    for tool_name in "${required_tools[@]}"; do
+        ensure_required_command "$tool_name" || return 1
+    done
+
+    return 0
+}
 
 suggest_lsof_install() {
     echo ""
@@ -1067,6 +1169,7 @@ print_banner() {
     echo "========================================"
     echo "  Config Files Installation Script"
     echo "  OS detected: $OS"
+    echo "  Package manager: $PACKAGE_MANAGER"
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "  MODE: DRY RUN (no changes will be made)"
     elif [[ $FORCE -eq 1 ]]; then
@@ -1113,6 +1216,10 @@ main() {
 
     log_info "Source directory: $SCRIPT_DIR"
     log_info "Target home: $HOME"
+
+    if ! install_required_tools; then
+        exit 1
+    fi
 
     if ! setup_agent_deck_integration; then
         exit 1

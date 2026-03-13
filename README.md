@@ -60,6 +60,8 @@ Options:
   --help, -h        Show help message
 ```
 
+`install.sh` will check required CLI tools before linking configs and install missing ones through the detected package manager when supported. The current required tools are `tmux` and `jq`.
+
 ### Windows (install.bat)
 
 ```cmd
