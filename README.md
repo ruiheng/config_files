@@ -60,7 +60,7 @@ Options:
   --help, -h        Show help message
 ```
 
-`install.sh` will check required CLI tools before linking configs and install missing ones through the detected package manager when supported. The current required tools are `tmux` and `jq`.
+`install.sh` will check required CLI tools before linking configs and install missing ones through the detected package manager when supported. The current required tools are `tmux` and `jq`. It also installs `agent-browser` with `npm install -g agent-browser` and then runs `agent-browser install` to download Chromium.
 
 ### Windows (install.bat)
 

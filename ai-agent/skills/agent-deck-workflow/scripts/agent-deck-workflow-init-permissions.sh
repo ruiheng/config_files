@@ -195,6 +195,8 @@ EOF
 [
   "Bash(agent-deck)",
   "Bash(agent-deck *)",
+  "Bash(jq)",
+  "Bash(jq *)",
 $git_readonly_permissions_json
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
@@ -221,6 +223,8 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
+      "Bash(jq)",
+      "Bash(jq *)",
 $git_readonly_permissions_json
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
@@ -243,6 +247,8 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
+      "Bash(jq)",
+      "Bash(jq *)",
 $git_readonly_permissions_json
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
@@ -294,6 +300,13 @@ prefix_rule(
     pattern = ["printf"],
     decision = "allow",
     justification = "Shell printf helper commands",
+)
+
+# Allow jq for JSON inspection and transformation in workflow scripts
+prefix_rule(
+    pattern = ["jq"],
+    decision = "allow",
+    justification = "jq JSON processing commands",
 )
 
 # Allow workflow scripts (installed path, tilde form)
@@ -356,6 +369,11 @@ configure_gemini() {
 pattern = "^agent-deck( .*)?$"
 action = "allow"
 description = "Agent deck commands"
+
+[[rules]]
+pattern = "^jq( .*)?$"
+action = "allow"
+description = "jq JSON processing commands"
 
 [[rules]]
 pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\.sh .*"

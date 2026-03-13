@@ -434,9 +434,22 @@ install_package() {
     return 1
 }
 
+package_name_for_command() {
+    local command_name="$1"
+
+    case "$command_name:$PACKAGE_MANAGER" in
+        npm:brew)
+            echo "node"
+            ;;
+        *)
+            echo "$command_name"
+            ;;
+    esac
+}
+
 ensure_required_command() {
     local command_name="$1"
-    local package_name="${2:-$1}"
+    local package_name="${2:-$(package_name_for_command "$command_name")}"
 
     if command -v "$command_name" &>/dev/null; then
         log_ok "Found required command: $command_name"
@@ -476,6 +489,44 @@ install_required_tools() {
     done
 
     return 0
+}
+
+install_agent_browser() {
+    log_info "Checking agent-browser..."
+
+    if ! ensure_required_command "npm"; then
+        log_error "agent-browser requires npm"
+        return 1
+    fi
+
+    if ! command -v agent-browser &>/dev/null; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would run: npm install -g agent-browser"
+        else
+            log_info "Running: npm install -g agent-browser"
+            if ! npm install -g agent-browser; then
+                log_error "Failed to install agent-browser with npm"
+                return 1
+            fi
+            log_ok "Installed agent-browser"
+        fi
+    else
+        log_ok "Found agent-browser"
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: agent-browser install"
+        return 0
+    fi
+
+    log_info "Running: agent-browser install"
+    if agent-browser install; then
+        log_ok "agent-browser Chromium setup complete"
+        return 0
+    fi
+
+    log_error "Failed to install agent-browser Chromium bundle"
+    return 1
 }
 
 suggest_lsof_install() {
@@ -1218,6 +1269,10 @@ main() {
     log_info "Target home: $HOME"
 
     if ! install_required_tools; then
+        exit 1
+    fi
+
+    if ! install_agent_browser; then
         exit 1
     fi
 
