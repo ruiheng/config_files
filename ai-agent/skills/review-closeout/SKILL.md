@@ -168,6 +168,7 @@ If UI package content exists, include UI package before planner follow-up.
 - Before or during closeout, inspect the source review report and decide whether residual accepted findings should update progress/todo or next-task planning.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.
+- When planner auto-dispatches from a known queue, planner should show dispatch progress in `current/total` form (for example `3/15`) before each newly dispatched task.
 ```
 
 ## Guidelines

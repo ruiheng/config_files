@@ -275,6 +275,9 @@ After closeout acceptance (explicit user or unattended policy):
 8. optional in script: dispatch next task
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
+When planner is dispatching from a known queued batch/plan, planner must proactively report queue progress before each new dispatch in `current/total` form (for example `3/15`).
+This progress is planner-owned state; workflow helper scripts must not invent or infer it.
+If planner knows the queue is ordered but does not know the total yet, say that explicitly instead of fabricating a ratio.
 
 Recommended planner invocation:
 
@@ -287,6 +290,12 @@ Recommended planner invocation:
 
 If next-task dispatch is configured, pass it as `--next-dispatch-cmd "<command>"`.
 Even when that command fails, required closeout actions remain completed.
+
+Planner user-facing status contract for auto-dispatch:
+- before each auto-dispatched task, show one short status line that includes the next dispatch progress
+- preferred format: `Auto-dispatch progress: <current>/<total> | next task: <task_id_or_short_title>`
+- if total is unknown, use an explicit unknown-total form such as `Auto-dispatch progress: 3/?`
+- do not delegate this responsibility to `planner-closeout-batch.sh` or `dispatch-control-message.sh`; they do not own queue state
 
 ## Example: Complete Task Flow
 
