@@ -62,7 +62,12 @@ Agent Deck mode:
 - Resolve by priority:
   - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
   - `planner_session_id`: detected current session id -> explicit -> context -> ask
+  - `start_branch`: detected current git branch when delegate begins -> explicit -> context -> ask
+  - `integration_branch`: explicit -> context -> if `start_branch` is the intended landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
+    - never assume `main`/`master`; branch names are evidence, not truth
   - `executor_session_id`: explicit -> context -> default `executor-<task_id>`
+  - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
+    - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
   - `executor_tool`: explicit -> context -> default current AI tool
     - if user/context provides a full command with arguments, preserve it unchanged
     - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
@@ -85,18 +90,24 @@ Generate sections:
 1. `Objective` (one sentence)
 2. `Components to Address` (3-6 components: name, responsibility, key question)
 3. `Critical Decisions` (2-4: options, trade-offs, recommendation)
-4. `Constraints & Risks` (hard constraints, key risks, mitigations)
-5. `Context to Acquire`:
+4. `Branch Plan`:
+   - `start_branch`
+   - `integration_branch`
+   - `task_branch`
+   - short rationale for why this task uses a dedicated task branch or reuses the existing topic branch
+5. `Constraints & Risks` (hard constraints, key risks, mitigations)
+6. `Context to Acquire`:
    - `Read Before Starting`
    - `Reference as Needed`
    - `Know It Exists`
-6. `Acceptance Criteria` (testable checklist)
-7. `Important Notes`:
+7. `Acceptance Criteria` (testable checklist)
+8. `Important Notes`:
    - in Agent Deck delegated execution, executor task-scoped git writes are pre-authorized
+   - executor must follow the recorded branch plan and must not invent a different working branch just because `task/<task_id>` is the default naming convention
    - after first delivery commit, executor runs `review-request` unless user waives review
-8. `Workflow Policy` (optional, only when overriding default human-gated behavior)
-9. `Agent Deck Context` (only in Agent Deck mode): `task_id`, `planner_session_id`, default `executor_session_id`, artifact root, `executor_tool`, `reviewer_tool`
-10. `Special Requirements` (optional fallback; only when needed): free-form constraints/instructions that must be preserved across executor/reviewer/planner messages
+9. `Workflow Policy` (optional, only when overriding default human-gated behavior)
+10. `Agent Deck Context` (only in Agent Deck mode): `task_id`, `planner_session_id`, default `executor_session_id`, artifact root, `start_branch`, `integration_branch`, `task_branch`, `executor_tool`, `reviewer_tool`
+11. `Special Requirements` (optional fallback; only when needed): free-form constraints/instructions that must be preserved across executor/reviewer/planner messages
 
 Tool-routing rule:
 - If user specifies a full executor/reviewer command, persist it unchanged in delegate brief context.
@@ -114,7 +125,7 @@ Tool-routing rule:
   --to-session-id "<executor_session_id>" \
   --action "execute_delegate_task" \
   --artifact-path ".agent-artifacts/<task_id>/delegate-task-<task_id>.md" \
-  --note "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to reviewer." \
+  --note "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file, especially Branch Plan / Agent Deck Context. MUST implement on the recorded task_branch. If that branch does not exist, create it from the recorded integration_branch; if it already exists, switch to it. Do not invent a different branch or assume task/<task_id> when the delegate file says to reuse an existing topic branch. If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to reviewer." \
   --workflow-policy-json '<workflow_policy_json_optional>' \
   --special-requirements-json '<special_requirements_json_optional>' \
   --cmd "<executor_tool>"
@@ -144,6 +155,7 @@ After writing/dispatching:
 - Return short confirmation:
   - delegate file path
   - one-line objective summary
+  - selected `task_branch` / `integration_branch`
   - selected `executor_tool` / `reviewer_tool` in Agent Deck mode
   - helper output summary (`dispatch_ok ...`) in Agent Deck mode
 - Keep raw control JSON internal unless user explicitly asks.

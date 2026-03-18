@@ -60,7 +60,7 @@ Sender invariants:
   "execution": {
     "action": "execute_delegate_task",
     "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
-    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file. MUST create/switch to branch task/<task_id> before any code change (for example: git switch task/<task_id> || git switch -c task/<task_id>). If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to reviewer."
+    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file, especially Branch Plan / Agent Deck Context. MUST implement on the recorded task_branch. If that branch does not exist, create it from the recorded integration_branch; if it already exists, switch to it. Do not invent a different branch or assume task/<task_id> when the delegate file says to reuse an existing topic branch. If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to reviewer."
   },
   "context": {
     "task_id": "<task_id>",
@@ -175,7 +175,7 @@ Usage note:
   "execution": {
     "action": "closeout_delivered",
     "artifact_path": ".agent-artifacts/<task_id>/closeout-<task_id>.md",
-    "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions. When --integration-branch is supplied, the script is expected to switch there before merge if the worktree is safe. Planning next task is optional."
+    "note": "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions, normally with explicit recorded --task-branch and --integration-branch. When --integration-branch is supplied, the script is expected to switch there before merge if the worktree is safe. Planning next task is optional."
   },
   "context": {
     "task_id": "<task_id>",
@@ -196,6 +196,7 @@ Protocol note:
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
 - Roles are task-scoped; if workflow context explicitly assigns both reviewer and planner roles to one session, `closeout_delivered` may target the same session id.
 - Skip dispatch only when target session equals current session (local continuation); otherwise dispatch may proceed even if `context.from_session_id == context.to_session_id`.
+- Branch roles should already be fixed in the delegate artifact: record `start_branch`, `task_branch`, and `integration_branch` there and keep them stable across review/closeout unless user explicitly changes them.
 - For UI-related tasks, reviewer should keep UI manual confirmation package in artifacts and closeout content for future re-check, regardless of whether current round already got human confirmation.
 - Planner closeout ordering is strict: required actions (`merge`, `progress update`) must complete first; notification/next-task dispatch failures are optional and must not block required completion.
 - Planner should not run separate git state-changing commands in parallel with `planner-closeout-batch.sh`; let the closeout script own integration-branch switching when `--integration-branch` is provided.

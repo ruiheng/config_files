@@ -20,8 +20,8 @@ Usage:
 
 Options:
   --task-id <id>                   Required task id (YYYYMMDD-HHMM-<slug>)
-  --task-branch <ref>              Task branch (default: task/<task_id>)
-  --integration-branch <ref>       Integration branch (default: current branch; script auto-switches when needed)
+  --task-branch <ref>              Task branch (default: task/<task_id>; pass explicitly when reusing an existing topic branch)
+  --integration-branch <ref>       Integration branch (default: current branch; planner should normally pass the branch resolved at delegate start)
   --closeout-artifact <path>       Closeout artifact (default: .agent-artifacts/<task_id>/closeout-<task_id>.md)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)

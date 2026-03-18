@@ -16,6 +16,9 @@ The cloned official `agent-deck` skill is a local reference library (`references
 - `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
 - `*_session_id`: Agent Deck session UUID (resolve with `agent-deck session show <session_id_or_ref> --json | jq -r '.id'`)
 - `*_session_ref`: Human-friendly session reference (`title` or `id`)
+- `start_branch`: planner's current git branch when `delegate-task` begins
+- `integration_branch`: branch where accepted work must land at closeout; this is the task-local mainline and is not assumed to be `main`/`master`
+- `task_branch`: executor working branch; may be a dedicated `task/<task_id>` branch or a reused existing topic branch
 - `workflow_policy`: optional per-task automation override; absent means human-gated defaults
 - `special_requirements`: optional free-form fallback requirements from user/planner; carry unchanged across all roles for the same `task_id`
 
@@ -58,6 +61,20 @@ Session identity nuance:
 - `*_session_id` fields identify which session currently holds each role mapping.
 - When `from_session_id == to_session_id`, this represents inter-role communication within one session.
 - Dispatch is skipped only when the target session is the current session (local continuation); otherwise dispatch proceeds.
+
+### Branch Roles and Resolution
+
+- Resolve branch roles when planner creates the delegate artifact, not during closeout.
+- `integration_branch` is the branch that accepted work merges into. It is the task-local mainline and may be `develop`, `release/*`, another feature branch, or anything else the task actually targets.
+- `task_branch` is the branch where executor commits. In the normal merge-based flow it must differ from `integration_branch`.
+- Deterministic default order:
+  1. preserve explicit/context branch values when already provided
+  2. detect `start_branch` from planner's current branch when `delegate-task` begins
+  3. if `start_branch` is the intended landing line for this delegated change, set `integration_branch = start_branch` and default `task_branch = task/<task_id>`
+  4. if `start_branch` is already the intended topic branch for this delegated change, reuse it as `task_branch` and resolve `integration_branch` from explicit user intent or a high-confidence tracked/base branch; if confidence is low, ask one short clarification instead of guessing
+- Never assume `master` or `main` unless the task's actual landing branch resolves there.
+- Once delegate artifact records `start_branch`, `integration_branch`, and `task_branch`, later roles should treat that branch plan as immutable task context unless user explicitly changes it.
+- Planner should pass explicit `--task-branch` and `--integration-branch` to `planner-closeout-batch.sh` whenever that branch plan is known.
 
 ### Session-Role Mapping Example
 
@@ -229,7 +246,9 @@ Use stable naming:
 
 - Executor session: `executor-<task_id>`
 - Reviewer session: `reviewer-<task_id>`
-- Branch: `task/<task_id>`
+- Default dedicated task branch: `task/<task_id>`
+- Default integration branch: planner's current branch at delegate creation when that branch is the intended landing line
+- Existing topic branch reuse: allowed when planner determines the current branch already is the correct `task_branch`
 - Artifacts root: `.agent-artifacts/<task_id>/`
 - `.agent-artifacts/` stores inter-agent communication records and workflow state artifacts; ignore it in normal coding/docs work, and inspect it only for postmortem or workflow-debug investigations.
 
@@ -238,6 +257,7 @@ Use stable naming:
 ### 1) Planner Starts Task
 
 - Planner prepares delegate artifact.
+- Planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) in that artifact before dispatch.
 - Planner dispatches `execute_delegate_task` to executor.
 
 ### 2) Executor Implements and Requests Review
@@ -267,12 +287,13 @@ Reviewer chooses one branch:
 After closeout acceptance (explicit user or unattended policy):
 1. inspect `closeout-<task_id>.md` and any referenced `review-report-r<n>.md`
 2. decide whether residual accepted findings require follow-up tracking (`progress`, `todo`, next-task queue, or no action)
-3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions
-4. if `--integration-branch` is provided and current branch differs, the script should switch to the integration branch itself; planner should not pre-stage a parallel `git switch`
-5. required in script: merge `task/<task_id>` into integration branch
-6. required in script: update progress record
-7. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
-8. optional in script: dispatch next task
+3. reuse recorded branch plan (`task_branch`, `integration_branch`); do not silently re-infer a different merge target if the delegate/closeout artifacts already define it
+4. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions, passing explicit `--task-branch` and `--integration-branch` when known
+5. if `--integration-branch` is provided and current branch differs, the script should switch to the integration branch itself; planner should not pre-stage a parallel `git switch`
+6. required in script: merge recorded `task_branch` into recorded `integration_branch`
+7. required in script: update progress record
+8. optional in script: hygiene (`prune-task-branches.sh`, `summarize-ui-confirmation-packages.sh`)
+9. optional in script: dispatch next task
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
 When planner is dispatching from a known queued batch/plan, planner must proactively report queue progress before each new dispatch in `current/total` form (for example `3/15`).
@@ -284,6 +305,7 @@ Recommended planner invocation:
 ```bash
 ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh \
   --task-id "<task_id>" \
+  --task-branch "<task_branch>" \
   --integration-branch "<integration_branch>" \
   --run-health-gate
 ```
@@ -300,13 +322,13 @@ Planner user-facing status contract for auto-dispatch:
 ## Example: Complete Task Flow
 
 1. User asks: "Add login rate limiting".
-2. Planner runs `delegate-task`; artifact `.agent-artifacts/<task_id>/delegate-task-<task_id>.md` is generated.
+2. Planner runs `delegate-task`; artifact `.agent-artifacts/<task_id>/delegate-task-<task_id>.md` is generated with recorded `start_branch`, `integration_branch`, and `task_branch`.
 3. Planner dispatches `execute_delegate_task` to `executor-<task_id>`.
-4. Executor implements, commits, runs `review-request`, and dispatches `review_requested`.
+4. Executor implements on recorded `task_branch`, commits, runs `review-request`, and dispatches `review_requested`.
 5. Reviewer runs `review-code` and dispatches `rework_required` (if must-fix exists).
 6. Executor fixes and sends another `review_requested`.
 7. Reviewer approves, user confirms, reviewer runs `review-closeout` and dispatches `closeout_delivered`.
-8. Planner merges branch and updates progress.
+8. Planner merges recorded `task_branch` into recorded `integration_branch` and updates progress.
 
 ## Role-Skill Mapping
 
@@ -322,12 +344,16 @@ Do:
 - keep cross-session messages short and pointer-based
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
+- resolve and record branch plan at delegate start, then reuse it consistently through closeout
 - let `planner-closeout-batch.sh` own integration-branch switching when `--integration-branch` is explicitly supplied
 - run planner required closeout actions via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`
 
 Do not:
 - auto-merge before acceptance
 - run `git switch` in parallel with planner closeout
+- assume the merge target is `main` or `master` when the recorded task mainline is something else
+- blindly create `task/<task_id>` when the delegate artifact explicitly says to reuse an existing topic branch as `task_branch`
+- silently re-derive merge target from whatever branch happens to be checked out at closeout time when branch plan was already recorded earlier
 - send large report bodies inline via `session send`
 - run proactive polling loops after dispatch
 - treat protocol JSON as default user-facing content
