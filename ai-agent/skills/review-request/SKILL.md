@@ -1,25 +1,25 @@
 ---
 name: review-request
-description: Generates a review-request document for code review from uncommitted changes, a specific commit, or a branch.
+description: Generates a review-request mailbox message for code review from uncommitted changes, a specific commit, or a branch.
 ---
 
 # Review Request
 
-Generate a copy/paste-friendly review handoff document for later code review.
+Generate a copy/paste-friendly mailbox message for code review.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 This skill only defines review-request-specific behavior.
 
 ## Required Scope Selection
 
-Before generating the document, determine one scope:
+Before generating the message, determine one scope:
 1. `uncommitted changes`
 2. `specific commit`
 3. `branch`
 
 Workflow continuity rule:
-- In an ongoing implementation session, if scope is not explicit, inherit from active delegated task for current `task_id`.
-- Ask a clarification question only when multiple scopes are equally plausible or no reliable scope can be inferred.
+- In an ongoing implementation session, if scope is not explicit, inherit from active delegated task for current `task_id`
+- Ask a clarification question only when multiple scopes are equally plausible or no reliable scope can be inferred
 
 ## Inputs
 
@@ -31,16 +31,13 @@ Workflow continuity rule:
 - Optional:
   - `base_branch` (for branch scope)
   - `original_task`
-  - `delegate_task_path`
-  - `output_path` (default: project root)
 
 ## Original Task Source (Required)
 
 Populate `## Original Task` by priority:
 1. explicit `original_task`
 2. active delegated-task context in current session
-3. `delegate_task_path`
-4. ask one short clarification question
+3. ask one short clarification question
 
 ## Data Collection (Read-Only)
 
@@ -61,31 +58,21 @@ Use read-only git commands only.
 ## Scope Hygiene and Noise Control (Required)
 
 Classify changes into:
-- In-scope: directly related to original task
-- Noise/out-of-scope: unrelated local files, temporary artifacts, env files
+- in-scope: directly related to original task
+- noise/out-of-scope: unrelated local files, temporary artifacts, env files
 
 Rules:
-1. `Files Modified/Created` includes in-scope files only.
-2. Do not list unrelated noise file-by-file.
-3. For uncommitted scope, summarize unrelated noise with count + up to 3 examples.
-4. Ask one short clarification question if relevance is uncertain.
-
-## Output File
-
-Create `review-request-<unique>.md`.
-- Default path: project root unless `output_path` provided.
-- If collision occurs, regenerate unique suffix.
+1. `Files Modified/Created` includes in-scope files only
+2. do not list unrelated noise file-by-file
+3. for uncommitted scope, summarize unrelated noise with count + up to 3 examples
+4. ask one short clarification question if relevance is uncertain
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`:
-- `Agent Deck Mode Detection`
-- `Context Resolution Priority`
-- `Dispatch Helper Usage`
-- `Error Handling and Diagnostics`
+Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> branch `task/<task_id>` -> delegated context/path -> ask
+- `task_id`: explicit -> branch `task/<task_id>` -> delegated context -> ask
 - `planner_session_id`: explicit/context -> ask
 - `executor_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_id`: explicit -> delegated context -> default `reviewer-<task_id>`
@@ -96,79 +83,49 @@ Skill-specific context resolution:
   - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
   - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
   - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
-- `reviewer_tool`: explicit -> delegated context -> map from normalized `executor_tool`:
+- `reviewer_tool`: explicit -> delegated context -> map from normalized `executor_tool`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
   - `executor_tool` starts with `codex` -> `claude --model sonnet --permission-mode acceptEdits`
   - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --ask-for-approval on-request`
   - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
 - `round`: explicit -> infer from context -> default `1`
 
-Then write to `.agent-artifacts/<task_id>/review-request-r<round>.md`.
-Create parent directories when missing.
-When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why. Reviewer feedback is advisory input, not automatic instructions.
-
-Dispatch to reviewer with canonical flags:
-
-```bash
-~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
-  --task-id "<task_id>" \
-  --planner-session-id "<planner_session_id>" \
-  --from-session-id "<executor_session_id>" \
-  --to-session-id "<reviewer_session_id>" \
-  --round "<round>" \
-  --action "review_requested" \
-  --artifact-path ".agent-artifacts/<task_id>/review-request-r<round>.md" \
-  --note "You are the reviewer for this task. Fully load and follow agent-deck-workflow/SKILL.md (especially Control Message Contract + Reviewer Decision Flow), and follow reviewer behavior rather than executor or planner behavior. If must-fix issues remain, dispatch rework_required to executor. If no must-fix issues remain, present stop_recommended to user rather than planner, unless policy allows immediate closeout. Read the review-request file and produce a full review report, then use ~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh for the required follow-up control message." \
-  --workflow-policy-json '<workflow_policy_json_optional>' \
-  --special-requirements-json '<special_requirements_json_optional>' \
-  --cmd "<reviewer_tool>"
-```
-
-Typical `--cmd` values (copy-ready):
-
-```bash
---cmd "codex --model gpt-5.4 --ask-for-approval on-request"
---cmd "claude --model sonnet --permission-mode acceptEdits"
---cmd "gemini --model gemini-2.5-pro"
-```
-
-Rules:
-- Do not emit bare provider names like `claude`, `codex`, or `gemini` as default workflow session commands.
-- Always quote `--cmd` when it contains spaces.
-- `--cmd` only applies when creating a missing target session; existing sessions keep their original tool command.
+When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why.
+Reviewer feedback is advisory input, not automatic instructions.
 
 Identity rules:
-- `review_requested` sender must be active executor session id.
-- If detected current session id differs from resolved `executor_session_id`, stop and ask for clarification.
+- `review_requested` sender must be active executor session id
+- If detected current session id differs from resolved `executor_session_id`, stop and ask for clarification
 - If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
   2. create/use new reviewer session with requested tool
 
-Post-dispatch behavior:
-- Executor enters waiting state.
-- Executor does not proactively poll reviewer unless user explicitly asks.
+Post-send behavior:
+- executor enters waiting state
+- executor does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
 
-Use this exact structure:
+Use this exact structure as the mailbox body:
 
 ```markdown
-# Review Request
+Task: <task_id>
+Action: review_requested
+From: executor <executor_session_id>
+To: reviewer <reviewer_session_id>
+Planner: <planner_session_id>
+Round: <round>
+
+## Summary
+[One-line review request summary]
 
 ## Scope
 - Type: [uncommitted | commit | branch]
 - Target: [working tree | commit hash | branch name]
 - Base (if branch): [base branch or N/A]
 
-## Agent Deck Context (Optional)
-- Task ID: [<task_id> when available]
-- Planner Session ID: [<planner_session_id> when available]
-- Round: [<round> when available]
-- Workflow Policy: [<workflow_policy_json> when available]
-- Special Requirements: [<special_requirements_json> when available]
-
 ## Original Task
-[Original task text from explicit input or active session context (optionally from `delegate_task_path` if provided). Use `Not provided` only after explicit clarification that no task text is available.]
+[Original task text from explicit input or active session context. Use `Not provided` only after explicit clarification that no task text is available.]
 
 ## Review Focus
 - [Primary risk/review angle 1]
@@ -191,21 +148,45 @@ Use this exact structure:
 - Result Summary: [pass/fail/high-level outcomes; if unknown write: Not provided]
 - Coverage Gaps: [known missing tests or validation gaps; if none write: None identified]
 
-## Working Tree Noise Summary (Optional, mostly for uncommitted scope)
-- Excluded unrelated items: [count]
-- Examples (max 3): [`path/a`, `path/b`]
+## Workflow Policy
+[only when present]
+
+## Special Requirements
+[only when present]
 
 ## Known Issues or Limitations
 [Known limitations; if none, write: None identified]
 ```
 
+## Mailbox Send + Wakeup
+
+Recommended subject:
+- `review request: <task_id> r<round>`
+
+Workflow send sequence:
+1. ensure sender and reviewer inbox endpoints exist:
+   - `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"`
+   - `agent-mailbox endpoint register --address "workflow/session/<reviewer_session_id>"`
+2. send the body with `agent-mailbox send --body-file -` and feed the composed body through stdin
+3. if reviewer session is not current session, wake it with:
+
+```text
+You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<reviewer_session_id> --json
+```
+
+Rules:
+- Do not create `review-request-*.md`
+- Do not tell reviewer to go read a generated workflow file
+- Do not send the review-request body through `agent-deck session send`
+- Do not write a temporary file just to pass body text to `agent-mailbox send`
+
 ## Quality Bar
 
-1. Keep concise and copy/paste friendly.
-2. Use neutral language.
-3. File list is complete for in-scope target, not full local noise.
-4. Prefer facts over speculation.
-5. Keep raw control JSON internal unless user asks.
-6. Always include `Review Focus` and `Verification Evidence` fields.
-7. Preserve `workflow_policy` unchanged when present.
-8. Preserve `special_requirements` unchanged when present.
+1. Keep concise and copy/paste friendly
+2. Use neutral language
+3. File list is complete for in-scope target, not full local noise
+4. Prefer facts over speculation
+5. Keep raw mailbox JSON internal unless user asks
+6. Always include `Review Focus` and `Verification Evidence` fields
+7. Preserve `workflow_policy` unchanged when present
+8. Preserve `special_requirements` unchanged when present

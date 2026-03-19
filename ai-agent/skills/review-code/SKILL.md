@@ -13,7 +13,7 @@ This skill only defines review-code-specific behavior.
 ## Input
 
 Provide one of:
-1. `review-request-*.md` file
+1. the mailbox body from `review_requested`
 2. original task + implementation summary + code changes
 
 ## Input Completeness Gate (Required)
@@ -30,13 +30,13 @@ If critical context is missing:
 
 ## What to Review
 
-- Logic correctness
-- Design quality and coupling
-- Security boundaries
-- Edge-case handling
-- Maintainability
-- Compatibility/regression risk
-- Verification coverage quality
+- logic correctness
+- design quality and coupling
+- security boundaries
+- edge-case handling
+- maintainability
+- compatibility/regression risk
+- verification coverage quality
 
 ## UI-Change Detection and Human Confirmation
 
@@ -64,7 +64,16 @@ Policy rules:
 
 ## Output Format
 
+Use this exact structure as the full review report. This report is also the mailbox body when reviewer sends `rework_required`.
+
 ```markdown
+Task: <task_id>
+Action: review_report
+From: reviewer <reviewer_session_id>
+To: executor <executor_session_id>
+Planner: <planner_session_id>
+Round: <round>
+
 ### Summary
 [APPROVED / NEEDS_REVISION]: Brief rationale (1-2 sentences)
 
@@ -111,23 +120,22 @@ For the implementer/author:
 Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 - `Agent Deck Mode Detection`
 - `Context Resolution Priority`
-- `Dispatch Helper Usage`
 - `Reviewer Decision Flow`
 - `Error Handling and Diagnostics`
 
 Skill-specific context resolution:
-- `task_id`: explicit -> review path `.agent-artifacts/<task_id>/...` -> Agent Deck context -> ask
-- `planner_session_id`: explicit/context only -> ask
+- `task_id`: explicit -> mailbox body -> ask
+- `planner_session_id`: explicit -> mailbox body -> ask
 - `current_session_id`: best-effort from `agent-deck session current --json`
-- `reviewer_session_id`: explicit -> `current_session_id` -> inbound payload `context.to_session_id` -> ask
-- `executor_session_id`: explicit -> inbound payload `context.from_session_id` -> default `executor-<task_id>`
-- `round`: explicit -> parse from `-r<round>.md` -> ask
-- `workflow_policy` (optional): explicit -> request/delegate context -> human-gated defaults
-- `special_requirements` (optional fallback): explicit -> inbound payload `context.special_requirements` -> request/delegate context -> omit
+- `reviewer_session_id`: explicit -> `current_session_id` -> mailbox body `To` header -> ask
+- `executor_session_id`: explicit -> mailbox body `From` header -> default `executor-<task_id>`
+- `round`: explicit -> mailbox body `Round` header -> default `1`
+- `workflow_policy` (optional): explicit -> request context -> human-gated defaults
+- `special_requirements` (optional fallback): explicit -> request context -> omit
 
 Important identity clarification:
-- `current_session_id` is for sender validation and safety checks.
-- `planner_session_id` must come from explicit/context workflow metadata, not current-session detection.
+- `current_session_id` is for sender validation and safety checks
+- `planner_session_id` must come from explicit/context workflow metadata, not current-session detection
 
 Default policy when missing:
 - `mode = "human_gated"`
@@ -136,51 +144,32 @@ Default policy when missing:
 - `ui_manual_confirmation = "auto"`
 
 Execution flow in Agent Deck mode:
-1. Write report to `.agent-artifacts/<task_id>/review-report-r<round>.md`.
+1. Produce the full review report in the format above
 2. Choose action:
-   - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL.
-   - `stop_recommended` if no must-fix remains.
-3. For `rework_required`, dispatch to executor.
+   - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL
+   - `stop_recommended` if no must-fix remains
+3. For `rework_required`, send the full review report as mailbox body to executor
 4. For `stop_recommended`:
    - if `auto_accept_if_no_must_fix=true`, run `review-closeout`
    - else present user decision summary and wait
    - in human-gated mode, request manual UI confirmation when required
 
-Dispatch example (`rework_required`):
+Mailbox subject (`rework_required`):
+- `rework required: <task_id> r<round>`
 
-```bash
-~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
-  --task-id "<task_id>" \
-  --planner-session-id "<planner_session_id>" \
-  --from-session-id "<reviewer_session_id>" \
-  --to-session-id "<executor_session_id>" \
-  --round "<round>" \
-  --action "rework_required" \
-  --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
-  --note "Must-fix items remain. Address the review findings and submit the next review request." \
-  --workflow-policy-json '<workflow_policy_json_optional>' \
-  --special-requirements-json '<special_requirements_json_optional>' \
-  --no-ensure-session \
-  --no-start-session
-```
+Mailbox body rules (`rework_required`):
+- use the full review report above as the body
+- send it with `agent-mailbox send --body-file -` via stdin
+- do not create `review-report-r<n>.md`
+- do not assume executor can read a separate artifact later
 
-Dispatch example (`user_requested_iteration` after user chooses iterate):
+Mailbox subject (`user_requested_iteration` after user chooses iterate):
+- `iteration requested: <task_id> r<round>`
 
-```bash
-~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
-  --task-id "<task_id>" \
-  --planner-session-id "<planner_session_id>" \
-  --from-session-id "<reviewer_session_id>" \
-  --to-session-id "<executor_session_id>" \
-  --round "<round>" \
-  --action "user_requested_iteration" \
-  --artifact-path ".agent-artifacts/<task_id>/review-report-r<round>.md" \
-  --note "User requested another implementation iteration. Address the requested follow-ups and submit a new review request." \
-  --workflow-policy-json '<workflow_policy_json_optional>' \
-  --special-requirements-json '<special_requirements_json_optional>' \
-  --no-ensure-session \
-  --no-start-session
-```
+Mailbox body rules (`user_requested_iteration`):
+- restate the user decision and the required follow-ups in the body
+- include enough of the prior review findings that executor can continue without opening external workflow files
+- send it with `agent-mailbox send --body-file -` via stdin
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
@@ -193,11 +182,11 @@ User-facing output requirement for `stop_recommended`:
 When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-accepted by workflow policy`.
 
 Required interaction behavior:
-- For `rework_required`, dispatch automatically after report generation.
-- For `stop_recommended` with manual decision, wait for explicit user choice.
-- Preserve `workflow_policy` unchanged in outbound dispatches.
-- Preserve `special_requirements` unchanged in outbound dispatches.
-- Keep control JSON internal unless user explicitly asks.
+- For `rework_required`, send automatically after the report is ready
+- For `stop_recommended` with manual decision, wait for explicit user choice
+- Preserve `workflow_policy` unchanged in outbound messages
+- Preserve `special_requirements` unchanged in outbound messages
+- Keep mailbox JSON internal unless user explicitly asks
 
 Sender identity rule:
-- Reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`.
+- reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`

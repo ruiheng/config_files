@@ -1,6 +1,6 @@
 ---
 name: review-closeout
-description: Extracts a concise review closeout from a full review report, keeping actionable items and any FAIL/UNKNOWN checks, and outputs directly for copy/paste.
+description: Extracts a concise closeout summary from a full review report and, in Agent Deck mode, sends it to planner through agent-mailbox.
 ---
 
 # Review Closeout
@@ -17,70 +17,57 @@ For UI-related tasks, carry forward human-run UI confirmation package into close
 Closeout should also give planner a compact summary of residual accepted findings that may need later tracking.
 
 Role intent:
-- Required role: reviewer role for the current task.
-- Role is task-scoped: the same AI/session may also hold planner role when workflow context explicitly assigns both.
-- Dispatch eligibility must come from resolved reviewer context, not session title naming.
+- required role: reviewer role for the current task
+- role is task-scoped: the same AI/session may also hold planner role when workflow context explicitly assigns both
+- dispatch eligibility must come from resolved reviewer context, not session title naming
 
 ## Input
 
-Provide one of:
-1. full review report text
-2. review report file path
+Provide the full review report text.
 
 ## Output Mode (Fixed)
 
-- Output directly in response.
-- Default: no file creation.
-- Agent Deck mode: also write closeout artifact for cross-session handoff.
-- Keep output compact and copy/paste friendly.
+- output directly in response
+- Agent Deck mode: also send the closeout summary to planner via `agent-mailbox`
+- keep output compact and copy/paste friendly
+- do not create a closeout Markdown file
 
 ## Agent Deck Mode
 
 Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 - `Agent Deck Mode Detection`
 - `Context Resolution Priority`
-- `Dispatch Helper Usage`
 - `Error Handling and Diagnostics`
 
 Skill-specific context resolution:
-- `task_id`: explicit -> review-report path `.agent-artifacts/<task_id>/...` -> ask
-- `planner_session_id`: explicit/context -> ask
+- `task_id`: explicit -> review report text -> ask
+- `planner_session_id`: explicit -> review context -> ask
 - `current_session_id`: best-effort from `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> review context -> ask
 - `workflow_policy` (optional): explicit -> review/report context -> default human-gated
 - `special_requirements` (optional fallback): explicit -> review/report context -> omit
+- `task_branch`: explicit -> review/report context -> default `task/<task_id>`
+- `integration_branch`: explicit -> review/report context -> ask if planner closeout will need it
 
 If required values are resolved:
-1. write closeout to `.agent-artifacts/<task_id>/closeout-<task_id>.md`
-2. normalize identity values before any comparison:
+1. normalize identity values before any comparison:
    - resolve `planner_session_id` / `reviewer_session_id` refs to UUID via `agent-deck session show ... --json`
    - use detected `current_session_id` UUID from `agent-deck session current --json`
-   - if normalization fails for required identity, do not dispatch automatically; ask one short clarification question
-3. dispatch mode:
-   - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session dispatch and continue locally
-   - otherwise dispatch `closeout_delivered` to planner
-4. include planner follow-up recommendation in closeout output (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
+   - if normalization fails for required identity, do not send automatically; ask one short clarification question
+2. send mode:
+   - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session wakeup and continue locally
+   - otherwise send `closeout_delivered` to planner inbox and wake planner session
+3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
+4. send the closeout body with `agent-mailbox send --body-file -` via stdin rather than writing a temporary file
 
-Dispatch example:
+Recommended mailbox subject:
+- `closeout delivered: <task_id>`
 
-```bash
-~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message.sh \
-  --task-id "<task_id>" \
-  --planner-session-id "<planner_session_id>" \
-  --from-session-id "<reviewer_session_id>" \
-  --to-session-id "<planner_session_id>" \
-  --round "final" \
-  --action "closeout_delivered" \
-  --artifact-path ".agent-artifacts/<task_id>/closeout-<task_id>.md" \
-  --note "Task review loop is complete after closeout acceptance (user or policy). Planner should run ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh to complete required closeout actions. When --integration-branch is supplied, the script is expected to switch there before merge if the worktree is safe. Planning next task is optional." \
-  --workflow-policy-json '<workflow_policy_json_optional>' \
-  --special-requirements-json '<special_requirements_json_optional>' \
-  --no-ensure-session \
-  --no-start-session
+Recommended wakeup text:
+
+```text
+You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<planner_session_id> --json
 ```
-
-Keep helper output concise (for example `dispatch_ok ...`).
-Keep raw control JSON internal unless user explicitly asks.
 
 ## Extraction Rules
 
@@ -96,7 +83,6 @@ Inclusion-first policy:
 Planner handoff rule:
 - when closeout happens after acceptance, convert surviving non-blocking findings into planner-usable follow-up input instead of leaving them as raw review debris
 - preserve whether each item looks like `progress/todo`, `next task`, or `no extra tracking`
-- if the source review report path is known, include it explicitly so planner can inspect full context when needed
 
 2. Request/security checks:
 - drop `PASS`
@@ -126,46 +112,46 @@ Rules:
 - render section only when it has at least one item
 - never output empty headings
 - if all buckets are empty:
-  - Agent Deck OFF:
 
 ```markdown
 ### Review Closeout
 No actionable items.
 ```
 
-  - Agent Deck ON: output `No actionable items.` and still append planner follow-up recommendation
-
 ## Output Template (Conditional)
 
 Always start with:
 
 ```markdown
+Task: <task_id>
+Action: closeout_delivered
+From: reviewer <reviewer_session_id>
+To: planner <planner_session_id>
+Planner: <planner_session_id>
+Round: final
+
 ### Review Closeout
 ```
 
 Then append only non-empty sections.
 
-In Agent Deck mode, append planner follow-up recommendation.
-If UI package content exists, include UI package before planner follow-up.
-
 ```markdown
-#### Residual Follow-up For Planner (Only when any accepted non-blocking items remain)
-- Source review report: `.agent-artifacts/<task_id>/review-report-r<round>.md`
+#### Residual Follow-up For Planner
 - Track in progress/todo: [items worth recording for later follow-up, or `None`]
 - Consider as next task/subtask: [items worth queueing, or `None`]
 - No extra tracking needed: [items intentionally left as informational only, or `None`]
 
-#### UI Manual Confirmation Package (Only when UI package content exists)
+#### UI Manual Confirmation Package
 - UI impact: [detected | none detected]
 - Changed UI surfaces: [routes/pages/components]
 - Manual check steps (human-run): [short checklist]
 - Expected visible outcomes: [what user should see]
 - Notes: [optional]
 
-#### Planner Follow-up Recommendation (After Closeout Acceptance)
-- Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --integration-branch <integration_branch>`.
-- Required by script: switch to the target integration branch when needed, then merge `task/<task_id>` and update planner progress records.
-- Before or during closeout, inspect the source review report and decide whether residual accepted findings should update progress/todo or next-task planning.
+#### Planner Follow-up Recommendation
+- Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --task-branch <task_branch> --integration-branch <integration_branch>`.
+- Required by script: switch to the target integration branch when needed, then merge the task branch and update planner progress records.
+- Before or during closeout, inspect this closeout message and decide whether residual accepted findings should update progress/todo or next-task planning.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.
 - When planner auto-dispatches from a known queue, planner should show dispatch progress in `current/total` form (for example `3/15`) before each newly dispatched task.
@@ -173,11 +159,11 @@ If UI package content exists, include UI package before planner follow-up.
 
 ## Guidelines
 
-1. Prefer completeness over aggressive trimming.
-2. Keep neutral tone.
-3. Do not include PASS-only lines.
-4. Keep section order stable.
-5. Keep output compact and copy/paste friendly.
-6. Preserve `workflow_policy` unchanged when dispatching.
-7. Preserve `special_requirements` unchanged when dispatching.
-8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case.
+1. Prefer completeness over aggressive trimming
+2. Keep neutral tone
+3. Do not include PASS-only lines
+4. Keep section order stable
+5. Keep output compact and copy/paste friendly
+6. Preserve `workflow_policy` unchanged when sending
+7. Preserve `special_requirements` unchanged when sending
+8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case

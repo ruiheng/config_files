@@ -11,7 +11,6 @@ Required actions (hard-fail):
 
 Optional actions (soft-fail):
 - prune stale task branches
-- summarize UI confirmation packages
 - dispatch next task command
 - desktop notifications
 
@@ -22,7 +21,6 @@ Options:
   --task-id <id>                   Required task id (YYYYMMDD-HHMM-<slug>)
   --task-branch <ref>              Task branch (default: task/<task_id>; pass explicitly when reusing an existing topic branch)
   --integration-branch <ref>       Integration branch (default: current branch; planner should normally pass the branch resolved at delegate start)
-  --closeout-artifact <path>       Closeout artifact (default: .agent-artifacts/<task_id>/closeout-<task_id>.md)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
   --planner-session-id <id|title>  Planner session ref (default: planner)
@@ -32,7 +30,6 @@ Options:
   --run-prune                      Run prune-task-branches.sh after required actions
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions (non-strict)
-  --no-ui-summary                  Skip summarize-ui-confirmation-packages.sh
   --next-dispatch-cmd <command>    Optional command executed after required actions
   -h, --help                       Show help
 
@@ -71,7 +68,6 @@ debug() {
 task_id=""
 task_branch=""
 integration_branch=""
-closeout_artifact=""
 artifact_root=".agent-artifacts"
 progress_file=""
 planner_session_ref="planner"
@@ -81,7 +77,6 @@ allow_dirty=0
 run_prune=0
 prune_apply=0
 run_health_gate=0
-run_ui_summary=1
 next_dispatch_cmd=""
 
 while [[ $# -gt 0 ]]; do
@@ -89,7 +84,6 @@ while [[ $# -gt 0 ]]; do
     --task-id) task_id="${2:-}"; shift 2 ;;
     --task-branch) task_branch="${2:-}"; shift 2 ;;
     --integration-branch) integration_branch="${2:-}"; shift 2 ;;
-    --closeout-artifact) closeout_artifact="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --progress-file) progress_file="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
@@ -99,7 +93,6 @@ while [[ $# -gt 0 ]]; do
     --run-prune) run_prune=1; shift 1 ;;
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
-    --no-ui-summary) run_ui_summary=0; shift 1 ;;
     --next-dispatch-cmd) next_dispatch_cmd="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
@@ -119,9 +112,6 @@ fi
 
 if [[ -z "$task_branch" ]]; then
   task_branch="task/${task_id}"
-fi
-if [[ -z "$closeout_artifact" ]]; then
-  closeout_artifact="${artifact_root%/}/${task_id}/closeout-${task_id}.md"
 fi
 if [[ -z "$progress_file" ]]; then
   progress_file="${artifact_root%/}/workflow-progress/progress.jsonl"
@@ -144,7 +134,6 @@ current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
 git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"
-[[ -f "$closeout_artifact" ]] || die "closeout artifact not found: $closeout_artifact"
 
 if (( allow_dirty == 0 )); then
   if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -173,7 +162,6 @@ fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 notify_script="${script_dir}/notify-workflow-event.sh"
 prune_script="${script_dir}/prune-task-branches.sh"
-ui_summary_script="${script_dir}/summarize-ui-confirmation-packages.sh"
 health_gate_script="${script_dir}/closeout-health-gate.sh"
 
 notify_event() {
@@ -234,7 +222,6 @@ progress_record="$(jq -nc \
   --arg task_branch "$task_branch" \
   --arg started_branch "$started_branch" \
   --arg merged_sha "$merged_sha" \
-  --arg closeout_artifact "$closeout_artifact" \
   --arg status "required_complete" \
   --argjson switched_integration_branch "$switched_integration_branch" \
   '{
@@ -245,7 +232,7 @@ progress_record="$(jq -nc \
     integration_branch: $integration_branch,
     task_branch: $task_branch,
     merged_sha: $merged_sha,
-    closeout_artifact: $closeout_artifact,
+    closeout_source: "mailbox_message",
     switched_integration_branch: $switched_integration_branch
   }'
 )"
@@ -257,7 +244,6 @@ else
 fi
 
 prune_status="skipped"
-ui_summary_status="skipped"
 health_gate_status="skipped"
 next_dispatch_status="skipped"
 optional_fail_count=0
@@ -284,27 +270,6 @@ if (( run_prune )); then
     prune_status="missing_script"
     optional_fail_count=$((optional_fail_count + 1))
     warn "optional prune script missing: ${prune_script}"
-  fi
-fi
-
-if (( run_ui_summary )); then
-  if [[ -x "$ui_summary_script" ]]; then
-    set +e
-    ui_output="$("$ui_summary_script" --artifact-root "$artifact_root" 2>&1)"
-    ui_rc=$?
-    set -e
-    echo "$ui_output"
-    if (( ui_rc == 0 )); then
-      ui_summary_status="ok"
-    else
-      ui_summary_status="failed"
-      optional_fail_count=$((optional_fail_count + 1))
-      warn "optional ui summary failed rc=${ui_rc}"
-    fi
-  else
-    ui_summary_status="missing_script"
-    optional_fail_count=$((optional_fail_count + 1))
-    warn "optional ui summary script missing: ${ui_summary_script}"
   fi
 fi
 
@@ -363,13 +328,11 @@ jq -nc \
   --arg started_branch "$started_branch" \
   --arg integration_branch "$integration_branch" \
   --arg task_branch "$task_branch" \
-  --arg closeout_artifact "$closeout_artifact" \
   --arg progress_file "$progress_file" \
   --arg merged_sha "$merged_sha" \
   --arg merge_mode "$merge_mode" \
   --argjson switched_integration_branch "$switched_integration_branch" \
   --arg prune_status "$prune_status" \
-  --arg ui_summary_status "$ui_summary_status" \
   --arg health_gate_status "$health_gate_status" \
   --arg next_dispatch_status "$next_dispatch_status" \
   --argjson optional_fail_count "$optional_fail_count" \
@@ -379,7 +342,7 @@ jq -nc \
     started_branch: $started_branch,
     integration_branch: $integration_branch,
     task_branch: $task_branch,
-    closeout_artifact: $closeout_artifact,
+    closeout_source: "mailbox_message",
     progress_file: $progress_file,
     required_actions: {
       switched_integration_branch: $switched_integration_branch,
@@ -390,7 +353,6 @@ jq -nc \
     },
     optional_actions: {
       prune: $prune_status,
-      ui_summary: $ui_summary_status,
       health_gate: $health_gate_status,
       next_dispatch: $next_dispatch_status
     },

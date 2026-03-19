@@ -4,90 +4,71 @@ This document describes the multi-agent workflow built around the skills in this
 
 ## Roles
 
-- Agent 1, **Planner** (`delegate-task`): planning agent, generates implementation task documents.
-- Agent 2, **Executor** (implementation): executes tasks and applies code changes.
-- Agent 3, **Reviewer** (`review-code`): review agent, produces full review reports.
-- User: orchestrates copy/paste handoff between agents and makes acceptance decisions.
+- Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
+- Agent 2, **Executor** (implementation): executes tasks and applies code changes
+- Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
+- User: makes acceptance decisions when the workflow is human-gated
 
-## Core Artifacts
+## Core Transport
 
-- Delegate task file: `delegate-task-<unique>.md`
-- Review request file: `review-request-<unique>.md`
-- Full review report: direct output from Agent 3 (copy/paste by user)
-- Closeout summary: direct output from `review-closeout` (copy/paste by user)
+- `agent-mailbox` is the authoritative workflow message layer
+- `agent-deck` is used only to wake the target session so it can receive mail
+- Workflow messages live in mailbox `subject` + `body`
+- When sending mailbox body text, prefer `agent-mailbox send --body-file -` and feed stdin directly
+- The workflow does not generate Markdown handoff files by default
 
 ## End-to-End Loop
 
-1. User asks Agent 1 to prepare work.
-2. Planner runs `delegate-task` and creates `delegate-task-<unique>.md`.
-3. User sends that task document to Agent 2.
+1. User asks Planner to prepare work.
+2. Planner runs `delegate-task` and sends one delegate mailbox message to Executor.
+3. Planner wakes Executor.
 4. Executor implements changes.
-5. Executor runs `review-request` and creates `review-request-<unique>.md`.
-6. User sends that review request document to Agent 3.
-7. Reviewer runs `review-code` and outputs a full review report (with PASS/FAIL/UNKNOWN checks).
-8. User sends the full review report back to Executor for fixes.
-9. Repeat steps 4-8 until the user decides quality is acceptable.
-10. After acceptance, Reviewer runs `review-closeout` to produce a concise closeout summary (direct output, no file) with planner follow-up recommendation.
-11. User sends the closeout summary to Planner.
-12. Planner waits for explicit user confirmation, then batches: merge task branch, update progress records, and plan next task.
-13. Executor and Reviewer can be fully exited.
+5. Executor runs `review-request` and sends one review-request mailbox message to Reviewer.
+6. Executor wakes Reviewer.
+7. Reviewer runs `review-code` and sends either:
+   - `rework_required` back to Executor, or
+   - `stop_recommended` to the user decision point.
+8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Executor.
+9. Repeat until the user decides quality is acceptable, or policy auto-accepts.
+10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
+11. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
+12. Executor and Reviewer can be fully exited.
 
 ## Flow Diagram
 
 ```mermaid
 flowchart TD
-    P[Planner] -->|cmd: delegate-task| TD[[delegate-task-<unique>.md]]
-    TD --> E[Executor]
-    E -->|cmd: review-request| RQ[[review-request-<unique>.md]]
-    RQ --> R[Reviewer]
-    R -->|cmd: review-code| FR[/Full Review Report/]
-
-    FR --> DEC{Quality Accepted?}
+    P[Planner] -->|mailbox: execute_delegate_task| E[Executor]
+    E -->|mailbox: review_requested| R[Reviewer]
+    R -->|review result| DEC{Quality Accepted?}
     DEC -- No --> E
     DEC -- Yes --> R
-    R -->|cmd: review-closeout| AO[/Review Closeout Output/]
-    AO --> P
+    R -->|mailbox: closeout_delivered| P
 
     style DEC fill:#fff3cd,stroke:#b58900,stroke-width:1px
-
-    classDef cmd fill:#eef5ff,stroke:#4a78c2,stroke-width:1px,color:#1f3f73;
-    classDef doc fill:#eef9f1,stroke:#2f8a4c,stroke-width:1px,color:#145c2f;
-    classDef report fill:#fff4e8,stroke:#c77719,stroke-width:1px,color:#7a410a;
-    class TD,RQ doc;
-    class FR,AO report;
 ```
 
 ## Operational Notes
 
-- `review-code` remains the authoritative full review output.
-- `review-closeout` is a closeout extractor for final handoff, not a replacement for full review.
-- Use copy/paste handoff strictly to keep each agent session isolated and disposable.
-- Diagram conventions:
-  - Edge label `cmd: ...` means a skill command invocation.
-  - `[[...]]` is a temporary document artifact.
-  - `[/.../]` is direct report output (copy/paste).
+- `review-code` remains the authoritative full review output
+- `review-closeout` is the compact planner handoff after acceptance
+- The receiver should always read mailbox `body` first
+- External files are supplemental references only, not the default transport
 
 ## Incremental Automation with Agent Deck
-
-The baseline flow above remains valid. `agent-deck` can be added gradually without switching to full automation.
 
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
 2. Create `executor-<task_id>` and `reviewer-<task_id>` per task.
-3. Keep user confirmation as the gate before final acceptance/closeout.
-4. Keep long payloads file-based (`delegate-task`, `review-request`, `review-report`, `closeout`).
-5. Keep planner closeout actions user-confirmed and batched (merge/progress/next-task in one step).
+3. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
+4. Keep workflow content in mailbox body instead of generated Markdown files.
+5. Keep planner closeout actions batched after acceptance.
 
 Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
 - Official docs bundle (reference-only, not a loaded skill): `ai-agent/skills/agent-deck/references/`
-
-Project workflow references:
-
-- Message semantics: `ai-agent/skills/agent-deck-workflow/references/control-message-semantics.md`
-- JSON protocol templates: `ai-agent/skills/agent-deck-workflow/references/internal-protocol/control-message-json-protocol.md`
 
 Official reference sync policy:
 
@@ -98,7 +79,7 @@ Official reference sync policy:
 - After sync, review diff and commit the snapshot update.
 - Keep `ai-agent/skills/agent-deck/` as reference-only (no `SKILL.md`) to avoid prompt conflicts and context overhead.
 
-Migration note (from old local `agent-deck` workflow skill):
+Migration note:
 
-- Old local workflow skill name `agent-deck` has been renamed to `agent-deck-workflow`.
-- Keep only `agent-deck-workflow` as the runnable workflow skill.
+- The runnable workflow skill is `agent-deck-workflow`.
+- The mailbox-first protocol replaces the old artifact-first handoff model.

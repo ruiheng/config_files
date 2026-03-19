@@ -195,12 +195,12 @@ EOF
 [
   "Bash(agent-deck)",
   "Bash(agent-deck *)",
+  "Bash(agent-mailbox)",
+  "Bash(agent-mailbox *)",
   "Bash(jq)",
   "Bash(jq *)",
 $git_readonly_permissions_json
-  "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
-  "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
   "$installed_skills_read_permission_tilde",
   "$installed_skills_read_permission_abs",
@@ -223,12 +223,12 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
+      "Bash(agent-mailbox)",
+      "Bash(agent-mailbox *)",
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
       "$installed_skills_read_permission_tilde",
       "$installed_skills_read_permission_abs",
@@ -247,12 +247,12 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
+      "Bash(agent-mailbox)",
+      "Bash(agent-mailbox *)",
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/dispatch-control-message.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
       "$installed_skills_read_permission_tilde",
       "$installed_skills_read_permission_abs",
@@ -295,6 +295,13 @@ prefix_rule(
     ],
 )
 
+# Allow all agent-mailbox commands
+prefix_rule(
+    pattern = ["agent-mailbox"],
+    decision = "allow",
+    justification = "Mailbox workflow transport commands",
+)
+
 # Allow shell formatting helper used in workflow wrappers
 prefix_rule(
     pattern = ["printf"],
@@ -309,24 +316,10 @@ prefix_rule(
     justification = "jq JSON processing commands",
 )
 
-# Allow workflow scripts (installed path, tilde form)
-prefix_rule(
-    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/dispatch-control-message.sh"],
-    decision = "allow",
-    justification = "Workflow dispatch script (installed path, tilde)",
-)
-
 prefix_rule(
     pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/planner-closeout-batch.sh"],
     decision = "allow",
     justification = "Workflow closeout script (installed path, tilde)",
-)
-
-# Allow workflow scripts (installed path, absolute form)
-prefix_rule(
-    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS/dispatch-control-message.sh"],
-    decision = "allow",
-    justification = "Workflow dispatch script (installed path, absolute)",
 )
 
 prefix_rule(
@@ -371,19 +364,14 @@ action = "allow"
 description = "Agent deck commands"
 
 [[rules]]
+pattern = "^agent-mailbox( .*)?$"
+action = "allow"
+description = "Agent mailbox commands"
+
+[[rules]]
 pattern = "^jq( .*)?$"
 action = "allow"
 description = "jq JSON processing commands"
-
-[[rules]]
-pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\.sh .*"
-action = "allow"
-description = "Workflow dispatch script (tilde)"
-
-[[rules]]
-pattern = ".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/dispatch-control-message\.sh .*"
-action = "allow"
-description = "Workflow dispatch script (absolute)"
 
 [[rules]]
 pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch\.sh .*"
