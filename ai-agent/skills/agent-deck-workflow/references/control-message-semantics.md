@@ -42,7 +42,8 @@ If executor and reviewer cannot converge on review findings, either role may sto
 
 ## Same-Session Role Overlap
 
-Roles are task-scoped. If workflow context explicitly assigns both reviewer and planner roles to the same session, `closeout_delivered` may target the same session id.
+Roles are task-scoped. Default mapping is one distinct session per role.
+If workflow context explicitly assigns both reviewer and planner roles to the same session, `closeout_delivered` may target the same session id as an explicit exception.
 Dispatch should be skipped only when the target session is also the current session (local continuation).
 
 ## User-Facing Rule

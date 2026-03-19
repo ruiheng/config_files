@@ -8,6 +8,10 @@ description: Human-led planner/executor/reviewer workflow protocol on top of age
 Use this skill as the single source of truth for three-role workflow protocol:
 `planner` (long-lived), `executor` (per-task), `reviewer` (per-task).
 
+Default role/session rule:
+- use one distinct session per role
+- treat planner/reviewer same-session operation as an explicit exception, not an implied default
+
 This workflow does not require loading the official `agent-deck` skill by default.
 The cloned official `agent-deck` skill is a local reference library (`references/`) only.
 
@@ -25,6 +29,8 @@ The cloned official `agent-deck` skill is a local reference library (`references
 ## Scope
 
 - Workflow shape: one long-lived `planner`, per-task `executor` + `reviewer`.
+- Default session mapping: planner, executor, and reviewer are separate sessions.
+- Same-session planner+reviewer is allowed only when explicitly assigned by workflow context.
 - Runtime shape: single shared workspace.
 - Governance: human-led; user confirmation gates remain required at stop/closeout points unless policy override is present.
 - Git approval exception: in delegated executor flow, task-scoped executor commits are allowed without per-commit user approval.
@@ -57,9 +63,13 @@ Session identity nuance:
 
 ### Role vs Session Identity
 
-- A session may hold multiple roles for the same task.
+- Default mapping is one distinct session per role: `planner_session_id`, `executor_session_id`, and `reviewer_session_id` should differ unless workflow context explicitly assigns an exception.
+- A session may hold multiple roles for the same task only when workflow context explicitly assigns that multi-role mapping.
 - `*_session_id` fields identify which session currently holds each role mapping.
-- When `from_session_id == to_session_id`, this represents inter-role communication within one session.
+- Tool/provider choice is separate from session identity.
+- Saying "reviewer uses codex" means "the reviewer session should be created or resumed with a Codex command", not "the current Codex planner/executor session should self-assign reviewer role".
+- Even when planner and reviewer use the same provider/model/command, keep a distinct reviewer session unless same-session reviewer assignment is explicitly stated in workflow context.
+- When `from_session_id == to_session_id`, this is an explicit local same-session continuation already established by workflow context, not something inferred from matching tool names.
 - Dispatch is skipped only when the target session is the current session (local continuation); otherwise dispatch proceeds.
 
 ### Branch Roles and Resolution
@@ -80,7 +90,22 @@ Session identity nuance:
 
 ```mermaid
 graph LR
-  S1["Session UUID-1<br/>Planner + Reviewer"]
+  S1["Session UUID-1<br/>Planner"]
+  S2["Session UUID-2<br/>Executor"]
+  S3["Session UUID-3<br/>Reviewer"]
+
+  S1 -->|execute_delegate_task| S2
+  S2 -->|review_requested| S3
+  S3 -->|rework_required| S2
+  S2 -->|review_requested| S3
+  S3 -->|closeout_delivered| S1
+```
+
+Explicit exception example:
+
+```mermaid
+graph LR
+  S1["Session UUID-1<br/>Planner + Reviewer (explicit exception)"]
   S2["Session UUID-2<br/>Executor"]
 
   S1 -->|execute_delegate_task| S2
@@ -335,7 +360,7 @@ Planner user-facing status contract for auto-dispatch:
 - Planner: `delegate-task`, `handoff`
 - Executor: `review-request`
 - Reviewer: `review-code`, `review-closeout`
-- Roles are task-scoped; one AI/session may assume multiple roles when workflow context explicitly assigns them.
+- Roles are task-scoped; same-session multi-role assignment is an explicit exception and must be stated in workflow context rather than inferred from provider/tool choice.
 
 ## Do / Do Not
 

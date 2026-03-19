@@ -60,7 +60,7 @@ Sender invariants:
   "execution": {
     "action": "execute_delegate_task",
     "artifact_path": ".agent-artifacts/<task_id>/delegate-task-<task_id>.md",
-    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file, especially Branch Plan / Agent Deck Context. MUST implement on the recorded task_branch. If that branch does not exist, create it from the recorded integration_branch; if it already exists, switch to it. Do not invent a different branch or assume task/<task_id> when the delegate file says to reuse an existing topic branch. If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to reviewer."
+    "note": "You are the executor for this task. Fully load and follow agent-deck-workflow/SKILL.md, and follow executor behavior rather than reviewer or planner behavior. Read and follow the delegate task file, especially Branch Plan / Agent Deck Context. MUST implement on the recorded task_branch. If that branch does not exist, create it from the recorded integration_branch; if it already exists, switch to it. Do not invent a different branch or assume task/<task_id> when the delegate file says to reuse an existing topic branch. If branch setup fails, stop and report. After first implementation pass, commit, prepare the review-request artifact, and dispatch review_requested to the recorded reviewer_session_id. Do not self-review unless workflow context explicitly assigns your current session as reviewer."
   },
   "context": {
     "task_id": "<task_id>",
@@ -194,7 +194,8 @@ Protocol note:
 - If `context.workflow_policy` is present, carry it forward unchanged for the same `task_id`.
 - If `context.special_requirements` is present, carry it forward unchanged for the same `task_id`.
 - After `review_requested` is dispatched, executor should wait; reviewer must proactively send the next control message.
-- Roles are task-scoped; if workflow context explicitly assigns both reviewer and planner roles to one session, `closeout_delivered` may target the same session id.
+- Roles are task-scoped; default mapping is one distinct session per role.
+- If workflow context explicitly assigns both reviewer and planner roles to one session, `closeout_delivered` may target the same session id as an explicit exception.
 - Skip dispatch only when target session equals current session (local continuation); otherwise dispatch may proceed even if `context.from_session_id == context.to_session_id`.
 - Branch roles should already be fixed in the delegate artifact: record `start_branch`, `task_branch`, and `integration_branch` there and keep them stable across review/closeout unless user explicitly changes them.
 - For UI-related tasks, reviewer should keep UI manual confirmation package in artifacts and closeout content for future re-check, regardless of whether current round already got human confirmation.
