@@ -14,23 +14,20 @@ Options:
   --title <text>             Required notification title
   --message <text>           Required notification message
   --severity <level>         info|warn|error (default: info)
-  --artifact-root <path>     Artifact root for state/log files (default: .agent-artifacts)
-  --dedupe-seconds <n>       Dedupe window in seconds (default from env or 30)
+  --artifact-root <path>     Accepted for compatibility; ignored
+  --dedupe-seconds <n>       Accepted for compatibility; ignored
   -h, --help                 Show help
 
 Env:
   ADWF_NOTIFY                auto|off|force (default: auto)
   ADWF_NOTIFY_MIN_SEVERITY   info|warn|error (default: info)
-  ADWF_NOTIFY_LOG            Log file path (default: <artifact-root>/workflow-health/notifications.log)
-  ADWF_NOTIFY_STATE          State file path (default: <artifact-root>/workflow-health/notify-state.json)
-  ADWF_NOTIFY_DEDUPE_SECONDS Dedupe window seconds (default: 30)
 
 Notes:
   - Never fails caller workflow; exits 0 on all paths.
   - Uses best-effort platform backends:
     Linux: notify-send or dunstify
     macOS: osascript
-    other platforms: log-only fallback
+    other platforms: no-op
 EOF
 }
 
@@ -74,9 +71,6 @@ esc_osascript() {
 
 mode="${ADWF_NOTIFY:-auto}"
 min_severity="${ADWF_NOTIFY_MIN_SEVERITY:-info}"
-if [[ -z "$dedupe_seconds" ]]; then
-  dedupe_seconds="${ADWF_NOTIFY_DEDUPE_SECONDS:-30}"
-fi
 
 if [[ -z "$event" || -z "$task_id" || -z "$title" || -z "$message" ]]; then
   exit 0
@@ -107,47 +101,7 @@ if [[ "$mode" == "off" ]]; then
   exit 0
 fi
 
-health_dir="${artifact_root%/}/workflow-health"
-mkdir -p "$health_dir"
-notify_log="${ADWF_NOTIFY_LOG:-${health_dir}/notifications.log}"
-notify_state="${ADWF_NOTIFY_STATE:-${health_dir}/notify-state.json}"
-
-if [[ ! "$dedupe_seconds" =~ ^[0-9]+$ ]]; then
-  dedupe_seconds=30
-fi
-
-now_epoch="$(date +%s)"
-dedupe_key="${event}|${task_id}|${severity}"
-skip_due_dedupe=0
-
-if (( dedupe_seconds > 0 )) && [[ -f "$notify_state" ]]; then
-  last_ts="$(jq -r --arg key "$dedupe_key" '.[$key] // 0' "$notify_state" 2>/dev/null || echo 0)"
-  if [[ "$last_ts" =~ ^[0-9]+$ ]]; then
-    if (( now_epoch - last_ts < dedupe_seconds )); then
-      skip_due_dedupe=1
-    fi
-  fi
-fi
-
-if (( skip_due_dedupe )); then
-  printf '%s event=%s task_id=%s severity=%s backend=dedupe_skip title=%q message=%q\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$event" "$task_id" "$severity" "$title" "$message" >>"$notify_log" 2>/dev/null || true
-  exit 0
-fi
-
-tmp_state="$(mktemp)"
-if [[ -f "$notify_state" ]] && jq -e 'type == "object"' "$notify_state" >/dev/null 2>&1; then
-  jq --arg key "$dedupe_key" --argjson ts "$now_epoch" '. + {($key): $ts}' "$notify_state" >"$tmp_state" 2>/dev/null || true
-else
-  jq -nc --arg key "$dedupe_key" --argjson ts "$now_epoch" '{($key): $ts}' >"$tmp_state" 2>/dev/null || true
-fi
-if [[ -s "$tmp_state" ]]; then
-  mv "$tmp_state" "$notify_state"
-else
-  rm -f "$tmp_state"
-fi
-
-backend="log_only"
+backend="noop"
 delivered=0
 
 if [[ "$(uname -s)" == "Linux" ]]; then
@@ -182,8 +136,5 @@ fi
 if [[ "$mode" == "force" ]]; then
   delivered=1
 fi
-
-printf '%s event=%s task_id=%s severity=%s backend=%s delivered=%s title=%q message=%q\n' \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$event" "$task_id" "$severity" "$backend" "$delivered" "$title" "$message" >>"$notify_log" 2>/dev/null || true
 
 exit 0
