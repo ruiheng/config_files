@@ -176,7 +176,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "review request: <task_id> r<round>"`
    - `--body-file -`
-3. let the helper resolve/create the reviewer session, register endpoints, send the body, start the target, wait `2s`, and then wake it
+3. let the helper resolve/create the reviewer session, register endpoints, send the body, start the target, wait `10s`, and then wake it
 4. use the helper result as the authoritative `reviewer_session_id`
 
 Exact command shape:
@@ -193,10 +193,18 @@ adwf-send-and-wake \
   --json
 ```
 
+Codex-style execution rule:
+- start `adwf-send-and-wake ... --body-file -` directly
+- then stream the composed review-request body through stdin tool input
+- do not create a temporary review-request body file
+- do not use `printf`, `cat`, heredoc, shell pipes, or redirection to feed the body
+
 Rules:
 - Do not create `review-request-*.md`
 - Do not tell reviewer to go read a generated workflow file
 - Do not run `adwf-send-and-wake --help` when this command shape already matches the task
+- Do not create a temporary review-request body file for a freshly generated message
+- Do not wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
 - Do not use `reviewer-<task_id>` as if it were already a real session id
 - Do not send wakeup before the helper's start-delay-wakeup sequence completes
 

@@ -26,7 +26,7 @@ Optional:
   --content-type <type>          Mailbox content type (default: text/markdown)
   --schema-version <value>       Mailbox schema version (default: 1)
   --wake-message <text>          Override wakeup text
-  --wake-delay-seconds <n>       Delay after session start before wakeup (default: 2)
+  --wake-delay-seconds <n>       Delay after session start before wakeup (default: 10)
   --json                         Emit JSON summary
   -h, --help                     Show help
 
@@ -62,7 +62,7 @@ body_file=""
 content_type="text/markdown"
 schema_version="1"
 wake_message=""
-wake_delay_seconds="2"
+wake_delay_seconds="10"
 json_output=0
 
 while [[ $# -gt 0 ]]; do

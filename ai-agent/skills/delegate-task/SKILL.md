@@ -159,7 +159,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "delegate: <task_id> -> executor"`
    - `--body-file -`
-3. let the helper resolve/create the executor session, register endpoints, send the body, start the target, wait `2s`, and then wake it
+3. let the helper resolve/create the executor session, register endpoints, send the body, start the target, wait `10s`, and then wake it
 4. use the helper result as the authoritative `executor_session_id` in user-facing status
 
 Exact command shape:
@@ -176,6 +176,12 @@ adwf-send-and-wake \
   --json
 ```
 
+Codex-style execution rule:
+- start `adwf-send-and-wake ... --body-file -` directly
+- then stream the composed delegate body through stdin tool input
+- do not create `/tmp/delegate-*.md`
+- do not use `printf`, `cat`, heredoc, shell pipes, or redirection to feed the body
+
 Recommended subject:
 - `delegate: <task_id> -> executor`
 
@@ -184,6 +190,8 @@ Rules:
 - Do not send the delegate body through `agent-deck session send`
 - Do not tell executor to go read a generated workflow file
 - Do not run `adwf-send-and-wake --help` when this command shape already matches the task
+- Do not create `/tmp/delegate-*.md` or any other temporary body file for a freshly generated delegate message
+- Do not wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
 - Do not use `executor-<task_id>` or `reviewer-<task_id>` titles as if they were session ids
 - Do not send wakeup before target session start completes and the readiness delay has passed
 - Do not claim wakeup success unless the helper has completed the full send/start/delay/wakeup sequence

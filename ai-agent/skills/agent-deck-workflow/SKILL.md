@@ -108,6 +108,9 @@ Send-body rule:
 - only use a real file when that file already exists independently and is intentionally the body source
 - in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin; do not wrap it in heredoc or shell pipes
 - prefer `adwf-send-and-wake` for cross-session workflow delivery; it hides stdin echo, serializes mailbox writes, and applies the start-delay-wakeup workaround
+- if the workflow body was generated in the current turn, pass it via stdin; do not write it to `/tmp`, `.agent-artifacts`, or any other temporary file first
+- in Codex-style agent environments, start `adwf-send-and-wake --body-file -` directly, then stream the body through stdin tool input
+- if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself; do not prepend `printf`, `cat`, pipes, or shell redirection
 
 Wakeup transport:
 - after a mailbox message is queued, use `agent-deck` only to wake the target session
@@ -177,7 +180,7 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 After sending mail to `workflow/session/<to_session_id>`:
 1. ensure the target session exists when the workflow expects it to exist
 2. start the target session when needed
-3. wait a short readiness delay before wakeup (default `2s`)
+3. wait a short readiness delay before wakeup (default `10s`)
 4. send one short reminder through `agent-deck`
 
 Why the delay exists:
@@ -194,6 +197,8 @@ Do not:
 - summarize the body so aggressively that the receiver can skip `recv`
 - send a "go read file X" reminder as the default path
 - write a temporary Markdown file only to hand it to `agent-mailbox send`
+- write generated workflow body text to a temporary file only to hand it to `adwf-send-and-wake`
+- wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
 - run mailbox state-mutating commands through parallel wrappers, background jobs, or shell `&`
 
 ### Receiver Contract

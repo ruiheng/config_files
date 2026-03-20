@@ -60,6 +60,7 @@ If required values are resolved:
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
 4. for cross-session closeout, use `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<planner_session_id>" --subject "closeout delivered: <task_id>" --body-file -`
 5. let the helper own the start-delay-wakeup sequence
+6. in Codex-style environments, start the helper directly and stream the closeout body through stdin tool input
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`
@@ -163,3 +164,4 @@ Then append only non-empty sections.
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
 9. Do not bypass `adwf-send-and-wake` for cross-session closeout delivery
+10. Do not create a temporary closeout body file or wrap the helper in `printf`, `cat`, heredoc, shell pipes, or redirection
