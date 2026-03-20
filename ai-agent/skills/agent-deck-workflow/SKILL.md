@@ -204,7 +204,7 @@ If workflow send/wakeup fails, report concise stderr summary and run these check
 
 If closeout cleanup fails, include:
 1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
-2. health report path (`.agent-artifacts/workflow-health/health-<task_id>.json`)
+2. session archive path (`.agent-artifacts/<task_id>/session-archive-<task_id>.json`)
 3. exact manual action to unblock (for example `agent-deck remove <session_id>`)
 
 Planner closeout execution rule:

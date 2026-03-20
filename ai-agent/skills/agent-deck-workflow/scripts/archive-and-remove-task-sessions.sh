@@ -21,12 +21,6 @@ Options:
 Outputs:
   - Writes task archive file:
       <artifact-root>/<task_id>/session-archive-<task_id>.json
-  - Writes catalog copy:
-      <artifact-root>/session-archives/<task_id>.json
-  - Updates catalog index:
-      <artifact-root>/session-archives/index.json
-  - Updates latest pointer copy:
-      <artifact-root>/session-archives/latest.json
   - Prints summary lines for archive/remove results.
 
 Notes:
@@ -34,7 +28,6 @@ Notes:
   - Provider session-id detection is automatic; script probes multiple sources internally.
   - Set ADWF_DEBUG=1 to print probe-source diagnostics.
   - Archive always includes raw `session show --json` payload for future recovery.
-  - Use catalog files for quick lookup without navigating per-task directories.
   - Deletion guard is tool-aware in --apply mode:
     - codex/claude/gemini/opencode sessions require matching provider session id.
     - other tools (for example shell) are not blocked by provider-id guard.
@@ -386,12 +379,7 @@ extract_provider_resume_ids_from_process_probe() {
 
 artifact_dir="${artifact_root%/}/${task_id}"
 archive_file="${artifact_dir}/session-archive-${task_id}.json"
-catalog_dir="${artifact_root%/}/session-archives"
-catalog_file="${catalog_dir}/${task_id}.json"
-catalog_index_file="${catalog_dir}/index.json"
-latest_catalog_file="${catalog_dir}/latest.json"
 mkdir -p "$artifact_dir"
-mkdir -p "$catalog_dir"
 
 profile_name="$(resolve_profile_name)"
 state_db_path="$HOME/.agent-deck/profiles/${profile_name}/state.db"
@@ -615,47 +603,9 @@ jq -n \
     sessions: $sessions
   }' >"$archive_file"
 
-cp "$archive_file" "$catalog_file"
-cp "$archive_file" "$latest_catalog_file"
-
-index_entry="$(jq -n \
-  --arg task_id "$task_id" \
-  --arg archived_at "$archived_at" \
-  --arg mode "$mode" \
-  --arg archive_file "$archive_file" \
-  --arg catalog_file "$catalog_file" \
-  --arg planner_session_id "$planner_session_id" \
-  --arg profile_name "$profile_name" \
-  '{
-    task_id: $task_id,
-    archived_at: $archived_at,
-    mode: $mode,
-    archive_file: $archive_file,
-    catalog_file: $catalog_file,
-    planner_session_id: (if $planner_session_id == "" then null else $planner_session_id end),
-    profile_name: $profile_name
-  }')"
-
-tmp_index="$(mktemp)"
-if [[ -f "$catalog_index_file" ]]; then
-  if jq -e 'type == "array"' "$catalog_index_file" >/dev/null 2>&1; then
-    jq -c \
-      --arg task_id "$task_id" \
-      --argjson entry "$index_entry" \
-      'map(select(.task_id != $task_id)) + [$entry] | sort_by(.archived_at)' \
-      "$catalog_index_file" >"$tmp_index"
-  else
-    jq -nc --argjson entry "$index_entry" '[$entry]' >"$tmp_index"
-  fi
-else
-  jq -nc --argjson entry "$index_entry" '[$entry]' >"$tmp_index"
-fi
-mv "$tmp_index" "$catalog_index_file"
-
 rm -f "$entries_file"
 
 echo "archive_ok file=${archive_file} mode=$([[ "$apply" -eq 1 ]] && echo apply || echo preview)"
-echo "catalog_ok file=${catalog_file} latest=${latest_catalog_file} index=${catalog_index_file}"
 
 if (( blocked_delete_count > 0 )); then
   echo "delete_guard_blocked count=${blocked_delete_count} reason=missing_provider_session_id"

@@ -9,7 +9,6 @@ This script runs one-shot post-closeout checks with minimal agent-side orchestra
 1) archive+cleanup executor/reviewer sessions
 2) verify cleanup result for this task
 3) verify global worker-session cap (to prevent unattended error accumulation)
-4) write workflow health report
 
 Usage:
   closeout-health-gate.sh [options]
@@ -26,10 +25,6 @@ Options:
   -h, --help                     Show help
 
 Outputs:
-  - Health file:
-      <artifact-root>/workflow-health/health-<task_id>.json
-  - Latest health pointer:
-      <artifact-root>/workflow-health/latest.json
   - Summary lines for cleanup and gate result.
 
 Exit codes:
@@ -202,10 +197,6 @@ elif (( worker_session_count > max_worker_sessions )); then
   failure_reasons+=("worker_cap_exceeded")
 fi
 
-health_dir="${artifact_root%/}/workflow-health"
-mkdir -p "$health_dir"
-health_file="${health_dir}/health-${task_id}.json"
-latest_file="${health_dir}/latest.json"
 checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 reasons_csv=""
@@ -213,47 +204,13 @@ if (( ${#failure_reasons[@]} > 0 )); then
   reasons_csv="$(IFS=,; echo "${failure_reasons[*]}")"
 fi
 
-jq -n \
-  --arg task_id "$task_id" \
-  --arg checked_at "$checked_at" \
-  --arg profile_name "${profile:-default}" \
-  --arg archive_file "$archive_file" \
-  --argjson strict "$strict" \
-  --argjson cleanup_exit_code "$cleanup_rc" \
-  --argjson archive_exists "$archive_exists" \
-  --argjson blocked_count "$blocked_count" \
-  --argjson delete_failed_count "$delete_failed_count" \
-  --argjson residual_count "$residual_count" \
-  --argjson worker_session_count "$worker_session_count" \
-  --argjson max_worker_sessions "$max_worker_sessions" \
-  --arg reasons_csv "$reasons_csv" \
-  --argjson health_ok "$health_ok" \
-  '{
-    task_id: $task_id,
-    checked_at: $checked_at,
-    profile_name: $profile_name,
-    strict: ($strict == 1),
-    cleanup_exit_code: $cleanup_exit_code,
-    archive_file: $archive_file,
-    archive_exists: $archive_exists,
-    blocked_count: $blocked_count,
-    delete_failed_count: $delete_failed_count,
-    residual_count: $residual_count,
-    worker_session_count: $worker_session_count,
-    max_worker_sessions: $max_worker_sessions,
-    health_ok: $health_ok,
-    failure_reasons: (if $reasons_csv == "" then [] else ($reasons_csv | split(",")) end)
-  }' >"$health_file"
-
-cp "$health_file" "$latest_file"
-
 if [[ "$health_ok" == "true" ]]; then
   notify_event \
     "health_gate_ok" \
     "info" \
     "Health gate passed: ${task_id}" \
     "Cleanup succeeded and worker sessions are within cap (${worker_session_count}/${max_worker_sessions})."
-  echo "health_ok task_id=${task_id} worker_sessions=${worker_session_count}/${max_worker_sessions} file=${health_file}"
+  echo "health_ok task_id=${task_id} checked_at=${checked_at} archive_file=${archive_file} worker_sessions=${worker_session_count}/${max_worker_sessions}"
   exit 0
 fi
 
@@ -263,7 +220,7 @@ notify_event \
   "Health gate failed: ${task_id}" \
   "Reasons: ${reasons_csv:-unknown}. Worker sessions ${worker_session_count}/${max_worker_sessions}."
 
-echo "health_fail task_id=${task_id} reasons=${reasons_csv:-unknown} worker_sessions=${worker_session_count}/${max_worker_sessions} file=${health_file}"
+echo "health_fail task_id=${task_id} checked_at=${checked_at} reasons=${reasons_csv:-unknown} archive_file=${archive_file} worker_sessions=${worker_session_count}/${max_worker_sessions}"
 if (( strict )); then
   notify_event \
     "unattended_halt" \
