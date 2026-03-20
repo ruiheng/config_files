@@ -191,8 +191,8 @@ body="${body//\{\{FROM_SESSION_ID\}\}/$from_session_id}"
 body="${body//\{\{TO_SESSION_ID\}\}/$to_session_id}"
 body="${body//\{\{TO_SESSION_REF\}\}/$to_session_ref}"
 
-from_address="workflow/session/${from_session_id}"
-to_address="workflow/session/${to_session_id}"
+from_address="agent-deck/${from_session_id}"
+to_address="agent-deck/${to_session_id}"
 
 run_capture "agent-mailbox endpoint register (${from_address})" agent-mailbox endpoint register --address "$from_address" >/dev/null
 run_capture "agent-mailbox endpoint register (${to_address})" agent-mailbox endpoint register --address "$to_address" >/dev/null
@@ -245,7 +245,7 @@ if [[ "$current_session_id" != "$to_session_id" ]]; then
   sleep "$wake_delay_seconds"
 
   if [[ -z "$wake_message" ]]; then
-    wake_message="You have new workflow mail. Run: agent-mailbox recv --for ${to_address} --json"
+    wake_message="Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
   fi
   run_capture "agent-deck session send (${to_session_id})" agent-deck session send "$to_session_id" "$wake_message" --no-wait >/dev/null
   wakeup_status="sent"

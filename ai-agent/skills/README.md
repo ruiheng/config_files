@@ -58,6 +58,7 @@ flowchart TD
 - `review-closeout` is the compact planner handoff after acceptance
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
+- Use `check-workflow-mail` as the receiver-side wake handler
 - External files are supplemental references only, not the default transport
 
 ## Incremental Automation with Agent Deck
@@ -73,6 +74,7 @@ Current recommended operating mode:
 Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
+- Receiver wake handler: `check-workflow-mail` (`ai-agent/skills/check-workflow-mail/SKILL.md`)
 - Official docs bundle (reference-only, not a loaded skill): `ai-agent/skills/agent-deck/references/`
 
 Official reference sync policy:

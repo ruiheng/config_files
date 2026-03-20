@@ -203,7 +203,7 @@ After sending:
   - selected `task_branch` / `integration_branch`
   - selected `executor_session_id` / `reviewer_session_ref`
   - selected `executor_tool` / `reviewer_tool`
-  - recipient inbox address (`workflow/session/<executor_session_id>`)
+  - recipient inbox address (`agent-deck/<executor_session_id>`)
   - wakeup summary
 - Keep raw mailbox JSON internal unless user explicitly asks
 - If send/wakeup fails, report stderr summary and include shared diagnostics checklist from `agent-deck-workflow/SKILL.md`

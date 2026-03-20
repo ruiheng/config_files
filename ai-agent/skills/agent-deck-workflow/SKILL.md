@@ -11,6 +11,7 @@ Use this skill as the single source of truth for the three-role workflow:
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
 - `agent-deck` only wakes the target session so it can receive mail
+- receiver-side wake handling should go through `check-workflow-mail`
 
 Default role/session rule:
 - use one distinct session per role
@@ -24,7 +25,7 @@ The cloned official `agent-deck` skill is a local reference library only.
 - `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
 - `*_session_id`: Agent Deck session UUID (resolve with `agent-deck session show <session_id_or_ref> --json | jq -r '.id'`)
 - `*_session_ref`: human-friendly session reference (`title` or `id`)
-- `inbox_address`: mailbox endpoint address for one workflow session: `workflow/session/<session_id>`
+- `inbox_address`: derived mailbox endpoint address for one workflow session: `agent-deck/<session_id>`
 - `start_branch`: planner's current git branch when `delegate-task` begins
 - `integration_branch`: branch where accepted work must land at closeout; this is the task-local mainline and is not assumed to be `main`/`master`
 - `task_branch`: executor working branch; may be a dedicated `task/<task_id>` branch or a reused existing topic branch
@@ -117,7 +118,8 @@ Wakeup transport:
 - wakeup text must be short and must not repeat the workflow body
 
 Before first send/receive for a session inbox:
-- register `workflow/session/<session_id>` with `agent-mailbox endpoint register --address ...`
+- derive inbox address as `agent-deck/<session_id>`; do not pass it around as independent workflow data
+- register `agent-deck/<session_id>` with `agent-mailbox endpoint register --address ...`
 - registering the same address again is a safe retry
 - endpoint registration must also run outside sandbox
 - if multiple mailbox state-mutating operations are needed, run them one at a time and wait for success before the next mailbox step
@@ -177,7 +179,7 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 ### Wakeup Contract
 
-After sending mail to `workflow/session/<to_session_id>`:
+After sending mail to `agent-deck/<to_session_id>`:
 1. ensure the target session exists when the workflow expects it to exist
 2. start the target session when needed
 3. wait a short readiness delay before wakeup (default `10s`)
@@ -189,8 +191,13 @@ Why the delay exists:
 Recommended reminder text:
 
 ```text
-You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<to_session_id> --json
+Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action.
 ```
+
+Wakeup wording rule:
+- use natural language, not provider-specific skill invocation syntax
+- explicitly tell the receiver to use `check-workflow-mail`
+- do not depend on `$skill-name`, `/skill-name`, or other vendor-specific command forms in the wakeup text
 
 Do not:
 - paste the full workflow body into `agent-deck session send`
@@ -204,7 +211,7 @@ Do not:
 ### Receiver Contract
 
 When a workflow session is woken:
-1. run `agent-mailbox recv --for workflow/session/<current_session_id> --json` outside sandbox
+1. run `agent-mailbox recv --for agent-deck/<current_session_id> --json` outside sandbox
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately execute that workflow stage; do not treat the mail as a notification
 4. only read supplemental files when the body explicitly requires them
@@ -226,7 +233,7 @@ Action execution defaults after `recv`:
 ### Error Handling and Diagnostics
 
 If workflow send/wakeup fails, report concise stderr summary and run these checks:
-1. Is the mailbox endpoint registered? (`agent-mailbox endpoint register --address workflow/session/<session_id>`)
+1. Is the mailbox endpoint registered? (`agent-mailbox endpoint register --address agent-deck/<session_id>`)
 2. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
 3. Is command running in correct tmux/session context? (`agent-deck session current --json`)
 4. Did mailbox send/recv/ack/release/fail return success?
@@ -319,7 +326,7 @@ Use full recommended commands unless the user explicitly supplied a different fu
 Use stable naming:
 - executor session: `executor-<task_id>`
 - reviewer session: `reviewer-<task_id>`
-- inbox address: `workflow/session/<session_id>`
+- inbox address: `agent-deck/<session_id>`
 - default dedicated task branch: `task/<task_id>`
 - default integration branch: planner's current branch at delegate creation when that branch is the intended landing line
 - existing topic branch reuse: allowed when planner determines the current branch already is the correct `task_branch`
