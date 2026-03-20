@@ -215,7 +215,7 @@ if [[ "$current_session_id" != "$to_session_id" ]]; then
       if [[ -z "$listener_message" ]]; then
         listener_message="Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action."
       fi
-      run_capture "agent-deck session start (${to_session_id})" agent-deck session start "$to_session_id" -m "$listener_message" --json >/dev/null
+      run_capture "agent-deck session start (${to_session_id})" agent-deck session start --json -m "$listener_message" "$to_session_id" >/dev/null
       start_status="started"
       listener_status="started_waiting"
       ;;
@@ -259,7 +259,7 @@ if (( nudge_after_send )); then
   if [[ -z "$wake_message" ]]; then
     wake_message="Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
   fi
-  run_capture "agent-deck session send (${to_session_id})" agent-deck session send "$to_session_id" "$wake_message" --no-wait >/dev/null
+  run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$wake_message" >/dev/null
   wakeup_status="sent"
 fi
 
