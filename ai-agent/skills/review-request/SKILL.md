@@ -186,7 +186,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "review request: <task_id> r<round>"`
    - `--body-file -`
-3. let the helper resolve/create the reviewer session, register endpoints, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
+3. let the helper resolve/create the reviewer session, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `reviewer_session_id`
 
 Exact command shape:

@@ -100,7 +100,7 @@ Authoritative transport:
 - receive workflow content with `agent-mailbox recv`
 - handle delivery lifecycle with `ack`, `release`, `defer`, or `fail`
 - every `agent-mailbox` command must run outside sandbox
-- mailbox state-mutating commands must run serially; do not parallelize `endpoint register`, `send`, `recv`, `ack`, `release`, `defer`, or `fail`
+- mailbox state-mutating commands must run serially; do not parallelize `send`, `recv`, `ack`, `release`, `defer`, or `fail`
 - read-only observation commands may run in parallel when safe (for example `watch`)
 
 Send-body rule:
@@ -108,7 +108,7 @@ Send-body rule:
 - do not create a temporary file just to pass mailbox body text
 - only use a real file when that file already exists independently and is intentionally the body source
 - in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin; do not wrap it in heredoc or shell pipes
-- prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, registers inboxes, primes new sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
+- prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, primes new sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
 - if the workflow body was generated in the current turn, pass it via stdin; do not write it to `/tmp`, `.agent-artifacts`, or any other temporary file first
 - in Codex-style agent environments, start `adwf-send-and-wake --body-file -` directly, then stream the body through stdin tool input
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself; do not prepend `printf`, `cat`, pipes, or shell redirection
@@ -117,11 +117,9 @@ Worker listener rule:
 - newly started executor/reviewer sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
 - for already active target sessions, sender may use `agent-deck session send` to nudge the target to run `check-workflow-mail`
 
-Before first send/receive for a session inbox:
+Inbox rule:
 - derive inbox address as `agent-deck/<session_id>`
-- register `agent-deck/<session_id>` with `agent-mailbox endpoint register --address ...`
-- registering the same address again is a safe retry
-- endpoint registration must also run outside sandbox
+- no separate registration step is needed
 - if multiple mailbox state-mutating operations are needed, run them one at a time and wait for success before the next mailbox step
 
 ### Mailbox Message Contract
@@ -180,9 +178,8 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 For newly started executor/reviewer sessions:
 1. ensure the target session exists when the workflow expects it to exist
-2. register the derived inbox address
-3. start the target session with a natural-language instruction to run `check-workflow-mail wait=True`
-4. send the mailbox message
+2. start the target session with a natural-language instruction to run `check-workflow-mail wait=True`
+3. send the mailbox message
 
 For already active sessions:
 1. send the mailbox message
@@ -238,10 +235,9 @@ Idle behavior:
 ### Error Handling and Diagnostics
 
 If workflow send/worker-start fails, report concise stderr summary and run these checks:
-1. Is the mailbox endpoint registered? (`agent-mailbox endpoint register --address agent-deck/<session_id>`)
-2. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
-3. Is command running in correct tmux/session context? (`agent-deck session current --json`)
-4. Did mailbox send/recv/ack/release/fail return success?
+1. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
+2. Is command running in correct tmux/session context? (`agent-deck session current --json`)
+3. Did mailbox send/recv/ack/release/fail return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 Do not attribute that prompt to serialization rules, stdin usage, or mailbox content.

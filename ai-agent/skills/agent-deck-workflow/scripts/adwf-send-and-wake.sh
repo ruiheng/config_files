@@ -197,9 +197,6 @@ body="${body//\{\{TO_SESSION_REF\}\}/$to_session_ref}"
 from_address="agent-deck/${from_session_id}"
 to_address="agent-deck/${to_session_id}"
 
-run_capture "agent-mailbox endpoint register (${from_address})" agent-mailbox endpoint register --address "$from_address" >/dev/null
-run_capture "agent-mailbox endpoint register (${to_address})" agent-mailbox endpoint register --address "$to_address" >/dev/null
-
 current_session_id="$(agent-deck session current --json 2>/dev/null | json_get_field '.id' || true)"
 start_status="skipped_same_session"
 listener_status="skipped_same_session"

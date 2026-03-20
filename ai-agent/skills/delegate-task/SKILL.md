@@ -156,7 +156,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "delegate: <task_id> -> executor"`
    - `--body-file -`
-3. let the helper resolve/create the executor session, register endpoints, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
+3. let the helper resolve/create the executor session, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `executor_session_id` in user-facing status
 
 Exact command shape:
@@ -190,7 +190,7 @@ Rules:
 - Do not create `/tmp/delegate-*.md` or any other temporary body file for a freshly generated delegate message
 - Do not wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
 - Do not use `executor-<task_id>` or `reviewer-<task_id>` titles as if they were session ids
-- Do not claim target readiness unless the helper has completed the full register/start-or-detect/send/nudge path that applies
+- Do not claim target readiness unless the helper has completed the full start-or-detect/send/nudge path that applies
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
