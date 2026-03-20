@@ -162,7 +162,6 @@ Mailbox body rules (`rework_required`):
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
 - assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, start the helper directly and stream the review body through stdin tool input
-- do not create `review-report-r<n>.md`
 - do not assume executor can read a separate artifact later
 
 Mailbox subject (`user_requested_iteration` after user chooses iterate):
@@ -187,6 +186,7 @@ When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-acc
 
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
+- After sending `rework_required` or `user_requested_iteration`, reviewer immediately uses `check-workflow-mail wait=True` when expecting the next workflow message
 - For `stop_recommended` with manual decision, wait for explicit user choice
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages

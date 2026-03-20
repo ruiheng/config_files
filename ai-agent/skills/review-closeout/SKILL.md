@@ -61,6 +61,7 @@ If required values are resolved:
 4. for cross-session closeout, use `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<planner_session_id>" --subject "closeout delivered: <task_id>" --body-file -`
 5. let the helper own the start-delay-send sequence
 6. in Codex-style environments, start the helper directly and stream the closeout body through stdin tool input
+7. after delivery completes, reviewer immediately uses `check-workflow-mail wait=True` when expecting later workflow mail
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`
