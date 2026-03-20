@@ -17,9 +17,6 @@ Default role/session rule:
 - use one distinct session per role
 - treat planner/reviewer same-session operation as an explicit exception, not an implied default
 
-This workflow does not require loading the official `agent-deck` skill by default.
-The cloned official `agent-deck` skill is a local reference library only.
-
 ## Terminology
 
 - `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
@@ -100,18 +97,17 @@ Authoritative transport:
 - receive workflow content with `agent-mailbox recv`
 - handle delivery lifecycle with `ack`, `release`, `defer`, or `fail`
 - every `agent-mailbox` command must run outside sandbox
-- mailbox state-mutating commands must run serially; do not parallelize `send`, `recv`, `ack`, `release`, `defer`, or `fail`
+- mailbox state-mutating commands must run serially
 - read-only observation commands may run in parallel when safe (for example `watch`)
 
 Send-body rule:
 - prefer `agent-mailbox send --body-file -` and feed the body through stdin
-- do not create a temporary file just to pass mailbox body text
-- only use a real file when that file already exists independently and is intentionally the body source
-- in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin; do not wrap it in heredoc or shell pipes
+- use a real file only when that file already exists independently and is intentionally the body source
+- in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin
 - prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, primes new sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
-- if the workflow body was generated in the current turn, pass it via stdin; do not write it to `/tmp`, `.agent-artifacts`, or any other temporary file first
+- if the workflow body was generated in the current turn, pass it via stdin
 - in Codex-style agent environments, start `adwf-send-and-wake --body-file -` directly, then stream the body through stdin tool input
-- if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself; do not prepend `printf`, `cat`, pipes, or shell redirection
+- if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
 
 Worker listener rule:
 - newly started executor/reviewer sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
@@ -128,7 +124,7 @@ Every workflow message has two parts:
 - `subject`: one-line summary for quick triage
 - `body`: full Markdown task content and the main source of truth
 
-Do not generate workflow-specific Markdown files just to carry the message.
+Keep workflow content in mailbox body instead of generating Markdown handoff files.
 
 Recommended body header:
 
@@ -197,28 +193,24 @@ Recommended active-session nudge:
 Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action.
 ```
 
-Do not:
-- paste the full workflow body into `agent-deck session send`
-- summarize the body so aggressively that the receiver can skip `recv`
-- drop `agent-deck session send` entirely for already active target sessions
-- write a temporary Markdown file only to hand it to `agent-mailbox send`
-- write generated workflow body text to a temporary file only to hand it to `adwf-send-and-wake`
-- wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
-- run mailbox state-mutating commands through parallel wrappers, background jobs, or shell `&`
+Rules:
+- keep `agent-deck session send` short; the real workflow body stays in mailbox
+- for already active target sessions, mailbox send may be followed by an `agent-deck` nudge
+- keep freshly generated workflow body in stdin
+- keep mailbox state-mutating commands serialized
 
 ### Receiver Contract
 
 When a workflow session is woken:
 1. run `agent-mailbox recv --for agent-deck/<current_session_id> --json` outside sandbox
 2. treat the returned `body` as the primary task input
-3. parse the `Action:` header and immediately execute that workflow stage; do not treat the mail as a notification
+3. parse the `Action:` header and immediately execute that workflow stage
 4. only read supplemental files when the body explicitly requires them
 5. `ack` only after the message has been successfully incorporated into local working state, and run that `ack` outside sandbox
 6. use `release` / `defer` / `fail` outside sandbox instead of silently dropping leased work
-7. keep mailbox lifecycle steps serialized: do not overlap mailbox state-mutating steps such as `recv` and `ack` / `release` / `defer` / `fail`
+7. keep mailbox lifecycle steps serialized
 
-Do not `ack` immediately after reading.
-Do not stop at "mail received" or "mailbox processed" when the message action is executable.
+Apply the message action before `ack`.
 
 Action execution defaults after `recv`:
 - `execute_delegate_task`: start the delegated implementation flow immediately
@@ -240,7 +232,6 @@ If workflow send/worker-start fails, report concise stderr summary and run these
 3. Did mailbox send/recv/ack/release/fail return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
-Do not attribute that prompt to serialization rules, stdin usage, or mailbox content.
 If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow bug signal.
 If an already active target missed the mailbox work, retry the `agent-deck session send` nudge instead of resending mailbox content.
 
@@ -268,7 +259,7 @@ Planner post-acceptance interpretation rule:
 Reviewer decision rules:
 1. If must-fix items exist, send `rework_required` to executor
 2. If no must-fix items exist and `workflow_policy.auto_accept_if_no_must_fix=true`, run `review-closeout` and send `closeout_delivered` to planner
-3. Otherwise, present `stop_recommended` to user and wait for user decision. Do not send `stop_recommended` to planner
+3. Otherwise, present `stop_recommended` to user and wait for user decision
 4. If user chooses closeout, run `review-closeout` and send `closeout_delivered` to planner
 5. If user chooses another iteration, send `user_requested_iteration` to executor
 
@@ -310,18 +301,11 @@ All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sa
 When a workflow turn needs multiple mailbox state-mutating commands, execute them sequentially, never in parallel.
 Read-only observation commands may run in parallel when safe.
 For cross-session workflow dispatch, prefer the installed helper `adwf-send-and-wake`.
-When the skill already provides an exact `adwf-send-and-wake` command shape for your case, do not run `--help` first.
-When workflow commands create sessions via `--cmd`, do not use bare provider names.
+When workflow commands create sessions via `--cmd`, use full commands instead of bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`
 - Codex: `codex --model gpt-5.4 --ask-for-approval on-request`
 - Gemini: `gemini --model gemini-2.5-pro`
-
-## Relationship with Official Skill Clone
-
-- Do not modify cloned official `agent-deck` skill for project-specific behavior
-- Do not require loading official `agent-deck` skill in normal execution
-- Use official clone references only when command details are needed
 
 ## Task Metadata Convention
 
@@ -362,7 +346,7 @@ Reviewer chooses one branch:
 
 2. `stop_recommended`
 - provide user-facing summary to user and wait for user decision
-- do not send `stop_recommended` to planner; this is the user decision point
+- keep `stop_recommended` at the user decision point
 - if `workflow_policy.auto_accept_if_no_must_fix=true`, reviewer may skip waiting and run closeout
 - in human-gated mode, request manual UI confirmation when required by policy
 
@@ -371,7 +355,7 @@ Reviewer chooses one branch:
 After closeout acceptance (explicit user or unattended policy):
 1. inspect the accepted closeout mailbox body
 2. decide whether residual accepted findings require follow-up tracking (`progress`, `todo`, next-task queue, or no action)
-3. reuse recorded branch plan (`task_branch`, `integration_branch`); do not silently re-infer a different merge target
+3. reuse recorded branch plan (`task_branch`, `integration_branch`) as the authoritative merge target
 4. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh` for required closeout actions, passing explicit `--task-branch` and `--integration-branch` when known
 5. if `--integration-branch` is provided and current branch differs, the script should switch to the integration branch itself; planner should not pre-stage a parallel `git switch`
 6. required in script: merge recorded `task_branch` into recorded `integration_branch`
@@ -401,7 +385,7 @@ Planner user-facing status contract for auto-dispatch:
 - before each auto-dispatched task, show one short status line that includes the next dispatch progress
 - preferred format: `Auto-dispatch progress: <current>/<total> | next task: <task_id_or_short_title>`
 - if total is unknown, use an explicit unknown-total form such as `Auto-dispatch progress: 3/?`
-- do not delegate this responsibility to `planner-closeout-batch.sh`; it does not own queue state
+- planner owns this progress reporting; `planner-closeout-batch.sh` does not
 
 ## Example: Complete Task Flow
 
@@ -421,9 +405,8 @@ Planner user-facing status contract for auto-dispatch:
 - Reviewer: `review-code`, `review-closeout`
 - Roles are task-scoped; same-session multi-role assignment is an explicit exception and must be stated in workflow context rather than inferred from provider/tool choice
 
-## Do / Do Not
+## Operating Rules
 
-Do:
 - keep the real workflow content in mailbox body
 - keep executor/reviewer in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
 - keep human confirmation gates in human-gated mode
@@ -431,16 +414,6 @@ Do:
 - resolve and record branch plan at delegate start, then reuse it consistently through closeout
 - let `planner-closeout-batch.sh` own integration-branch switching when `--integration-branch` is explicitly supplied
 - run planner required closeout actions via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`
-
-Do not:
-- auto-merge before acceptance
-- run `git switch` in parallel with planner closeout
-- assume the merge target is `main` or `master` when the recorded task mainline is something else
-- blindly create `task/<task_id>` when the delegate message explicitly says to reuse an existing topic branch as `task_branch`
-- silently re-derive merge target from whatever branch happens to be checked out at closeout time when branch plan was already recorded earlier
-- send workflow body through `agent-deck session send`
-- rely on `agent-deck session send` alone when a newly started worker should have been put into `check-workflow-mail wait=True`
-- create Markdown handoff files just to transport workflow messages
-- run proactive polling loops after dispatch
-- treat mailbox JSON output as default user-facing content
-- block `merge + progress update` on optional notify/dispatch failures
+- use `agent-deck session send` only as a short nudge for already active sessions
+- keep workflow transport free of generated Markdown handoff files
+- finish required closeout actions even when optional notify or dispatch steps fail

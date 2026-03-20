@@ -30,7 +30,7 @@ Provide the full review report text.
 - output directly in response
 - Agent Deck mode: also send the closeout summary to planner via `agent-mailbox`
 - keep output compact and copy/paste friendly
-- do not create a closeout Markdown file
+- keep closeout in mailbox body instead of a generated Markdown handoff file
 
 ## Agent Deck Mode
 
@@ -53,13 +53,13 @@ If required values are resolved:
 1. normalize identity values before any comparison:
    - resolve `planner_session_id` / `reviewer_session_id` refs to UUID via `agent-deck session show ... --json`
    - use detected `current_session_id` UUID from `agent-deck session current --json`
-   - if normalization fails for required identity, do not send automatically; ask one short clarification question
+   - if normalization fails for required identity, ask one short clarification question before sending
 2. send mode:
    - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session delivery and continue locally
    - otherwise send `closeout_delivered` to planner inbox; if planner is not already waiting in `check-workflow-mail wait=True`, let the helper start it before send
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
 4. for cross-session closeout, use `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<planner_session_id>" --subject "closeout delivered: <task_id>" --body-file -`
-5. let the helper own the start-delay-send sequence
+5. let the helper own the delivery sequence
 6. in Codex-style environments, start the helper directly and stream the closeout body through stdin tool input
 7. after delivery completes, reviewer immediately uses `check-workflow-mail wait=True` when expecting later workflow mail
 
@@ -92,7 +92,7 @@ Planner handoff rule:
 4. Wording safety:
 - preserve technical meaning
 - keep file paths / line references
-- do not invent issues
+- report only issues supported by the review report
 
 ## Rendering Rules (No Empty Sections)
 
@@ -158,11 +158,11 @@ Then append only non-empty sections.
 
 1. Prefer completeness over aggressive trimming
 2. Keep neutral tone
-3. Do not include PASS-only lines
+3. Include only FAIL/UNKNOWN check lines
 4. Keep section order stable
 5. Keep output compact and copy/paste friendly
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
-9. Do not bypass `adwf-send-and-wake` for cross-session closeout delivery
-10. Do not create a temporary closeout body file or wrap the helper in `printf`, `cat`, heredoc, shell pipes, or redirection
+9. Use `adwf-send-and-wake` for cross-session closeout delivery
+10. Keep freshly generated closeout body in stdin

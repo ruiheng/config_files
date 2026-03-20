@@ -29,8 +29,8 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 
 ## Rules
 
-- Do not stop at "mail received" or "mailbox processed" when the action is executable
-- Do not ask the user what to do next unless the mailbox body explicitly requires a user decision
-- Do not hunt for external files first; read them only when the mailbox body explicitly says they are needed
+- Treat the received mailbox body as executable workflow input
+- Ask the user for the next step only when the mailbox body explicitly requires a user decision
+- Read external files only when the mailbox body explicitly says they are needed
 - Keep mailbox lifecycle commands outside sandbox
 - Keep mailbox state-mutating commands serialized

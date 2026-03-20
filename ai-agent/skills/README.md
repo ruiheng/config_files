@@ -25,16 +25,16 @@ This document describes the multi-agent workflow built around the skills in this
 
 1. User asks Planner to prepare work.
 2. Planner runs `delegate-task`, starts Executor into `check-workflow-mail wait=True` when needed, or nudges the existing Executor session, then sends one delegate mailbox message.
-4. Executor implements changes.
-5. Executor runs `review-request`, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
-7. Reviewer runs `review-code` and sends either:
+3. Executor implements changes.
+4. Executor runs `review-request`, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
+5. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Executor, or
    - `stop_recommended` to the user decision point.
-8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Executor.
-9. Repeat until the user decides quality is acceptable, or policy auto-accepts.
-10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
-11. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
-12. Executor and Reviewer can be fully exited.
+6. If user wants another iteration, Reviewer sends `user_requested_iteration` to Executor.
+7. Repeat until the user decides quality is acceptable, or policy auto-accepts.
+8. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
+9. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
+10. Executor and Reviewer can be fully exited.
 
 ## Flow Diagram
 
@@ -75,17 +75,3 @@ Use skills:
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
 - Receiver wake handler: `check-workflow-mail` (`ai-agent/skills/check-workflow-mail/SKILL.md`)
 - Official docs bundle (reference-only, not a loaded skill): `ai-agent/skills/agent-deck/references/`
-
-Official reference sync policy:
-
-- `install.sh` should not fetch network content at install time.
-- Official `agent-deck` references are stored as a pinned local snapshot under `ai-agent/skills/agent-deck/references/`.
-- Update explicitly when needed:
-  - `ai-agent/scripts/sync-official-agent-deck-skill.sh <ref>`
-- After sync, review diff and commit the snapshot update.
-- Keep `ai-agent/skills/agent-deck/` as reference-only (no `SKILL.md`) to avoid prompt conflicts and context overhead.
-
-Migration note:
-
-- The runnable workflow skill is `agent-deck-workflow`.
-- The mailbox-first protocol replaces the old artifact-first handoff model.

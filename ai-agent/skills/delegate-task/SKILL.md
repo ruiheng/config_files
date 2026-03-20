@@ -1,6 +1,6 @@
 ---
 name: delegate-task
-description: Use only for non-trivial implementation tasks that require meaningful code changes; do not use for simple tasks or documentation-only work.
+description: Use for non-trivial implementation tasks that require meaningful code changes.
 ---
 
 # Delegate Task
@@ -29,7 +29,7 @@ Before drafting the delegate message:
   - components can be implemented independently
   - components can be validated independently
   - split reduces risk
-- If delegation is not clearly worthwhile, stop and do not create a delegate message
+- If delegation is not clearly worthwhile, do the work directly
 - If splitting is recommended, ask user to choose:
   - keep one delegated task, or
   - split into multiple delegated tasks
@@ -42,8 +42,7 @@ Execution mode gates:
 
 ## 2) Output Mode
 
-Do not create a workflow-specific Markdown file.
-The delegate brief lives directly in the mailbox body.
+Keep the delegate brief directly in the mailbox body.
 
 Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
@@ -176,21 +175,17 @@ adwf-send-and-wake \
 Codex-style execution rule:
 - start `adwf-send-and-wake ... --body-file -` directly
 - then stream the composed delegate body through stdin tool input
-- do not create `/tmp/delegate-*.md`
-- do not use `printf`, `cat`, heredoc, shell pipes, or redirection to feed the body
+- keep freshly generated body in stdin
+- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
 Recommended subject:
 - `delegate: <task_id> -> executor`
 
 Rules:
-- Do not create `delegate-task-*.md`
-- Do not send the delegate body through `agent-deck session send`
-- Do not tell executor to go read a generated workflow file
-- Do not run `adwf-send-and-wake --help` when this command shape already matches the task
-- Do not create `/tmp/delegate-*.md` or any other temporary body file for a freshly generated delegate message
-- Do not wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
-- Do not use `executor-<task_id>` or `reviewer-<task_id>` titles as if they were session ids
-- Do not claim target readiness unless the helper has completed the full start-or-detect/send/nudge path that applies
+- keep the full delegate brief in mailbox body
+- use `executor-<task_id>` and `reviewer-<task_id>` as session refs until the helper resolves real session ids
+- use the exact command shape above when it already matches the task
+- report target readiness only after the helper completes the full start-or-detect/send/nudge path that applies
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
