@@ -206,12 +206,22 @@ Do not:
 When a workflow session is woken:
 1. run `agent-mailbox recv --for workflow/session/<current_session_id> --json` outside sandbox
 2. treat the returned `body` as the primary task input
-3. only read supplemental files when the body explicitly requires them
-4. `ack` only after the message has been successfully incorporated into local working state, and run that `ack` outside sandbox
-5. use `release` / `defer` / `fail` outside sandbox instead of silently dropping leased work
-6. keep mailbox lifecycle steps serialized: do not overlap mailbox state-mutating steps such as `recv` and `ack` / `release` / `defer` / `fail`
+3. parse the `Action:` header and immediately execute that workflow stage; do not treat the mail as a notification
+4. only read supplemental files when the body explicitly requires them
+5. `ack` only after the message has been successfully incorporated into local working state, and run that `ack` outside sandbox
+6. use `release` / `defer` / `fail` outside sandbox instead of silently dropping leased work
+7. keep mailbox lifecycle steps serialized: do not overlap mailbox state-mutating steps such as `recv` and `ack` / `release` / `defer` / `fail`
 
 Do not `ack` immediately after reading.
+Do not stop at "mail received" or "mailbox processed" when the message action is executable.
+
+Action execution defaults after `recv`:
+- `execute_delegate_task`: start the delegated implementation flow immediately
+- `review_requested`: start review immediately
+- `rework_required`: continue executor iteration immediately
+- `user_requested_iteration`: continue executor iteration immediately
+- `closeout_delivered`: start planner closeout interpretation immediately
+- only pause for user input when the message body explicitly requires a user decision
 
 ### Error Handling and Diagnostics
 

@@ -57,6 +57,7 @@ flowchart TD
 - `review-code` remains the authoritative full review output
 - `review-closeout` is the compact planner handoff after acceptance
 - The receiver should always read mailbox `body` first
+- A received workflow mail is executable work, not a notification to acknowledge and ignore
 - External files are supplemental references only, not the default transport
 
 ## Incremental Automation with Agent Deck
