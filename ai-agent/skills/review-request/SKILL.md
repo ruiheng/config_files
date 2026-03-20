@@ -63,8 +63,8 @@ Classify changes into:
 
 Rules:
 1. `Files Modified/Created` includes in-scope files only
-2. do not list unrelated noise file-by-file
-3. for uncommitted scope, summarize unrelated noise with count + up to 3 examples
+2. summarize unrelated noise with count + up to 3 examples
+3. for committed scope, omit unrelated noise unless it materially affects review framing
 4. ask one short clarification question if relevance is uncertain
 
 ## Agent Deck Mode
@@ -206,17 +206,14 @@ adwf-send-and-wake \
 Codex-style execution rule:
 - start `adwf-send-and-wake ... --body-file -` directly
 - then stream the composed review-request body through stdin tool input
-- do not create a temporary review-request body file
-- do not use `printf`, `cat`, heredoc, shell pipes, or redirection to feed the body
+- keep freshly generated body in stdin
+- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
 Rules:
-- Do not create `review-request-*.md`
-- Do not tell reviewer to go read a generated workflow file
-- Do not run `adwf-send-and-wake --help` when this command shape already matches the task
-- Do not create a temporary review-request body file for a freshly generated message
-- Do not wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
-- Do not use `reviewer-<task_id>` as if it were already a real session id
-- Do not assume the helper can skip nudging an already active reviewer session
+- send the full review request in mailbox body
+- use `reviewer-<task_id>` as a session ref until the helper resolves the real `reviewer_session_id`
+- use the exact command shape above when it already matches the task
+- let the helper decide whether this reviewer needs session start or an active-session nudge
 
 ## Quality Bar
 
