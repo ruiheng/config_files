@@ -42,7 +42,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 Skill-specific context resolution:
 - `task_id`: explicit -> review report text -> ask
 - `planner_session_id`: explicit -> review context -> ask
-- `current_session_id`: best-effort from `agent-deck session current --json`
+- `current_session_id`: best-effort from one cached `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> review context -> ask
 - `workflow_policy` (optional): explicit -> review/report context -> default human-gated
 - `special_requirements` (optional fallback): explicit -> review/report context -> omit
@@ -52,7 +52,7 @@ Skill-specific context resolution:
 If required values are resolved:
 1. normalize identity values before any comparison:
    - resolve `planner_session_id` / `reviewer_session_id` refs to UUID via `agent-deck session show ... --json`
-   - use detected `current_session_id` UUID from `agent-deck session current --json`
+   - use one cached `current_session_id` UUID for the whole closeout turn
    - if normalization fails for required identity, ask one short clarification question before sending
 2. send mode:
    - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session delivery and continue locally

@@ -50,6 +50,7 @@ Agent Deck mode:
   - delegate creator is planner sender
   - `planner_session_id` is expected to equal detected `current_session_id`
   - if explicit/context planner id conflicts with detected current session id, ask user to confirm before sending
+  - resolve `current_session_id` once and reuse it for the whole delegate-task turn
 
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`

@@ -14,7 +14,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 
 ## Steps
 
-1. Run `agent-deck session current --json` outside sandbox and read `.id`
+1. Run `agent-deck session current --json` outside sandbox once and read `.id`
 2. Derive inbox address as `agent-deck/<current_session_id>`
 3. Run one of these outside sandbox:
    - `wait=False`: `agent-mailbox recv --for agent-deck/<current_session_id> --json`

@@ -50,6 +50,11 @@ Enter Agent Deck mode when any condition matches:
 `agent-deck session current --json` is best-effort context only and must run in host shell.
 If it fails, continue with explicit/context metadata.
 
+Current-session caching rule:
+- resolve `current_session_id` at most once per workflow turn
+- reuse that cached value for sender validation, inbox derivation, and same-session checks
+- re-run `agent-deck session current --json` only when the execution context actually changed
+
 ### Context Resolution Priority
 
 Use this priority chain for each field:
@@ -60,7 +65,7 @@ Session identity nuance:
 - `current_session_id` is used for sender identity verification and role safety checks
 - before identity comparisons, resolve all session refs/titles to UUIDs:
   - explicit refs: `agent-deck session show <ref> --json | jq -r '.id'`
-  - current session: `agent-deck session current --json | jq -r '.id'`
+  - current session: cached result from one `agent-deck session current --json`
 - exception (`delegate-task` only): planner sender legitimately equals current session, so `planner_session_id` may start from detected `current_session_id`
 - in all other skills, `current_session_id` is not a replacement source for `planner_session_id`
 - use `*_session_ref` for planned worker titles before a real session exists; only write `*_session_id` when you actually have the resolved session id
@@ -233,7 +238,7 @@ Idle behavior:
 
 If workflow send/worker-start fails, report concise stderr summary and run these checks:
 1. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
-2. Is command running in correct tmux/session context? (`agent-deck session current --json`)
+2. Is command running in the expected tmux/session context? (reuse cached `current_session_id`; only re-run `agent-deck session current --json` if context may have changed)
 3. Did mailbox send/recv/ack/release/fail return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
