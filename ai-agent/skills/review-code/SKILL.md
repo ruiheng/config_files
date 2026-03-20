@@ -160,6 +160,8 @@ Mailbox subject (`rework_required`):
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - send it with `agent-mailbox send --body-file -` outside sandbox via stdin
+- run the mailbox send as a single serialized step; do not overlap it with other mailbox state-mutating operations
+- invoke `agent-mailbox send --body-file -` directly; do not wrap it in heredoc or shell pipes
 - do not create `review-report-r<n>.md`
 - do not assume executor can read a separate artifact later
 
@@ -170,6 +172,8 @@ Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - include enough of the prior review findings that executor can continue without opening external workflow files
 - send it with `agent-mailbox send --body-file -` outside sandbox via stdin
+- run the mailbox send as a single serialized step; do not overlap it with other mailbox state-mutating operations
+- invoke `agent-mailbox send --body-file -` directly; do not wrap it in heredoc or shell pipes
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
@@ -188,6 +192,7 @@ Required interaction behavior:
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks
 - Do not run `agent-mailbox` inside sandbox
+- Do not run mailbox state-mutating `agent-mailbox` commands in parallel
 
 Sender identity rule:
 - reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`

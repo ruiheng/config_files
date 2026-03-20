@@ -98,11 +98,14 @@ Authoritative transport:
 - receive workflow content with `agent-mailbox recv`
 - handle delivery lifecycle with `ack`, `release`, `defer`, or `fail`
 - every `agent-mailbox` command must run outside sandbox
+- mailbox state-mutating commands must run serially; do not parallelize `endpoint register`, `send`, `recv`, `ack`, `release`, `defer`, or `fail`
+- read-only observation commands may run in parallel when safe (for example `watch`)
 
 Send-body rule:
 - prefer `agent-mailbox send --body-file -` and feed the body through stdin
 - do not create a temporary file just to pass mailbox body text
 - only use a real file when that file already exists independently and is intentionally the body source
+- in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin; do not wrap it in heredoc or shell pipes
 
 Wakeup transport:
 - after a mailbox message is queued, use `agent-deck` only to wake the target session
@@ -112,6 +115,7 @@ Before first send/receive for a session inbox:
 - register `workflow/session/<session_id>` with `agent-mailbox endpoint register --address ...`
 - registering the same address again is a safe retry
 - endpoint registration must also run outside sandbox
+- if multiple mailbox state-mutating operations are needed, run them one at a time and wait for success before the next mailbox step
 
 ### Mailbox Message Contract
 
@@ -184,6 +188,7 @@ Do not:
 - summarize the body so aggressively that the receiver can skip `recv`
 - send a "go read file X" reminder as the default path
 - write a temporary Markdown file only to hand it to `agent-mailbox send`
+- run mailbox state-mutating commands through parallel wrappers, background jobs, or shell `&`
 
 ### Receiver Contract
 
@@ -193,6 +198,7 @@ When a workflow session is woken:
 3. only read supplemental files when the body explicitly requires them
 4. `ack` only after the message has been successfully incorporated into local working state, and run that `ack` outside sandbox
 5. use `release` / `defer` / `fail` outside sandbox instead of silently dropping leased work
+6. keep mailbox lifecycle steps serialized: do not overlap mailbox state-mutating steps such as `recv` and `ack` / `release` / `defer` / `fail`
 
 Do not `ack` immediately after reading.
 
@@ -203,6 +209,9 @@ If workflow send/wakeup fails, report concise stderr summary and run these check
 2. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
 3. Is command running in correct tmux/session context? (`agent-deck session current --json`)
 4. Did mailbox send/recv/ack/release/fail return success?
+
+If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
+Do not attribute that prompt to serialization rules, stdin usage, or mailbox content.
 
 If closeout cleanup fails, include:
 1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
@@ -263,6 +272,8 @@ Rules:
 
 All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sandbox) to keep real tmux/session context.
 `agent-mailbox` is especially strict here: run it outside sandbox.
+When a workflow turn needs multiple mailbox state-mutating commands, execute them sequentially, never in parallel.
+Read-only observation commands may run in parallel when safe.
 When workflow commands create sessions via `--cmd`, do not use bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`

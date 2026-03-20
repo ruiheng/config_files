@@ -169,6 +169,7 @@ Workflow send sequence:
    - run `agent-mailbox endpoint register --address "workflow/session/<reviewer_session_id>"` outside sandbox
 2. send the body with `agent-mailbox send --body-file -` outside sandbox and feed the composed body through stdin
 3. if reviewer session is not current session, wake it with:
+4. keep mailbox state-mutating steps serialized; do not register inboxes and send mail in parallel
 
 ```text
 You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<reviewer_session_id> --json
@@ -179,7 +180,9 @@ Rules:
 - Do not tell reviewer to go read a generated workflow file
 - Do not send the review-request body through `agent-deck session send`
 - Do not write a temporary file just to pass body text to `agent-mailbox send`
+- Do not wrap `agent-mailbox send --body-file -` in heredoc or shell pipes; invoke it directly and write stdin directly
 - Do not run `agent-mailbox` inside sandbox
+- Do not run mailbox state-mutating `agent-mailbox` commands in parallel
 
 ## Quality Bar
 

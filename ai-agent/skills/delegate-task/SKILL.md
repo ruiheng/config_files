@@ -153,6 +153,7 @@ Workflow send sequence:
 2. if executor session is missing, create it with `agent-deck add ... --cmd "<executor_tool>" --parent "<planner_session_id>"`
 3. send the delegate body with `agent-mailbox send --body-file -` outside sandbox and feed the composed body through stdin
 4. if target session is not current session, start it when needed and wake it with a short `agent-deck session send`
+5. keep mailbox state-mutating steps serialized; do not register inboxes and send mail in parallel
 
 Recommended subject:
 - `delegate: <task_id> -> executor`
@@ -168,7 +169,9 @@ Rules:
 - Do not send the delegate body through `agent-deck session send`
 - Do not tell executor to go read a generated workflow file
 - Do not write a temporary file just to pass body text to `agent-mailbox send`
+- Do not wrap `agent-mailbox send --body-file -` in heredoc or shell pipes; invoke it directly and write stdin directly
 - Do not run `agent-mailbox` inside sandbox
+- Do not run mailbox state-mutating `agent-mailbox` commands in parallel
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
