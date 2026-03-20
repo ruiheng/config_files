@@ -165,9 +165,9 @@ Recommended subject:
 
 Workflow send sequence:
 1. ensure sender and reviewer inbox endpoints exist:
-   - `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"`
-   - `agent-mailbox endpoint register --address "workflow/session/<reviewer_session_id>"`
-2. send the body with `agent-mailbox send --body-file -` and feed the composed body through stdin
+   - run `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"` outside sandbox
+   - run `agent-mailbox endpoint register --address "workflow/session/<reviewer_session_id>"` outside sandbox
+2. send the body with `agent-mailbox send --body-file -` outside sandbox and feed the composed body through stdin
 3. if reviewer session is not current session, wake it with:
 
 ```text
@@ -179,6 +179,7 @@ Rules:
 - Do not tell reviewer to go read a generated workflow file
 - Do not send the review-request body through `agent-deck session send`
 - Do not write a temporary file just to pass body text to `agent-mailbox send`
+- Do not run `agent-mailbox` inside sandbox
 
 ## Quality Bar
 

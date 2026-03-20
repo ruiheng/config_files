@@ -97,6 +97,7 @@ Authoritative transport:
 - send workflow content with `agent-mailbox send`
 - receive workflow content with `agent-mailbox recv`
 - handle delivery lifecycle with `ack`, `release`, `defer`, or `fail`
+- every `agent-mailbox` command must run outside sandbox
 
 Send-body rule:
 - prefer `agent-mailbox send --body-file -` and feed the body through stdin
@@ -110,6 +111,7 @@ Wakeup transport:
 Before first send/receive for a session inbox:
 - register `workflow/session/<session_id>` with `agent-mailbox endpoint register --address ...`
 - registering the same address again is a safe retry
+- endpoint registration must also run outside sandbox
 
 ### Mailbox Message Contract
 
@@ -186,11 +188,11 @@ Do not:
 ### Receiver Contract
 
 When a workflow session is woken:
-1. run `agent-mailbox recv --for workflow/session/<current_session_id> --json`
+1. run `agent-mailbox recv --for workflow/session/<current_session_id> --json` outside sandbox
 2. treat the returned `body` as the primary task input
 3. only read supplemental files when the body explicitly requires them
-4. `ack` only after the message has been successfully incorporated into local working state
-5. use `release` / `defer` / `fail` instead of silently dropping leased work
+4. `ack` only after the message has been successfully incorporated into local working state, and run that `ack` outside sandbox
+5. use `release` / `defer` / `fail` outside sandbox instead of silently dropping leased work
 
 Do not `ack` immediately after reading.
 
@@ -259,7 +261,8 @@ Rules:
 
 ## Execution Environment (Required)
 
-All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sandbox) to keep real tmux/session context and real mailbox state.
+All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sandbox) to keep real tmux/session context.
+`agent-mailbox` is especially strict here: run it outside sandbox.
 When workflow commands create sessions via `--cmd`, do not use bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`

@@ -58,7 +58,7 @@ If required values are resolved:
    - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session wakeup and continue locally
    - otherwise send `closeout_delivered` to planner inbox and wake planner session
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
-4. send the closeout body with `agent-mailbox send --body-file -` via stdin rather than writing a temporary file
+4. send the closeout body with `agent-mailbox send --body-file -` outside sandbox via stdin rather than writing a temporary file
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`
@@ -167,3 +167,4 @@ Then append only non-empty sections.
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
+9. Do not run `agent-mailbox` inside sandbox

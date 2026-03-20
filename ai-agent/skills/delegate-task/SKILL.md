@@ -148,10 +148,10 @@ Use direct CLI commands, not workflow wrapper scripts.
 
 Workflow send sequence:
 1. ensure sender and recipient inbox endpoints exist:
-   - `agent-mailbox endpoint register --address "workflow/session/<planner_session_id>"`
-   - `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"`
+   - run `agent-mailbox endpoint register --address "workflow/session/<planner_session_id>"` outside sandbox
+   - run `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"` outside sandbox
 2. if executor session is missing, create it with `agent-deck add ... --cmd "<executor_tool>" --parent "<planner_session_id>"`
-3. send the delegate body with `agent-mailbox send --body-file -` and feed the composed body through stdin
+3. send the delegate body with `agent-mailbox send --body-file -` outside sandbox and feed the composed body through stdin
 4. if target session is not current session, start it when needed and wake it with a short `agent-deck session send`
 
 Recommended subject:
@@ -168,6 +168,7 @@ Rules:
 - Do not send the delegate body through `agent-deck session send`
 - Do not tell executor to go read a generated workflow file
 - Do not write a temporary file just to pass body text to `agent-mailbox send`
+- Do not run `agent-mailbox` inside sandbox
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
