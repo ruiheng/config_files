@@ -16,7 +16,7 @@ This document describes the multi-agent workflow built around the skills in this
 - Workflow messages live in mailbox `subject` + `body`
 - When sending mailbox body text, prefer `agent-mailbox send --body-file -` and feed stdin directly
 - Prefer `adwf-send-and-wake` for cross-session workflow delivery
-- In Codex-style environments, start `adwf-send-and-wake --body-file -` directly and stream body text through stdin tool input
+- In Codex-style environments, launch `adwf-send-and-wake --body-file -` in a background terminal / PTY session and write body text to that session's stdin
 - Run every `agent-mailbox` command outside sandbox
 - Run mailbox state-mutating `agent-mailbox` commands serially, not in parallel
 - The workflow does not generate Markdown handoff files by default

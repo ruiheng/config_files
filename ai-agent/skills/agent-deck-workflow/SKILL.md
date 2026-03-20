@@ -106,7 +106,7 @@ Send-body rule:
 - in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin
 - prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, uses `agent-deck launch` to prime missing sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
 - if the workflow body was generated in the current turn, pass it via stdin
-- in Codex-style agent environments, start `adwf-send-and-wake --body-file -` directly, then stream the body through stdin tool input
+- in Codex-style agent environments, launch `adwf-send-and-wake --body-file -` in a background terminal / PTY session, then write the body to that session's stdin
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
 
 Worker listener rule:

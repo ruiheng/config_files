@@ -248,8 +248,8 @@ adwf-send-and-wake \
 ```
 
 Codex-style execution rule:
-- start `adwf-send-and-wake ... --body-file -` directly
-- then stream the composed review-request body through stdin tool input
+- launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
+- then write the composed review-request body to that session's stdin
 - keep freshly generated body in stdin
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
