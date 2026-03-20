@@ -168,6 +168,11 @@ Review disagreement policy:
 - when executor disagrees, the next `review_requested` body should state the disagreement and rationale clearly
 - if executor and reviewer cannot converge, either role may stop and ask user for a decision
 
+Review-request continuity:
+- first `review_requested` to a reviewer session carries the full task and review context
+- later `review_requested` messages to that same reviewer session carry only the delta since the previous review round
+- if the reviewer session changes, resend the full review context to the new reviewer session
+
 User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 ### Delivery Order Contract

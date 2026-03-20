@@ -91,6 +91,11 @@ Skill-specific context resolution:
 When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why.
 Reviewer feedback is advisory input, not automatic instructions.
 
+Review-request continuity rule:
+- round `1` uses the full review-request body
+- round `>1` to the same reviewer session uses a delta-only body
+- if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
+
 Identity rules:
 - `review_requested` sender must be active executor session id
 - If detected current session id differs from resolved `executor_session_id`, stop and ask for clarification
@@ -103,6 +108,8 @@ Post-send behavior:
 - executor does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
+
+Round `1` or new reviewer session: use the full body below.
 
 Use this exact structure as the mailbox body:
 
@@ -169,6 +176,43 @@ Your job is to stop a weak patch from slipping through by looking for what the p
 [Known limitations; if none, write: None identified]
 ```
 
+Round `>1` to the same reviewer session: send only delta.
+
+Use this structure:
+
+```markdown
+Task: <task_id>
+Action: review_requested
+From: executor <executor_session_id>
+To: reviewer {{TO_SESSION_ID}}
+Planner: <planner_session_id>
+Round: <round>
+
+## Summary
+[One-line delta summary]
+
+## Delta Since Last Review
+- Scope: [what changed in reviewed scope]
+- Findings addressed: [adopted items]
+- Findings rejected: [rejected items + rationale]
+- New risks or open questions: [only if changed]
+
+## Updated Implementation Summary
+[Only what changed since the last review request]
+
+## Files Changed Since Last Review
+- `path/to/file1` - [delta description]
+- `path/to/file2` - [delta description]
+
+## Updated Verification Evidence
+- Commands/Checks: [only new or rerun checks relevant to this round]
+- Result Summary: [delta results]
+- Coverage Gaps: [remaining gaps after this round]
+
+## Known Issues or Limitations
+[Current remaining limitations; if none, write: None identified]
+```
+
 ## Mailbox Send + Wakeup
 
 Recommended subject:
@@ -210,7 +254,9 @@ Codex-style execution rule:
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
 Rules:
-- send the full review request in mailbox body
+- round `1` sends the full review request in mailbox body
+- later rounds to the same reviewer send delta only
+- if reviewer continuity changed, resend the full review request body
 - use `reviewer-<task_id>` as a session ref until the helper resolves the real `reviewer_session_id`
 - use the exact command shape above when it already matches the task
 - let the helper decide whether this reviewer needs session start or an active-session nudge
