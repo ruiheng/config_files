@@ -155,7 +155,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "delegate: <task_id> -> executor"`
    - `--body-file -`
-3. let the helper resolve/create the executor session, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
+3. let the helper resolve the executor session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `executor_session_id` in user-facing status
 
 Exact command shape:
@@ -185,7 +185,7 @@ Rules:
 - keep the full delegate brief in mailbox body
 - use `executor-<task_id>` and `reviewer-<task_id>` as session refs until the helper resolves real session ids
 - use the exact command shape above when it already matches the task
-- report target readiness only after the helper completes the full start-or-detect/send/nudge path that applies
+- report target readiness only after the helper completes the full launch-or-detect/send/nudge path that applies
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract

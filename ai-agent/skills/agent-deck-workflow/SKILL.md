@@ -104,7 +104,7 @@ Send-body rule:
 - prefer `agent-mailbox send --body-file -` and feed the body through stdin
 - use a real file only when that file already exists independently and is intentionally the body source
 - in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin
-- prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, primes new sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
+- prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, uses `agent-deck launch` to prime missing sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
 - if the workflow body was generated in the current turn, pass it via stdin
 - in Codex-style agent environments, start `adwf-send-and-wake --body-file -` directly, then stream the body through stdin tool input
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
@@ -179,7 +179,7 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 For newly started executor/reviewer sessions:
 1. ensure the target session exists when the workflow expects it to exist
-2. start the target session with a natural-language instruction to run `check-workflow-mail wait=True`
+2. `agent-deck launch` a missing target session with a natural-language instruction to run `check-workflow-mail wait=True`
 3. send the mailbox message
 
 For already active sessions:
@@ -396,7 +396,7 @@ Planner user-facing status contract for auto-dispatch:
 
 1. User asks: "Add login rate limiting".
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
-3. Planner starts `executor-<task_id>` into `check-workflow-mail wait=True` or nudges the existing executor session.
+3. Planner `agent-deck launch`es a missing `executor-<task_id>` into `check-workflow-mail wait=True` or nudges the existing executor session.
 4. Executor implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
 5. Reviewer runs `review-code` and sends `rework_required` (if must-fix exists).
 6. Executor fixes and sends another `review_requested`.

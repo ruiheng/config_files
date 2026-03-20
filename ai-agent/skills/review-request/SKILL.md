@@ -230,7 +230,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "review request: <task_id> r<round>"`
    - `--body-file -`
-3. let the helper resolve/create the reviewer session, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
+3. let the helper resolve the reviewer session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `reviewer_session_id`
 
 Exact command shape:
@@ -259,7 +259,7 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - use `reviewer-<task_id>` as a session ref until the helper resolves the real `reviewer_session_id`
 - use the exact command shape above when it already matches the task
-- let the helper decide whether this reviewer needs session start or an active-session nudge
+- let the helper decide whether this reviewer needs direct `agent-deck launch` or an active-session nudge
 
 ## Quality Bar
 

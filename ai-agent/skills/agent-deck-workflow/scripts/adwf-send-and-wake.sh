@@ -18,9 +18,9 @@ Target selection:
 
 Optional target creation:
   --ensure-target-title <title>  Create target session with this title if missing
-  --ensure-target-cmd <cmd>      Full command for target session creation
+  --ensure-target-cmd <cmd>      Full command for target session launch
   --parent-session-id <id>       Parent session id for target session creation
-  --workdir <path>               Workdir for `agent-deck add` (default: cwd)
+  --workdir <path>               Workdir for `agent-deck launch` (default: cwd)
 
 Optional:
   --content-type <type>          Mailbox content type (default: text/markdown)
@@ -154,7 +154,10 @@ if [[ -z "$to_session_id" ]]; then
     [[ -n "$parent_session_id" ]] || die "--parent-session-id is required when creating target session"
     [[ -d "$workdir" ]] || die "workdir does not exist: $workdir"
 
-    create_json="$(run_capture "agent-deck add" agent-deck add "$workdir" --title "$ensure_target_title" --parent "$parent_session_id" --cmd "$ensure_target_cmd" --json)"
+    if [[ -z "$listener_message" ]]; then
+      listener_message="Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action."
+    fi
+    create_json="$(run_capture "agent-deck launch" agent-deck launch --json --title "$ensure_target_title" --parent "$parent_session_id" --cmd "$ensure_target_cmd" --message "$listener_message" "$workdir")"
     to_session_id="$(printf '%s' "$create_json" | json_get_field '.id')"
     [[ -n "$to_session_id" ]] || die "failed to parse created target session id"
     if [[ -z "$to_session_ref" ]]; then
@@ -204,22 +207,27 @@ wakeup_status="skipped_same_session"
 nudge_after_send=0
 
 if [[ "$current_session_id" != "$to_session_id" ]]; then
-  target_status="$(get_session_status "$to_session_id" || true)"
-  case "$target_status" in
-    running|waiting|idle)
-      start_status="already_${target_status}"
-      listener_status="not_needed_existing_session"
-      nudge_after_send=1
-      ;;
-    *)
-      if [[ -z "$listener_message" ]]; then
-        listener_message="Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action."
-      fi
-      run_capture "agent-deck session start (${to_session_id})" agent-deck session start --json -m "$listener_message" "$to_session_id" >/dev/null
-      start_status="started"
-      listener_status="started_waiting"
-      ;;
-  esac
+  if (( created_target )); then
+    start_status="started"
+    listener_status="started_waiting"
+  else
+    target_status="$(get_session_status "$to_session_id" || true)"
+    case "$target_status" in
+      running|waiting|idle)
+        start_status="already_${target_status}"
+        listener_status="not_needed_existing_session"
+        nudge_after_send=1
+        ;;
+      *)
+        if [[ -z "$listener_message" ]]; then
+          listener_message="Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action."
+        fi
+        run_capture "agent-deck session start (${to_session_id})" agent-deck session start --json -m "$listener_message" "$to_session_id" >/dev/null
+        start_status="started"
+        listener_status="started_waiting"
+        ;;
+    esac
+  fi
 fi
 
 set +e
