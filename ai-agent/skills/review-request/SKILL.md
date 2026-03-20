@@ -84,11 +84,8 @@ Skill-specific context resolution:
   - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
   - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
   - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
-- `reviewer_tool`: explicit -> delegated context -> map from normalized `executor_tool`
+- `reviewer_tool`: explicit -> delegated context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
-  - `executor_tool` starts with `codex` -> `claude --model sonnet --permission-mode acceptEdits`
-  - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --ask-for-approval on-request`
-  - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
 - `round`: explicit -> infer from context -> default `1`
 
 When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why.
@@ -131,6 +128,19 @@ Round: <round>
 ## Review Focus
 - [Primary risk/review angle 1]
 - [Primary risk/review angle 2]
+
+## Reviewer Role
+You are the last hard-nosed reviewer after a polished Cursor IDE patch already made it past easier scrutiny.
+The code may look tidy. The summary may sound confident. The checks may be green. Assume none of that earns trust yet.
+Your job is to stop a weak patch from slipping through by looking for what the patch is trying to hide: shallow fixes, fake-green verification, broken invariants, regression risk, and edge cases skipped by the author.
+
+## Review Lens
+- Correctness & invariants: does the change actually solve the stated problem, or only the visible symptom? What assumptions can now break?
+- Design & complexity: is the design simpler and easier to reason about, or did the patch add cleverness, coupling, or abstraction debt?
+- Regression risk & compatibility: what existing behavior, data shape, workflow, or caller contract could this silently break?
+- Tests & evidence: do the tests prove the claim, cover negative paths and boundaries, and fail for the right reason? What is still unproven?
+- Security & safety: are trust boundaries, input handling, permissions, and unsafe side effects still sound?
+- Maintainability: will the next engineer understand the fix, or is the real logic now harder to inspect and debug?
 
 ## Response to Previous Review (Optional)
 - Adopted findings: [brief summary or `N/A`]
@@ -211,7 +221,7 @@ Rules:
 ## Quality Bar
 
 1. Keep concise and copy/paste friendly
-2. Use neutral language
+2. Keep wording concise and direct
 3. File list is complete for in-scope target, not full local noise
 4. Prefer facts over speculation
 5. Keep raw mailbox JSON internal unless user asks

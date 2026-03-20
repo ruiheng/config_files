@@ -69,11 +69,8 @@ Resolve by priority:
   - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
   - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
   - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
-- `reviewer_tool`: explicit -> context -> map from normalized `executor_tool`
+- `reviewer_tool`: explicit -> context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
-  - `executor_tool` starts with `codex` -> `claude --model sonnet --permission-mode acceptEdits`
-  - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --ask-for-approval on-request`
-  - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
   - `reviewer_tool` selects how the reviewer session is created/resumed; it does not collapse reviewer role into the current planner/executor session
   - if planner/executor and reviewer all use Codex, still keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicitly requested in workflow context
 - `workflow_policy` (optional): explicit -> context -> omit when not set

@@ -253,6 +253,10 @@ Reviewer decision rules:
 4. If user chooses closeout, run `review-closeout` and send `closeout_delivered` to planner
 5. If user chooses another iteration, send `user_requested_iteration` to executor
 
+### Reviewer Default
+
+- Default reviewer tool: `codex --model gpt-5.4 --ask-for-approval on-request`
+
 ## Automation Policy Override (Optional)
 
 Default behavior is human-gated.
