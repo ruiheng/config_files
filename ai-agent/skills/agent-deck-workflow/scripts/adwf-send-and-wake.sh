@@ -42,6 +42,24 @@ die() {
   exit 1
 }
 
+run_capture() {
+  local step="$1"
+  shift
+  local output=""
+  local status=0
+  set +e
+  output="$("$@" 2>&1)"
+  status=$?
+  set -e
+  if (( status != 0 )); then
+    if [[ -n "$output" ]]; then
+      die "$step failed: $output"
+    fi
+    die "$step failed with exit code $status"
+  fi
+  printf '%s' "$output"
+}
+
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "$1 not found in PATH"
 }
@@ -108,6 +126,18 @@ resolve_session_id() {
   printf '%s' "$show_json" | json_get_field '.id'
 }
 
+get_session_status() {
+  local session="$1"
+  local show_json
+  if ! show_json="$(agent-deck session show "$session" --json 2>/dev/null)"; then
+    return 1
+  fi
+  if [[ "$(printf '%s' "$show_json" | json_get_field '.success')" == "false" ]]; then
+    return 1
+  fi
+  printf '%s' "$show_json" | json_get_field '.status'
+}
+
 if [[ -z "$to_session_id" ]]; then
   if [[ -n "$to_session_ref" ]]; then
     if resolved_id="$(resolve_session_id "$to_session_ref")" && [[ -n "$resolved_id" ]]; then
@@ -121,7 +151,7 @@ if [[ -z "$to_session_id" ]]; then
     [[ -n "$parent_session_id" ]] || die "--parent-session-id is required when creating target session"
     [[ -d "$workdir" ]] || die "workdir does not exist: $workdir"
 
-    create_json="$(agent-deck add "$workdir" --title "$ensure_target_title" --parent "$parent_session_id" --cmd "$ensure_target_cmd" --json)"
+    create_json="$(run_capture "agent-deck add" agent-deck add "$workdir" --title "$ensure_target_title" --parent "$parent_session_id" --cmd "$ensure_target_cmd" --json)"
     to_session_id="$(printf '%s' "$create_json" | json_get_field '.id')"
     [[ -n "$to_session_id" ]] || die "failed to parse created target session id"
     if [[ -z "$to_session_ref" ]]; then
@@ -164,9 +194,10 @@ body="${body//\{\{TO_SESSION_REF\}\}/$to_session_ref}"
 from_address="workflow/session/${from_session_id}"
 to_address="workflow/session/${to_session_id}"
 
-agent-mailbox endpoint register --address "$from_address" >/dev/null
-agent-mailbox endpoint register --address "$to_address" >/dev/null
+run_capture "agent-mailbox endpoint register (${from_address})" agent-mailbox endpoint register --address "$from_address" >/dev/null
+run_capture "agent-mailbox endpoint register (${to_address})" agent-mailbox endpoint register --address "$to_address" >/dev/null
 
+set +e
 send_output="$(
   printf '%s' "$body" | agent-mailbox send \
     --to "$to_address" \
@@ -174,8 +205,16 @@ send_output="$(
     --subject "$subject" \
     --content-type "$content_type" \
     --schema-version "$schema_version" \
-    --body-file -
+    --body-file - 2>&1
 )"
+send_status=$?
+set -e
+if (( send_status != 0 )); then
+  if [[ -n "$send_output" ]]; then
+    die "agent-mailbox send failed: $send_output"
+  fi
+  die "agent-mailbox send failed with exit code $send_status"
+fi
 
 message_id=""
 delivery_id=""
@@ -193,14 +232,22 @@ start_status="skipped_same_session"
 wakeup_status="skipped_same_session"
 
 if [[ "$current_session_id" != "$to_session_id" ]]; then
-  agent-deck session start "$to_session_id" --json >/dev/null
-  start_status="started"
+  target_status="$(get_session_status "$to_session_id" || true)"
+  case "$target_status" in
+    running|waiting|idle)
+      start_status="already_${target_status}"
+      ;;
+    *)
+      run_capture "agent-deck session start (${to_session_id})" agent-deck session start "$to_session_id" --json >/dev/null
+      start_status="started"
+      ;;
+  esac
   sleep "$wake_delay_seconds"
 
   if [[ -z "$wake_message" ]]; then
     wake_message="You have new workflow mail. Run: agent-mailbox recv --for ${to_address} --json"
   fi
-  agent-deck session send "$to_session_id" "$wake_message" --no-wait >/dev/null
+  run_capture "agent-deck session send (${to_session_id})" agent-deck session send "$to_session_id" "$wake_message" --no-wait >/dev/null
   wakeup_status="sent"
 fi
 
