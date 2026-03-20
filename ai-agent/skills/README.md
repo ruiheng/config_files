@@ -12,7 +12,7 @@ This document describes the multi-agent workflow built around the skills in this
 ## Core Transport
 
 - `agent-mailbox` is the authoritative workflow message layer
-- `agent-deck` is used only to wake the target session so it can receive mail
+- `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
 - Workflow messages live in mailbox `subject` + `body`
 - When sending mailbox body text, prefer `agent-mailbox send --body-file -` and feed stdin directly
 - Prefer `adwf-send-and-wake` for cross-session workflow delivery
@@ -24,11 +24,9 @@ This document describes the multi-agent workflow built around the skills in this
 ## End-to-End Loop
 
 1. User asks Planner to prepare work.
-2. Planner runs `delegate-task` and sends one delegate mailbox message to Executor.
-3. Planner wakes Executor.
+2. Planner runs `delegate-task`, starts Executor into `check-workflow-mail wait=True` when needed, or nudges the existing Executor session, then sends one delegate mailbox message.
 4. Executor implements changes.
-5. Executor runs `review-request` and sends one review-request mailbox message to Reviewer.
-6. Executor wakes Reviewer.
+5. Executor runs `review-request`, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
 7. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Executor, or
    - `stop_recommended` to the user decision point.
@@ -67,9 +65,10 @@ Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
 2. Create `executor-<task_id>` and `reviewer-<task_id>` per task.
-3. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
-4. Keep workflow content in mailbox body instead of generated Markdown files.
-5. Keep planner closeout actions batched after acceptance.
+3. Keep executor/reviewer in `check-workflow-mail wait=True` when they are idle and expecting the next workflow step.
+4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
+5. Keep workflow content in mailbox body instead of generated Markdown files.
+6. Keep planner closeout actions batched after acceptance.
 
 Use skills:
 

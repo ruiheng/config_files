@@ -55,11 +55,11 @@ If required values are resolved:
    - use detected `current_session_id` UUID from `agent-deck session current --json`
    - if normalization fails for required identity, do not send automatically; ask one short clarification question
 2. send mode:
-   - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session wakeup and continue locally
-   - otherwise send `closeout_delivered` to planner inbox and wake planner session
+   - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session delivery and continue locally
+   - otherwise send `closeout_delivered` to planner inbox; if planner is not already waiting in `check-workflow-mail wait=True`, let the helper start it before send
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
 4. for cross-session closeout, use `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<planner_session_id>" --subject "closeout delivered: <task_id>" --body-file -`
-5. let the helper own the start-delay-wakeup sequence
+5. let the helper own the start-delay-send sequence
 6. in Codex-style environments, start the helper directly and stream the closeout body through stdin tool input
 
 Recommended mailbox subject:

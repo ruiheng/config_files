@@ -10,7 +10,7 @@ Use this skill as the single source of truth for the three-role workflow:
 
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
-- `agent-deck` only wakes the target session so it can receive mail
+- `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
 - receiver-side wake handling should go through `check-workflow-mail`
 
 Default role/session rule:
@@ -108,17 +108,17 @@ Send-body rule:
 - do not create a temporary file just to pass mailbox body text
 - only use a real file when that file already exists independently and is intentionally the body source
 - in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin; do not wrap it in heredoc or shell pipes
-- prefer `adwf-send-and-wake` for cross-session workflow delivery; it hides stdin echo, serializes mailbox writes, and applies the start-delay-wakeup workaround
+- prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, registers inboxes, primes new sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
 - if the workflow body was generated in the current turn, pass it via stdin; do not write it to `/tmp`, `.agent-artifacts`, or any other temporary file first
 - in Codex-style agent environments, start `adwf-send-and-wake --body-file -` directly, then stream the body through stdin tool input
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself; do not prepend `printf`, `cat`, pipes, or shell redirection
 
-Wakeup transport:
-- after a mailbox message is queued, use `agent-deck` only to wake the target session
-- wakeup text must be short and must not repeat the workflow body
+Worker listener rule:
+- newly started executor/reviewer sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
+- for already active target sessions, sender may use `agent-deck session send` to nudge the target to run `check-workflow-mail`
 
 Before first send/receive for a session inbox:
-- derive inbox address as `agent-deck/<session_id>`; do not pass it around as independent workflow data
+- derive inbox address as `agent-deck/<session_id>`
 - register `agent-deck/<session_id>` with `agent-mailbox endpoint register --address ...`
 - registering the same address again is a safe retry
 - endpoint registration must also run outside sandbox
@@ -130,7 +130,6 @@ Every workflow message has two parts:
 - `subject`: one-line summary for quick triage
 - `body`: full Markdown task content and the main source of truth
 
-Do not add a protocol version header.
 Do not generate workflow-specific Markdown files just to carry the message.
 
 Recommended body header:
@@ -177,32 +176,34 @@ Review disagreement policy:
 
 User-facing responses should provide readable decisions, not raw mailbox JSON.
 
-### Wakeup Contract
+### Delivery Order Contract
 
-After sending mail to `agent-deck/<to_session_id>`:
+For newly started executor/reviewer sessions:
 1. ensure the target session exists when the workflow expects it to exist
-2. start the target session when needed
-3. wait a short readiness delay before wakeup (default `10s`)
-4. send one short reminder through `agent-deck`
+2. register the derived inbox address
+3. start the target session with a natural-language instruction to run `check-workflow-mail wait=True`
+4. send the mailbox message
 
-Why the delay exists:
-- workaround for current `agent-deck` behavior where an immediate wakeup can land in the target shell before the AI process is ready
+For already active sessions:
+1. send the mailbox message
+2. send one short natural-language nudge through `agent-deck` telling the target to use `check-workflow-mail`
 
-Recommended reminder text:
+Recommended session-start instruction:
+
+```text
+Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action.
+```
+
+Recommended active-session nudge:
 
 ```text
 Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action.
 ```
 
-Wakeup wording rule:
-- use natural language, not provider-specific skill invocation syntax
-- explicitly tell the receiver to use `check-workflow-mail`
-- do not depend on `$skill-name`, `/skill-name`, or other vendor-specific command forms in the wakeup text
-
 Do not:
 - paste the full workflow body into `agent-deck session send`
 - summarize the body so aggressively that the receiver can skip `recv`
-- send a "go read file X" reminder as the default path
+- drop `agent-deck session send` entirely for already active target sessions
 - write a temporary Markdown file only to hand it to `agent-mailbox send`
 - write generated workflow body text to a temporary file only to hand it to `adwf-send-and-wake`
 - wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
@@ -230,9 +231,13 @@ Action execution defaults after `recv`:
 - `closeout_delivered`: start planner closeout interpretation immediately
 - only pause for user input when the message body explicitly requires a user decision
 
+Idle behavior:
+- when executor or reviewer is waiting for the next workflow message, use `check-workflow-mail wait=True` instead of relying on a later `agent-deck session send`
+- planner may also use `check-workflow-mail wait=True` when running unattended and waiting for workflow mail
+
 ### Error Handling and Diagnostics
 
-If workflow send/wakeup fails, report concise stderr summary and run these checks:
+If workflow send/worker-start fails, report concise stderr summary and run these checks:
 1. Is the mailbox endpoint registered? (`agent-mailbox endpoint register --address agent-deck/<session_id>`)
 2. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
 3. Is command running in correct tmux/session context? (`agent-deck session current --json`)
@@ -240,7 +245,8 @@ If workflow send/wakeup fails, report concise stderr summary and run these check
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 Do not attribute that prompt to serialization rules, stdin usage, or mailbox content.
-If a wakeup reminder lands in the target shell, treat that as a workflow bug signal and retry with the documented start-delay-wakeup sequence instead of claiming wakeup success.
+If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow bug signal.
+If an already active target missed the mailbox work, retry the `agent-deck session send` nudge instead of resending mailbox content.
 
 If closeout cleanup fails, include:
 1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
@@ -339,14 +345,14 @@ Use stable naming:
 
 - planner prepares one mailbox message body for the executor
 - planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) inside that message body before sending
-- planner queues the message to executor inbox and wakes executor session
+- planner either starts executor into `check-workflow-mail wait=True` or nudges an already active executor, then queues the message to executor inbox
 
 ### 2) Executor Implements and Requests Review
 
 - executor implements and commits first delivery
 - executor prepares one mailbox review request body for reviewer
-- executor queues the message to reviewer inbox and wakes reviewer session
-- executor enters waiting state and does not proactively poll reviewer unless user asks
+- executor either starts reviewer into `check-workflow-mail wait=True` or nudges an already active reviewer, then queues the message to reviewer inbox
+- executor enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
 
 ### 3) Reviewer Loop
 
@@ -405,7 +411,7 @@ Planner user-facing status contract for auto-dispatch:
 
 1. User asks: "Add login rate limiting".
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
-3. Planner wakes `executor-<task_id>`.
+3. Planner starts `executor-<task_id>` into `check-workflow-mail wait=True` or nudges the existing executor session.
 4. Executor implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
 5. Reviewer runs `review-code` and sends `rework_required` (if must-fix exists).
 6. Executor fixes and sends another `review_requested`.
@@ -423,6 +429,7 @@ Planner user-facing status contract for auto-dispatch:
 
 Do:
 - keep the real workflow content in mailbox body
+- keep executor/reviewer in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
 - resolve and record branch plan at delegate start, then reuse it consistently through closeout
@@ -436,6 +443,7 @@ Do not:
 - blindly create `task/<task_id>` when the delegate message explicitly says to reuse an existing topic branch as `task_branch`
 - silently re-derive merge target from whatever branch happens to be checked out at closeout time when branch plan was already recorded earlier
 - send workflow body through `agent-deck session send`
+- rely on `agent-deck session send` alone when a newly started worker should have been put into `check-workflow-mail wait=True`
 - create Markdown handoff files just to transport workflow messages
 - run proactive polling loops after dispatch
 - treat mailbox JSON output as default user-facing content

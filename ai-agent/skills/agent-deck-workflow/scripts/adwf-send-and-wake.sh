@@ -25,8 +25,9 @@ Optional target creation:
 Optional:
   --content-type <type>          Mailbox content type (default: text/markdown)
   --schema-version <value>       Mailbox schema version (default: 1)
-  --wake-message <text>          Override wakeup text
-  --wake-delay-seconds <n>       Delay after session start before wakeup (default: 10)
+  --listener-message <text>      Override session-start listener instruction
+  --wake-message <text>          Override active-session wake instruction
+  --wake-delay-seconds <n>       Delay before active-session wake send (default: 10)
   --json                         Emit JSON summary
   -h, --help                     Show help
 
@@ -79,6 +80,7 @@ subject=""
 body_file=""
 content_type="text/markdown"
 schema_version="1"
+listener_message=""
 wake_message=""
 wake_delay_seconds="10"
 json_output=0
@@ -96,6 +98,7 @@ while [[ $# -gt 0 ]]; do
     --body-file) body_file="${2:-}"; shift 2 ;;
     --content-type) content_type="${2:-}"; shift 2 ;;
     --schema-version) schema_version="${2:-}"; shift 2 ;;
+    --listener-message) listener_message="${2:-}"; shift 2 ;;
     --wake-message) wake_message="${2:-}"; shift 2 ;;
     --wake-delay-seconds) wake_delay_seconds="${2:-}"; shift 2 ;;
     --json) json_output=1; shift ;;
@@ -197,6 +200,31 @@ to_address="agent-deck/${to_session_id}"
 run_capture "agent-mailbox endpoint register (${from_address})" agent-mailbox endpoint register --address "$from_address" >/dev/null
 run_capture "agent-mailbox endpoint register (${to_address})" agent-mailbox endpoint register --address "$to_address" >/dev/null
 
+current_session_id="$(agent-deck session current --json 2>/dev/null | json_get_field '.id' || true)"
+start_status="skipped_same_session"
+listener_status="skipped_same_session"
+wakeup_status="skipped_same_session"
+nudge_after_send=0
+
+if [[ "$current_session_id" != "$to_session_id" ]]; then
+  target_status="$(get_session_status "$to_session_id" || true)"
+  case "$target_status" in
+    running|waiting|idle)
+      start_status="already_${target_status}"
+      listener_status="not_needed_existing_session"
+      nudge_after_send=1
+      ;;
+    *)
+      if [[ -z "$listener_message" ]]; then
+        listener_message="Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action."
+      fi
+      run_capture "agent-deck session start (${to_session_id})" agent-deck session start "$to_session_id" -m "$listener_message" --json >/dev/null
+      start_status="started"
+      listener_status="started_waiting"
+      ;;
+  esac
+fi
+
 set +e
 send_output="$(
   printf '%s' "$body" | agent-mailbox send \
@@ -227,23 +255,10 @@ for token in $send_output; do
   esac
 done
 
-current_session_id="$(agent-deck session current --json 2>/dev/null | json_get_field '.id' || true)"
-start_status="skipped_same_session"
-wakeup_status="skipped_same_session"
-
-if [[ "$current_session_id" != "$to_session_id" ]]; then
-  target_status="$(get_session_status "$to_session_id" || true)"
-  case "$target_status" in
-    running|waiting|idle)
-      start_status="already_${target_status}"
-      ;;
-    *)
-      run_capture "agent-deck session start (${to_session_id})" agent-deck session start "$to_session_id" --json >/dev/null
-      start_status="started"
-      ;;
-  esac
-  sleep "$wake_delay_seconds"
-
+if (( nudge_after_send )); then
+  if [[ -n "$wake_delay_seconds" && "$wake_delay_seconds" != "0" ]]; then
+    sleep "$wake_delay_seconds"
+  fi
   if [[ -z "$wake_message" ]]; then
     wake_message="Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
   fi
@@ -261,6 +276,7 @@ if (( json_output )); then
     --arg delivery_id "$delivery_id" \
     --arg blob_id "$blob_id" \
     --arg start_status "$start_status" \
+    --arg listener_status "$listener_status" \
     --arg wakeup_status "$wakeup_status" \
     --argjson created_target "$created_target" \
     --argjson wake_delay_seconds "$wake_delay_seconds" \
@@ -274,17 +290,19 @@ if (( json_output )); then
       delivery_id: (if $delivery_id == "" then null else $delivery_id end),
       blob_id: (if $blob_id == "" then null else $blob_id end),
       start_status: $start_status,
+      listener_status: $listener_status,
       wakeup_status: $wakeup_status,
       wake_delay_seconds: $wake_delay_seconds
     }'
 else
-  printf 'dispatch_ok to_session_id=%s to_session_ref=%s created_target=%s message_id=%s delivery_id=%s start_status=%s wakeup_status=%s wake_delay_seconds=%s\n' \
+  printf 'dispatch_ok to_session_id=%s to_session_ref=%s created_target=%s message_id=%s delivery_id=%s start_status=%s listener_status=%s wakeup_status=%s wake_delay_seconds=%s\n' \
     "$to_session_id" \
     "$to_session_ref" \
     "$created_target" \
     "${message_id:-none}" \
     "${delivery_id:-none}" \
     "$start_status" \
+    "$listener_status" \
     "$wakeup_status" \
     "$wake_delay_seconds"
 fi

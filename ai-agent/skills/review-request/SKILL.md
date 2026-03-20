@@ -99,7 +99,7 @@ Identity rules:
   2. create/use new reviewer session with requested tool
 
 Post-send behavior:
-- executor enters waiting state
+- executor immediately uses `check-workflow-mail wait=True`
 - executor does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
@@ -186,7 +186,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "review request: <task_id> r<round>"`
    - `--body-file -`
-3. let the helper resolve/create the reviewer session, register endpoints, send the body, start the target, wait `10s`, and then wake it
+3. let the helper resolve/create the reviewer session, register endpoints, start the target in `check-workflow-mail wait=True` when needed, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `reviewer_session_id`
 
 Exact command shape:
@@ -216,7 +216,7 @@ Rules:
 - Do not create a temporary review-request body file for a freshly generated message
 - Do not wrap `adwf-send-and-wake --body-file -` in `printf`, `cat`, heredoc, shell pipes, or redirection
 - Do not use `reviewer-<task_id>` as if it were already a real session id
-- Do not send wakeup before the helper's start-delay-wakeup sequence completes
+- Do not assume the helper can skip nudging an already active reviewer session
 
 ## Quality Bar
 

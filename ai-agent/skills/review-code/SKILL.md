@@ -160,6 +160,7 @@ Mailbox subject (`rework_required`):
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
+- assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, start the helper directly and stream the review body through stdin tool input
 - do not create `review-report-r<n>.md`
 - do not assume executor can read a separate artifact later
@@ -171,6 +172,7 @@ Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - include enough of the prior review findings that executor can continue without opening external workflow files
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
+- assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, start the helper directly and stream the iteration body through stdin tool input
 
 User-facing output requirement for `stop_recommended`:
