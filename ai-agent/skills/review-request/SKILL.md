@@ -75,7 +75,8 @@ Skill-specific context resolution:
 - `task_id`: explicit -> branch `task/<task_id>` -> delegated context -> ask
 - `planner_session_id`: explicit/context -> ask
 - `executor_session_id`: explicit -> current session id -> delegated context -> ask
-- `reviewer_session_id`: explicit -> delegated context -> default `reviewer-<task_id>`
+- `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
+- `reviewer_session_id`: explicit actual id -> delegated context actual id -> resolved/created from `reviewer_session_ref` before send
 - `workflow_policy` (optional): explicit -> delegated context -> omit
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `executor_tool`: explicit -> delegated context -> default current AI tool
@@ -112,7 +113,7 @@ Use this exact structure as the mailbox body:
 Task: <task_id>
 Action: review_requested
 From: executor <executor_session_id>
-To: reviewer <reviewer_session_id>
+To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: <round>
 
@@ -163,26 +164,41 @@ Round: <round>
 Recommended subject:
 - `review request: <task_id> r<round>`
 
-Workflow send sequence:
-1. ensure sender and reviewer inbox endpoints exist:
-   - run `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"` outside sandbox
-   - run `agent-mailbox endpoint register --address "workflow/session/<reviewer_session_id>"` outside sandbox
-2. send the body with `agent-mailbox send --body-file -` outside sandbox and feed the composed body through stdin
-3. if reviewer session is not current session, wake it with:
-4. keep mailbox state-mutating steps serialized; do not register inboxes and send mail in parallel
+Preferred path: use the installed helper `adwf-send-and-wake`.
 
-```text
-You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<reviewer_session_id> --json
+Workflow send sequence:
+1. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
+2. run `adwf-send-and-wake` outside sandbox:
+   - `--from-session-id "<executor_session_id>"`
+   - `--to-session-ref "<reviewer_session_ref>"`
+   - `--ensure-target-title "<reviewer_session_ref>"`
+   - `--ensure-target-cmd "<reviewer_tool>"`
+   - `--parent-session-id "<planner_session_id>"`
+   - `--subject "review request: <task_id> r<round>"`
+   - `--body-file -`
+3. let the helper resolve/create the reviewer session, register endpoints, send the body, start the target, wait `2s`, and then wake it
+4. use the helper result as the authoritative `reviewer_session_id`
+
+Exact command shape:
+
+```bash
+adwf-send-and-wake \
+  --from-session-id "<executor_session_id>" \
+  --to-session-ref "<reviewer_session_ref>" \
+  --ensure-target-title "<reviewer_session_ref>" \
+  --ensure-target-cmd "<reviewer_tool>" \
+  --parent-session-id "<planner_session_id>" \
+  --subject "review request: <task_id> r<round>" \
+  --body-file - \
+  --json
 ```
 
 Rules:
 - Do not create `review-request-*.md`
 - Do not tell reviewer to go read a generated workflow file
-- Do not send the review-request body through `agent-deck session send`
-- Do not write a temporary file just to pass body text to `agent-mailbox send`
-- Do not wrap `agent-mailbox send --body-file -` in heredoc or shell pipes; invoke it directly and write stdin directly
-- Do not run `agent-mailbox` inside sandbox
-- Do not run mailbox state-mutating `agent-mailbox` commands in parallel
+- Do not run `adwf-send-and-wake --help` when this command shape already matches the task
+- Do not use `reviewer-<task_id>` as if it were already a real session id
+- Do not send wakeup before the helper's start-delay-wakeup sequence completes
 
 ## Quality Bar
 

@@ -4,6 +4,6 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern=["~/.codex/skills/agent-deck-workflow/scripts/dispatch-control-message.sh"],
+    pattern=["~/.local/bin/adwf-send-and-wake"],
     decision="allow",
 )

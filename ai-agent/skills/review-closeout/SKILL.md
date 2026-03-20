@@ -58,18 +58,11 @@ If required values are resolved:
    - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session wakeup and continue locally
    - otherwise send `closeout_delivered` to planner inbox and wake planner session
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
-4. send the closeout body with `agent-mailbox send --body-file -` outside sandbox via stdin rather than writing a temporary file
-5. keep mailbox state-mutating steps serialized; do not overlap send with other mailbox operations
-6. invoke `agent-mailbox send --body-file -` directly; do not wrap it in heredoc or shell pipes
+4. for cross-session closeout, use `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<planner_session_id>" --subject "closeout delivered: <task_id>" --body-file -`
+5. let the helper own the start-delay-wakeup sequence
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`
-
-Recommended wakeup text:
-
-```text
-You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<planner_session_id> --json
-```
 
 ## Extraction Rules
 
@@ -169,5 +162,4 @@ Then append only non-empty sections.
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
-9. Do not run `agent-mailbox` inside sandbox
-10. Do not run mailbox state-mutating `agent-mailbox` commands in parallel
+9. Do not bypass `adwf-send-and-wake` for cross-session closeout delivery

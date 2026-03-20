@@ -65,6 +65,7 @@ Session identity nuance:
   - current session: `agent-deck session current --json | jq -r '.id'`
 - exception (`delegate-task` only): planner sender legitimately equals current session, so `planner_session_id` may start from detected `current_session_id`
 - in all other skills, `current_session_id` is not a replacement source for `planner_session_id`
+- use `*_session_ref` for planned worker titles before a real session exists; only write `*_session_id` when you actually have the resolved session id
 
 ### Role vs Session Identity
 
@@ -106,6 +107,7 @@ Send-body rule:
 - do not create a temporary file just to pass mailbox body text
 - only use a real file when that file already exists independently and is intentionally the body source
 - in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin; do not wrap it in heredoc or shell pipes
+- prefer `adwf-send-and-wake` for cross-session workflow delivery; it hides stdin echo, serializes mailbox writes, and applies the start-delay-wakeup workaround
 
 Wakeup transport:
 - after a mailbox message is queued, use `agent-deck` only to wake the target session
@@ -175,7 +177,11 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 After sending mail to `workflow/session/<to_session_id>`:
 1. ensure the target session exists when the workflow expects it to exist
 2. start the target session when needed
-3. send one short reminder through `agent-deck`
+3. wait a short readiness delay before wakeup (default `2s`)
+4. send one short reminder through `agent-deck`
+
+Why the delay exists:
+- workaround for current `agent-deck` behavior where an immediate wakeup can land in the target shell before the AI process is ready
 
 Recommended reminder text:
 
@@ -212,6 +218,7 @@ If workflow send/wakeup fails, report concise stderr summary and run these check
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 Do not attribute that prompt to serialization rules, stdin usage, or mailbox content.
+If a wakeup reminder lands in the target shell, treat that as a workflow bug signal and retry with the documented start-delay-wakeup sequence instead of claiming wakeup success.
 
 If closeout cleanup fails, include:
 1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
@@ -274,6 +281,8 @@ All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sa
 `agent-mailbox` is especially strict here: run it outside sandbox.
 When a workflow turn needs multiple mailbox state-mutating commands, execute them sequentially, never in parallel.
 Read-only observation commands may run in parallel when safe.
+For cross-session workflow dispatch, prefer the installed helper `adwf-send-and-wake`.
+When the skill already provides an exact `adwf-send-and-wake` command shape for your case, do not run `--help` first.
 When workflow commands create sessions via `--cmd`, do not use bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`
@@ -296,6 +305,7 @@ Use stable naming:
 - default integration branch: planner's current branch at delegate creation when that branch is the intended landing line
 - existing topic branch reuse: allowed when planner determines the current branch already is the correct `task_branch`
 - `.agent-artifacts/` is for non-message supplemental material only; workflow should not create Markdown handoff artifacts as the default transport
+- `executor_session_ref` / `reviewer_session_ref` may be planned before creation; resolve them to real `*_session_id` values before mailbox addressing
 
 ## Human-Led Three-Role Flow
 

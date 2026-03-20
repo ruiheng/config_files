@@ -16,6 +16,8 @@ INSTALLED_SKILLS_DIR="$HOME/.config/ai-agent/skills"
 INSTALLED_SKILLS_DIR_TILDE="~/.config/ai-agent/skills"
 INSTALLED_WORKFLOW_SCRIPTS="$INSTALLED_SKILLS_DIR/agent-deck-workflow/scripts"
 INSTALLED_WORKFLOW_SCRIPTS_TILDE="$INSTALLED_SKILLS_DIR_TILDE/agent-deck-workflow/scripts"
+INSTALLED_LOCAL_BIN="$HOME/.local/bin"
+INSTALLED_LOCAL_BIN_TILDE="~/.local/bin"
 
 # Colors
 RED='\033[0;31m'
@@ -200,6 +202,8 @@ EOF
   "Bash(jq)",
   "Bash(jq *)",
 $git_readonly_permissions_json
+  "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
+  "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
   "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
   "$installed_skills_read_permission_tilde",
@@ -228,6 +232,8 @@ EOF
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
+      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
+      "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
       "$installed_skills_read_permission_tilde",
@@ -252,6 +258,8 @@ EOF
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
+      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
+      "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
       "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
       "$installed_skills_read_permission_tilde",
@@ -317,6 +325,18 @@ prefix_rule(
 )
 
 prefix_rule(
+    pattern = ["$INSTALLED_LOCAL_BIN_TILDE/adwf-send-and-wake"],
+    decision = "allow",
+    justification = "Workflow send+wakeup helper (installed local bin, tilde)",
+)
+
+prefix_rule(
+    pattern = ["$INSTALLED_LOCAL_BIN/adwf-send-and-wake"],
+    decision = "allow",
+    justification = "Workflow send+wakeup helper (installed local bin, absolute)",
+)
+
+prefix_rule(
     pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/planner-closeout-batch.sh"],
     decision = "allow",
     justification = "Workflow closeout script (installed path, tilde)",
@@ -372,6 +392,16 @@ description = "Agent mailbox commands"
 pattern = "^jq( .*)?$"
 action = "allow"
 description = "jq JSON processing commands"
+
+[[rules]]
+pattern = "^~/.local/bin/adwf-send-and-wake( .*)?$"
+action = "allow"
+description = "Workflow send+wakeup helper (tilde)"
+
+[[rules]]
+pattern = ".*/\\.local/bin/adwf-send-and-wake( .*)?$"
+action = "allow"
+description = "Workflow send+wakeup helper (absolute)"
 
 [[rules]]
 pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch\.sh .*"

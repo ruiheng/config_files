@@ -58,8 +58,10 @@ Resolve by priority:
 - `start_branch`: detected current git branch when delegation begins -> explicit -> context -> ask
 - `integration_branch`: explicit -> context -> if `start_branch` is the intended landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
   - never assume `main`/`master`; branch names are evidence, not truth
-- `executor_session_id`: explicit -> context -> default `executor-<task_id>`
-- `reviewer_session_id`: explicit -> context -> default `reviewer-<task_id>`
+- `executor_session_ref`: explicit -> context -> default `executor-<task_id>`
+- `executor_session_id`: explicit actual id -> context actual id -> helper output after target resolution -> omit until known
+- `reviewer_session_ref`: explicit -> context -> default `reviewer-<task_id>`
+- `reviewer_session_id`: explicit actual id -> context actual id -> omit until known
 - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
   - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
 - `executor_tool`: explicit -> context -> default current AI tool
@@ -73,7 +75,7 @@ Resolve by priority:
   - `executor_tool` starts with `claude` -> `codex --model gpt-5.4 --ask-for-approval on-request`
   - otherwise -> `claude --model sonnet --permission-mode acceptEdits`
   - `reviewer_tool` selects how the reviewer session is created/resumed; it does not collapse reviewer role into the current planner/executor session
-  - if planner/executor and reviewer all use Codex, still keep `reviewer_session_id` distinct unless same-session reviewer assignment is explicitly requested in workflow context
+  - if planner/executor and reviewer all use Codex, still keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicitly requested in workflow context
 - `workflow_policy` (optional): explicit -> context -> omit when not set
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 
@@ -85,7 +87,7 @@ Use this structure:
 Task: <task_id>
 Action: execute_delegate_task
 From: planner <planner_session_id>
-To: executor <executor_session_id>
+To: executor {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: 1
 
@@ -122,12 +124,13 @@ Round: 1
 - Executor git writes for this delegated task are pre-authorized
 - Executor must follow the recorded branch plan and must not invent a different working branch
 - After first delivery commit, executor runs `review-request` unless user waives review
-- Matching provider names do not merge roles: "reviewer uses codex" means use/create the recorded `reviewer_session_id` with a Codex command unless workflow context explicitly says planner and reviewer are the same session
+- Matching provider names do not merge roles: "reviewer uses codex" means use/create the recorded `reviewer_session_ref` with a Codex command unless workflow context explicitly says planner and reviewer are the same session
 
 ## Agent Deck Context
 - Planner session: [planner_session_id]
-- Executor session: [executor_session_id]
-- Reviewer session: [reviewer_session_id]
+- Executor session ref: [executor_session_ref]
+- Executor session id: {{TO_SESSION_ID}}
+- Reviewer session ref: [reviewer_session_ref]
 - Executor tool: [executor_tool]
 - Reviewer tool: [reviewer_tool]
 
@@ -144,34 +147,46 @@ Tool-routing rule:
 
 ## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
 
-Use direct CLI commands, not workflow wrapper scripts.
+Preferred path: use the installed helper `adwf-send-and-wake`.
 
 Workflow send sequence:
-1. ensure sender and recipient inbox endpoints exist:
-   - run `agent-mailbox endpoint register --address "workflow/session/<planner_session_id>"` outside sandbox
-   - run `agent-mailbox endpoint register --address "workflow/session/<executor_session_id>"` outside sandbox
-2. if executor session is missing, create it with `agent-deck add ... --cmd "<executor_tool>" --parent "<planner_session_id>"`
-3. send the delegate body with `agent-mailbox send --body-file -` outside sandbox and feed the composed body through stdin
-4. if target session is not current session, start it when needed and wake it with a short `agent-deck session send`
-5. keep mailbox state-mutating steps serialized; do not register inboxes and send mail in parallel
+1. compose the body with `{{TO_SESSION_ID}}` placeholders where the real executor session id must appear
+2. run `adwf-send-and-wake` outside sandbox:
+   - `--from-session-id "<planner_session_id>"`
+   - `--to-session-ref "<executor_session_ref>"`
+   - `--ensure-target-title "<executor_session_ref>"`
+   - `--ensure-target-cmd "<executor_tool>"`
+   - `--parent-session-id "<planner_session_id>"`
+   - `--subject "delegate: <task_id> -> executor"`
+   - `--body-file -`
+3. let the helper resolve/create the executor session, register endpoints, send the body, start the target, wait `2s`, and then wake it
+4. use the helper result as the authoritative `executor_session_id` in user-facing status
+
+Exact command shape:
+
+```bash
+adwf-send-and-wake \
+  --from-session-id "<planner_session_id>" \
+  --to-session-ref "<executor_session_ref>" \
+  --ensure-target-title "<executor_session_ref>" \
+  --ensure-target-cmd "<executor_tool>" \
+  --parent-session-id "<planner_session_id>" \
+  --subject "delegate: <task_id> -> executor" \
+  --body-file - \
+  --json
+```
 
 Recommended subject:
 - `delegate: <task_id> -> executor`
-
-Recommended wakeup text:
-
-```text
-You have new workflow mail. Run: agent-mailbox recv --for workflow/session/<executor_session_id> --json
-```
 
 Rules:
 - Do not create `delegate-task-*.md`
 - Do not send the delegate body through `agent-deck session send`
 - Do not tell executor to go read a generated workflow file
-- Do not write a temporary file just to pass body text to `agent-mailbox send`
-- Do not wrap `agent-mailbox send --body-file -` in heredoc or shell pipes; invoke it directly and write stdin directly
-- Do not run `agent-mailbox` inside sandbox
-- Do not run mailbox state-mutating `agent-mailbox` commands in parallel
+- Do not run `adwf-send-and-wake --help` when this command shape already matches the task
+- Do not use `executor-<task_id>` or `reviewer-<task_id>` titles as if they were session ids
+- Do not send wakeup before target session start completes and the readiness delay has passed
+- Do not claim wakeup success unless the helper has completed the full send/start/delay/wakeup sequence
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
@@ -181,7 +196,7 @@ After sending:
   - mailbox subject
   - one-line objective summary
   - selected `task_branch` / `integration_branch`
-  - selected `executor_session_id` / `reviewer_session_id`
+  - selected `executor_session_id` / `reviewer_session_ref`
   - selected `executor_tool` / `reviewer_tool`
   - recipient inbox address (`workflow/session/<executor_session_id>`)
   - wakeup summary

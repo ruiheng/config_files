@@ -127,6 +127,23 @@ log_dry() {
     echo -e "${BLUE}[DRY RUN]${NC} $1"
 }
 
+ensure_path_contains_local_bin() {
+    local local_bin="$HOME/.local/bin"
+
+    case ":$PATH:" in
+        *":$local_bin:"*)
+            log_ok "PATH includes: $local_bin"
+            return 0
+            ;;
+    esac
+
+    log_warn "PATH does not include: $local_bin"
+    log_info "Add it to your shell config so helper commands like 'adwf-send-and-wake' are directly runnable"
+    log_info "Suggested line:"
+    echo '  export PATH="$HOME/.local/bin:$PATH"'
+    return 0
+}
+
 # Prompt user for action when target exists
 # $1: target path
 # Returns: 0=skip, 1=backup, 2=replace, 3=cancel
@@ -900,6 +917,7 @@ install_claude_config() {
         fi
     fi
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
+    link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
 
     # Link statusline script
     link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
@@ -1271,6 +1289,8 @@ main() {
     if ! install_required_tools; then
         exit 1
     fi
+
+    ensure_path_contains_local_bin
 
     if ! install_agent_browser; then
         exit 1

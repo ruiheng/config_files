@@ -128,7 +128,7 @@ Skill-specific context resolution:
 - `planner_session_id`: explicit -> mailbox body -> ask
 - `current_session_id`: best-effort from `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> `current_session_id` -> mailbox body `To` header -> ask
-- `executor_session_id`: explicit -> mailbox body `From` header -> default `executor-<task_id>`
+- `executor_session_id`: explicit -> mailbox body `From` header -> ask
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 - `workflow_policy` (optional): explicit -> request context -> human-gated defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
@@ -159,9 +159,7 @@ Mailbox subject (`rework_required`):
 
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
-- send it with `agent-mailbox send --body-file -` outside sandbox via stdin
-- run the mailbox send as a single serialized step; do not overlap it with other mailbox state-mutating operations
-- invoke `agent-mailbox send --body-file -` directly; do not wrap it in heredoc or shell pipes
+- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
 - do not create `review-report-r<n>.md`
 - do not assume executor can read a separate artifact later
 
@@ -171,9 +169,7 @@ Mailbox subject (`user_requested_iteration` after user chooses iterate):
 Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - include enough of the prior review findings that executor can continue without opening external workflow files
-- send it with `agent-mailbox send --body-file -` outside sandbox via stdin
-- run the mailbox send as a single serialized step; do not overlap it with other mailbox state-mutating operations
-- invoke `agent-mailbox send --body-file -` directly; do not wrap it in heredoc or shell pipes
+- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
@@ -191,8 +187,7 @@ Required interaction behavior:
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks
-- Do not run `agent-mailbox` inside sandbox
-- Do not run mailbox state-mutating `agent-mailbox` commands in parallel
+- Do not bypass `adwf-send-and-wake` for cross-session reviewer messages
 
 Sender identity rule:
 - reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`

@@ -15,7 +15,7 @@ This document describes the multi-agent workflow built around the skills in this
 - `agent-deck` is used only to wake the target session so it can receive mail
 - Workflow messages live in mailbox `subject` + `body`
 - When sending mailbox body text, prefer `agent-mailbox send --body-file -` and feed stdin directly
-- Invoke `agent-mailbox send --body-file -` directly; do not wrap it in heredoc or shell pipes
+- Prefer `adwf-send-and-wake` for cross-session workflow delivery
 - Run every `agent-mailbox` command outside sandbox
 - Run mailbox state-mutating `agent-mailbox` commands serially, not in parallel
 - The workflow does not generate Markdown handoff files by default
