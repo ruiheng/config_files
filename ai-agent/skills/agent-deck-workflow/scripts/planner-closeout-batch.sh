@@ -13,6 +13,7 @@ Optional actions (soft-fail):
 - prune stale task branches
 - dispatch next task command
 - desktop notifications
+- post-closeout health gate and disposable worker cleanup
 
 Usage:
   planner-closeout-batch.sh [options]
@@ -24,12 +25,15 @@ Options:
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
   --planner-session-id <id|title>  Planner session ref (default: planner)
+  --executor-session-id <id|title> Executor session ref (default: executor-<task_id>)
+  --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
   --profile <name>                 Agent-deck profile (used by optional health gate)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
   --run-prune                      Run prune-task-branches.sh after required actions
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
-  --run-health-gate                Run closeout-health-gate.sh after required actions (non-strict)
+  --run-health-gate                Run closeout-health-gate.sh after required actions
+  --skip-health-gate               Skip closeout-health-gate.sh
   --next-dispatch-cmd <command>    Optional command executed after required actions
   -h, --help                       Show help
 
@@ -71,12 +75,14 @@ integration_branch=""
 artifact_root=".agent-artifacts"
 progress_file=""
 planner_session_ref="planner"
+executor_session_ref=""
+reviewer_session_ref=""
 profile=""
 merge_mode="ff-only"
 allow_dirty=0
 run_prune=0
 prune_apply=0
-run_health_gate=0
+run_health_gate=1
 next_dispatch_cmd=""
 
 while [[ $# -gt 0 ]]; do
@@ -87,12 +93,15 @@ while [[ $# -gt 0 ]]; do
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --progress-file) progress_file="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
+    --executor-session-id) executor_session_ref="${2:-}"; shift 2 ;;
+    --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
     --run-prune) run_prune=1; shift 1 ;;
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
+    --skip-health-gate) run_health_gate=0; shift 1 ;;
     --next-dispatch-cmd) next_dispatch_cmd="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
@@ -115,6 +124,12 @@ if [[ -z "$task_branch" ]]; then
 fi
 if [[ -z "$progress_file" ]]; then
   progress_file="${artifact_root%/}/workflow-progress/progress.jsonl"
+fi
+if [[ -z "$executor_session_ref" ]]; then
+  executor_session_ref="executor-${task_id}"
+fi
+if [[ -z "$reviewer_session_ref" ]]; then
+  reviewer_session_ref="reviewer-${task_id}"
 fi
 
 command -v git >/dev/null 2>&1 || die "git is required"
@@ -279,8 +294,8 @@ if (( run_health_gate )); then
       "$health_gate_script"
       --task-id "$task_id"
       --planner-session-id "$planner_session_ref"
-      --executor-session-id "executor-${task_id}"
-      --reviewer-session-id "reviewer-${task_id}"
+      --executor-session-id "$executor_session_ref"
+      --reviewer-session-id "$reviewer_session_ref"
       --artifact-root "$artifact_root"
       --max-worker-sessions 2
     )

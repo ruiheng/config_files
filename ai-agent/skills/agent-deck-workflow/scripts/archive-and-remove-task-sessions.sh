@@ -91,6 +91,13 @@ ad() {
   fi
 }
 
+is_disposable_task_session() {
+  local role="$1"
+  local title="$2"
+  local expected="${role}-${task_id}"
+  [[ -n "$title" && "$title" == "$expected" ]]
+}
+
 resolve_profile_name() {
   if [[ -n "$profile" ]]; then
     echo "$profile"
@@ -417,9 +424,12 @@ process_session() {
   local delete_status
   local deleted=false
   local delete_block_reason=""
+  local session_title=""
+  local delete_eligible=false
 
   shown="$(ad session show "$ref" --json 2>/dev/null || true)"
   session_id="$(jq -r 'if type == "object" then .id // empty else empty end' <<<"$shown" 2>/dev/null || true)"
+  session_title="$(jq -r 'if type == "object" then .title // empty else empty end' <<<"$shown" 2>/dev/null || true)"
   tool_name="$(jq -r 'if type == "object" then .tool // "" else "" end' <<<"$shown" 2>/dev/null || true)"
   tmux_session_name="$(jq -r 'if type == "object" then .tmux_session // "" else "" end' <<<"$shown" 2>/dev/null || true)"
   expected_provider_key="$(expected_provider_key_for_tool "$tool_name")"
@@ -477,6 +487,9 @@ process_session() {
   if has_expected_provider_resume_id "$provider_resume_ids" "$expected_provider_key"; then
     provider_guard_passed=true
   fi
+  if is_disposable_task_session "$role" "$session_title"; then
+    delete_eligible=true
+  fi
 
   if [[ -z "$shown" || -z "$session_id" ]]; then
     delete_status="not_found"
@@ -493,6 +506,7 @@ process_session() {
       --arg provider_resume_source "$provider_resume_source" \
       --arg delete_status "$delete_status" \
       --arg delete_block_reason "$delete_block_reason" \
+      --argjson delete_eligible "$delete_eligible" \
       --argjson apply_flag "$apply" \
       '{
         role: $role,
@@ -504,6 +518,7 @@ process_session() {
         provider_guard_expected_key: (if $expected_provider_key == "" then null else $expected_provider_key end),
         provider_guard_required: $provider_guard_required,
         provider_guard_passed: $provider_guard_passed,
+        delete_eligible: $delete_eligible,
         provider_resume_source: $provider_resume_source,
         raw_session_show: (if $raw_show == "" then null else $raw_show end),
         delete_applied: ($apply_flag == 1),
@@ -518,7 +533,11 @@ process_session() {
   fi
 
   if (( apply )); then
-    if [[ "$provider_guard_required" == "true" && "$provider_guard_passed" != "true" ]]; then
+    if [[ "$delete_eligible" != "true" ]]; then
+      delete_status="skipped_non_disposable_session"
+      delete_block_reason="non_disposable_session"
+      echo "session_preserved role=${role} ref=${ref} id=${session_id} title=${session_title} reason=${delete_block_reason}"
+    elif [[ "$provider_guard_required" == "true" && "$provider_guard_passed" != "true" ]]; then
       delete_status="blocked_missing_provider_session_id"
       delete_block_reason="missing_provider_session_id"
       blocked_delete_count=$((blocked_delete_count + 1))
@@ -546,6 +565,7 @@ process_session() {
     --arg provider_resume_source "$provider_resume_source" \
     --arg delete_status "$delete_status" \
     --arg delete_block_reason "$delete_block_reason" \
+    --argjson delete_eligible "$delete_eligible" \
     --argjson apply_flag "$apply" \
     --argjson deleted "$deleted" \
     '{
@@ -563,6 +583,7 @@ process_session() {
       provider_guard_expected_key: (if $expected_provider_key == "" then null else $expected_provider_key end),
       provider_guard_required: $provider_guard_required,
       provider_guard_passed: $provider_guard_passed,
+      delete_eligible: $delete_eligible,
       provider_resume_source: $provider_resume_source,
       session_show: $shown,
       delete_applied: ($apply_flag == 1),

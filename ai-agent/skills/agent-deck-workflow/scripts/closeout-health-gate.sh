@@ -161,7 +161,7 @@ if [[ -f "$archive_file" ]]; then
   archive_exists=true
   blocked_count="$(jq -r '[.sessions[]? | select(.delete_status == "blocked_missing_provider_session_id")] | length' "$archive_file" 2>/dev/null || echo 0)"
   delete_failed_count="$(jq -r '[.sessions[]? | select(.delete_status == "delete_failed")] | length' "$archive_file" 2>/dev/null || echo 0)"
-  residual_count="$(jq -r '[.sessions[]? | select(.found == true and (.delete_status != "deleted" and .delete_status != "not_found"))] | length' "$archive_file" 2>/dev/null || echo 0)"
+  residual_count="$(jq -r '[.sessions[]? | select(.found == true and (.delete_status != "deleted" and .delete_status != "not_found" and .delete_status != "skipped_non_disposable_session"))] | length' "$archive_file" 2>/dev/null || echo 0)"
 fi
 
 worker_session_count="$(count_worker_sessions)"

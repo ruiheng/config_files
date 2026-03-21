@@ -256,6 +256,7 @@ Planner closeout execution rule:
 3. optional-action failures must not roll back or block required closeout completion
 4. when `--integration-branch` is provided, `planner-closeout-batch.sh` is responsible for switching to that branch before merge if the worktree is in a safe state
 5. planner should not run git state-changing commands in parallel with `planner-closeout-batch.sh`
+6. `planner-closeout-batch.sh` should run closeout health gate by default; use `--skip-health-gate` only for explicit troubleshooting
 
 Planner post-acceptance interpretation rule:
 1. `closeout_delivered` means accepted review loop complete; normal closeout should proceed
@@ -370,8 +371,9 @@ After closeout acceptance (explicit user or unattended policy):
 5. if `--integration-branch` is provided and current branch differs, the script should switch to the integration branch itself; planner should not pre-stage a parallel `git switch`
 6. required in script: merge recorded `task_branch` into recorded `integration_branch`
 7. required in script: update progress record
-8. optional in script: hygiene (`prune-task-branches.sh`) and health gate
-9. optional in script: dispatch next task
+8. optional in script: hygiene (`prune-task-branches.sh`) and dispatch next task
+9. default in script: run closeout health gate and disposable worker cleanup
+10. reusable custom executor/reviewer sessions should be preserved; default cleanup should remove only disposable task-scoped sessions such as `executor-<task_id>` and `reviewer-<task_id>`
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
 When planner is dispatching from a known queued batch/plan, planner must proactively report queue progress before each new dispatch in `current/total` form (for example `3/15`).
@@ -384,8 +386,7 @@ Recommended planner invocation:
 ~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh \
   --task-id "<task_id>" \
   --task-branch "<task_branch>" \
-  --integration-branch "<integration_branch>" \
-  --run-health-gate
+  --integration-branch "<integration_branch>"
 ```
 
 If next-task dispatch is configured, pass it as `--next-dispatch-cmd "<command>"`.
