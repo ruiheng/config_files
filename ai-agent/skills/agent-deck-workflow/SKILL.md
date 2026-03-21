@@ -1,12 +1,12 @@
 ---
 name: agent-deck-workflow
-description: Human-led planner/executor/reviewer workflow protocol with agent-mailbox as the authoritative message layer and agent-deck used only for session wakeups.
+description: Human-led planner/executor/reviewer workflow protocol with an optional browser-tester worker, using agent-mailbox as the authoritative message layer and agent-deck only for wakeups.
 ---
 
 # Agent Deck Workflow
 
-Use this skill as the single source of truth for the three-role workflow:
-`planner` (long-lived), `executor` (per-task), `reviewer` (per-task).
+Use this skill as the single source of truth for the workflow roles:
+`planner` (long-lived), `executor` (per-task), `reviewer` (per-task), and optional `browser-tester` workers.
 
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
@@ -31,8 +31,8 @@ Default role/session rule:
 
 ## Scope
 
-- Workflow shape: one long-lived `planner`, per-task `executor` + `reviewer`
-- Default session mapping: planner, executor, and reviewer are separate sessions
+- Workflow shape: one long-lived `planner`, per-task `executor` + `reviewer`, plus optional `browser-tester` workers
+- Default session mapping: planner, executor, and reviewer are separate sessions; browser-tester is optional and requester-scoped
 - Same-session planner+reviewer is allowed only when explicitly assigned by workflow context
 - Runtime shape: single shared workspace
 - Governance: human-led; user confirmation gates remain required at stop/closeout points unless policy override is present
@@ -72,7 +72,7 @@ Session identity nuance:
 
 ### Role vs Session Identity
 
-- Default mapping is one distinct session per role: `planner_session_id`, `executor_session_id`, and `reviewer_session_id` should differ unless workflow context explicitly assigns an exception
+- Default mapping is one distinct session per active role: `planner_session_id`, `executor_session_id`, and `reviewer_session_id` should differ unless workflow context explicitly assigns an exception
 - A session may hold multiple roles for the same task only when workflow context explicitly assigns that multi-role mapping
 - `*_session_id` fields identify which session currently holds each role mapping
 - Tool/provider choice is separate from session identity
@@ -116,7 +116,7 @@ Send-body rule:
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
 
 Worker listener rule:
-- newly started executor/reviewer sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
+- newly started executor/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
 - for already active target sessions, sender may use `agent-deck session send` to nudge the target to run `check-workflow-mail`
 
 Inbox rule:
@@ -151,6 +151,8 @@ Then include normal Markdown sections. Required meaning:
 Required action names:
 - `execute_delegate_task`
 - `review_requested`
+- `browser_check_requested`
+- `browser_check_report`
 - `rework_required`
 - `user_requested_iteration`
 - `closeout_delivered`
@@ -158,12 +160,16 @@ Required action names:
 Sender invariants:
 - `execute_delegate_task`: sender is planner
 - `review_requested`: sender is executor
+- `browser_check_requested`: sender is the requesting workflow session
+- `browser_check_report`: sender is browser-tester
 - `rework_required`, `user_requested_iteration`, `closeout_delivered`: sender is reviewer
 - never default sender to planner for non-planner actions
 
 Action contract:
 - `execute_delegate_task`: planner starts delegated implementation
 - `review_requested`: executor asks reviewer to run full review and reviewer must proactively send the next workflow message
+- `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence
+- `browser_check_report`: browser-tester returns PASS / FAIL / UNKNOWN evidence to the original requester session
 - `rework_required`: reviewer blocks and sends must-fix follow-up to executor
 - `user_requested_iteration`: reviewer forwards user's iterate decision to executor and restates the required follow-ups in the message body
 - `closeout_delivered`: reviewer sends accepted closeout to planner; planner should treat the closeout body as planning input for residual follow-up tracking, not as a default reason to reopen accepted review
@@ -228,6 +234,8 @@ Apply the message action before `ack`.
 Action execution defaults after `recv`:
 - `execute_delegate_task`: start the delegated implementation flow immediately
 - `review_requested`: start review immediately
+- `browser_check_requested`: start browser validation immediately
+- `browser_check_report`: requester resumes decision-making immediately
 - `rework_required`: continue executor iteration immediately
 - `user_requested_iteration`: continue executor iteration immediately
 - `closeout_delivered`: start planner closeout interpretation immediately
@@ -272,10 +280,20 @@ Planner post-acceptance interpretation rule:
 
 Reviewer decision rules:
 1. If must-fix items exist, send `rework_required` to executor
-2. If no must-fix items exist and `workflow_policy.auto_accept_if_no_must_fix=true`, run `review-closeout` and send `closeout_delivered` to planner
-3. Otherwise, present `stop_recommended` to user and wait for user decision
-4. If user chooses closeout, run `review-closeout` and send `closeout_delivered` to planner
-5. If user chooses another iteration, send `user_requested_iteration` to executor
+2. If browser validation is required and current browser evidence is missing or stale, run `browser-test-request`
+3. If no must-fix items exist and `workflow_policy.auto_accept_if_no_must_fix=true`, run `review-closeout` and send `closeout_delivered` to planner
+4. Otherwise, present `stop_recommended` to user and wait for user decision
+5. If user chooses closeout, run `review-closeout` and send `closeout_delivered` to planner
+6. If user chooses another iteration, send `user_requested_iteration` to executor
+
+### Browser Tester Loop
+
+Browser tester rules:
+1. `browser-tester` does runtime verification only; it does not change code or decide acceptance
+2. use `agent-browser` as the primary validation tool
+3. return one `browser_check_report` to the original requester with PASS / FAIL / UNKNOWN plus evidence
+4. if environment or test preconditions are missing, return `UNKNOWN` instead of guessing
+5. after sending the report, browser-tester returns to `check-workflow-mail wait=True` when expecting more workflow mail
 
 ### Reviewer Default
 
@@ -333,7 +351,7 @@ Use stable naming:
 - `.agent-artifacts/` is for non-message supplemental material only; workflow should not create Markdown handoff artifacts as the default transport
 - `executor_session_ref` / `reviewer_session_ref` may be planned before creation; resolve them to real `*_session_id` values before mailbox addressing
 
-## Human-Led Three-Role Flow
+## Human-Led Core Flow
 
 ### 1) Planner Starts Task
 
@@ -364,7 +382,18 @@ Reviewer chooses one branch:
 - if `workflow_policy.auto_accept_if_no_must_fix=true`, reviewer may skip waiting and run closeout
 - in human-gated mode, request manual UI confirmation when required by policy
 
-### 4) Planner Closeout Batch (After Acceptance)
+3. `browser_check_requested`
+- send to browser-tester
+- use when runtime browser evidence is required before acceptance
+- requester waits for one `browser_check_report`
+
+### 4) Browser Tester Loop
+
+- browser-tester runs the requested browser flow with `agent-browser`
+- browser-tester sends `browser_check_report` back to the requester
+- requester interprets the report and chooses the next step
+
+### 5) Planner Closeout Batch (After Acceptance)
 
 After closeout acceptance (explicit user or unattended policy):
 1. inspect the accepted closeout mailbox body
@@ -407,16 +436,19 @@ Planner user-facing status contract for auto-dispatch:
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
 3. Planner `agent-deck launch`es a missing `executor-<task_id>` into `check-workflow-mail wait=True` or nudges the existing executor session.
 4. Executor implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
-5. Reviewer runs `review-code` and sends `rework_required` (if must-fix exists).
-6. Executor fixes and sends another `review_requested`.
-7. Reviewer approves, user confirms, reviewer runs `review-closeout` and sends `closeout_delivered`.
-8. Planner merges recorded `task_branch` into recorded `integration_branch` and updates progress.
+5. Reviewer runs `review-code`.
+6. If runtime browser validation is needed, reviewer runs `browser-test-request` and sends `browser_check_requested`.
+7. Browser-tester runs `browser-test` and sends `browser_check_report` back to the requester.
+8. The requester interprets the report and chooses the next step.
+9. Planner merges recorded `task_branch` into recorded `integration_branch` and updates progress.
 
 ## Role-Skill Mapping
 
 - Planner: `delegate-task`, `handoff`
 - Executor: `review-request`
-- Reviewer: `review-code`, `review-closeout`
+- Reviewer: `review-code`, `review-closeout`, `browser-test-request`
+- Planner or Executor may also use `browser-test-request` when runtime browser evidence is needed
+- Browser tester: `browser-test`
 - Roles are task-scoped; same-session multi-role assignment is an explicit exception and must be stated in workflow context rather than inferred from provider/tool choice
 
 ## Operating Rules

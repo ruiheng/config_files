@@ -14,7 +14,8 @@ This skill only defines review-code-specific behavior.
 
 Provide one of:
 1. the mailbox body from `review_requested`
-2. original task + implementation summary + code changes
+2. the mailbox body from `browser_check_report` plus current review context
+3. original task + implementation summary + code changes
 
 ## Input Completeness Gate (Required)
 
@@ -129,6 +130,8 @@ Skill-specific context resolution:
 - `current_session_id`: best-effort from one cached `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> `current_session_id` -> mailbox body `To` header -> ask
 - `executor_session_id`: explicit -> mailbox body `From` header -> ask
+- `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester-<task_id>`
+- `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 - `workflow_policy` (optional): explicit -> request context -> human-gated defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
@@ -148,9 +151,11 @@ Execution flow in Agent Deck mode:
 1. Produce the full review report in the format above
 2. Choose action:
    - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL
-   - `stop_recommended` if no must-fix remains
+   - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
+   - `stop_recommended` if no must-fix remains and browser validation is not required or already passed
 3. For `rework_required`, send the full review report as mailbox body to executor
-4. For `stop_recommended`:
+4. For `browser_check_requested`, run `browser-test-request`; the browser report will return to the requester session
+5. For `stop_recommended`:
    - if `auto_accept_if_no_must_fix=true`, run `review-closeout`
    - else present user decision summary and wait
    - in human-gated mode, request manual UI confirmation when required

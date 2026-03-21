@@ -7,6 +7,7 @@ This document describes the multi-agent workflow built around the skills in this
 - Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
 - Agent 2, **Executor** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
+- Agent 4, **Browser Tester** (`browser-test`): runtime validation agent, checks browser behavior with `agent-browser` and reports evidence back to the requester session
 - User: makes acceptance decisions when the workflow is human-gated
 
 ## Core Transport
@@ -29,12 +30,14 @@ This document describes the multi-agent workflow built around the skills in this
 4. Executor runs `review-request`, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
 5. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Executor, or
+   - `browser_check_requested` to Browser Tester, or
    - `stop_recommended` to the user decision point.
-6. If user wants another iteration, Reviewer sends `user_requested_iteration` to Executor.
-7. Repeat until the user decides quality is acceptable, or policy auto-accepts.
-8. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
-9. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
-10. Executor and Reviewer can be fully exited.
+6. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
+7. If user wants another iteration, Reviewer sends `user_requested_iteration` to Executor.
+8. Repeat until the user decides quality is acceptable, or policy auto-accepts.
+9. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
+10. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
+11. Executor, Reviewer, and Browser Tester can be fully exited.
 
 ## Flow Diagram
 
@@ -42,6 +45,9 @@ This document describes the multi-agent workflow built around the skills in this
 flowchart TD
     P[Planner] -->|mailbox: execute_delegate_task| E[Executor]
     E -->|mailbox: review_requested| R[Reviewer]
+    R -->|mailbox: browser_check_requested| B[Browser Tester]
+    X[Requester] -->|mailbox: browser_check_requested| B
+    B -->|mailbox: browser_check_report| X
     R -->|review result| DEC{Quality Accepted?}
     DEC -- No --> E
     DEC -- Yes --> R
@@ -53,6 +59,7 @@ flowchart TD
 ## Operational Notes
 
 - `review-code` remains the authoritative full review output
+- `browser-test` is runtime evidence only; acceptance stays with whichever role requested the check
 - `review-closeout` is the compact planner handoff after acceptance
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
@@ -64,8 +71,8 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `executor-<task_id>` and `reviewer-<task_id>` per task.
-3. Keep executor/reviewer in `check-workflow-mail wait=True` when they are idle and expecting the next workflow step.
+2. Create `executor-<task_id>`, `reviewer-<task_id>`, and `browser-tester-<task_id>` per task when needed.
+3. Keep executor/reviewer/browser-tester in `check-workflow-mail wait=True` when they are idle and expecting the next workflow step.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
@@ -74,4 +81,6 @@ Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
 - Receiver wake handler: `check-workflow-mail` (`ai-agent/skills/check-workflow-mail/SKILL.md`)
+- Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)
+- Browser tester: `browser-test` (`ai-agent/skills/browser-test/SKILL.md`)
 - Agent Deck skill + docs bundle: `ai-agent/skills/agent-deck/SKILL.md` and `ai-agent/skills/agent-deck/references/`
