@@ -156,7 +156,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "delegate: <task_id> -> coder"`
    - `--body-file -`
-3. let the helper resolve the coder session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True` in the foreground, or nudge the existing active session after mailbox send
+3. let the helper resolve the coder session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `coder_session_id` in user-facing status
 
 Exact command shape:

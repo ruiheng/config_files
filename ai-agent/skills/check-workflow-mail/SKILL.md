@@ -10,9 +10,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 ## Mode
 
 - `wait=False` (default): check once and return immediately when no mail is waiting
-- `wait=True`: block on `recv --wait` until a message becomes claimable or the process is interrupted
-
-`wait=True` is a foreground-only mode. Do not run it in a background terminal, detached process, or parallel watcher.
+- `wait=True`: observe the inbox with `watch` until mail appears, then `recv` once to claim it
 
 ## Steps
 
@@ -20,7 +18,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 2. Derive inbox address as `agent-deck/<current_session_id>`
 3. Run one of these outside sandbox:
    - `wait=False`: `agent-mailbox recv --for agent-deck/<current_session_id> --yaml`
-   - `wait=True`: `agent-mailbox recv --for agent-deck/<current_session_id> --wait --yaml`
+   - `wait=True`: `agent-mailbox watch --for agent-deck/<current_session_id> --yaml`, then `agent-mailbox recv --for agent-deck/<current_session_id> --yaml`
 4. If no message is waiting, report that no workflow mail is available and stop
 5. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
@@ -32,8 +30,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 ## Rules
 
 - Treat the received mailbox body as executable workflow input
-- Run `wait=True` only in the foreground of the target session
-- Keep at most one active `wait=True` listener per session
+- `wait=True` should watch for mail first, then receive it once mail appears
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - Keep mailbox lifecycle commands outside sandbox
