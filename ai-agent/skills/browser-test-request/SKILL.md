@@ -40,7 +40,7 @@ Skill-specific context resolution:
 - `requester_role`: explicit -> mailbox/review context -> infer from current workflow stage -> default `requester`
 - `browser_tester_session_ref`: explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id`: explicit actual id -> resolved/created from `browser_tester_session_ref` before send
-- `browser_tester_tool`: explicit -> mailbox/review context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
+- `browser_tester_tool`: explicit -> mailbox/review context -> default `codex -m gpt-5.4 -c model_reasoning_effort="medium"`
 - `round`: explicit -> context -> default `1`
 
 Identity rules:
@@ -115,6 +115,12 @@ adwf-send-and-wake \
   --subject "browser check: <task_id> r<round>" \
   --body-file - \
   --json
+```
+
+Default browser tester agent command:
+
+```bash
+codex -m gpt-5.4 -c model_reasoning_effort="medium"
 ```
 
 Codex-style execution rule:

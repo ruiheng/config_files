@@ -29,6 +29,16 @@ Preferred commands:
 - `agent-browser errors`
 - `agent-browser screenshot`
 
+## First-Use Environment Check
+
+Before the first browser action in a workflow turn, run a minimal environment check:
+1. confirm `agent-browser` is available with `command -v agent-browser`
+2. run `agent-deck session current --json` once as best-effort context detection
+3. if that command succeeds, cache `.id` as `current_session_id` and reuse it for same-turn identity checks
+4. if it fails with `not in a tmux session` or similar, treat the run as outside agent-deck unless explicit workflow metadata says otherwise
+
+Do not re-run either check unless the execution context actually changed.
+
 ## Output Format
 
 Use this exact structure as the mailbox body:
@@ -77,19 +87,22 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body -> ask
-- `browser_tester_session_id`: explicit -> current session id -> mailbox body `To` header -> ask
+- `current_session_id`: best-effort from one cached `agent-deck session current --json`
+- `browser_tester_session_id`: explicit -> cached `current_session_id` -> mailbox body `To` header -> ask
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask
 - `requester_role`: explicit -> mailbox body `From` header -> default `requester`
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 
 Execution flow:
-1. execute the requested browser steps with `agent-browser`
+1. run the first-use environment check
+   - if `agent-browser` is unavailable, stop and report the blocker instead of improvising with another browser tool
+2. execute the requested browser steps with `agent-browser`
    - if the request explicitly allows browser-tester edits, it may modify display-adjacent code on the requested branch before rerunning browser validation
    - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
-2. collect runtime evidence
-3. produce one `browser_check_report`
-4. send it back to the requester with `adwf-send-and-wake --from-session-id "<browser_tester_session_id>" --to-session-id "<requester_session_id>" --subject "browser report: <task_id> r<round>" --body-file -`
-5. after sending, immediately use `check-workflow-mail wait=True`
+3. collect runtime evidence
+4. produce one `browser_check_report`
+5. send it back to the requester with `adwf-send-and-wake --from-session-id "<browser_tester_session_id>" --to-session-id "<requester_session_id>" --subject "browser report: <task_id> r<round>" --body-file -`
+6. after sending, immediately use `check-workflow-mail wait=True`
 
 Codex-style execution rule:
 - launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
@@ -102,6 +115,7 @@ Codex-style execution rule:
 - validate the requested browser behavior, not unrelated product areas
 - prefer the shortest path that proves or disproves the assertion
 - return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
+- if `agent-browser` is missing, or required session identity cannot be resolved from cached/current context plus explicit metadata, state that explicitly in the report or blocker message
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
