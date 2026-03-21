@@ -5,7 +5,7 @@ description: Generates a browser-check mailbox message for runtime page validati
 
 # Browser Test Request
 
-Generate a concise mailbox message that asks a browser-tester to validate a concrete browser flow with `agent-browser`.
+Generate a concise mailbox message that asks a browser-tester to validate one coherent browser test batch with `agent-browser`.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 This skill only defines browser-check-request-specific behavior.
@@ -63,7 +63,7 @@ Round: <round>
 [One-line browser-check summary]
 
 ## Goal
-[What runtime behavior must be verified]
+[What runtime behavior or feature area must be verified]
 
 ## Target
 - URL or route: [value]
@@ -79,6 +79,11 @@ Round: <round>
 ## Assertions
 - [expected visible result]
 - [expected network / console / error condition]
+
+## Test Points
+- [related scenario / assertion group 1]
+- [related scenario / assertion group 2]
+- [related edge case or regression check]
 
 ## Browser Tester Edit Permission
 - Allowed: [yes/no]
@@ -131,7 +136,9 @@ Codex-style execution rule:
 
 ## Rules
 
-- keep the request focused on one browser flow or one tight group of related checks
+- keep the request focused on one page, feature area, or one coherent validation batch
+- include all related test points for that batch in one request instead of splitting them into many tiny mailbox tasks
+- prefer a compact test matrix of related scenarios, states, and regressions over a module-style task breakdown
 - specify assertions, not just exploration goals
 - keep the body self-contained; browser-tester should not need workflow files
 - use a stable long-lived browser-tester session ref such as `browser-tester`

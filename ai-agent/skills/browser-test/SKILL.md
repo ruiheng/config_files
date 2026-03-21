@@ -99,7 +99,7 @@ Round: <round>
 PASS / FAIL / UNKNOWN
 
 ## Coverage
-[What flow or checks were actually exercised]
+[What batch of scenarios or checks were actually exercised]
 
 ## Findings
 - [finding or `None`]
@@ -156,8 +156,9 @@ Codex-style execution rule:
 
 ## Rules
 
-- validate the requested browser behavior, not unrelated product areas
-- prefer the shortest path that proves or disproves the assertion
+- validate the full requested browser test batch, not just one narrow sub-step and not unrelated product areas
+- prefer the shortest path that still covers the requested scenarios, assertions, and regression checks
+- when the request includes multiple related test points, report which ones were covered, which failed, and which remained unverified
 - return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
 - if `agent-browser` is missing, or required session identity cannot be resolved from cached/current context plus explicit metadata, state that explicitly in the report or blocker message
 - by default, do not change code from this role
