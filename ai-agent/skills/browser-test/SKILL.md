@@ -50,6 +50,12 @@ PASS / FAIL / UNKNOWN
 ## Findings
 - [finding or `None`]
 
+## Code Change Summary
+- Code changed: [yes/no]
+- Branch: [branch name or `N/A`]
+- Commit: [hash or `N/A`]
+- Files changed: [list or `None`]
+
 ## Evidence
 - Steps executed: [summary]
 - Console errors: [summary or `None`]
@@ -78,6 +84,7 @@ Skill-specific context resolution:
 
 Execution flow:
 1. execute the requested browser steps with `agent-browser`
+   - if the request explicitly allows browser-tester edits, it may modify display-adjacent code on the requested branch before rerunning browser validation
 2. collect runtime evidence
 3. produce one `browser_check_report`
 4. send it back to the requester with `adwf-send-and-wake --from-session-id "<browser_tester_session_id>" --to-session-id "<requester_session_id>" --subject "browser report: <task_id> r<round>" --body-file -`
@@ -94,6 +101,7 @@ Codex-style execution rule:
 - validate the requested browser behavior, not unrelated product areas
 - prefer the shortest path that proves or disproves the assertion
 - return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
-- do not change code from this role
+- by default, do not change code from this role
+- if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
 - when idle, stay in `check-workflow-mail wait=True` instead of exiting

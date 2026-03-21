@@ -59,7 +59,7 @@ flowchart TD
 ## Operational Notes
 
 - `review-code` remains the authoritative full review output
-- `browser-test` is runtime evidence only; acceptance stays with whichever role requested the check
+- `browser-test` is primarily runtime evidence; when explicitly allowed, Browser Tester may directly adjust display-adjacent code on its own branch before reporting back
 - `review-closeout` is the compact planner handoff after acceptance
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore

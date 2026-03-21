@@ -21,6 +21,8 @@ This skill only defines browser-check-request-specific behavior.
 - `target_url` or route
 - `steps`
 - `assertions`
+- optional `allow_display_adjacent_edits`
+- optional `browser_tester_branch`
 - optional `accounts_or_env`
 - optional `browser_tester_tool`
 - optional `round`
@@ -74,8 +76,16 @@ Round: <round>
 - [expected visible result]
 - [expected network / console / error condition]
 
+## Browser Tester Edit Permission
+- Allowed: [yes/no]
+- Branch: [branch name or `N/A`]
+- Scope: [display-adjacent only | read-only]
+
 ## Evidence To Return
 - Decision: PASS / FAIL / UNKNOWN
+- Code changed: [yes/no]
+- Branch / commit: [value or `N/A`]
+- Files changed: [list or `None`]
 - Findings with reproduction steps
 - Console and page errors summary
 - Screenshots only when they add evidence
@@ -116,3 +126,5 @@ Codex-style execution rule:
 - keep the body self-contained; browser-tester should not need workflow files
 - use a stable long-lived browser-tester session ref such as `browser-tester`
 - the report returns to the requester session, not to a fixed reviewer session
+- if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
+- browser-tester edits are only for display-adjacent code

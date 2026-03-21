@@ -168,7 +168,7 @@ Sender invariants:
 Action contract:
 - `execute_delegate_task`: planner starts delegated implementation
 - `review_requested`: coder asks reviewer to run full review and reviewer must proactively send the next workflow message
-- `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence
+- `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence; when the request explicitly allows it, browser-tester may directly modify display-adjacent code on its own branch before reporting back
 - `browser_check_report`: browser-tester returns PASS / FAIL / UNKNOWN evidence to the original requester session
 - `rework_required`: reviewer blocks and sends must-fix follow-up to coder
 - `user_requested_iteration`: reviewer forwards user's iterate decision to coder and restates the required follow-ups in the message body
@@ -290,6 +290,7 @@ Reviewer decision rules:
 
 Browser tester rules:
 1. `browser-tester` does runtime verification only; it does not change code or decide acceptance
+   - exception: when the request explicitly allows browser-tester edits for display-adjacent code, it may make those changes on its own branch
 2. use `agent-browser` as the primary validation tool
 3. treat browser-tester as a long-lived service session that keeps browser state warm across tasks
 4. return one `browser_check_report` to the original requester with PASS / FAIL / UNKNOWN plus evidence
@@ -388,6 +389,7 @@ Reviewer chooses one branch:
 3. `browser_check_requested`
 - send to browser-tester
 - use when runtime browser evidence is required before acceptance
+- request may explicitly allow browser-tester to directly modify display-adjacent code on its own branch
 - requester waits for one `browser_check_report`
 
 ### 4) Browser Tester Loop
