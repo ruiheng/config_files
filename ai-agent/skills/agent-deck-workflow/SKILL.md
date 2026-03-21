@@ -168,7 +168,7 @@ Sender invariants:
 
 Action contract:
 - `execute_delegate_task`: planner starts delegated implementation
-- `review_requested`: coder asks reviewer to run full review and reviewer must proactively send the next workflow message
+- `review_requested`: coder asks reviewer to run full review, includes the coder's already-run verification record, and reviewer must proactively send the next workflow message
 - `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence; when the request explicitly allows it, browser-tester may directly modify display-adjacent code on its own branch before reporting back
 - `browser_check_report`: browser-tester returns PASS / FAIL / UNKNOWN evidence to the original requester session
 - `rework_required`: reviewer blocks and sends must-fix follow-up to coder
@@ -185,6 +185,7 @@ Review-request continuity:
 - first `review_requested` to a reviewer session carries the full task and review context
 - later `review_requested` messages to that same reviewer session carry only the delta since the previous review round
 - if the reviewer session changes, resend the full review context to the new reviewer session
+- `review_requested` should carry a concise record of coder-run lint, build/link, compile/type-check, test, and other verification results so reviewer can usually avoid rerunning the same slow checks
 
 User-facing responses should provide readable decisions, not raw mailbox JSON.
 

@@ -162,6 +162,13 @@ Your job is to stop a weak patch from slipping through by looking for what the p
 - `path/to/file1` - [brief description of changes]
 - `path/to/file2` - [brief description of changes]
 
+## Checks Already Run
+- Lint: [command/result or `Not run`]
+- Build/Link: [command/result or `Not run`]
+- Compile/Type-check: [command/result or `Not run`]
+- Tests: [command/result or `Not run`]
+- Other verification: [manual/browser/scripted checks or `None`]
+
 ## Verification Evidence
 - Commands/Checks: [tests, type-check, lint, manual checks; if unknown write: Not provided]
 - Result Summary: [pass/fail/high-level outcomes; if unknown write: Not provided]
@@ -204,6 +211,13 @@ Round: <round>
 ## Files Changed Since Last Review
 - `path/to/file1` - [delta description]
 - `path/to/file2` - [delta description]
+
+## Checks Already Run Since Last Review
+- Lint: [new or rerun command/result or `No change`]
+- Build/Link: [new or rerun command/result or `No change`]
+- Compile/Type-check: [new or rerun command/result or `No change`]
+- Tests: [new or rerun command/result or `No change`]
+- Other verification: [new manual/browser/scripted checks or `No change`]
 
 ## Updated Verification Evidence
 - Commands/Checks: [only new or rerun checks relevant to this round]
@@ -258,6 +272,8 @@ Rules:
 - round `1` sends the full review request in mailbox body
 - later rounds to the same reviewer send delta only
 - if reviewer continuity changed, resend the full review request body
+- include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
+- for each recorded check, include enough command/result detail to show scope and outcome
 - use `reviewer-<task_id>` as a session ref until the helper resolves the real `reviewer_session_id`
 - use the exact command shape above when it already matches the task
 - let the helper decide whether this reviewer needs direct `agent-deck launch` or an active-session nudge

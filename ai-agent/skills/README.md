@@ -59,6 +59,7 @@ flowchart TD
 ## Operational Notes
 
 - `review-code` remains the authoritative full review output
+- `review-request` should record coder-run lint / build / compile / test results so reviewer can usually reuse them instead of rerunning the same slow checks
 - `browser-test` is primarily runtime evidence; when explicitly allowed, Browser Tester may directly adjust display-adjacent code on its own branch before reporting back
 - requester should provide browser-test login/auth/setup context whenever possible; Browser Tester may ask requester or user for missing access details
 - `review-closeout` is the compact planner handoff after acceptance

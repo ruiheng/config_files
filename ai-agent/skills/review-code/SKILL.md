@@ -63,6 +63,13 @@ Policy rules:
 - style/formatting (formatters)
 - comment/string typos
 
+## Verification Reuse Rule
+
+- Treat `Checks Already Run` in `review_requested` as the primary record of coder-run verification
+- Usually reuse recorded lint, build/link, compile/type-check, and test results instead of rerunning the same slow checks
+- Rerun only when the recorded evidence is missing, stale, too broad, too narrow, suspicious, or does not answer the actual review risk
+- When rerunning is necessary, prefer the narrowest command that answers the open question
+
 ## Output Format
 
 Use this exact structure as the full review report. When reviewer sends follow-up mail, the `Action:` line must match the outbound workflow action.
@@ -135,6 +142,7 @@ Skill-specific context resolution:
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 - `workflow_policy` (optional): explicit -> request context -> human-gated defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
+- `checks_already_run` (optional): explicit -> mailbox body -> use for rerun decisions
 
 Important identity clarification:
 - `current_session_id` is for sender validation and safety checks
