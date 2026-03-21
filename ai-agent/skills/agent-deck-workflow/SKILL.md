@@ -212,7 +212,7 @@ Rules:
 ### Receiver Contract
 
 When a workflow session is woken:
-1. run `agent-mailbox recv --for agent-deck/<current_session_id> --json` outside sandbox
+1. run `agent-mailbox recv --for agent-deck/<current_session_id> --yaml` outside sandbox
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately execute that workflow stage
 4. only read supplemental files when the body explicitly requires them

@@ -17,8 +17,8 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 1. Run `agent-deck session current --json` outside sandbox once and read `.id`
 2. Derive inbox address as `agent-deck/<current_session_id>`
 3. Run one of these outside sandbox:
-   - `wait=False`: `agent-mailbox recv --for agent-deck/<current_session_id> --json`
-   - `wait=True`: `agent-mailbox recv --for agent-deck/<current_session_id> --wait --json`
+   - `wait=False`: `agent-mailbox recv --for agent-deck/<current_session_id> --yaml`
+   - `wait=True`: `agent-mailbox recv --for agent-deck/<current_session_id> --wait --yaml`
 4. If no message is waiting, report that no workflow mail is available and stop
 5. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
