@@ -12,6 +12,8 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 - `wait=False` (default): check once and return immediately when no mail is waiting
 - `wait=True`: block on `recv --wait` until a message becomes claimable or the process is interrupted
 
+`wait=True` is a foreground-only mode. Do not run it in a background terminal, detached process, or parallel watcher.
+
 ## Steps
 
 1. Run `agent-deck session current --json` outside sandbox once and read `.id`
@@ -30,6 +32,8 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 ## Rules
 
 - Treat the received mailbox body as executable workflow input
+- Run `wait=True` only in the foreground of the target session
+- Keep at most one active `wait=True` listener per session
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - Keep mailbox lifecycle commands outside sandbox

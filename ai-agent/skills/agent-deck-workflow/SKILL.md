@@ -118,6 +118,8 @@ Send-body rule:
 Worker listener rule:
 - newly started coder/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
 - for already active target sessions, sender may use `agent-deck session send` to nudge the target to run `check-workflow-mail`
+- `check-workflow-mail wait=True` must run in the foreground of the target session; never start it in a background terminal, detached process, or parallel watcher
+- keep at most one active `check-workflow-mail wait=True` listener per session
 
 Inbox rule:
 - derive inbox address as `agent-deck/<session_id>`
@@ -201,7 +203,7 @@ For already active sessions:
 Recommended session-start instruction:
 
 ```text
-Use the check-workflow-mail skill now with wait=True. Wait for pending workflow mail for your current agent-deck session and execute its requested action.
+Use the check-workflow-mail skill now with wait=True in the foreground. Do not run it in a background terminal or detached process. Wait for pending workflow mail for your current agent-deck session and execute its requested action.
 ```
 
 Recommended active-session nudge:
