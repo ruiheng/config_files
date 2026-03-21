@@ -10,7 +10,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 ## Mode
 
 - `wait=False` (default): check once and return immediately when no mail is waiting
-- `wait=True`: observe the inbox with `watch` until mail appears, then `recv` once to claim it
+- `wait=True`: observe the inbox with `wait` until mail appears, then `recv` once to claim it
 
 ## Steps
 
@@ -18,7 +18,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 2. Derive inbox address as `agent-deck/<current_session_id>`
 3. Run one of these outside sandbox:
    - `wait=False`: `agent-mailbox recv --for agent-deck/<current_session_id> --yaml`
-   - `wait=True`: `agent-mailbox watch --for agent-deck/<current_session_id> --yaml`, then `agent-mailbox recv --for agent-deck/<current_session_id> --yaml`
+   - `wait=True`: `agent-mailbox wait --for agent-deck/<current_session_id> --yaml`, then `agent-mailbox recv --for agent-deck/<current_session_id> --yaml`
 4. If no message is waiting, report that no workflow mail is available and stop
 5. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
