@@ -105,7 +105,7 @@ Identity rules:
   2. create/use new reviewer session with requested tool
 
 Post-send behavior:
-- coder immediately uses `check-workflow-mail wait=True`
+- coder immediately uses `check-workflow-mail wait=True` in the foreground
 - coder does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
@@ -231,7 +231,7 @@ Workflow send sequence:
    - `--parent-session-id "<planner_session_id>"`
    - `--subject "review request: <task_id> r<round>"`
    - `--body-file -`
-3. let the helper resolve the reviewer session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
+3. let the helper resolve the reviewer session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True` in the foreground, or nudge the existing active session after mailbox send
 4. use the helper result as the authoritative `reviewer_session_id`
 
 Exact command shape:

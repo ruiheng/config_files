@@ -167,7 +167,7 @@ Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<coder_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
-- assume coder is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
+- assume coder is already waiting in `check-workflow-mail wait=True` in the foreground; if not, let the helper start it before send
 - in Codex-style environments, launch the helper in a background terminal / PTY session and write the review body to that session's stdin
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 - include enough evidence and fix guidance that coder can continue from the mailbox body alone
@@ -180,7 +180,7 @@ Mailbox body rules (`user_requested_iteration`):
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<coder_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
-- assume coder is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
+- assume coder is already waiting in `check-workflow-mail wait=True` in the foreground; if not, let the helper start it before send
 - in Codex-style environments, launch the helper in a background terminal / PTY session and write the iteration body to that session's stdin
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
@@ -196,7 +196,7 @@ When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-acc
 
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
-- After sending `rework_required` or `user_requested_iteration`, reviewer immediately uses `check-workflow-mail wait=True` when expecting the next workflow message
+- After sending `rework_required` or `user_requested_iteration`, reviewer immediately uses `check-workflow-mail wait=True` in the foreground when expecting the next workflow message
 - For `stop_recommended` with manual decision, wait for explicit user choice
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages

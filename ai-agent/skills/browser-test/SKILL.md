@@ -146,7 +146,7 @@ Execution flow:
 3. collect runtime evidence
 4. produce one `browser_check_report`
 5. send it back to the requester with `adwf-send-and-wake --from-session-id "<browser_tester_session_id>" --to-session-id "<requester_session_id>" --subject "browser report: <task_id> r<round>" --body-file -`
-6. after sending, immediately use `check-workflow-mail wait=True`
+6. after sending, immediately use `check-workflow-mail wait=True` in the foreground
 
 Codex-style execution rule:
 - launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
@@ -163,5 +163,5 @@ Codex-style execution rule:
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
-- when idle, stay in `check-workflow-mail wait=True` instead of exiting
+- when idle, stay in `check-workflow-mail wait=True` in the foreground instead of exiting
 - prefer requester-provided login/auth/setup context over re-discovering it from scratch

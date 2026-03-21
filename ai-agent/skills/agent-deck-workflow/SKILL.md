@@ -116,7 +116,7 @@ Send-body rule:
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
 
 Worker listener rule:
-- newly started coder/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
+- newly started coder/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` in the foreground before the sender queues mailbox work
 - for already active target sessions, sender may use `agent-deck session send` to nudge the target to run `check-workflow-mail`
 - `check-workflow-mail wait=True` must run in the foreground of the target session; never start it in a background terminal, detached process, or parallel watcher
 - keep at most one active `check-workflow-mail wait=True` listener per session
@@ -193,7 +193,7 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 For newly started coder/reviewer sessions:
 1. ensure the target session exists when the workflow expects it to exist
-2. `agent-deck launch` a missing target session with a natural-language instruction to run `check-workflow-mail wait=True`
+2. `agent-deck launch` a missing target session with a natural-language instruction to run `check-workflow-mail wait=True` in the foreground
 3. send the mailbox message
 
 For already active sessions:
@@ -244,8 +244,8 @@ Action execution defaults after `recv`:
 - only pause for user input when the message body explicitly requires a user decision
 
 Idle behavior:
-- when coder or reviewer is waiting for the next workflow message, use `check-workflow-mail wait=True` instead of relying on a later `agent-deck session send`
-- planner may also use `check-workflow-mail wait=True` when running unattended and waiting for workflow mail
+- when coder or reviewer is waiting for the next workflow message, use `check-workflow-mail wait=True` in the foreground instead of relying on a later `agent-deck session send`
+- planner may also use `check-workflow-mail wait=True` in the foreground when running unattended and waiting for workflow mail
 
 ### Error Handling and Diagnostics
 
@@ -255,7 +255,7 @@ If workflow send/worker-start fails, report concise stderr summary and run these
 3. Did mailbox send/recv/ack/release/fail return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
-If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow bug signal.
+If a newly started target did not enter `check-workflow-mail wait=True` in the foreground, treat that as a workflow bug signal.
 If an already active target missed the mailbox work, retry the `agent-deck session send` nudge instead of resending mailbox content.
 
 If closeout cleanup fails, include:
@@ -297,8 +297,8 @@ Browser tester rules:
 3. treat browser-tester as a long-lived service session that keeps browser state warm across tasks
 4. return one `browser_check_report` to the original requester with PASS / FAIL / UNKNOWN plus evidence
 5. if environment or test preconditions are missing, return `UNKNOWN` instead of guessing
-6. when browser-tester has no active request, it should be in `check-workflow-mail wait=True`
-7. after sending the report, browser-tester returns to `check-workflow-mail wait=True`
+6. when browser-tester has no active request, it should be in `check-workflow-mail wait=True` in the foreground
+7. after sending the report, browser-tester returns to `check-workflow-mail wait=True` in the foreground
 8. requester should provide required login, environment, and test data context in the request body whenever possible
 9. if required access or setup information is missing, browser-tester should first ask the requester session; browser-tester may ask the user directly when requester context is unavailable or user input is clearly required
 
@@ -365,14 +365,14 @@ Use stable naming:
 
 - planner prepares one mailbox message body for the coder
 - planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) inside that message body before sending
-- planner either starts coder into `check-workflow-mail wait=True` or nudges an already active coder, then queues the message to coder inbox
+- planner either starts coder into `check-workflow-mail wait=True` in the foreground or nudges an already active coder, then queues the message to coder inbox
 
 ### 2) Coder Implements and Requests Review
 
 - coder implements and commits first delivery
 - coder prepares one mailbox review request body for reviewer
-- coder either starts reviewer into `check-workflow-mail wait=True` or nudges an already active reviewer, then queues the message to reviewer inbox
-- coder enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
+- coder either starts reviewer into `check-workflow-mail wait=True` in the foreground or nudges an already active reviewer, then queues the message to reviewer inbox
+- coder enters `check-workflow-mail wait=True` in the foreground and does not proactively poll reviewer unless user asks
 
 ### 3) Reviewer Loop
 
@@ -443,7 +443,7 @@ Planner user-facing status contract for auto-dispatch:
 
 1. User asks: "Add login rate limiting".
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
-3. Planner `agent-deck launch`es a missing `coder-<task_id>` into `check-workflow-mail wait=True` or nudges the existing coder session.
+3. Planner `agent-deck launch`es a missing `coder-<task_id>` into `check-workflow-mail wait=True` in the foreground or nudges the existing coder session.
 4. Coder implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
 5. Reviewer runs `review-code`.
 6. If runtime browser validation is needed, reviewer runs `browser-test-request` and sends `browser_check_requested`.
@@ -463,8 +463,8 @@ Planner user-facing status contract for auto-dispatch:
 ## Operating Rules
 
 - keep the real workflow content in mailbox body
-- keep coder/reviewer in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
-- keep long-lived browser-tester sessions in `check-workflow-mail wait=True` whenever they are not actively executing a request
+- keep coder/reviewer in `check-workflow-mail wait=True` in the foreground when they are idle and waiting for the next workflow step
+- keep long-lived browser-tester sessions in `check-workflow-mail wait=True` in the foreground whenever they are not actively executing a request
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
 - resolve and record branch plan at delegate start, then reuse it consistently through closeout
