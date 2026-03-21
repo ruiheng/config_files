@@ -26,7 +26,7 @@ This document describes the multi-agent workflow built around the skills in this
 
 1. User asks Planner to prepare work.
 2. Planner runs `delegate-task`, starts Coder into `check-workflow-mail wait=True` when needed, or nudges the existing Coder session, then sends one delegate mailbox message.
-3. Coder implements changes and commits a delivery snapshot.
+3. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
 4. Coder runs `review-request` from that committed state, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
 5. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or

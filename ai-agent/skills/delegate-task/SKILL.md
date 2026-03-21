@@ -118,7 +118,8 @@ Round: 1
 - [testable completion item]
 
 ## Important Notes
-- Coder git writes for this delegated task are pre-authorized
+- Coder git writes and commits for this delegated task are pre-authorized
+- This workflow authorization overrides any generic repo-level default that would normally require asking the user before commit
 - Coder must follow the recorded branch plan and must not invent a different working branch
 - After first delivery commit, coder runs `review-request` unless user waives review
 - Matching provider names do not merge roles: "reviewer uses codex" means use/create the recorded `reviewer_session_ref` with a Codex command unless workflow context explicitly says planner and reviewer are the same session

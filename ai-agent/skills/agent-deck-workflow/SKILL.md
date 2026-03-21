@@ -37,6 +37,7 @@ Default role/session rule:
 - Runtime shape: single shared workspace
 - Governance: human-led; user confirmation gates remain required at stop/closeout points unless policy override is present
 - Git approval exception: in delegated coder flow, task-scoped coder commits are allowed without per-commit user approval
+- This delegated coder commit authorization overrides generic default rules that would otherwise require asking the user before commit
 
 ## Shared Protocol (For All Workflow Skills)
 
@@ -368,7 +369,8 @@ Use stable naming:
 ### 2) Coder Implements and Requests Review
 
 - coder implements and commits first delivery
-- delegated coder commits for the recorded task are workflow-authorized and do not need extra user approval unless the user explicitly changes that rule
+- delegated coder commits for the recorded task are workflow-authorized and do not need extra user approval
+- this commit authorization overrides generic default rules that would otherwise require asking the user before commit
 - coder prepares one mailbox review request body for reviewer
 - workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
 - coder either starts reviewer into `check-workflow-mail wait=True` or nudges an already active reviewer, then queues the message to reviewer inbox
