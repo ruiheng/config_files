@@ -29,6 +29,50 @@ Preferred commands:
 - `agent-browser errors`
 - `agent-browser screenshot`
 
+## Basic agent-browser Help
+
+Keep this basic CLI shape in mind while executing browser checks:
+
+```text
+agent-browser - fast browser automation CLI for AI agents
+
+Usage: agent-browser <command> [args] [options]
+
+Core Commands:
+  open <url>                 Navigate to URL
+  click <sel>                Click element (or @ref)
+  type <sel> <text>          Type into element
+  fill <sel> <text>          Clear and fill
+  press <key>                Press key (Enter, Tab, Control+a)
+  wait <sel|ms>              Wait for element or time
+  screenshot [path]          Take screenshot
+  snapshot                   Accessibility tree with refs (for AI)
+  eval <js>                  Run JavaScript
+  close                      Close browser
+
+Navigation:
+  back                       Go back
+  forward                    Go forward
+  reload                     Reload page
+
+Get Info:  agent-browser get <what> [selector]
+  text, html, value, attr <name>, title, url, count, box, styles, cdp-url
+
+Check State:  agent-browser is <what> <selector>
+  visible, enabled, checked
+
+Examples:
+  agent-browser open example.com
+  agent-browser snapshot -i
+  agent-browser click @e2
+  agent-browser fill @e3 "test@example.com"
+  agent-browser get text @e1
+  agent-browser screenshot --full
+  agent-browser wait --load networkidle
+```
+
+For browser-test work, default to `snapshot -i` to get stable element refs, then interact via `@e...` refs when possible.
+
 ## First-Use Environment Check
 
 Before the first browser action in a workflow turn, run a minimal environment check:
