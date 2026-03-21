@@ -85,6 +85,7 @@ Skill-specific context resolution:
 Execution flow:
 1. execute the requested browser steps with `agent-browser`
    - if the request explicitly allows browser-tester edits, it may modify display-adjacent code on the requested branch before rerunning browser validation
+   - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
 2. collect runtime evidence
 3. produce one `browser_check_report`
 4. send it back to the requester with `adwf-send-and-wake --from-session-id "<browser_tester_session_id>" --to-session-id "<requester_session_id>" --subject "browser report: <task_id> r<round>" --body-file -`
@@ -105,3 +106,4 @@ Codex-style execution rule:
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
 - when idle, stay in `check-workflow-mail wait=True` instead of exiting
+- prefer requester-provided login/auth/setup context over re-discovering it from scratch

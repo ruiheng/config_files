@@ -297,6 +297,8 @@ Browser tester rules:
 5. if environment or test preconditions are missing, return `UNKNOWN` instead of guessing
 6. when browser-tester has no active request, it should be in `check-workflow-mail wait=True`
 7. after sending the report, browser-tester returns to `check-workflow-mail wait=True`
+8. requester should provide required login, environment, and test data context in the request body whenever possible
+9. if required access or setup information is missing, browser-tester should first ask the requester session; browser-tester may ask the user directly when requester context is unavailable or user input is clearly required
 
 ### Reviewer Default
 

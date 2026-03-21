@@ -24,6 +24,8 @@ This skill only defines browser-check-request-specific behavior.
 - optional `allow_display_adjacent_edits`
 - optional `browser_tester_branch`
 - optional `accounts_or_env`
+- optional `login_or_auth`
+- optional `test_data_or_setup`
 - optional `browser_tester_tool`
 - optional `round`
 
@@ -67,6 +69,8 @@ Round: <round>
 - URL or route: [value]
 - Entry point: [how to reach it]
 - Accounts / env / flags: [value or `None`]
+- Login / auth: [credentials source, auth profile, or `Ask requester/user`]
+- Test data / setup: [seed data, fixtures, prerequisites, or `None`]
 
 ## Steps
 1. [step]
@@ -128,3 +132,4 @@ Codex-style execution rule:
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code
+- requester should provide required login, auth, environment, and test-data context whenever possible
