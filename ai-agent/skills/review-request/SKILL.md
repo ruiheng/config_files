@@ -74,12 +74,12 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> branch `task/<task_id>` -> delegated context -> ask
 - `planner_session_id`: explicit/context -> ask
-- `executor_session_id`: explicit -> current session id -> delegated context -> ask
+- `coder_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `reviewer_session_id`: explicit actual id -> delegated context actual id -> resolved/created from `reviewer_session_ref` before send
 - `workflow_policy` (optional): explicit -> delegated context -> omit
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
-- `executor_tool`: explicit -> delegated context -> default current AI tool
+- `coder_tool`: explicit -> delegated context -> default current AI tool
   - if user/context provides a full command with arguments, preserve it unchanged
   - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
   - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
@@ -97,16 +97,16 @@ Review-request continuity rule:
 - if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
 
 Identity rules:
-- `review_requested` sender must be active executor session id
+- `review_requested` sender must be active coder session id
 - resolve current session id once and reuse it for sender validation in the whole review-request turn
-- If detected current session id differs from resolved `executor_session_id`, stop and ask for clarification
+- If detected current session id differs from resolved `coder_session_id`, stop and ask for clarification
 - If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
   2. create/use new reviewer session with requested tool
 
 Post-send behavior:
-- executor immediately uses `check-workflow-mail wait=True`
-- executor does not proactively poll reviewer unless user explicitly asks
+- coder immediately uses `check-workflow-mail wait=True`
+- coder does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
 
@@ -117,7 +117,7 @@ Use this exact structure as the mailbox body:
 ```markdown
 Task: <task_id>
 Action: review_requested
-From: executor <executor_session_id>
+From: coder <coder_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: <round>
@@ -184,7 +184,7 @@ Use this structure:
 ```markdown
 Task: <task_id>
 Action: review_requested
-From: executor <executor_session_id>
+From: coder <coder_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: <round>
@@ -224,7 +224,7 @@ Preferred path: use the installed helper `adwf-send-and-wake`.
 Workflow send sequence:
 1. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
 2. run `adwf-send-and-wake` outside sandbox:
-   - `--from-session-id "<executor_session_id>"`
+   - `--from-session-id "<coder_session_id>"`
    - `--to-session-ref "<reviewer_session_ref>"`
    - `--ensure-target-title "<reviewer_session_ref>"`
    - `--ensure-target-cmd "<reviewer_tool>"`
@@ -238,7 +238,7 @@ Exact command shape:
 
 ```bash
 adwf-send-and-wake \
-  --from-session-id "<executor_session_id>" \
+  --from-session-id "<coder_session_id>" \
   --to-session-ref "<reviewer_session_ref>" \
   --ensure-target-title "<reviewer_session_ref>" \
   --ensure-target-cmd "<reviewer_tool>" \

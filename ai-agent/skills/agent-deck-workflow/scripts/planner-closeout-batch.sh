@@ -25,7 +25,7 @@ Options:
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
   --planner-session-id <id|title>  Planner session ref (default: planner)
-  --executor-session-id <id|title> Executor session ref (default: executor-<task_id>)
+  --coder-session-id <id|title>    Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
   --profile <name>                 Agent-deck profile (used by optional health gate)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
@@ -75,7 +75,7 @@ integration_branch=""
 artifact_root=".agent-artifacts"
 progress_file=""
 planner_session_ref="planner"
-executor_session_ref=""
+coder_session_ref=""
 reviewer_session_ref=""
 profile=""
 merge_mode="ff-only"
@@ -93,7 +93,7 @@ while [[ $# -gt 0 ]]; do
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --progress-file) progress_file="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
-    --executor-session-id) executor_session_ref="${2:-}"; shift 2 ;;
+    --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
@@ -125,8 +125,8 @@ fi
 if [[ -z "$progress_file" ]]; then
   progress_file="${artifact_root%/}/workflow-progress/progress.jsonl"
 fi
-if [[ -z "$executor_session_ref" ]]; then
-  executor_session_ref="executor-${task_id}"
+if [[ -z "$coder_session_ref" ]]; then
+  coder_session_ref="coder-${task_id}"
 fi
 if [[ -z "$reviewer_session_ref" ]]; then
   reviewer_session_ref="reviewer-${task_id}"
@@ -294,7 +294,7 @@ if (( run_health_gate )); then
       "$health_gate_script"
       --task-id "$task_id"
       --planner-session-id "$planner_session_ref"
-      --executor-session-id "$executor_session_ref"
+      --coder-session-id "$coder_session_ref"
       --reviewer-session-id "$reviewer_session_ref"
       --artifact-root "$artifact_root"
       --max-worker-sessions 2

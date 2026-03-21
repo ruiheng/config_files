@@ -71,7 +71,7 @@ Use this exact structure as the full review report. When reviewer sends follow-u
 Task: <task_id>
 Action: <rework_required | stop_recommended>
 From: reviewer <reviewer_session_id>
-To: executor <executor_session_id>
+To: coder <coder_session_id>
 Planner: <planner_session_id>
 Round: <round>
 
@@ -129,7 +129,7 @@ Skill-specific context resolution:
 - `planner_session_id`: explicit -> mailbox body -> ask
 - `current_session_id`: best-effort from one cached `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> `current_session_id` -> mailbox body `To` header -> ask
-- `executor_session_id`: explicit -> mailbox body `From` header -> ask
+- `coder_session_id`: explicit -> mailbox body `From` header -> ask
 - `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester-<task_id>`
 - `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
 - `round`: explicit -> mailbox body `Round` header -> default `1`
@@ -153,7 +153,7 @@ Execution flow in Agent Deck mode:
    - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
    - `stop_recommended` if no must-fix remains and browser validation is not required or already passed
-3. For `rework_required`, send the full review report as mailbox body to executor
+3. For `rework_required`, send the full review report as mailbox body to coder
 4. For `browser_check_requested`, run `browser-test-request`; the browser report will return to the requester session
 5. For `stop_recommended`:
    - if `auto_accept_if_no_must_fix=true`, run `review-closeout`
@@ -166,11 +166,11 @@ Mailbox subject (`rework_required`):
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
-- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
-- assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
+- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<coder_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
+- assume coder is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, launch the helper in a background terminal / PTY session and write the review body to that session's stdin
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
-- include enough evidence and fix guidance that executor can continue from the mailbox body alone
+- include enough evidence and fix guidance that coder can continue from the mailbox body alone
 
 Mailbox subject (`user_requested_iteration` after user chooses iterate):
 - `iteration requested: <task_id> r<round>`
@@ -178,9 +178,9 @@ Mailbox subject (`user_requested_iteration` after user chooses iterate):
 Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - keep `Action: user_requested_iteration`
-- include enough of the prior review findings that executor can continue without opening external workflow files
-- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
-- assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
+- include enough of the prior review findings that coder can continue without opening external workflow files
+- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<coder_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
+- assume coder is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, launch the helper in a background terminal / PTY session and write the iteration body to that session's stdin
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 

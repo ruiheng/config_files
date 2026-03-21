@@ -6,7 +6,7 @@ usage() {
 Closeout health gate for agent-deck workflow.
 
 This script runs one-shot post-closeout checks with minimal agent-side orchestration:
-1) archive+cleanup executor/reviewer sessions
+1) archive+cleanup coder/reviewer sessions
 2) verify cleanup result for this task
 3) verify global worker-session cap (to prevent unattended error accumulation)
 
@@ -16,7 +16,7 @@ Usage:
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)
   --planner-session-id <id|title>   Planner session ref (default: planner)
-  --executor-session-id <id|title>  Executor session ref (default: executor-<task_id>)
+  --coder-session-id <id|title>     Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
@@ -51,7 +51,7 @@ debug() {
 
 task_id=""
 planner_session_ref="planner"
-executor_session_ref=""
+coder_session_ref=""
 reviewer_session_ref=""
 artifact_root=".agent-artifacts"
 profile=""
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
-    --executor-session-id) executor_session_ref="${2:-}"; shift 2 ;;
+    --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
@@ -76,8 +76,8 @@ done
 [[ -n "$task_id" ]] || die "--task-id is required"
 [[ "$max_worker_sessions" =~ ^[0-9]+$ ]] || die "--max-worker-sessions must be a non-negative integer"
 
-if [[ -z "$executor_session_ref" ]]; then
-  executor_session_ref="executor-${task_id}"
+if [[ -z "$coder_session_ref" ]]; then
+  coder_session_ref="coder-${task_id}"
 fi
 if [[ -z "$reviewer_session_ref" ]]; then
   reviewer_session_ref="reviewer-${task_id}"
@@ -105,7 +105,7 @@ count_worker_sessions() {
     if type != "array" then
       -1
     else
-      [ .[] | select(((.title // "") | test("^(executor|reviewer)-"))) ] | length
+      [ .[] | select(((.title // "") | test("^(coder|reviewer)-"))) ] | length
     end
   ' <<<"$list_json" 2>/dev/null || echo "-1"
 }
@@ -135,7 +135,7 @@ cleanup_cmd=(
   "$cleanup_script"
   --task-id "$task_id"
   --planner-session-id "$planner_session_ref"
-  --executor-session-id "$executor_session_ref"
+  --coder-session-id "$coder_session_ref"
   --reviewer-session-id "$reviewer_session_ref"
   --artifact-root "$artifact_root"
   --apply

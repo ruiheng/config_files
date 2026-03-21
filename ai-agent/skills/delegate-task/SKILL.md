@@ -23,7 +23,7 @@ Before drafting the delegate message:
   - expected code change is narrow enough that splitting adds overhead instead of reducing risk
 - Delegate only when all of these are true:
   - task requires meaningful code modification, not just docs or prompts
-  - task has enough complexity, scope, or validation burden that a separate executor is useful
+  - task has enough complexity, scope, or validation burden that a separate coder is useful
   - delegated execution creates a clearer ownership boundary or lowers delivery risk
 - Check whether splitting is useful:
   - components can be implemented independently
@@ -58,21 +58,21 @@ Resolve by priority:
 - `start_branch`: detected current git branch when delegation begins -> explicit -> context -> ask
 - `integration_branch`: explicit -> context -> if `start_branch` is the intended landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
   - never assume `main`/`master`; branch names are evidence, not truth
-- `executor_session_ref`: explicit -> context -> default `executor-<task_id>`
-- `executor_session_id`: explicit actual id -> context actual id -> helper output after target resolution -> omit until known
+- `coder_session_ref`: explicit -> context -> default `coder-<task_id>`
+- `coder_session_id`: explicit actual id -> context actual id -> helper output after target resolution -> omit until known
 - `reviewer_session_ref`: explicit -> context -> default `reviewer-<task_id>`
 - `reviewer_session_id`: explicit actual id -> context actual id -> omit until known
 - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
   - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
-- `executor_tool`: explicit -> context -> default current AI tool
+- `coder_tool`: explicit -> context -> default current AI tool
   - if user/context provides a full command with arguments, preserve it unchanged
   - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
   - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
   - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
 - `reviewer_tool`: explicit -> context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
-  - `reviewer_tool` selects how the reviewer session is created/resumed; it does not collapse reviewer role into the current planner/executor session
-  - if planner/executor and reviewer all use Codex, still keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicitly requested in workflow context
+  - `reviewer_tool` selects how the reviewer session is created/resumed; it does not collapse reviewer role into the current planner/coder session
+  - if planner/coder and reviewer all use Codex, still keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicitly requested in workflow context
 - `workflow_policy` (optional): explicit -> context -> omit when not set
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 
@@ -84,7 +84,7 @@ Use this structure:
 Task: <task_id>
 Action: execute_delegate_task
 From: planner <planner_session_id>
-To: executor {{TO_SESSION_ID}}
+To: coder {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: 1
 
@@ -118,17 +118,17 @@ Round: 1
 - [testable completion item]
 
 ## Important Notes
-- Executor git writes for this delegated task are pre-authorized
-- Executor must follow the recorded branch plan and must not invent a different working branch
-- After first delivery commit, executor runs `review-request` unless user waives review
+- Coder git writes for this delegated task are pre-authorized
+- Coder must follow the recorded branch plan and must not invent a different working branch
+- After first delivery commit, coder runs `review-request` unless user waives review
 - Matching provider names do not merge roles: "reviewer uses codex" means use/create the recorded `reviewer_session_ref` with a Codex command unless workflow context explicitly says planner and reviewer are the same session
 
 ## Agent Deck Context
 - Planner session: [planner_session_id]
-- Executor session ref: [executor_session_ref]
-- Executor session id: {{TO_SESSION_ID}}
+- Coder session ref: [coder_session_ref]
+- Coder session id: {{TO_SESSION_ID}}
 - Reviewer session ref: [reviewer_session_ref]
-- Executor tool: [executor_tool]
+- Coder tool: [coder_tool]
 - Reviewer tool: [reviewer_tool]
 
 ## Workflow Policy
@@ -139,7 +139,7 @@ Round: 1
 ```
 
 Tool-routing rule:
-- If user specifies a full executor/reviewer command, persist it unchanged in the message body
+- If user specifies a full coder/reviewer command, persist it unchanged in the message body
 - If user specifies only provider preference (for example `claude`, `codex`, `gemini`), persist the normalized full command with recommended arguments
 
 ## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
@@ -147,28 +147,28 @@ Tool-routing rule:
 Preferred path: use the installed helper `adwf-send-and-wake`.
 
 Workflow send sequence:
-1. compose the body with `{{TO_SESSION_ID}}` placeholders where the real executor session id must appear
+1. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
 2. run `adwf-send-and-wake` outside sandbox:
    - `--from-session-id "<planner_session_id>"`
-   - `--to-session-ref "<executor_session_ref>"`
-   - `--ensure-target-title "<executor_session_ref>"`
-   - `--ensure-target-cmd "<executor_tool>"`
+   - `--to-session-ref "<coder_session_ref>"`
+   - `--ensure-target-title "<coder_session_ref>"`
+   - `--ensure-target-cmd "<coder_tool>"`
    - `--parent-session-id "<planner_session_id>"`
-   - `--subject "delegate: <task_id> -> executor"`
+   - `--subject "delegate: <task_id> -> coder"`
    - `--body-file -`
-3. let the helper resolve the executor session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
-4. use the helper result as the authoritative `executor_session_id` in user-facing status
+3. let the helper resolve the coder session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
+4. use the helper result as the authoritative `coder_session_id` in user-facing status
 
 Exact command shape:
 
 ```bash
 adwf-send-and-wake \
   --from-session-id "<planner_session_id>" \
-  --to-session-ref "<executor_session_ref>" \
-  --ensure-target-title "<executor_session_ref>" \
-  --ensure-target-cmd "<executor_tool>" \
+  --to-session-ref "<coder_session_ref>" \
+  --ensure-target-title "<coder_session_ref>" \
+  --ensure-target-cmd "<coder_tool>" \
   --parent-session-id "<planner_session_id>" \
-  --subject "delegate: <task_id> -> executor" \
+  --subject "delegate: <task_id> -> coder" \
   --body-file - \
   --json
 ```
@@ -180,11 +180,11 @@ Codex-style execution rule:
 - feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
 Recommended subject:
-- `delegate: <task_id> -> executor`
+- `delegate: <task_id> -> coder`
 
 Rules:
 - keep the full delegate brief in mailbox body
-- use `executor-<task_id>` and `reviewer-<task_id>` as session refs until the helper resolves real session ids
+- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the helper resolves real session ids
 - use the exact command shape above when it already matches the task
 - report target readiness only after the helper completes the full launch-or-detect/send/nudge path that applies
 - `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
@@ -196,9 +196,9 @@ After sending:
   - mailbox subject
   - one-line objective summary
   - selected `task_branch` / `integration_branch`
-  - selected `executor_session_id` / `reviewer_session_ref`
-  - selected `executor_tool` / `reviewer_tool`
-  - recipient inbox address (`agent-deck/<executor_session_id>`)
+  - selected `coder_session_id` / `reviewer_session_ref`
+  - selected `coder_tool` / `reviewer_tool`
+  - recipient inbox address (`agent-deck/<coder_session_id>`)
   - listener/send/nudge summary
 - Keep raw mailbox JSON internal unless user explicitly asks
 - If listener/send fails, report stderr summary and include shared diagnostics checklist from `agent-deck-workflow/SKILL.md`

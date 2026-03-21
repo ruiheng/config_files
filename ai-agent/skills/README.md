@@ -5,7 +5,7 @@ This document describes the multi-agent workflow built around the skills in this
 ## Roles
 
 - Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
-- Agent 2, **Executor** (implementation): executes tasks and applies code changes
+- Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
 - Agent 4, **Browser Tester** (`browser-test`): runtime validation agent, checks browser behavior with `agent-browser` and reports evidence back to the requester session
 - User: makes acceptance decisions when the workflow is human-gated
@@ -25,31 +25,31 @@ This document describes the multi-agent workflow built around the skills in this
 ## End-to-End Loop
 
 1. User asks Planner to prepare work.
-2. Planner runs `delegate-task`, starts Executor into `check-workflow-mail wait=True` when needed, or nudges the existing Executor session, then sends one delegate mailbox message.
-3. Executor implements changes.
-4. Executor runs `review-request`, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
+2. Planner runs `delegate-task`, starts Coder into `check-workflow-mail wait=True` when needed, or nudges the existing Coder session, then sends one delegate mailbox message.
+3. Coder implements changes.
+4. Coder runs `review-request`, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
 5. Reviewer runs `review-code` and sends either:
-   - `rework_required` back to Executor, or
+   - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
    - `stop_recommended` to the user decision point.
 6. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
-7. If user wants another iteration, Reviewer sends `user_requested_iteration` to Executor.
+7. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
 8. Repeat until the user decides quality is acceptable, or policy auto-accepts.
 9. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
 10. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
-11. Executor, Reviewer, and Browser Tester can be fully exited.
+11. Coder, Reviewer, and Browser Tester can be fully exited.
 
 ## Flow Diagram
 
 ```mermaid
 flowchart TD
-    P[Planner] -->|mailbox: execute_delegate_task| E[Executor]
-    E -->|mailbox: review_requested| R[Reviewer]
+    P[Planner] -->|mailbox: execute_delegate_task| C[Coder]
+    C -->|mailbox: review_requested| R[Reviewer]
     R -->|mailbox: browser_check_requested| B[Browser Tester]
     X[Requester] -->|mailbox: browser_check_requested| B
     B -->|mailbox: browser_check_report| X
     R -->|review result| DEC{Quality Accepted?}
-    DEC -- No --> E
+    DEC -- No --> C
     DEC -- Yes --> R
     R -->|mailbox: closeout_delivered| P
 
@@ -71,8 +71,8 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `executor-<task_id>`, `reviewer-<task_id>`, and `browser-tester-<task_id>` per task when needed.
-3. Keep executor/reviewer/browser-tester in `check-workflow-mail wait=True` when they are idle and expecting the next workflow step.
+2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `browser-tester-<task_id>` per task when needed.
+3. Keep coder/reviewer/browser-tester in `check-workflow-mail wait=True` when they are idle and expecting the next workflow step.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.

@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Archive task-session resume metadata, then optionally remove executor/reviewer sessions.
+Archive task-session resume metadata, then optionally remove coder/reviewer sessions.
 
 Usage:
   ./scripts/archive-and-remove-task-sessions.sh [options]
@@ -11,11 +11,11 @@ Usage:
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)
   --planner-session-id <id|title>   Planner session ref (default: planner)
-  --executor-session-id <id|title>  Executor session ref (default: executor-<task_id>)
+  --coder-session-id <id|title>     Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
-  --apply                        Remove executor/reviewer sessions after archiving
+  --apply                        Remove coder/reviewer sessions after archiving
   -h, --help                     Show help
 
 Outputs:
@@ -50,7 +50,7 @@ debug() {
 
 task_id=""
 planner_session_ref="planner"
-executor_session_ref=""
+coder_session_ref=""
 reviewer_session_ref=""
 artifact_root=".agent-artifacts"
 profile=""
@@ -60,7 +60,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
-    --executor-session-id) executor_session_ref="${2:-}"; shift 2 ;;
+    --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
@@ -72,8 +72,8 @@ done
 
 [[ -n "$task_id" ]] || die "--task-id is required"
 
-if [[ -z "$executor_session_ref" ]]; then
-  executor_session_ref="executor-${task_id}"
+if [[ -z "$coder_session_ref" ]]; then
+  coder_session_ref="coder-${task_id}"
 fi
 if [[ -z "$reviewer_session_ref" ]]; then
   reviewer_session_ref="reviewer-${task_id}"
@@ -597,7 +597,7 @@ process_session() {
   echo "session role=${role} ref=${ref} found=1 id=${session_id} delete_status=${delete_status}"
 }
 
-process_session "executor" "$executor_session_ref"
+process_session "coder" "$coder_session_ref"
 process_session "reviewer" "$reviewer_session_ref"
 
 sessions_json="$(jq -s '.' "$entries_file")"
