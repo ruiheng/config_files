@@ -164,6 +164,7 @@ Mailbox body rules (`rework_required`):
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
 - assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, launch the helper in a background terminal / PTY session and write the review body to that session's stdin
+- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 - include enough evidence and fix guidance that executor can continue from the mailbox body alone
 
 Mailbox subject (`user_requested_iteration` after user chooses iterate):
@@ -176,6 +177,7 @@ Mailbox body rules (`user_requested_iteration`):
 - send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<executor_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
 - assume executor is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
 - in Codex-style environments, launch the helper in a background terminal / PTY session and write the iteration body to that session's stdin
+- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
