@@ -6,7 +6,7 @@ description: Human-led planner/coder/reviewer workflow protocol with an optional
 # Agent Deck Workflow
 
 Use this skill as the single source of truth for the workflow roles:
-`planner` (long-lived), `coder` (per-task), `reviewer` (per-task), and optional `browser-tester` workers.
+`planner` (long-lived), `coder` (per-task), `reviewer` (per-task), and optional long-lived `browser-tester` workers.
 
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
@@ -31,8 +31,8 @@ Default role/session rule:
 
 ## Scope
 
-- Workflow shape: one long-lived `planner`, per-task `coder` + `reviewer`, plus optional `browser-tester` workers
-- Default session mapping: planner, coder, and reviewer are separate sessions; browser-tester is optional and requester-scoped
+- Workflow shape: one long-lived `planner`, per-task `coder` + `reviewer`, plus optional long-lived `browser-tester` sessions
+- Default session mapping: planner, coder, and reviewer are separate sessions; browser-tester is optional, shared, and requester-scoped
 - Same-session planner+reviewer is allowed only when explicitly assigned by workflow context
 - Runtime shape: single shared workspace
 - Governance: human-led; user confirmation gates remain required at stop/closeout points unless policy override is present
@@ -291,9 +291,11 @@ Reviewer decision rules:
 Browser tester rules:
 1. `browser-tester` does runtime verification only; it does not change code or decide acceptance
 2. use `agent-browser` as the primary validation tool
-3. return one `browser_check_report` to the original requester with PASS / FAIL / UNKNOWN plus evidence
-4. if environment or test preconditions are missing, return `UNKNOWN` instead of guessing
-5. after sending the report, browser-tester returns to `check-workflow-mail wait=True` when expecting more workflow mail
+3. treat browser-tester as a long-lived service session that keeps browser state warm across tasks
+4. return one `browser_check_report` to the original requester with PASS / FAIL / UNKNOWN plus evidence
+5. if environment or test preconditions are missing, return `UNKNOWN` instead of guessing
+6. when browser-tester has no active request, it should be in `check-workflow-mail wait=True`
+7. after sending the report, browser-tester returns to `check-workflow-mail wait=True`
 
 ### Reviewer Default
 
@@ -344,6 +346,7 @@ Use full recommended commands unless the user explicitly supplied a different fu
 Use stable naming:
 - coder session: `coder-<task_id>`
 - reviewer session: `reviewer-<task_id>`
+- browser-tester session: use a stable long-lived title such as `browser-tester`; do not default to `browser-tester-<task_id>`
 - inbox address: `agent-deck/<session_id>`
 - default dedicated task branch: `task/<task_id>`
 - default integration branch: planner's current branch at delegate creation when that branch is the intended landing line
@@ -455,6 +458,7 @@ Planner user-facing status contract for auto-dispatch:
 
 - keep the real workflow content in mailbox body
 - keep coder/reviewer in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
+- keep long-lived browser-tester sessions in `check-workflow-mail wait=True` whenever they are not actively executing a request
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
 - resolve and record branch plan at delegate start, then reuse it consistently through closeout

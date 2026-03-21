@@ -34,7 +34,7 @@ Skill-specific context resolution:
 - `planner_session_id`: explicit -> mailbox/review context -> omit when not available
 - `requester_session_id`: explicit -> current session id -> mailbox/review context -> ask
 - `requester_role`: explicit -> mailbox/review context -> infer from current workflow stage -> default `requester`
-- `browser_tester_session_ref`: explicit -> mailbox/review context -> default `browser-tester-<task_id>`
+- `browser_tester_session_ref`: explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id`: explicit actual id -> resolved/created from `browser_tester_session_ref` before send
 - `browser_tester_tool`: explicit -> mailbox/review context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
 - `round`: explicit -> context -> default `1`
@@ -114,5 +114,5 @@ Codex-style execution rule:
 - keep the request focused on one browser flow or one tight group of related checks
 - specify assertions, not just exploration goals
 - keep the body self-contained; browser-tester should not need workflow files
-- use `browser-tester-<task_id>` as a session ref until the helper resolves the real `browser_tester_session_id`
+- use a stable long-lived browser-tester session ref such as `browser-tester`
 - the report returns to the requester session, not to a fixed reviewer session

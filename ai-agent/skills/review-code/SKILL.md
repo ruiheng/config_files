@@ -130,7 +130,7 @@ Skill-specific context resolution:
 - `current_session_id`: best-effort from one cached `agent-deck session current --json`
 - `reviewer_session_id`: explicit -> `current_session_id` -> mailbox body `To` header -> ask
 - `coder_session_id`: explicit -> mailbox body `From` header -> ask
-- `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester-<task_id>`
+- `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 - `workflow_policy` (optional): explicit -> request context -> human-gated defaults

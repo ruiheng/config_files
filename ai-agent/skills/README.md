@@ -7,7 +7,7 @@ This document describes the multi-agent workflow built around the skills in this
 - Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
-- Agent 4, **Browser Tester** (`browser-test`): runtime validation agent, checks browser behavior with `agent-browser` and reports evidence back to the requester session
+- Agent 4, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - User: makes acceptance decisions when the workflow is human-gated
 
 ## Core Transport
@@ -71,8 +71,8 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `browser-tester-<task_id>` per task when needed.
-3. Keep coder/reviewer/browser-tester in `check-workflow-mail wait=True` when they are idle and expecting the next workflow step.
+2. Create `coder-<task_id>` and `reviewer-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
+3. Keep coder/reviewer in `check-workflow-mail wait=True` when they are idle; keep `browser-tester` in `check-workflow-mail wait=True` whenever it is not actively executing a request.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
