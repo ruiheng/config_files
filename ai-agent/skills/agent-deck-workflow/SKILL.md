@@ -168,7 +168,7 @@ Sender invariants:
 
 Action contract:
 - `execute_delegate_task`: planner starts delegated implementation
-- `review_requested`: coder asks reviewer to run full review, includes the coder's already-run verification record, and reviewer must proactively send the next workflow message
+- `review_requested`: coder asks reviewer to run full review from a delivery commit, includes the coder's already-run verification record, and reviewer must proactively send the next workflow message
 - `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence; when the request explicitly allows it, browser-tester may directly modify display-adjacent code on its own branch before reporting back
 - `browser_check_report`: browser-tester returns PASS / FAIL / UNKNOWN evidence to the original requester session
 - `rework_required`: reviewer blocks and sends must-fix follow-up to coder
@@ -368,7 +368,9 @@ Use stable naming:
 ### 2) Coder Implements and Requests Review
 
 - coder implements and commits first delivery
+- delegated coder commits for the recorded task are workflow-authorized and do not need extra user approval unless the user explicitly changes that rule
 - coder prepares one mailbox review request body for reviewer
+- workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
 - coder either starts reviewer into `check-workflow-mail wait=True` or nudges an already active reviewer, then queues the message to reviewer inbox
 - coder enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
 
