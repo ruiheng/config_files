@@ -28,7 +28,7 @@ Provide the full review report text.
 ## Output Mode (Fixed)
 
 - output directly in response
-- Agent Deck mode: also send the closeout summary to planner via `agent-mailbox`
+- Agent Deck mode: also deliver the closeout summary to planner through the workflow transport
 - keep output compact and copy/paste friendly
 - keep closeout in mailbox body instead of a generated Markdown handoff file
 

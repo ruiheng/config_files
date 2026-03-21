@@ -106,10 +106,11 @@ Authoritative transport:
 - read-only observation commands may run in parallel when safe (for example `watch`)
 
 Send-body rule:
+- for cross-session workflow delivery, use `adwf-send-and-wake`
+- use bare `agent-mailbox send` only when sender and receiver are the same current session
 - prefer `agent-mailbox send --body-file -` and feed the body through stdin
 - use a real file only when that file already exists independently and is intentionally the body source
-- in agent-tool environments, invoke `agent-mailbox send --body-file -` directly and write body via stdin
-- prefer `adwf-send-and-wake` for cross-session worker delivery; it hides stdin echo, uses `agent-deck launch` to prime missing sessions into `check-workflow-mail wait=True`, and then sends the mailbox message
+- in agent-tool environments, invoke `adwf-send-and-wake --body-file -` directly for cross-session delivery and write body via stdin
 - if the workflow body was generated in the current turn, pass it via stdin
 - in Codex-style agent environments, launch `adwf-send-and-wake --body-file -` in a background terminal / PTY session, then write the body to that session's stdin
 - if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
@@ -311,7 +312,7 @@ All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sa
 `agent-mailbox` is especially strict here: run it outside sandbox.
 When a workflow turn needs multiple mailbox state-mutating commands, execute them sequentially, never in parallel.
 Read-only observation commands may run in parallel when safe.
-For cross-session workflow dispatch, prefer the installed helper `adwf-send-and-wake`.
+For cross-session workflow dispatch, use the installed helper `adwf-send-and-wake`.
 When workflow commands create sessions via `--cmd`, use full commands instead of bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`

@@ -15,7 +15,7 @@ This document describes the multi-agent workflow built around the skills in this
 - `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
 - Workflow messages live in mailbox `subject` + `body`
 - When sending mailbox body text, prefer `agent-mailbox send --body-file -` and feed stdin directly
-- Prefer `adwf-send-and-wake` for cross-session workflow delivery
+- Use `adwf-send-and-wake` for cross-session workflow delivery
 - In Codex-style environments, launch `adwf-send-and-wake --body-file -` in a background terminal / PTY session and write body text to that session's stdin
 - Run every `agent-mailbox` command outside sandbox
 - Run mailbox state-mutating `agent-mailbox` commands serially, not in parallel
