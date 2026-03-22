@@ -54,6 +54,11 @@ delegate-task-*.md
 review-request-*.md
 .agent-artifacts/
 
+# local JS tooling artifacts
+node_modules/
+/package.json
+/bun.lock
+
 # nvim related
 
 .nvimlog
