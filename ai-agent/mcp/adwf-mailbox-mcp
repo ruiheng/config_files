@@ -420,7 +420,7 @@ function buildServer() {
     "workflow_recv",
     {
       description:
-        "Receive workflow mail for the bound session, or explicit addresses. With wait=true, first wait for mail to appear, then claim it once.",
+        "Receive workflow mail. Uses the bound session by default; pass addresses to override. With wait=true, wait for mail, then claim one message.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
         wait: z.boolean().optional(),
