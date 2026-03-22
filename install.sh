@@ -34,6 +34,7 @@ ALL_REPLACE=0
 
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
+WORKFLOW_MAILBOX_MCP_READY=0
 
 # Colors for output
 RED='\033[0;31m'
@@ -546,6 +547,48 @@ install_agent_browser() {
     return 1
 }
 
+install_workflow_mailbox_mcp_runtime() {
+    if [[ $WORKFLOW_MAILBOX_MCP_READY -eq 1 ]]; then
+        log_ok "workflow_mailbox MCP runtime already prepared"
+        return 0
+    fi
+
+    log_info "Checking workflow_mailbox MCP runtime..."
+
+    if ! ensure_required_command "node"; then
+        log_error "workflow_mailbox MCP requires node"
+        return 1
+    fi
+
+    if ! ensure_required_command "npm"; then
+        log_error "workflow_mailbox MCP requires npm"
+        return 1
+    fi
+
+    local mcp_dir="$SCRIPT_DIR/ai-agent/mcp"
+    local lockfile="$mcp_dir/package-lock.json"
+
+    if [[ ! -f "$lockfile" ]]; then
+        log_error "Missing workflow_mailbox MCP lockfile: $lockfile"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: npm ci --prefix $mcp_dir"
+        return 0
+    fi
+
+    log_info "Running: npm ci --prefix $mcp_dir"
+    if npm ci --prefix "$mcp_dir"; then
+        WORKFLOW_MAILBOX_MCP_READY=1
+        log_ok "Installed workflow_mailbox MCP dependencies"
+        return 0
+    fi
+
+    log_error "Failed to install workflow_mailbox MCP dependencies"
+    return 1
+}
+
 install_gemini_workflow_mailbox_mcp() {
     local launcher="$HOME/.local/bin/adwf-mailbox-mcp"
 
@@ -995,6 +1038,10 @@ install_claude_config() {
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
     link_file "ai-agent/mcp/adwf-mailbox-mcp" "$bin_dir/adwf-mailbox-mcp"
+    if ! install_workflow_mailbox_mcp_runtime; then
+        log_error "Failed to prepare workflow_mailbox MCP runtime for Claude"
+        return 1
+    fi
     install_claude_workflow_mailbox_mcp
 
     # Link statusline script
@@ -1095,6 +1142,11 @@ install_gemini_config() {
         log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
     fi
 
+    if ! install_workflow_mailbox_mcp_runtime; then
+        log_error "Failed to prepare workflow_mailbox MCP runtime for Gemini"
+        return 1
+    fi
+
     install_gemini_workflow_mailbox_mcp
 }
 
@@ -1124,6 +1176,11 @@ install_codex_config() {
         link_file "ai-agent/codex/rules/agent-deck-workflow.rules" "$codex_dir/rules/agent-deck-workflow.rules"
     else
         log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
+    fi
+
+    if ! install_workflow_mailbox_mcp_runtime; then
+        log_error "Failed to prepare workflow_mailbox MCP runtime for Codex"
+        return 1
     fi
 
     install_codex_workflow_mailbox_mcp
