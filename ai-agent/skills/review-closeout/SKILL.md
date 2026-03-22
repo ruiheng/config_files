@@ -1,6 +1,6 @@
 ---
 name: review-closeout
-description: Extracts a concise closeout summary from a full review report and, in Agent Deck mode, sends it to planner through agent-mailbox.
+description: Extracts a concise closeout summary from a full review report and, in Agent Deck mode, sends it to planner through workflow transport.
 ---
 
 # Review Closeout
