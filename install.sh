@@ -546,6 +546,82 @@ install_agent_browser() {
     return 1
 }
 
+install_gemini_workflow_mailbox_mcp() {
+    local launcher="$HOME/.local/bin/adwf-mailbox-mcp"
+
+    if ! command -v gemini &>/dev/null; then
+        log_warn "Skipping Gemini MCP install (gemini not found)"
+        return 0
+    fi
+
+    if gemini mcp list 2>/dev/null | grep -Fq "workflow_mailbox"; then
+        log_ok "Gemini MCP already configured: workflow_mailbox"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: gemini mcp add -s user workflow_mailbox $launcher"
+        return 0
+    fi
+
+    if gemini mcp add -s user workflow_mailbox "$launcher"; then
+        log_ok "Configured Gemini MCP: workflow_mailbox"
+        return 0
+    fi
+
+    log_error "Failed to configure Gemini MCP: workflow_mailbox"
+    return 1
+}
+
+install_codex_workflow_mailbox_mcp() {
+    local launcher="$HOME/.local/bin/adwf-mailbox-mcp"
+
+    if ! command -v codex &>/dev/null; then
+        log_warn "Skipping Codex MCP install (codex not found)"
+        return 0
+    fi
+
+    if codex mcp get workflow_mailbox >/dev/null 2>&1; then
+        log_ok "Codex MCP already configured: workflow_mailbox"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: codex mcp add workflow_mailbox -- $launcher"
+        return 0
+    fi
+
+    if codex mcp add workflow_mailbox -- "$launcher"; then
+        log_ok "Configured Codex MCP: workflow_mailbox"
+        return 0
+    fi
+
+    log_error "Failed to configure Codex MCP: workflow_mailbox"
+    return 1
+}
+
+install_claude_workflow_mailbox_mcp() {
+    local launcher="$HOME/.local/bin/adwf-mailbox-mcp"
+
+    if ! command -v claude &>/dev/null; then
+        log_warn "Skipping Claude MCP install (claude not found)"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: claude mcp add -s user workflow_mailbox -- $launcher"
+        return 0
+    fi
+
+    if claude mcp add -s user workflow_mailbox -- "$launcher"; then
+        log_ok "Configured Claude MCP: workflow_mailbox"
+        return 0
+    fi
+
+    log_error "Failed to configure Claude MCP: workflow_mailbox"
+    return 1
+}
+
 suggest_lsof_install() {
     echo ""
     log_info "agent-deck requires 'lsof'. Install it with:"
@@ -919,6 +995,7 @@ install_claude_config() {
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
     link_file "ai-agent/mcp/adwf-mailbox-mcp" "$bin_dir/adwf-mailbox-mcp"
+    install_claude_workflow_mailbox_mcp
 
     # Link statusline script
     link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
@@ -1017,6 +1094,8 @@ install_gemini_config() {
     else
         log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
     fi
+
+    install_gemini_workflow_mailbox_mcp
 }
 
 install_codex_skills() {
@@ -1046,6 +1125,8 @@ install_codex_config() {
     else
         log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
     fi
+
+    install_codex_workflow_mailbox_mcp
 }
 
 install_serena_config() {
