@@ -134,8 +134,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body -> ask
-- `current_session_id`: best-effort from one cached `agent-deck session current --json`
-- `reviewer_session_id`: explicit -> `current_session_id` -> mailbox body `To` header -> ask
+- `reviewer_session_id`: explicit -> mailbox body `To` header -> bound workflow session -> ask
 - `coder_session_id`: explicit -> mailbox body `From` header -> ask
 - `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
@@ -145,9 +144,7 @@ Skill-specific context resolution:
 - `checks_already_run` (optional): explicit -> mailbox body -> use for rerun decisions
 
 Important identity clarification:
-- `current_session_id` is for sender validation and safety checks
-- `planner_session_id` must come from explicit/context workflow metadata, not current-session detection
-- resolve `current_session_id` once and reuse it for the whole review turn
+- `planner_session_id` must come from explicit/context workflow metadata
 
 Default policy when missing:
 - `mode = "human_gated"`

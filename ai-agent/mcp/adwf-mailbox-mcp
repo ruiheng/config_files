@@ -15,13 +15,18 @@ const STATE = {
 };
 
 const DEFAULT_LISTENER_MESSAGE =
-  "Use the check-workflow-mail skill now with wait=True. " +
-  "Watch for pending workflow mail for your current agent-deck session, " +
+  "If workflow_mailbox is not bound yet, first run agent-deck session current --json and call workflow_bind_session for this session. Then use the check-workflow-mail skill now with wait=True. " +
+  "Watch for pending workflow mail, " +
   "then receive it and execute its requested action.";
 
 const DEFAULT_WAKE_MESSAGE =
   "Use the check-workflow-mail skill now. " +
-  "Receive the pending message for your current agent-deck session and execute its requested action.";
+  "Receive the pending message and execute its requested action.";
+
+const SERVER_INSTRUCTIONS =
+  "Bootstrap this MCP process once per agent-deck session. " +
+  "First run `agent-deck session current --json`, take the current session id, and call `workflow_bind_session`. " +
+  "Later `workflow_wait`, `workflow_recv`, and same-session `workflow_send` checks reuse that bound session until MCP state is lost.";
 
 function fail(message, data) {
   const error = new Error(message);
@@ -84,7 +89,7 @@ function mailboxAddresses(args) {
     };
   }
 
-  const sessionId = args.current_session_id || args.session_id || STATE.bound_session_id;
+  const sessionId = args.session_id || STATE.bound_session_id;
   if (!sessionId) {
     fail("no session_id provided and no bound workflow session is set");
   }
@@ -93,10 +98,6 @@ function mailboxAddresses(args) {
     addresses: [`agent-deck/${sessionId}`],
     resolvedSessionId: sessionId,
   };
-}
-
-function boundOrExplicitSessionId(args, field = "current_session_id") {
-  return args[field] || STATE.bound_session_id || null;
 }
 
 function resolveSessionShow(identifier) {
@@ -160,24 +161,20 @@ function buildServer() {
   const server = new McpServer({
     name: "workflow_mailbox",
     version: "0.2.0",
+    instructions: SERVER_INSTRUCTIONS,
   });
 
   server.registerTool(
     "workflow_bind_session",
     {
-      description:
-        "Bind one agent-deck session id into MCP server state so later workflow_wait/workflow_recv calls can omit it.",
+      description: "Bind one agent-deck session id into MCP server state.",
       inputSchema: {
-        session_id: z.string().optional(),
-        current_session_id: z.string().optional(),
+        session_id: z.string(),
         default_workdir: z.string().optional(),
       },
     },
-    async ({ session_id, current_session_id, default_workdir }) => {
-      const sessionId = session_id || current_session_id;
-      if (!sessionId) {
-        fail("session_id is required");
-      }
+    async ({ session_id, default_workdir }) => {
+      const sessionId = session_id;
       STATE.bound_session_id = sessionId;
       STATE.default_workdir = default_workdir || null;
       return makeToolResult({
@@ -191,7 +188,7 @@ function buildServer() {
   server.registerTool(
     "workflow_session_status",
     {
-      description: "Show the currently bound agent-deck session id stored in this MCP server.",
+      description: "Show the currently bound workflow session and default workdir stored in this MCP server.",
       inputSchema: {},
     },
     async () =>
@@ -207,7 +204,6 @@ function buildServer() {
       description: "Send one workflow mailbox message and perform the normal start-or-nudge delivery sequence.",
       inputSchema: {
         from_session_id: z.string(),
-        current_session_id: z.string().optional(),
         to_session_id: z.string().optional(),
         to_session_ref: z.string().optional(),
         ensure_target_title: z.string().optional(),
@@ -225,9 +221,9 @@ function buildServer() {
     },
     async (args) => {
       const fromSessionId = args.from_session_id;
-      const currentSessionId = boundOrExplicitSessionId(args);
+      const currentSessionId = STATE.bound_session_id;
       if (!currentSessionId) {
-        fail("workflow_send requires current_session_id or a prior workflow_bind_session");
+        fail("workflow_send requires a prior workflow_bind_session");
       }
 
       let toSessionId = args.to_session_id || null;
@@ -243,6 +239,9 @@ function buildServer() {
       const wakeDelaySeconds = args.wake_delay_seconds ?? 10;
 
       let createdTarget = false;
+
+      let body = args.body;
+      body = body.replaceAll("{{FROM_SESSION_ID}}", fromSessionId);
 
       if (!toSessionId && toSessionRef) {
         toSessionId = resolveSessionId(toSessionRef);
@@ -295,8 +294,6 @@ function buildServer() {
         toSessionRef = toSessionId;
       }
 
-      let body = args.body;
-      body = body.replaceAll("{{FROM_SESSION_ID}}", fromSessionId);
       body = body.replaceAll("{{TO_SESSION_ID}}", toSessionId);
       body = body.replaceAll("{{TO_SESSION_REF}}", toSessionRef);
 
@@ -365,7 +362,7 @@ function buildServer() {
 
       return makeToolResult({
         from_session_id: fromSessionId,
-        current_session_id: currentSessionId,
+        session_id: currentSessionId,
         to_session_id: toSessionId,
         to_session_ref: toSessionRef,
         created_target: createdTarget,
@@ -385,9 +382,8 @@ function buildServer() {
     "workflow_wait",
     {
       description:
-        "Observe whether workflow mail is available for the bound session, an explicit session, or explicit addresses without claiming it.",
+        "Observe whether workflow mail is available without claiming it.",
       inputSchema: {
-        current_session_id: z.string().optional(),
         session_id: z.string().optional(),
         addresses: z.array(z.string()).optional(),
         timeout: z.string().optional(),
@@ -407,13 +403,13 @@ function buildServer() {
       if (proc.status === 2) {
         return makeToolResult({
           status: "no_message",
-          current_session_id: resolvedSessionId,
+          session_id: resolvedSessionId,
           addresses,
         });
       }
       return makeToolResult({
         status: "message_available",
-        current_session_id: resolvedSessionId,
+        session_id: resolvedSessionId,
         addresses,
         delivery: parseJsonOutput(proc.stdout, "agent-mailbox wait"),
       });
@@ -424,10 +420,8 @@ function buildServer() {
     "workflow_recv",
     {
       description:
-        "Receive workflow mail for the bound session, an explicit session, or explicit addresses. With wait=true, first wait for mail to appear, then claim it once.",
+        "Receive workflow mail for the bound session, or explicit addresses. With wait=true, first wait for mail to appear, then claim it once.",
       inputSchema: {
-        current_session_id: z.string().optional(),
-        session_id: z.string().optional(),
         addresses: z.array(z.string()).optional(),
         wait: z.boolean().optional(),
         timeout: z.string().optional(),
@@ -458,13 +452,13 @@ function buildServer() {
       if (proc.status === 2) {
         return makeToolResult({
           status: "no_message",
-          current_session_id: resolvedSessionId,
+          session_id: resolvedSessionId,
           addresses,
         });
       }
       return makeToolResult({
         status: "received",
-        current_session_id: resolvedSessionId,
+        session_id: resolvedSessionId,
         addresses,
         delivery: parseJsonOutput(proc.stdout, "agent-mailbox recv"),
       });

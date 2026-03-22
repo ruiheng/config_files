@@ -77,11 +77,7 @@ For browser-test work, default to `snapshot -i` to get stable element refs, then
 
 Before the first browser action in a workflow turn, run a minimal environment check:
 1. confirm `agent-browser` is available with `command -v agent-browser`
-2. run `agent-deck session current --json` once as best-effort context detection
-3. if that command succeeds, cache `.id` as `current_session_id` and reuse it for same-turn identity checks
-4. if it fails with `not in a tmux session` or similar, treat the run as outside agent-deck unless explicit workflow metadata says otherwise
-
-Do not re-run either check unless the execution context actually changed.
+2. confirm `workflow_mailbox` is already bound for this session, or bind it before sending the report
 
 ## Output Format
 
@@ -131,8 +127,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body -> ask
-- `current_session_id`: best-effort from one cached `agent-deck session current --json`
-- `browser_tester_session_id`: explicit -> cached `current_session_id` -> mailbox body `To` header -> ask
+- `browser_tester_session_id`: explicit -> mailbox body `To` header -> bound workflow session -> ask
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask
 - `requester_role`: explicit -> mailbox body `From` header -> default `requester`
 - `round`: explicit -> mailbox body `Round` header -> default `1`
@@ -159,7 +154,7 @@ Execution flow:
 - prefer the shortest path that still covers the requested scenarios, assertions, and regression checks
 - when the request includes multiple related test points, report which ones were covered, which failed, and which remained unverified
 - return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
-- if `agent-browser` is missing, or required session identity cannot be resolved from cached/current context plus explicit metadata, state that explicitly in the report or blocker message
+- if `agent-browser` is missing, or required session identity cannot be resolved from explicit metadata plus bound workflow session, state that explicitly in the report or blocker message
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence

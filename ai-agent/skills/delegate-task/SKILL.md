@@ -48,13 +48,11 @@ Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
 - Skill-specific planner identity rule:
   - delegate creator is planner sender
-  - `planner_session_id` is expected to equal detected `current_session_id`
-  - if explicit/context planner id conflicts with detected current session id, ask user to confirm before sending
-  - resolve `current_session_id` once and reuse it for the whole delegate-task turn
+  - `planner_session_id` should resolve from explicit/context workflow metadata or the bound workflow session
 
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
-- `planner_session_id`: detected current session id -> explicit -> context -> ask
+- `planner_session_id`: explicit -> context -> bound workflow session -> ask
 - `start_branch`: detected current git branch when delegation begins -> explicit -> context -> ask
 - `integration_branch`: explicit -> context -> if `start_branch` is the intended landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
   - never assume `main`/`master`; branch names are evidence, not truth

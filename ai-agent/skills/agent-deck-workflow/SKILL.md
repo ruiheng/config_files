@@ -12,7 +12,7 @@ Core transport rule:
 - `agent-mailbox` carries the real workflow message
 - `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
 - use the `workflow_mailbox` MCP tools as the default transport interface
-- receiver-side wake handling should go through `check-workflow-mail`
+- use `check-workflow-mail` for receiver-side wake handling
 
 Default role/session rule:
 - use one distinct session per role
@@ -49,14 +49,9 @@ Enter Agent Deck mode when any condition matches:
 2. inbound mailbox body already carries workflow metadata
 3. user explicitly asks for agent-deck workflow
 
-`agent-deck session current --json` is best-effort context only and must run in host shell.
-If it fails, continue with explicit/context metadata.
-
-Current-session caching rule:
-- resolve `current_session_id` at most once per workflow turn
-- bind that session id into the `workflow_mailbox` MCP server once with `workflow_bind_session`
-- reuse that cached value for sender validation, inbox derivation, and same-session checks
-- re-run `agent-deck session current --json` only when the execution context actually changed
+Session binding rule:
+- bind `workflow_mailbox` once when the session starts
+- reuse that bound session for later `workflow_wait`, `workflow_recv`, and same-session checks
 
 ### Context Resolution Priority
 
@@ -65,12 +60,8 @@ Use this priority chain for each field:
 
 Session identity nuance:
 - `planner_session_id` must come from explicit/context workflow metadata
-- `current_session_id` is used for sender identity verification and role safety checks
 - before identity comparisons, resolve all session refs/titles to UUIDs:
   - explicit refs: `agent-deck session show <ref> --json | jq -r '.id'`
-  - current session: cached result from one `agent-deck session current --json`
-- exception (`delegate-task` only): planner sender legitimately equals current session, so `planner_session_id` may start from detected `current_session_id`
-- in all other skills, `current_session_id` is not a replacement source for `planner_session_id`
 - use `*_session_ref` for planned worker titles before a real session exists; only write `*_session_id` when you actually have the resolved session id
 
 ### Role vs Session Identity
@@ -111,7 +102,7 @@ Preferred transport interface:
 - `workflow_fail`
 
 Transport rules:
-- call `workflow_bind_session` once after resolving `current_session_id`
+- bind `workflow_mailbox` once when the session starts
 - use `workflow_send` for cross-session workflow delivery
 - use `workflow_recv` to claim mail
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
@@ -232,11 +223,11 @@ Idle behavior:
 
 If workflow send/worker-start fails, report concise stderr summary and run these checks:
 1. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
-2. Is command running in the expected tmux/session context? (reuse cached `current_session_id`; only re-run `agent-deck session current --json` if context may have changed)
+2. Is command running in the expected workflow session context?
 3. Did `workflow_send` / `workflow_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
-If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow bug signal.
+If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow issue.
 If an already active target missed the mailbox work, retry the nudge path instead of resending mailbox content.
 
 If closeout cleanup fails, include:

@@ -98,8 +98,7 @@ Review-request continuity rule:
 
 Identity rules:
 - `review_requested` sender must be active coder session id
-- resolve current session id once and reuse it for sender validation in the whole review-request turn
-- If detected current session id differs from resolved `coder_session_id`, stop and ask for clarification
+- use the bound workflow session for sender validation
 - If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
   2. create/use new reviewer session with requested tool

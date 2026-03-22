@@ -1,11 +1,11 @@
 ---
 name: check-workflow-mail
-description: Receive pending workflow mail for the current agent-deck session and immediately execute the requested workflow action.
+description: Receive pending workflow mail and immediately execute the requested workflow action.
 ---
 
 # Check Workflow Mail
 
-Use this skill to turn a wakeup nudge into actual workflow execution.
+Use this skill to turn a startup bind or wakeup nudge into actual workflow execution.
 
 ## Mode
 
@@ -14,18 +14,17 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 
 ## Steps
 
-1. Run `agent-deck session current --json` outside sandbox once and read `.id`
-2. Bind that id once into the `workflow_mailbox` MCP server with `workflow_bind_session`
-3. Run one of these MCP calls:
+1. If `workflow_mailbox` is not already bound, read `session_id` from the startup context and call `workflow_bind_session`
+2. Run one of these MCP calls:
    - `wait=False`: `workflow_recv`
    - `wait=True`: `workflow_wait`, then `workflow_recv`
-4. If no message is waiting, report that no workflow mail is available and stop
-5. If a message is returned:
+3. If no message is waiting, report that no workflow mail is available and stop
+4. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
    - execute that workflow stage immediately
-6. Only `workflow_ack` after the message has been incorporated into working state
-7. If the message cannot be acted on yet, use `workflow_release`, `workflow_defer`, or `workflow_fail` instead of silently dropping it
+5. Only `workflow_ack` after the message has been incorporated into working state
+6. If the message cannot be acted on yet, use `workflow_release`, `workflow_defer`, or `workflow_fail` instead of silently dropping it
 
 ## Rules
 
