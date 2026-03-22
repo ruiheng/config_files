@@ -28,16 +28,18 @@ The server is stdio-based and exposes these tools:
 
 `workflow_bind_session`
 - store one caller-provided `agent-deck` session id inside MCP server state
+- optionally store a `default_workdir` for later target creation
 - later `workflow_wait` / `workflow_recv` can omit session id arguments
 
 `workflow_session_status`
-- show the currently bound session id
+- show the currently bound session id and default workdir
 
 `workflow_send`
 - performs the normal workflow delivery sequence inside MCP
 - accepts a structured body string instead of shell command assembly
 - handles target resolution, optional target creation, mailbox send, and active-session nudge
 - uses the bound session id, or explicit `current_session_id`, to decide whether the target is local or needs wakeup
+- uses explicit `workdir` or bound `default_workdir` when creating a new target session
 
 `workflow_wait`
 - checks whether mail is available for the bound session, an explicit session, or explicit addresses
