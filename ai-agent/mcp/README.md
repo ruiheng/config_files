@@ -37,6 +37,7 @@ The server is stdio-based and exposes these tools:
 - performs the normal workflow delivery sequence inside MCP
 - accepts a structured body string instead of shell command assembly
 - handles target resolution, optional target creation, mailbox send, and active-session nudge
+- uses the bound session id, or explicit `current_session_id`, to decide whether the target is local or needs wakeup
 
 `workflow_wait`
 - checks whether mail is available for the bound session, an explicit session, or explicit addresses
@@ -82,3 +83,4 @@ claude mcp add -s user workflow_mailbox -- ~/.local/bin/adwf-mailbox-mcp
 - `workflow_send` no longer depends on the external shell helper.
 - `workflow_recv` and lifecycle tools call `agent-mailbox` directly.
 - Intended usage is bind-first: call `workflow_bind_session` once, then reuse that MCP server state for later `workflow_wait` / `workflow_recv`.
+- `workflow_send` also expects that bound session context unless `current_session_id` is passed explicitly.

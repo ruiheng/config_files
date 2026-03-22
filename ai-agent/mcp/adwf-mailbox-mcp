@@ -112,6 +112,16 @@ def mailbox_addresses(args: dict[str, Any]) -> tuple[list[str], str | None]:
     return [f"agent-deck/{session_id}"], session_id
 
 
+def bound_or_explicit_session_id(args: dict[str, Any], *, field: str = "current_session_id") -> str | None:
+    session_id = args.get(field)
+    if session_id is not None and not isinstance(session_id, str):
+        raise MCPError(f"{field} must be a string")
+    if session_id:
+        return session_id
+    bound = STATE.get("bound_session_id")
+    return bound if isinstance(bound, str) and bound else None
+
+
 def resolve_session_show(identifier: str) -> dict[str, Any] | None:
     proc = subprocess.run(
         ["agent-deck", "session", "show", identifier, "--json"],
@@ -185,6 +195,7 @@ def tool_workflow_send(args: dict[str, Any]) -> dict[str, Any]:
             raise MCPError(f"{key} is required and must be a non-empty string")
 
     from_session_id = args["from_session_id"]
+    current_session_id = bound_or_explicit_session_id(args)
     to_session_id = args.get("to_session_id")
     to_session_ref = args.get("to_session_ref")
     ensure_target_title = args.get("ensure_target_title")
@@ -219,6 +230,8 @@ def tool_workflow_send(args: dict[str, Any]) -> dict[str, Any]:
         raise MCPError("wake_message must be a non-empty string")
     if not isinstance(wake_delay_seconds, int) or wake_delay_seconds < 0:
         raise MCPError("wake_delay_seconds must be a non-negative integer")
+    if not current_session_id:
+        raise MCPError("workflow_send requires current_session_id or a prior workflow_bind_session")
 
     created_target = False
 
@@ -275,7 +288,7 @@ def tool_workflow_send(args: dict[str, Any]) -> dict[str, Any]:
     wakeup_status = "skipped_same_session"
     nudge_after_send = False
 
-    if from_session_id != to_session_id:
+    if current_session_id != to_session_id:
         if created_target:
             start_status = "started"
             listener_status = "started_waiting"
@@ -329,6 +342,7 @@ def tool_workflow_send(args: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "from_session_id": from_session_id,
+        "current_session_id": current_session_id,
         "to_session_id": to_session_id,
         "to_session_ref": to_session_ref,
         "created_target": created_target,
@@ -482,6 +496,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "from_session_id": {"type": "string"},
+                "current_session_id": {"type": "string"},
                 "to_session_id": {"type": "string"},
                 "to_session_ref": {"type": "string"},
                 "ensure_target_title": {"type": "string"},
