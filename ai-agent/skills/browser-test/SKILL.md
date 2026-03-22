@@ -145,14 +145,13 @@ Execution flow:
    - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
 3. collect runtime evidence
 4. produce one `browser_check_report`
-5. send it back to the requester with `adwf-send-and-wake --from-session-id "<browser_tester_session_id>" --to-session-id "<requester_session_id>" --subject "browser report: <task_id> r<round>" --body-file -`
-6. after sending, immediately use `check-workflow-mail wait=True`
-
-Codex-style execution rule:
-- launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
-- then write the composed report body to that session's stdin
-- keep freshly generated body in stdin
-- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
+5. if this session is not already bound, call `workflow_bind_session` with `browser_tester_session_id`
+6. send it back to the requester with `workflow_send`
+   - `from_session_id = <browser_tester_session_id>`
+   - `to_session_id = <requester_session_id>`
+   - `subject = "browser report: <task_id> r<round>"`
+   - `body = <browser-check report body>`
+7. after sending, immediately use `check-workflow-mail wait=True`
 
 ## Rules
 

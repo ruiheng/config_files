@@ -233,40 +233,20 @@ Round: <round>
 Recommended subject:
 - `review request: <task_id> r<round>`
 
-Preferred path: use the installed helper `adwf-send-and-wake`.
+Preferred path: use the `workflow_mailbox` MCP tools.
 
 Workflow send sequence:
-1. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-2. run `adwf-send-and-wake` outside sandbox:
-   - `--from-session-id "<coder_session_id>"`
-   - `--to-session-ref "<reviewer_session_ref>"`
-   - `--ensure-target-title "<reviewer_session_ref>"`
-   - `--ensure-target-cmd "<reviewer_tool>"`
-   - `--parent-session-id "<planner_session_id>"`
-   - `--subject "review request: <task_id> r<round>"`
-   - `--body-file -`
-3. let the helper resolve the reviewer session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
-4. use the helper result as the authoritative `reviewer_session_id`
-
-Exact command shape:
-
-```bash
-adwf-send-and-wake \
-  --from-session-id "<coder_session_id>" \
-  --to-session-ref "<reviewer_session_ref>" \
-  --ensure-target-title "<reviewer_session_ref>" \
-  --ensure-target-cmd "<reviewer_tool>" \
-  --parent-session-id "<planner_session_id>" \
-  --subject "review request: <task_id> r<round>" \
-  --body-file - \
-  --json
-```
-
-Codex-style execution rule:
-- launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
-- then write the composed review-request body to that session's stdin
-- keep freshly generated body in stdin
-- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
+1. if this session is not already bound, call `workflow_bind_session` with `coder_session_id`
+2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
+3. call `workflow_send` with:
+   - `from_session_id = <coder_session_id>`
+   - `to_session_ref = <reviewer_session_ref>`
+   - `ensure_target_title = <reviewer_session_ref>`
+   - `ensure_target_cmd = <reviewer_tool>`
+   - `parent_session_id = <planner_session_id>`
+   - `subject = "review request: <task_id> r<round>"`
+   - `body = <review-request mailbox body>`
+4. use the tool result as the authoritative `reviewer_session_id`
 
 Rules:
 - round `1` sends the full review request in mailbox body
@@ -274,9 +254,8 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
-- use `reviewer-<task_id>` as a session ref until the helper resolves the real `reviewer_session_id`
-- use the exact command shape above when it already matches the task
-- let the helper decide whether this reviewer needs direct `agent-deck launch` or an active-session nudge
+- use `reviewer-<task_id>` as a session ref until `workflow_send` resolves the real `reviewer_session_id`
+- let `workflow_send` decide whether this reviewer needs direct launch or an active-session nudge
 
 ## Quality Bar
 

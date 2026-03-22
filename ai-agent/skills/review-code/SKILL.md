@@ -174,10 +174,12 @@ Mailbox subject (`rework_required`):
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
-- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<coder_session_id>" --subject "rework required: <task_id> r<round>" --body-file -` outside sandbox
-- assume coder is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
-- in Codex-style environments, launch the helper in a background terminal / PTY session and write the review body to that session's stdin
-- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
+- if this session is not already bound, call `workflow_bind_session` with `reviewer_session_id`
+- send it with `workflow_send`
+  - `from_session_id = <reviewer_session_id>`
+  - `to_session_id = <coder_session_id>`
+  - `subject = "rework required: <task_id> r<round>"`
+  - `body = <full review report>`
 - include enough evidence and fix guidance that coder can continue from the mailbox body alone
 
 Mailbox subject (`user_requested_iteration` after user chooses iterate):
@@ -187,10 +189,12 @@ Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
-- send it with `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<coder_session_id>" --subject "iteration requested: <task_id> r<round>" --body-file -` outside sandbox
-- assume coder is already waiting in `check-workflow-mail wait=True`; if not, let the helper start it before send
-- in Codex-style environments, launch the helper in a background terminal / PTY session and write the iteration body to that session's stdin
-- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
+- if this session is not already bound, call `workflow_bind_session` with `reviewer_session_id`
+- send it with `workflow_send`
+  - `from_session_id = <reviewer_session_id>`
+  - `to_session_id = <coder_session_id>`
+  - `subject = "iteration requested: <task_id> r<round>"`
+  - `body = <iteration mailbox body>`
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
@@ -209,8 +213,7 @@ Required interaction behavior:
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks
-- Use `adwf-send-and-wake` for cross-session reviewer messages
-- Keep freshly generated outbound body in stdin
+- Use `workflow_send` for cross-session reviewer messages
 
 Sender identity rule:
 - reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`

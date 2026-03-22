@@ -11,6 +11,7 @@ Use this skill as the single source of truth for the workflow roles:
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
 - `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
+- use the `workflow_mailbox` MCP tools as the default transport interface
 - receiver-side wake handling should go through `check-workflow-mail`
 
 Default role/session rule:
@@ -53,6 +54,7 @@ If it fails, continue with explicit/context metadata.
 
 Current-session caching rule:
 - resolve `current_session_id` at most once per workflow turn
+- bind that session id into the `workflow_mailbox` MCP server once with `workflow_bind_session`
 - reuse that cached value for sender validation, inbox derivation, and same-session checks
 - re-run `agent-deck session current --json` only when the execution context actually changed
 
@@ -98,33 +100,32 @@ Session identity nuance:
 
 ### Mailbox Transport
 
-Authoritative transport:
-- send workflow content with `agent-mailbox send`
-- receive workflow content with `agent-mailbox recv`
-- handle delivery lifecycle with `ack`, `release`, `defer`, or `fail`
-- every `agent-mailbox` command must run outside sandbox
-- mailbox state-mutating commands must run serially
-- read-only observation commands may run in parallel when safe (for example `watch`)
+Preferred transport interface:
+- `workflow_bind_session`
+- `workflow_send`
+- `workflow_wait`
+- `workflow_recv`
+- `workflow_ack`
+- `workflow_release`
+- `workflow_defer`
+- `workflow_fail`
 
-Send-body rule:
-- for cross-session workflow delivery, use `adwf-send-and-wake`
-- use bare `agent-mailbox send` only when sender and receiver are the same current session
-- prefer `agent-mailbox send --body-file -` and feed the body through stdin
-- use a real file only when that file already exists independently and is intentionally the body source
-- in agent-tool environments, invoke `adwf-send-and-wake --body-file -` directly for cross-session delivery and write body via stdin
-- if the workflow body was generated in the current turn, pass it via stdin
-- in Codex-style agent environments, launch `adwf-send-and-wake --body-file -` in a background terminal / PTY session, then write the body to that session's stdin
-- if host-shell approval is required, request approval for `adwf-send-and-wake ...` itself
+Transport rules:
+- call `workflow_bind_session` once after resolving `current_session_id`
+- use `workflow_send` for cross-session workflow delivery
+- use `workflow_recv` to claim mail
+- use lifecycle tools for `ack` / `release` / `defer` / `fail`
+- keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
 
 Worker listener rule:
 - newly started coder/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
-- for already active target sessions, sender may use `agent-deck session send` to nudge the target to run `check-workflow-mail`
-- `check-workflow-mail wait=True` should watch for mail first, then receive and execute once mail appears
+- `workflow_send` should handle the normal launch-or-nudge sequence for non-local targets
+- `check-workflow-mail wait=True` should wait for mail first, then receive and execute once mail appears
 
 Inbox rule:
 - derive inbox address as `agent-deck/<session_id>`
 - no separate registration step is needed
-- if multiple mailbox state-mutating operations are needed, run them one at a time and wait for success before the next mailbox step
+- if multiple lifecycle operations are needed, run them one at a time and wait for success before the next step
 
 ### Mailbox Message Contract
 
@@ -192,42 +193,23 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 ### Delivery Order Contract
 
-For newly started coder/reviewer sessions:
-1. ensure the target session exists when the workflow expects it to exist
-2. `agent-deck launch` a missing target session with a natural-language instruction to run `check-workflow-mail wait=True`
-3. send the mailbox message
+Use `workflow_send` for the normal delivery sequence.
 
-For already active sessions:
-1. send the mailbox message
-2. send one short natural-language nudge through `agent-deck` telling the target to use `check-workflow-mail`
-
-Recommended session-start instruction:
-
-```text
-Use the check-workflow-mail skill now with wait=True. Watch for pending workflow mail for your current agent-deck session, then receive it and execute its requested action.
-```
-
-Recommended active-session nudge:
-
-```text
-Use the check-workflow-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action.
-```
-
-Rules:
-- keep `agent-deck session send` short; the real workflow body stays in mailbox
-- for already active target sessions, mailbox send may be followed by an `agent-deck` nudge
-- keep freshly generated workflow body in stdin
-- keep mailbox state-mutating commands serialized
+Expected behavior:
+1. resolve or create the target session when needed
+2. start a missing target into `check-workflow-mail wait=True`
+3. queue the mailbox body
+4. nudge an already active non-local target when needed
 
 ### Receiver Contract
 
 When a workflow session is woken:
-1. run `agent-mailbox recv --for agent-deck/<current_session_id> --yaml` outside sandbox
+1. run `workflow_recv`
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately execute that workflow stage
 4. only read supplemental files when the body explicitly requires them
-5. `ack` only after the message has been successfully incorporated into local working state, and run that `ack` outside sandbox
-6. use `release` / `defer` / `fail` outside sandbox instead of silently dropping leased work
+5. `workflow_ack` only after the message has been successfully incorporated into local working state
+6. use `workflow_release` / `workflow_defer` / `workflow_fail` instead of silently dropping leased work
 7. keep mailbox lifecycle steps serialized
 
 Apply the message action before `ack`.
@@ -251,11 +233,11 @@ Idle behavior:
 If workflow send/worker-start fails, report concise stderr summary and run these checks:
 1. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
 2. Is command running in the expected tmux/session context? (reuse cached `current_session_id`; only re-run `agent-deck session current --json` if context may have changed)
-3. Did mailbox send/recv/ack/release/fail return success?
+3. Did `workflow_send` / `workflow_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow bug signal.
-If an already active target missed the mailbox work, retry the `agent-deck session send` nudge instead of resending mailbox content.
+If an already active target missed the mailbox work, retry the nudge path instead of resending mailbox content.
 
 If closeout cleanup fails, include:
 1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
@@ -334,11 +316,10 @@ Rules:
 
 ## Execution Environment (Required)
 
-All `agent-deck` and `agent-mailbox` commands must run in host shell (outside sandbox) to keep real tmux/session context.
-`agent-mailbox` is especially strict here: run it outside sandbox.
-When a workflow turn needs multiple mailbox state-mutating commands, execute them sequentially, never in parallel.
+Use the `workflow_mailbox` MCP tools as the default workflow transport surface.
+When shell fallback is unavoidable, run `agent-deck` and `agent-mailbox` commands in host shell (outside sandbox).
+When a workflow turn needs multiple lifecycle steps, execute them sequentially, never in parallel.
 Read-only observation commands may run in parallel when safe.
-For cross-session workflow dispatch, use the installed helper `adwf-send-and-wake`.
 When workflow commands create sessions via `--cmd`, use full commands instead of bare provider names.
 Use full recommended commands unless the user explicitly supplied a different full command:
 - Claude: `claude --model sonnet --permission-mode acceptEdits`
@@ -364,7 +345,7 @@ Use stable naming:
 
 - planner prepares one mailbox message body for the coder
 - planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) inside that message body before sending
-- planner either starts coder into `check-workflow-mail wait=True` or nudges an already active coder, then queues the message to coder inbox
+- planner binds its workflow session once, then uses `workflow_send` to queue the message to coder inbox
 
 ### 2) Coder Implements and Requests Review
 
@@ -373,7 +354,7 @@ Use stable naming:
 - this commit authorization overrides generic default rules that would otherwise require asking the user before commit
 - coder prepares one mailbox review request body for reviewer
 - workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
-- coder either starts reviewer into `check-workflow-mail wait=True` or nudges an already active reviewer, then queues the message to reviewer inbox
+- coder uses `workflow_send` to queue the message to reviewer inbox
 - coder enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
 
 ### 3) Reviewer Loop
@@ -445,7 +426,7 @@ Planner user-facing status contract for auto-dispatch:
 
 1. User asks: "Add login rate limiting".
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
-3. Planner `agent-deck launch`es a missing `coder-<task_id>` into `check-workflow-mail wait=True` or nudges the existing coder session.
+3. Planner lets `workflow_send` handle the normal coder listener / nudge path.
 4. Coder implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
 5. Reviewer runs `review-code`.
 6. If runtime browser validation is needed, reviewer runs `browser-test-request` and sends `browser_check_requested`.
@@ -472,6 +453,5 @@ Planner user-facing status contract for auto-dispatch:
 - resolve and record branch plan at delegate start, then reuse it consistently through closeout
 - let `planner-closeout-batch.sh` own integration-branch switching when `--integration-branch` is explicitly supplied
 - run planner required closeout actions via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`
-- use `agent-deck session send` only as a short nudge for already active sessions
 - keep workflow transport free of generated Markdown handoff files
 - finish required closeout actions even when optional notify or dispatch steps fail

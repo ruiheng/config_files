@@ -56,13 +56,15 @@ If required values are resolved:
    - if normalization fails for required identity, ask one short clarification question before sending
 2. send mode:
    - if `reviewer_session_id == planner_session_id` and target session is current session, skip cross-session delivery and continue locally
-   - otherwise send `closeout_delivered` to planner inbox; if planner is not already waiting in `check-workflow-mail wait=True`, let the helper start it before send
+   - otherwise send `closeout_delivered` to planner through `workflow_send`
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
-4. for cross-session closeout, use `adwf-send-and-wake --from-session-id "<reviewer_session_id>" --to-session-id "<planner_session_id>" --subject "closeout delivered: <task_id>" --body-file -`
-5. let the helper own the delivery sequence
-6. in Codex-style environments, launch the helper in a background terminal / PTY session and write the closeout body to that session's stdin
-7. feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
-8. after delivery completes, reviewer immediately uses `check-workflow-mail wait=True` when expecting later workflow mail
+4. if this session is not already bound, call `workflow_bind_session` with `reviewer_session_id`
+5. use `workflow_send` with:
+   - `from_session_id = <reviewer_session_id>`
+   - `to_session_id = <planner_session_id>`
+   - `subject = "closeout delivered: <task_id>"`
+   - `body = <closeout mailbox body>`
+6. after delivery completes, reviewer immediately uses `check-workflow-mail wait=True` when expecting later workflow mail
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`
@@ -166,5 +168,4 @@ Then append only non-empty sections.
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
-9. Use `adwf-send-and-wake` for cross-session closeout delivery
-10. Keep freshly generated closeout body in stdin
+9. Use `workflow_send` for cross-session closeout delivery

@@ -145,50 +145,29 @@ Tool-routing rule:
 
 ## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
 
-Preferred path: use the installed helper `adwf-send-and-wake`.
+Preferred path: use the `workflow_mailbox` MCP tools.
 
 Workflow send sequence:
-1. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-2. run `adwf-send-and-wake` outside sandbox:
-   - `--from-session-id "<planner_session_id>"`
-   - `--to-session-ref "<coder_session_ref>"`
-   - `--ensure-target-title "<coder_session_ref>"`
-   - `--ensure-target-cmd "<coder_tool>"`
-   - `--parent-session-id "<planner_session_id>"`
-   - `--subject "delegate: <task_id> -> coder"`
-   - `--body-file -`
-3. let the helper resolve the coder session, `agent-deck launch` a missing target directly into `check-workflow-mail wait=True`, or nudge the existing active session after mailbox send
-4. use the helper result as the authoritative `coder_session_id` in user-facing status
-
-Exact command shape:
-
-```bash
-adwf-send-and-wake \
-  --from-session-id "<planner_session_id>" \
-  --to-session-ref "<coder_session_ref>" \
-  --ensure-target-title "<coder_session_ref>" \
-  --ensure-target-cmd "<coder_tool>" \
-  --parent-session-id "<planner_session_id>" \
-  --subject "delegate: <task_id> -> coder" \
-  --body-file - \
-  --json
-```
-
-Codex-style execution rule:
-- launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
-- then write the composed delegate body to that session's stdin
-- keep freshly generated body in stdin
-- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
+1. if this session is not already bound, call `workflow_bind_session` with `planner_session_id`
+2. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
+3. call `workflow_send` with:
+   - `from_session_id = <planner_session_id>`
+   - `to_session_ref = <coder_session_ref>`
+   - `ensure_target_title = <coder_session_ref>`
+   - `ensure_target_cmd = <coder_tool>`
+   - `parent_session_id = <planner_session_id>`
+   - `subject = "delegate: <task_id> -> coder"`
+   - `body = <delegate mailbox body>`
+4. use the tool result as the authoritative `coder_session_id` in user-facing status
 
 Recommended subject:
 - `delegate: <task_id> -> coder`
 
 Rules:
 - keep the full delegate brief in mailbox body
-- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the helper resolves real session ids
-- use the exact command shape above when it already matches the task
-- report target readiness only after the helper completes the full launch-or-detect/send/nudge path that applies
-- `--cmd` only matters when creating a missing target session; existing sessions keep their original tool command
+- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `workflow_send` resolves real session ids
+- report target readiness only after `workflow_send` completes the full launch-or-detect/send/nudge path that applies
+- `ensure_target_cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
 

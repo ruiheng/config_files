@@ -14,20 +14,17 @@ This document describes the multi-agent workflow built around the skills in this
 
 - `agent-mailbox` is the authoritative workflow message layer
 - `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
+- `workflow_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
-- When sending mailbox body text, prefer `agent-mailbox send --body-file -` and feed stdin directly
-- Use `adwf-send-and-wake` for cross-session workflow delivery
-- In Codex-style environments, launch `adwf-send-and-wake --body-file -` in a background terminal / PTY session and write body text to that session's stdin
-- Run every `agent-mailbox` command outside sandbox
-- Run mailbox state-mutating `agent-mailbox` commands serially, not in parallel
+- Bind the current session once with `workflow_bind_session`, then reuse `workflow_send`, `workflow_wait`, `workflow_recv`, and lifecycle tools
 - The workflow does not generate Markdown handoff files by default
 
 ## End-to-End Loop
 
 1. User asks Planner to prepare work.
-2. Planner runs `delegate-task`, starts Coder into `check-workflow-mail wait=True` when needed, or nudges the existing Coder session, then sends one delegate mailbox message.
+2. Planner runs `delegate-task` and sends one delegate workflow message.
 3. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
-4. Coder runs `review-request` from that committed state, starts Reviewer into `check-workflow-mail wait=True` when needed, or nudges the existing Reviewer session, then sends one review-request mailbox message.
+4. Coder runs `review-request` from that committed state and sends one review-request workflow message.
 5. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or

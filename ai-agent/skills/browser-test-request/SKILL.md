@@ -108,31 +108,22 @@ Round: <round>
 Recommended subject:
 - `browser check: <task_id> r<round>`
 
-Exact command shape:
-
-```bash
-adwf-send-and-wake \
-  --from-session-id "<requester_session_id>" \
-  --to-session-ref "<browser_tester_session_ref>" \
-  --ensure-target-title "<browser_tester_session_ref>" \
-  --ensure-target-cmd "<browser_tester_tool>" \
-  --parent-session-id "<requester_session_id>" \
-  --subject "browser check: <task_id> r<round>" \
-  --body-file - \
-  --json
-```
+Use the `workflow_mailbox` MCP tools:
+- if this session is not already bound, call `workflow_bind_session` with `requester_session_id`
+- call `workflow_send` with:
+  - `from_session_id = <requester_session_id>`
+  - `to_session_ref = <browser_tester_session_ref>`
+  - `ensure_target_title = <browser_tester_session_ref>`
+  - `ensure_target_cmd = <browser_tester_tool>`
+  - `parent_session_id = <requester_session_id>`
+  - `subject = "browser check: <task_id> r<round>"`
+  - `body = <browser-check mailbox body>`
 
 Default browser tester agent command:
 
 ```bash
 codex -m gpt-5.4 -c model_reasoning_effort="medium"
 ```
-
-Codex-style execution rule:
-- launch `adwf-send-and-wake ... --body-file -` in a background terminal / PTY session
-- then write the composed mailbox body to that session's stdin
-- keep freshly generated body in stdin
-- feed stdin directly, without `printf`, `cat`, heredoc, shell pipes, or redirection
 
 ## Rules
 
