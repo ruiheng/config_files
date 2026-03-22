@@ -918,6 +918,7 @@ install_claude_config() {
     fi
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
+    link_file "ai-agent/mcp/adwf-mailbox-mcp" "$bin_dir/adwf-mailbox-mcp"
 
     # Link statusline script
     link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"

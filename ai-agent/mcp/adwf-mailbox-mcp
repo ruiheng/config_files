@@ -1,0 +1,721 @@
+#!/usr/bin/env python3
+
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class MCPError(Exception):
+    def __init__(self, message: str, code: int = -32000, data: Any | None = None):
+        super().__init__(message)
+        self.code = code
+        self.data = data
+
+
+def write_message(payload: dict[str, Any]) -> None:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    sys.stdout.buffer.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
+    sys.stdout.buffer.write(body)
+    sys.stdout.buffer.flush()
+
+
+def read_message() -> dict[str, Any] | None:
+    headers: dict[str, str] = {}
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line in (b"\r\n", b"\n"):
+            break
+        text = line.decode("utf-8").strip()
+        if ":" not in text:
+            continue
+        key, value = text.split(":", 1)
+        headers[key.strip().lower()] = value.strip()
+
+    content_length = headers.get("content-length")
+    if not content_length:
+        raise MCPError("missing Content-Length header", code=-32700)
+    body = sys.stdin.buffer.read(int(content_length))
+    if not body:
+        return None
+    return json.loads(body.decode("utf-8"))
+
+
+def run_cmd(args: list[str], *, input_text: str | None = None, ok_codes: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(
+        args,
+        input=input_text,
+        text=True,
+        capture_output=True,
+        cwd=str(REPO_ROOT),
+    )
+    if proc.returncode not in ok_codes:
+        detail = proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}"
+        raise MCPError(f"command failed: {' '.join(args)} :: {detail}", data={"args": args, "returncode": proc.returncode})
+    return proc
+
+
+def parse_json_output(text: str, context: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise MCPError(f"{context} returned invalid JSON: {exc}", data={"output": text}) from exc
+
+
+def dedupe(values: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value not in seen:
+            out.append(value)
+            seen.add(value)
+    return out
+
+
+STATE: dict[str, Any] = {
+    "bound_session_id": None,
+}
+
+DEFAULT_LISTENER_MESSAGE = (
+    "Use the check-workflow-mail skill now with wait=True. "
+    "Watch for pending workflow mail for your current agent-deck session, "
+    "then receive it and execute its requested action."
+)
+
+DEFAULT_WAKE_MESSAGE = (
+    "Use the check-workflow-mail skill now. "
+    "Receive the pending message for your current agent-deck session and execute its requested action."
+)
+
+
+def mailbox_addresses(args: dict[str, Any]) -> tuple[list[str], str | None]:
+    raw = args.get("addresses")
+    if raw:
+        if not isinstance(raw, list) or not all(isinstance(v, str) and v for v in raw):
+            raise MCPError("addresses must be a non-empty string array")
+        return dedupe(raw), None
+
+    session_id = args.get("current_session_id") or args.get("session_id")
+    if session_id is not None and not isinstance(session_id, str):
+        raise MCPError("current_session_id/session_id must be a string")
+    if not session_id:
+        session_id = STATE.get("bound_session_id")
+    if not session_id:
+        raise MCPError("no session_id provided and no bound workflow session is set")
+    return [f"agent-deck/{session_id}"], session_id
+
+
+def resolve_session_show(identifier: str) -> dict[str, Any] | None:
+    proc = subprocess.run(
+        ["agent-deck", "session", "show", identifier, "--json"],
+        text=True,
+        capture_output=True,
+        cwd=str(REPO_ROOT),
+    )
+    if proc.returncode != 0:
+        return None
+    data = parse_json_output(proc.stdout, "agent-deck session show")
+    if data.get("success") is False:
+        return None
+    return data
+
+
+def resolve_session_id(identifier: str) -> str | None:
+    data = resolve_session_show(identifier)
+    if not data:
+        return None
+    session_id = data.get("id")
+    return session_id if isinstance(session_id, str) and session_id else None
+
+
+def get_session_status(identifier: str) -> str | None:
+    data = resolve_session_show(identifier)
+    if not data:
+        return None
+    status = data.get("status")
+    return status if isinstance(status, str) and status else None
+
+
+def parse_send_tokens(output: str) -> dict[str, str | None]:
+    result: dict[str, str | None] = {
+        "message_id": None,
+        "delivery_id": None,
+        "blob_id": None,
+    }
+    for token in output.split():
+        if token.startswith("message_id="):
+            result["message_id"] = token.split("=", 1)[1]
+        elif token.startswith("delivery_id="):
+            result["delivery_id"] = token.split("=", 1)[1]
+        elif token.startswith("blob_id="):
+            result["blob_id"] = token.split("=", 1)[1]
+    return result
+
+
+def tool_workflow_bind_session(args: dict[str, Any]) -> dict[str, Any]:
+    session_id = args.get("session_id") or args.get("current_session_id")
+    if not isinstance(session_id, str) or not session_id:
+        raise MCPError("session_id is required")
+    STATE["bound_session_id"] = session_id
+    return {
+        "status": "bound",
+        "bound_session_id": session_id,
+    }
+
+
+def tool_workflow_session_status(args: dict[str, Any]) -> dict[str, Any]:
+    _ = args
+    return {
+        "bound_session_id": STATE.get("bound_session_id"),
+    }
+
+
+def tool_workflow_send(args: dict[str, Any]) -> dict[str, Any]:
+    required = ["from_session_id", "subject", "body"]
+    for key in required:
+        value = args.get(key)
+        if not isinstance(value, str) or not value:
+            raise MCPError(f"{key} is required and must be a non-empty string")
+
+    from_session_id = args["from_session_id"]
+    to_session_id = args.get("to_session_id")
+    to_session_ref = args.get("to_session_ref")
+    ensure_target_title = args.get("ensure_target_title")
+    ensure_target_cmd = args.get("ensure_target_cmd")
+    parent_session_id = args.get("parent_session_id")
+    workdir = args.get("workdir") or str(REPO_ROOT)
+    content_type = args.get("content_type") or "text/markdown"
+    schema_version = args.get("schema_version") or "1"
+    listener_message = args.get("listener_message") or DEFAULT_LISTENER_MESSAGE
+    wake_message = args.get("wake_message") or DEFAULT_WAKE_MESSAGE
+    wake_delay_seconds = args.get("wake_delay_seconds", 10)
+
+    if to_session_id is not None and (not isinstance(to_session_id, str) or not to_session_id):
+        raise MCPError("to_session_id must be a non-empty string")
+    if to_session_ref is not None and (not isinstance(to_session_ref, str) or not to_session_ref):
+        raise MCPError("to_session_ref must be a non-empty string")
+    if ensure_target_title is not None and (not isinstance(ensure_target_title, str) or not ensure_target_title):
+        raise MCPError("ensure_target_title must be a non-empty string")
+    if ensure_target_cmd is not None and (not isinstance(ensure_target_cmd, str) or not ensure_target_cmd):
+        raise MCPError("ensure_target_cmd must be a non-empty string")
+    if parent_session_id is not None and (not isinstance(parent_session_id, str) or not parent_session_id):
+        raise MCPError("parent_session_id must be a non-empty string")
+    if not isinstance(workdir, str) or not workdir:
+        raise MCPError("workdir must be a non-empty string")
+    if not isinstance(content_type, str) or not content_type:
+        raise MCPError("content_type must be a non-empty string")
+    if not isinstance(schema_version, str) or not schema_version:
+        raise MCPError("schema_version must be a non-empty string")
+    if not isinstance(listener_message, str) or not listener_message:
+        raise MCPError("listener_message must be a non-empty string")
+    if not isinstance(wake_message, str) or not wake_message:
+        raise MCPError("wake_message must be a non-empty string")
+    if not isinstance(wake_delay_seconds, int) or wake_delay_seconds < 0:
+        raise MCPError("wake_delay_seconds must be a non-negative integer")
+
+    created_target = False
+
+    if not to_session_id and to_session_ref:
+        to_session_id = resolve_session_id(to_session_ref)
+
+    if not to_session_id:
+        if not ensure_target_title:
+            raise MCPError("target session missing: provide to_session_id, to_session_ref, or ensure_target_title")
+        if not ensure_target_cmd:
+            raise MCPError("ensure_target_cmd is required when creating target session")
+        if not parent_session_id:
+            raise MCPError("parent_session_id is required when creating target session")
+        if not Path(workdir).is_dir():
+            raise MCPError(f"workdir does not exist: {workdir}")
+
+        proc = run_cmd(
+            [
+                "agent-deck",
+                "launch",
+                "--json",
+                "--title",
+                ensure_target_title,
+                "--parent",
+                parent_session_id,
+                "--cmd",
+                ensure_target_cmd,
+                "--message",
+                listener_message,
+                workdir,
+            ]
+        )
+        create_data = parse_json_output(proc.stdout, "agent-deck launch")
+        to_session_id = create_data.get("id")
+        if not isinstance(to_session_id, str) or not to_session_id:
+            raise MCPError("failed to parse created target session id", data=create_data)
+        if not to_session_ref:
+            to_session_ref = ensure_target_title
+        created_target = True
+
+    if not to_session_ref:
+        to_session_ref = to_session_id
+
+    body = args["body"]
+    body = body.replace("{{FROM_SESSION_ID}}", from_session_id)
+    body = body.replace("{{TO_SESSION_ID}}", to_session_id)
+    body = body.replace("{{TO_SESSION_REF}}", to_session_ref)
+
+    from_address = f"agent-deck/{from_session_id}"
+    to_address = f"agent-deck/{to_session_id}"
+
+    start_status = "skipped_same_session"
+    listener_status = "skipped_same_session"
+    wakeup_status = "skipped_same_session"
+    nudge_after_send = False
+
+    if from_session_id != to_session_id:
+        if created_target:
+            start_status = "started"
+            listener_status = "started_waiting"
+        else:
+            target_status = get_session_status(to_session_id)
+            if target_status in {"running", "waiting", "idle"}:
+                start_status = f"already_{target_status}"
+                listener_status = "not_needed_existing_session"
+                nudge_after_send = True
+            else:
+                run_cmd(
+                    [
+                        "agent-deck",
+                        "session",
+                        "start",
+                        "--json",
+                        "-m",
+                        listener_message,
+                        to_session_id,
+                    ]
+                )
+                start_status = "started"
+                listener_status = "started_waiting"
+
+    send_proc = run_cmd(
+        [
+            "agent-mailbox",
+            "send",
+            "--to",
+            to_address,
+            "--from",
+            from_address,
+            "--subject",
+            args["subject"],
+            "--content-type",
+            content_type,
+            "--schema-version",
+            schema_version,
+            "--body-file",
+            "-",
+        ],
+        input_text=body,
+    )
+    send_ids = parse_send_tokens(send_proc.stdout)
+
+    if nudge_after_send:
+        if wake_delay_seconds:
+            time.sleep(wake_delay_seconds)
+        run_cmd(["agent-deck", "session", "send", "--no-wait", to_session_id, wake_message])
+        wakeup_status = "sent"
+
+    return {
+        "from_session_id": from_session_id,
+        "to_session_id": to_session_id,
+        "to_session_ref": to_session_ref,
+        "created_target": created_target,
+        "subject": args["subject"],
+        "message_id": send_ids["message_id"],
+        "delivery_id": send_ids["delivery_id"],
+        "blob_id": send_ids["blob_id"],
+        "start_status": start_status,
+        "listener_status": listener_status,
+        "wakeup_status": wakeup_status,
+        "wake_delay_seconds": wake_delay_seconds,
+    }
+
+
+def tool_workflow_wait(args: dict[str, Any]) -> dict[str, Any]:
+    addresses, resolved_session_id = mailbox_addresses(args)
+    cmd = ["agent-mailbox", "wait"]
+    for address in addresses:
+        cmd.extend(["--for", address])
+
+    timeout = args.get("timeout")
+    if timeout is not None:
+        if not isinstance(timeout, str) or not timeout:
+            raise MCPError("timeout must be a non-empty duration string")
+        cmd.extend(["--timeout", timeout])
+
+    cmd.append("--json")
+    proc = run_cmd(cmd, ok_codes=(0, 2))
+    if proc.returncode == 2:
+        return {
+            "status": "no_message",
+            "current_session_id": resolved_session_id,
+            "addresses": addresses,
+        }
+    return {
+        "status": "message_available",
+        "current_session_id": resolved_session_id,
+        "addresses": addresses,
+        "delivery": parse_json_output(proc.stdout, "agent-mailbox wait"),
+    }
+
+
+def tool_workflow_recv(args: dict[str, Any]) -> dict[str, Any]:
+    addresses, resolved_session_id = mailbox_addresses(args)
+    wait_mode = bool(args.get("wait", False))
+
+    timeout = args.get("timeout")
+    if timeout is not None and (not isinstance(timeout, str) or not timeout):
+        raise MCPError("timeout must be a non-empty duration string")
+
+    if wait_mode:
+        wait_result = tool_workflow_wait({"addresses": addresses, "timeout": timeout})
+        if wait_result["status"] == "no_message":
+            return wait_result
+
+    cmd = ["agent-mailbox", "recv"]
+    for address in addresses:
+        cmd.extend(["--for", address])
+    cmd.append("--json")
+    proc = run_cmd(cmd, ok_codes=(0, 2))
+    if proc.returncode == 2:
+        return {
+            "status": "no_message",
+            "current_session_id": resolved_session_id,
+            "addresses": addresses,
+        }
+
+    return {
+        "status": "received",
+        "current_session_id": resolved_session_id,
+        "addresses": addresses,
+        "delivery": parse_json_output(proc.stdout, "agent-mailbox recv"),
+    }
+
+
+def tool_workflow_ack(args: dict[str, Any]) -> dict[str, Any]:
+    delivery_id = args.get("delivery_id")
+    lease_token = args.get("lease_token")
+    if not isinstance(delivery_id, str) or not delivery_id:
+        raise MCPError("delivery_id is required")
+    if not isinstance(lease_token, str) or not lease_token:
+        raise MCPError("lease_token is required")
+    run_cmd(["agent-mailbox", "ack", "--delivery", delivery_id, "--lease-token", lease_token])
+    return {"status": "acked", "delivery_id": delivery_id}
+
+
+def tool_workflow_release(args: dict[str, Any]) -> dict[str, Any]:
+    delivery_id = args.get("delivery_id")
+    lease_token = args.get("lease_token")
+    if not isinstance(delivery_id, str) or not delivery_id:
+        raise MCPError("delivery_id is required")
+    if not isinstance(lease_token, str) or not lease_token:
+        raise MCPError("lease_token is required")
+    run_cmd(["agent-mailbox", "release", "--delivery", delivery_id, "--lease-token", lease_token])
+    return {"status": "released", "delivery_id": delivery_id}
+
+
+def tool_workflow_defer(args: dict[str, Any]) -> dict[str, Any]:
+    delivery_id = args.get("delivery_id")
+    lease_token = args.get("lease_token")
+    until = args.get("until")
+    if not isinstance(delivery_id, str) or not delivery_id:
+        raise MCPError("delivery_id is required")
+    if not isinstance(lease_token, str) or not lease_token:
+        raise MCPError("lease_token is required")
+    if not isinstance(until, str) or not until:
+        raise MCPError("until is required")
+    run_cmd(["agent-mailbox", "defer", "--delivery", delivery_id, "--lease-token", lease_token, "--until", until])
+    return {"status": "deferred", "delivery_id": delivery_id, "until": until}
+
+
+def tool_workflow_fail(args: dict[str, Any]) -> dict[str, Any]:
+    delivery_id = args.get("delivery_id")
+    lease_token = args.get("lease_token")
+    reason = args.get("reason")
+    if not isinstance(delivery_id, str) or not delivery_id:
+        raise MCPError("delivery_id is required")
+    if not isinstance(lease_token, str) or not lease_token:
+        raise MCPError("lease_token is required")
+    if not isinstance(reason, str) or not reason:
+        raise MCPError("reason is required")
+    run_cmd(["agent-mailbox", "fail", "--delivery", delivery_id, "--lease-token", lease_token, "--reason", reason])
+    return {"status": "failed", "delivery_id": delivery_id, "reason": reason}
+
+
+TOOLS: dict[str, dict[str, Any]] = {
+    "workflow_bind_session": {
+        "description": "Bind one agent-deck session id into MCP server state so later workflow_wait/workflow_recv calls can omit it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string"},
+                "current_session_id": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_bind_session,
+    },
+    "workflow_session_status": {
+        "description": "Show the currently bound agent-deck session id stored in this MCP server.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_session_status,
+    },
+    "workflow_send": {
+        "description": "Send one workflow mailbox message and perform the normal start-or-nudge delivery sequence.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_session_id": {"type": "string"},
+                "to_session_id": {"type": "string"},
+                "to_session_ref": {"type": "string"},
+                "ensure_target_title": {"type": "string"},
+                "ensure_target_cmd": {"type": "string"},
+                "parent_session_id": {"type": "string"},
+                "workdir": {"type": "string"},
+                "subject": {"type": "string"},
+                "body": {"type": "string"},
+                "content_type": {"type": "string"},
+                "schema_version": {"type": "string"},
+                "listener_message": {"type": "string"},
+                "wake_message": {"type": "string"},
+                "wake_delay_seconds": {"type": "integer", "minimum": 0},
+            },
+            "required": ["from_session_id", "subject", "body"],
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_send,
+    },
+    "workflow_wait": {
+        "description": "Observe whether workflow mail is available for the bound session, an explicit session, or explicit addresses without claiming it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "current_session_id": {"type": "string"},
+                "session_id": {"type": "string"},
+                "addresses": {"type": "array", "items": {"type": "string"}},
+                "timeout": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_wait,
+    },
+    "workflow_recv": {
+        "description": "Receive workflow mail for the bound session, an explicit session, or explicit addresses. With wait=true, first wait for mail to appear, then claim it once.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "current_session_id": {"type": "string"},
+                "session_id": {"type": "string"},
+                "addresses": {"type": "array", "items": {"type": "string"}},
+                "wait": {"type": "boolean"},
+                "timeout": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_recv,
+    },
+    "workflow_ack": {
+        "description": "Acknowledge a claimed workflow delivery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "delivery_id": {"type": "string"},
+                "lease_token": {"type": "string"},
+            },
+            "required": ["delivery_id", "lease_token"],
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_ack,
+    },
+    "workflow_release": {
+        "description": "Release a claimed workflow delivery back to the queue.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "delivery_id": {"type": "string"},
+                "lease_token": {"type": "string"},
+            },
+            "required": ["delivery_id", "lease_token"],
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_release,
+    },
+    "workflow_defer": {
+        "description": "Defer a claimed workflow delivery until a later RFC3339 time.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "delivery_id": {"type": "string"},
+                "lease_token": {"type": "string"},
+                "until": {"type": "string"},
+            },
+            "required": ["delivery_id", "lease_token", "until"],
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_defer,
+    },
+    "workflow_fail": {
+        "description": "Fail a claimed workflow delivery with a reason.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "delivery_id": {"type": "string"},
+                "lease_token": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["delivery_id", "lease_token", "reason"],
+            "additionalProperties": False,
+        },
+        "handler": tool_workflow_fail,
+    },
+}
+
+
+def make_tool_list() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for name, spec in TOOLS.items():
+        out.append(
+            {
+                "name": name,
+                "description": spec["description"],
+                "inputSchema": spec["inputSchema"],
+            }
+        )
+    return out
+
+
+def make_tool_result(result: Any) -> dict[str, Any]:
+    text = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)
+    return {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": result,
+        "isError": False,
+    }
+
+
+def make_error_result(message: str, data: Any | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"error": message}
+    if data is not None:
+        payload["data"] = data
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    return {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": payload,
+        "isError": True,
+    }
+
+
+def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
+    method = message.get("method")
+    request_id = message.get("id")
+
+    if method == "notifications/initialized":
+        return None
+
+    if method == "initialize":
+        params = message.get("params", {})
+        protocol_version = params.get("protocolVersion", "2025-03-26")
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "protocolVersion": protocol_version,
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                },
+                "serverInfo": {
+                    "name": "adwf-mailbox-mcp",
+                    "version": "0.1.0",
+                },
+            },
+        }
+
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": make_tool_list()}}
+
+    if method == "tools/call":
+        params = message.get("params", {})
+        name = params.get("name")
+        arguments = params.get("arguments", {})
+        if name not in TOOLS:
+            raise MCPError(f"unknown tool: {name}", code=-32601)
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            raise MCPError("tool arguments must be an object", code=-32602)
+        try:
+            result = TOOLS[name]["handler"](arguments)
+            return {"jsonrpc": "2.0", "id": request_id, "result": make_tool_result(result)}
+        except MCPError as exc:
+            return {"jsonrpc": "2.0", "id": request_id, "result": make_error_result(str(exc), exc.data)}
+
+    if request_id is None:
+        return None
+    raise MCPError(f"unsupported method: {method}", code=-32601)
+
+
+def main() -> int:
+    while True:
+        try:
+            message = read_message()
+            if message is None:
+                return 0
+            response = handle_request(message)
+            if response is not None:
+                write_message(response)
+        except MCPError as exc:
+            request_id = None
+            try:
+                request_id = message.get("id")  # type: ignore[name-defined]
+            except Exception:
+                request_id = None
+            write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": exc.code,
+                        "message": str(exc),
+                        "data": exc.data,
+                    },
+                }
+            )
+        except Exception as exc:
+            request_id = None
+            try:
+                request_id = message.get("id")  # type: ignore[name-defined]
+            except Exception:
+                request_id = None
+            write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32603,
+                        "message": f"internal error: {exc}",
+                    },
+                }
+            )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
