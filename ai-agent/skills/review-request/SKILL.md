@@ -242,12 +242,11 @@ Workflow send sequence:
    - `ensure_cmd = <reviewer_tool>`
    - `parent_session_id = <planner_session_id>`
 4. use the returned `session_id` as the authoritative `reviewer_session_id`
-5. fill the final body and call `mailbox_send` with:
+5. fill the final body and call `mailbox_deliver` with:
    - `from_address = agent-deck/<coder_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
    - `body = <review-request mailbox body>`
-6. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, call `notify_send` for `agent-deck/<reviewer_session_id>`
 
 Rules:
 - round `1` sends the full review request in mailbox body
@@ -256,7 +255,7 @@ Rules:
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
 - use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
-- nudge every non-local reviewer after `mailbox_send`
+- `mailbox_deliver` handles the normal non-local reviewer nudge
 
 ## Quality Bar
 

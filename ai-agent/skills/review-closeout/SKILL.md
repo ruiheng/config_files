@@ -54,16 +54,15 @@ If required values are resolved:
    - if normalization fails for required identity, ask one short clarification question before sending
 2. send mode:
    - if `reviewer_session_id == planner_session_id`, skip cross-session delivery and continue locally
-   - otherwise send `closeout_delivered` to planner through `mailbox_send`
+   - otherwise send `closeout_delivered` to planner through `mailbox_deliver`
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
 4. if `agent_mailbox` is not already bound for this session, bind it first
 5. first call `agent_deck_ensure_session` with `session_id = <planner_session_id>`
-6. use `mailbox_send` with:
+6. use `mailbox_deliver` with:
    - `from_address = agent-deck/<reviewer_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "closeout delivered: <task_id>"`
    - `body = <closeout mailbox body>`
-7. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<planner_session_id>`
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`
@@ -167,4 +166,4 @@ Then append only non-empty sections.
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
-9. Use `mailbox_send` for cross-session closeout delivery
+9. Use `mailbox_deliver` for normal cross-session closeout delivery

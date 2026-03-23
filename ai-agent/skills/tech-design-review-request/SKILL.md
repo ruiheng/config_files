@@ -156,12 +156,11 @@ Use the `agent_mailbox` MCP tools:
    - `ensure_cmd = <architect_tool>`
    - `parent_session_id = <planner_session_id_or_requester_session_id>`
 4. use the returned `session_id` as the authoritative `architect_session_id`
-5. fill the final body and call `mailbox_send` with:
+5. fill the final body and call `mailbox_deliver` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<architect_session_id>`
    - `subject = "tech-design review: <task_id> r<round>"`
    - `body = <tech-design review request body>`
-6. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, call `notify_send` for `agent-deck/<architect_session_id>`
 
 ## Rules
 

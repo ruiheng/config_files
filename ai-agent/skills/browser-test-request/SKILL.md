@@ -115,12 +115,11 @@ Use the `agent_mailbox` MCP tools:
   - `ensure_title = <browser_tester_session_ref>`
   - `ensure_cmd = <browser_tester_tool>`
   - `parent_session_id = <requester_session_id>`
-- call `mailbox_send` with:
+- call `mailbox_deliver` with:
   - `from_address = agent-deck/<requester_session_id>`
   - `to_address = agent-deck/<browser_tester_session_id>`
   - `subject = "browser check: <task_id> r<round>"`
   - `body = <browser-check mailbox body>`
-- if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, call `notify_send` for `agent-deck/<browser_tester_session_id>`
 
 Default browser tester agent command:
 

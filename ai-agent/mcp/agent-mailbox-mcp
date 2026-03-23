@@ -114,6 +114,10 @@ function senderAddress(args = {}) {
   return args.from_address || STATE.default_sender || STATE.bound_addresses[0] || null;
 }
 
+function isLocalAddress(address) {
+  return STATE.bound_addresses.includes(address);
+}
+
 function resolveSessionShow(identifier) {
   const proc = spawnSync("agent-deck", ["session", "show", identifier, "--json"], {
     cwd: REPO_ROOT,
@@ -273,6 +277,83 @@ function buildServer() {
         message_id: sendIds.message_id,
         delivery_id: sendIds.delivery_id,
         blob_id: sendIds.blob_id,
+      });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_deliver",
+    {
+      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it.",
+      inputSchema: {
+        to_address: z.string(),
+        from_address: z.string().optional(),
+        subject: z.string(),
+        body: z.string(),
+        content_type: z.string().optional(),
+        schema_version: z.string().optional(),
+        notify_message: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const fromAddress = senderAddress(args);
+      if (!fromAddress) {
+        fail("mailbox_deliver requires from_address or a bound default_sender");
+      }
+
+      const contentType = args.content_type || "text/markdown";
+      const schemaVersion = args.schema_version || "1";
+      const sendProc = runCmd(
+        [
+          "agent-mailbox",
+          "send",
+          "--to",
+          args.to_address,
+          "--from",
+          fromAddress,
+          "--subject",
+          args.subject,
+          "--content-type",
+          contentType,
+          "--schema-version",
+          schemaVersion,
+          "--body-file",
+          "-",
+        ],
+        { inputText: args.body }
+      );
+      const sendIds = parseSendTokens(sendProc.stdout);
+
+      let notifyStatus = "skipped_local";
+      let notifyScheme = null;
+      const parsed = parseAddress(args.to_address);
+      if (!isLocalAddress(args.to_address)) {
+        switch (parsed.scheme) {
+          case "agent-deck":
+          case "codex": {
+            const notifyMessage = args.notify_message || DEFAULT_NOTIFY_MESSAGE;
+            runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
+            notifyStatus = "sent";
+            notifyScheme = parsed.scheme;
+            break;
+          }
+          default:
+            notifyStatus = "unsupported";
+            notifyScheme = parsed.scheme;
+            break;
+        }
+      }
+
+      return makeToolResult({
+        status: "delivered",
+        from_address: fromAddress,
+        to_address: args.to_address,
+        subject: args.subject,
+        message_id: sendIds.message_id,
+        delivery_id: sendIds.delivery_id,
+        blob_id: sendIds.blob_id,
+        notify_status: notifyStatus,
+        notify_scheme: notifyScheme,
       });
     }
   );

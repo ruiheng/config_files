@@ -173,12 +173,11 @@ Mailbox body rules (`rework_required`):
 - set `Action: rework_required`
 - if `agent_mailbox` is not already bound for this session, bind it first
 - first call `agent_deck_ensure_session` with `session_id = <coder_session_id>`
-- send it with `mailbox_send`
+- send it with `mailbox_deliver`
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<coder_session_id>`
   - `subject = "rework required: <task_id> r<round>"`
   - `body = <full review report>`
-- if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<coder_session_id>`
 - include enough evidence and fix guidance that coder can continue from the mailbox body alone
 
 Mailbox subject (`user_requested_iteration` after user chooses iterate):
@@ -190,12 +189,11 @@ Mailbox body rules (`user_requested_iteration`):
 - include enough of the prior review findings that coder can continue without opening external workflow files
 - if `agent_mailbox` is not already bound for this session, bind it first
 - first call `agent_deck_ensure_session` with `session_id = <coder_session_id>`
-- send it with `mailbox_send`
+- send it with `mailbox_deliver`
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<coder_session_id>`
   - `subject = "iteration requested: <task_id> r<round>"`
   - `body = <iteration mailbox body>`
-- if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<coder_session_id>`
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
@@ -213,7 +211,7 @@ Required interaction behavior:
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks
-- Use `mailbox_send` for cross-session reviewer messages
+- Use `mailbox_deliver` for normal cross-session reviewer messages
 
 Sender identity rule:
 - reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`

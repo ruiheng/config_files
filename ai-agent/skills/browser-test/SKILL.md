@@ -142,12 +142,11 @@ Execution flow:
 4. produce one `browser_check_report`
 5. if `agent_mailbox` is not already bound for this session, bind it first
 6. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
-7. send it back to the requester with `mailbox_send`
+7. send it back to the requester with `mailbox_deliver`
    - `from_address = agent-deck/<browser_tester_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "browser report: <task_id> r<round>"`
    - `body = <browser-check report body>`
-8. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<requester_session_id>`
 
 ## Rules
 

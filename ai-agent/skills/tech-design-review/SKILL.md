@@ -92,12 +92,11 @@ Execution flow:
 2. produce one `tech_design_review_report`
 3. if `agent_mailbox` is not already bound for this session, bind it first
 4. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
-5. send the report back with `mailbox_send`
+5. send the report back with `mailbox_deliver`
    - `from_address = agent-deck/<architect_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "tech-design report: <task_id> r<round>"`
    - `body = <tech-design review report body>`
-6. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<requester_session_id>`
 
 ## Rules
 

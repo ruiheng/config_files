@@ -20,6 +20,7 @@ The server is stdio-based and exposes three groups of tools.
 
 - `mailbox_bind`
 - `mailbox_status`
+- `mailbox_deliver`
 - `mailbox_send`
 - `mailbox_wait`
 - `mailbox_recv`
@@ -35,6 +36,11 @@ The server is stdio-based and exposes three groups of tools.
 For an agent-deck-managed session `<id>`, bind both:
 - `agent-deck/<id>`
 - `codex/<id>`
+
+`mailbox_deliver`
+- sends one mailbox message
+- auto-notifies a non-local target when the address scheme supports push nudge
+- uses `from_address` explicitly, or falls back to the bound `default_sender`
 
 `mailbox_send`
 - sends one mailbox message
@@ -63,7 +69,6 @@ For an agent-deck-managed session `<id>`, bind both:
 `agent_deck_ensure_session`
 - resolves an existing session or creates it when missing
 - starts an inactive target when needed
-- returns whether a later push nudge is useful
 
 ## Notify Tool
 
@@ -72,6 +77,10 @@ For an agent-deck-managed session `<id>`, bind both:
 `notify_send`
 - sends a push-style nudge to one session address
 - currently supports `agent-deck/<id>` and `codex/<id>` by routing through `agent-deck session send`
+
+Typical workflow delivery:
+1. `agent_deck_ensure_session`
+2. `mailbox_deliver`
 
 ## Config Snippets
 
