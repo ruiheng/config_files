@@ -77,7 +77,7 @@ For browser-test work, default to `snapshot -i` to get stable element refs, then
 
 Before the first browser action in a workflow turn, run a minimal environment check:
 1. confirm `agent-browser` is available with `command -v agent-browser`
-2. confirm `workflow_mailbox` is already bound for this session, or bind it before sending the report
+2. confirm `agent_mailbox` is already bound for this session, or bind it before sending the report
 
 ## Output Format
 
@@ -127,7 +127,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body -> ask
-- `browser_tester_session_id`: explicit -> mailbox body `To` header -> bound workflow session -> ask
+- `browser_tester_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask
 - `requester_role`: explicit -> mailbox body `From` header -> default `requester`
 - `round`: explicit -> mailbox body `Round` header -> default `1`
@@ -140,13 +140,15 @@ Execution flow:
    - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
 3. collect runtime evidence
 4. produce one `browser_check_report`
-5. if this session is not already bound, call `workflow_bind_session` with `browser_tester_session_id`
-6. send it back to the requester with `workflow_send`
-   - `from_session_id = <browser_tester_session_id>`
-   - `to_session_id = <requester_session_id>`
+5. if `agent_mailbox` is not already bound for this session, bind it first
+6. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
+7. send it back to the requester with `mailbox_send`
+   - `from_address = agent-deck/<browser_tester_session_id>`
+   - `to_address = agent-deck/<requester_session_id>`
    - `subject = "browser report: <task_id> r<round>"`
    - `body = <browser-check report body>`
-7. after sending, immediately use `check-workflow-mail wait=True`
+8. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<requester_session_id>`
+9. after sending, immediately use `check-workflow-mail wait=True`
 
 ## Rules
 
@@ -154,7 +156,7 @@ Execution flow:
 - prefer the shortest path that still covers the requested scenarios, assertions, and regression checks
 - when the request includes multiple related test points, report which ones were covered, which failed, and which remained unverified
 - return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
-- if `agent-browser` is missing, or required session identity cannot be resolved from explicit metadata plus bound workflow session, state that explicitly in the report or blocker message
+- if `agent-browser` is missing, or required session identity cannot be resolved from explicit metadata plus bound mailbox sender context, state that explicitly in the report or blocker message
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence

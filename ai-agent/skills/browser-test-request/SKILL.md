@@ -108,16 +108,19 @@ Round: <round>
 Recommended subject:
 - `browser check: <task_id> r<round>`
 
-Use the `workflow_mailbox` MCP tools:
-- if this session is not already bound, call `workflow_bind_session` with `requester_session_id`
-- call `workflow_send` with:
-  - `from_session_id = <requester_session_id>`
-  - `to_session_ref = <browser_tester_session_ref>`
-  - `ensure_target_title = <browser_tester_session_ref>`
-  - `ensure_target_cmd = <browser_tester_tool>`
+Use the `agent_mailbox` MCP tools:
+- if `agent_mailbox` is not already bound for this session, bind it first
+- call `agent_deck_ensure_session` with:
+  - `session_ref = <browser_tester_session_ref>`
+  - `ensure_title = <browser_tester_session_ref>`
+  - `ensure_cmd = <browser_tester_tool>`
   - `parent_session_id = <requester_session_id>`
+- call `mailbox_send` with:
+  - `from_address = agent-deck/<requester_session_id>`
+  - `to_address = agent-deck/<browser_tester_session_id>`
   - `subject = "browser check: <task_id> r<round>"`
   - `body = <browser-check mailbox body>`
+- if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, call `notify_send` for `agent-deck/<browser_tester_session_id>`
 
 Default browser tester agent command:
 

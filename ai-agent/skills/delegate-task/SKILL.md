@@ -48,11 +48,11 @@ Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
 - Skill-specific planner identity rule:
   - delegate creator is planner sender
-  - `planner_session_id` should resolve from explicit/context workflow metadata or the bound workflow session
+  - `planner_session_id` should resolve from explicit/context workflow metadata or the bound mailbox sender context
 
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
-- `planner_session_id`: explicit -> context -> bound workflow session -> ask
+- `planner_session_id`: explicit -> context -> bound mailbox sender context -> ask
 - `start_branch`: detected current git branch when delegation begins -> explicit -> context -> ask
 - `integration_branch`: explicit -> context -> if `start_branch` is the intended landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
   - never assume `main`/`master`; branch names are evidence, not truth
@@ -143,28 +143,31 @@ Tool-routing rule:
 
 ## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
 
-Preferred path: use the `workflow_mailbox` MCP tools.
+Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
-1. if this session is not already bound, call `workflow_bind_session` with `planner_session_id`
+1. if `agent_mailbox` is not already bound for this session, bind it first
 2. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-3. call `workflow_send` with:
-   - `from_session_id = <planner_session_id>`
-   - `to_session_ref = <coder_session_ref>`
-   - `ensure_target_title = <coder_session_ref>`
-   - `ensure_target_cmd = <coder_tool>`
+3. call `agent_deck_ensure_session` with:
+   - `session_ref = <coder_session_ref>`
+   - `ensure_title = <coder_session_ref>`
+   - `ensure_cmd = <coder_tool>`
    - `parent_session_id = <planner_session_id>`
+4. use the returned `session_id` as the authoritative `coder_session_id`
+5. fill the final body and call `mailbox_send` with:
+   - `from_address = agent-deck/<planner_session_id>`
+   - `to_address = agent-deck/<coder_session_id>`
    - `subject = "delegate: <task_id> -> coder"`
    - `body = <delegate mailbox body>`
-4. use the tool result as the authoritative `coder_session_id` in user-facing status
+6. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, call `notify_send` for `agent-deck/<coder_session_id>`
 
 Recommended subject:
 - `delegate: <task_id> -> coder`
 
 Rules:
 - keep the full delegate brief in mailbox body
-- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `workflow_send` resolves real session ids
-- report target readiness only after `workflow_send` completes the full launch-or-detect/send/nudge path that applies
+- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
+- report target readiness only after the resolve/create/send/nudge path that applies has completed
 - `ensure_target_cmd` only matters when creating a missing target session; existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract

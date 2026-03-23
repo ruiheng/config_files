@@ -1,89 +1,104 @@
-# Workflow Mailbox MCP
+# Agent Mailbox MCP
 
-This local MCP server wraps the `agent-deck-workflow` mailbox transport as structured tool calls.
+This local MCP server wraps mailbox transport as structured tool calls and keeps agent-deck-specific session operations separate.
 
 Goals:
 - avoid long shell command construction
 - reduce transcript noise from large mailbox body sends
 - avoid repeated shell-approval churn caused by small command-shape differences
+- keep mailbox transport decoupled from workflow-specific orchestration
 
 Command:
 
 ```bash
-~/.local/bin/adwf-mailbox-mcp
+$HOME/.local/bin/agent-mailbox-mcp
 ```
 
-The server is stdio-based and exposes these tools:
-- `workflow_bind_session`
-- `workflow_session_status`
-- `workflow_send`
-- `workflow_wait`
-- `workflow_recv`
-- `workflow_ack`
-- `workflow_release`
-- `workflow_defer`
-- `workflow_fail`
+The server is stdio-based and exposes three groups of tools.
 
-## Tool Summary
+## Mailbox Tools
 
-`workflow_bind_session`
-- store one caller-provided `agent-deck` session id inside MCP server state
-- derive the AI agent inbox address as `agent-deck/<agent-deck-session-id>`
-- optionally store a `default_workdir` for later target creation
-- later `workflow_wait` / `workflow_recv` can omit session id arguments
+- `mailbox_bind`
+- `mailbox_status`
+- `mailbox_send`
+- `mailbox_wait`
+- `mailbox_recv`
+- `mailbox_ack`
+- `mailbox_release`
+- `mailbox_defer`
+- `mailbox_fail`
 
-`workflow_session_status`
-- show the currently bound session id and default workdir
+`mailbox_bind`
+- stores one or more mailbox addresses in MCP server state
+- optionally stores `default_sender` and `default_workdir`
 
-`workflow_send`
-- performs the normal workflow delivery sequence inside MCP
-- accepts a structured body string instead of shell command assembly
-- handles target resolution, optional target creation, mailbox send, and active-session nudge
-- uses the bound session id to decide whether the target is local or needs wakeup
-- uses explicit `workdir` or bound `default_workdir` when creating a new target session
+For an agent-deck-managed session `<id>`, bind both:
+- `agent-deck/<id>`
+- `codex/<id>`
 
-`workflow_wait`
-- checks whether mail is available for the bound AI agent inbox `agent-deck/<agent-deck-session-id>` or explicit override addresses
+`mailbox_send`
+- sends one mailbox message
+- uses `from_address` explicitly, or falls back to the bound `default_sender`
+
+`mailbox_wait`
+- checks whether mail is available for the bound addresses or explicit override addresses
 - does not claim the delivery
 
-`workflow_recv`
-- receives mail for the bound AI agent inbox `agent-deck/<agent-deck-session-id>` or explicit override addresses
+`mailbox_recv`
+- receives mail for the bound addresses or explicit override addresses
 - with `wait=true`, first waits for mail to appear, then claims one delivery
 
-`workflow_ack` / `workflow_release` / `workflow_defer` / `workflow_fail`
+`mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
 - wrap the corresponding `agent-mailbox` lifecycle commands
+
+## Agent-Deck Tools
+
+- `agent_deck_resolve_session`
+- `agent_deck_ensure_session`
+
+`agent_deck_resolve_session`
+- resolves an agent-deck session ref or id
+- returns canonical session id, status, and both mailbox addresses
+
+`agent_deck_ensure_session`
+- resolves an existing session or creates it when missing
+- starts an inactive target when needed
+- returns whether a later push nudge is useful
+
+## Notify Tool
+
+- `notify_send`
+
+`notify_send`
+- sends a push-style nudge to one session address
+- currently supports `agent-deck/<id>` and `codex/<id>` by routing through `agent-deck session send`
 
 ## Config Snippets
 
-Codex (`~/.codex/config.toml`):
+Codex:
 
 ```toml
-[mcp_servers.workflow_mailbox]
-command = "~/.local/bin/adwf-mailbox-mcp"
+[mcp_servers.agent_mailbox]
+command = "$HOME/.local/bin/agent-mailbox-mcp"
 ```
 
-Gemini (`~/.gemini/settings.json`):
+Gemini:
 
-```json
-{
-  "mcpServers": {
-    "workflow_mailbox": {
-      "command": "~/.local/bin/adwf-mailbox-mcp"
-    }
-  }
-}
+```bash
+gemini mcp add -s user agent_mailbox "$HOME/.local/bin/agent-mailbox-mcp"
 ```
 
 Claude Code:
 
 ```bash
-claude mcp add -s user workflow_mailbox -- ~/.local/bin/adwf-mailbox-mcp
+claude mcp add -s user agent_mailbox -- "$HOME/.local/bin/agent-mailbox-mcp"
 ```
 
 ## Notes
 
-- This server does not change any workflow prompts by itself.
-- `workflow_send` no longer depends on the external shell helper.
-- `workflow_recv` and lifecycle tools call `agent-mailbox` directly.
-- Intended usage is bind-first: call `workflow_bind_session` once, then reuse that MCP server state for later `workflow_wait` / `workflow_recv`.
-- `workflow_send` also expects that bound session context.
+- This server does not change workflow prompts by itself.
+- Mailbox transport does not depend on `agent-deck`.
+- `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.
+- Typical bootstrap for an agent-deck-managed session is:
+  1. `agent-deck session current --json`
+  2. `mailbox_bind(addresses=["agent-deck/<id>", "codex/<id>"], default_sender="agent-deck/<id>")`

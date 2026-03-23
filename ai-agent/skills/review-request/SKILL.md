@@ -98,7 +98,7 @@ Review-request continuity rule:
 
 Identity rules:
 - `review_requested` sender must be active coder session id
-- use the bound workflow session for sender validation
+- use the bound mailbox sender context for sender validation
 - If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
   2. create/use new reviewer session with requested tool
@@ -232,20 +232,23 @@ Round: <round>
 Recommended subject:
 - `review request: <task_id> r<round>`
 
-Preferred path: use the `workflow_mailbox` MCP tools.
+Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
-1. if this session is not already bound, call `workflow_bind_session` with `coder_session_id`
+1. if `agent_mailbox` is not already bound for this session, bind it first
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. call `workflow_send` with:
-   - `from_session_id = <coder_session_id>`
-   - `to_session_ref = <reviewer_session_ref>`
-   - `ensure_target_title = <reviewer_session_ref>`
-   - `ensure_target_cmd = <reviewer_tool>`
+3. call `agent_deck_ensure_session` with:
+   - `session_ref = <reviewer_session_ref>`
+   - `ensure_title = <reviewer_session_ref>`
+   - `ensure_cmd = <reviewer_tool>`
    - `parent_session_id = <planner_session_id>`
+4. use the returned `session_id` as the authoritative `reviewer_session_id`
+5. fill the final body and call `mailbox_send` with:
+   - `from_address = agent-deck/<coder_session_id>`
+   - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
    - `body = <review-request mailbox body>`
-4. use the tool result as the authoritative `reviewer_session_id`
+6. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, call `notify_send` for `agent-deck/<reviewer_session_id>`
 
 Rules:
 - round `1` sends the full review request in mailbox body
@@ -253,8 +256,8 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
-- use `reviewer-<task_id>` as a session ref until `workflow_send` resolves the real `reviewer_session_id`
-- let `workflow_send` decide whether this reviewer needs direct launch or an active-session nudge
+- use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
+- let `agent_deck_ensure_session` decide whether this reviewer needs direct start or later notify
 
 ## Quality Bar
 

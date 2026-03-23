@@ -14,17 +14,17 @@ Use this skill to turn a startup bind or wakeup nudge into actual workflow execu
 
 ## Steps
 
-1. If `workflow_mailbox` is not already bound, read `session_id` from the startup context and call `workflow_bind_session`
+1. If `agent_mailbox` is not already bound, bind mailbox addresses for this session first
 2. Run one of these MCP calls:
-   - `wait=False`: `workflow_recv`
-   - `wait=True`: `workflow_wait`, then `workflow_recv`
+   - `wait=False`: `mailbox_recv`
+   - `wait=True`: `mailbox_wait`, then `mailbox_recv`
 3. If no message is waiting, report that no workflow mail is available and stop
 4. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
    - execute that workflow stage immediately
-5. Only `workflow_ack` after the message has been incorporated into working state
-6. If the message cannot be acted on yet, use `workflow_release`, `workflow_defer`, or `workflow_fail` instead of silently dropping it
+5. Only `mailbox_ack` after the message has been incorporated into working state
+6. If the message cannot be acted on yet, use `mailbox_release`, `mailbox_defer`, or `mailbox_fail` instead of silently dropping it
 
 ## Rules
 

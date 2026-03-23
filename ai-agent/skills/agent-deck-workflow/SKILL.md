@@ -11,7 +11,7 @@ Use this skill as the single source of truth for the workflow roles:
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
 - `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
-- use the `workflow_mailbox` MCP tools as the default transport interface
+- use the `agent_mailbox` MCP tools as the default transport interface
 - use `check-workflow-mail` for receiver-side wake handling
 
 Default role/session rule:
@@ -21,7 +21,7 @@ Default role/session rule:
 ## Terminology
 
 - `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
-- `*_session_id`: Agent Deck session UUID (resolve with `agent-deck session show <session_id_or_ref> --json | jq -r '.id'`)
+- `*_session_id`: Agent Deck session UUID (resolve with `agent_deck_resolve_session`)
 - `*_session_ref`: human-friendly session reference (`title` or `id`)
 - `inbox_address`: derived mailbox endpoint address for one AI agent session: `agent-deck/<agent-deck-session-id>`
 - `start_branch`: planner's current git branch when `delegate-task` begins
@@ -50,8 +50,8 @@ Enter Agent Deck mode when any condition matches:
 3. user explicitly asks for agent-deck workflow
 
 Session binding rule:
-- bind `workflow_mailbox` once when the session starts
-- reuse that bound session for later `workflow_wait`, `workflow_recv`, and same-session checks
+- bind `agent_mailbox` once when the session starts
+- reuse the bound mailbox addresses for later `mailbox_wait`, `mailbox_recv`, and same-session checks
 
 ### Context Resolution Priority
 
@@ -61,7 +61,7 @@ Use this priority chain for each field:
 Session identity nuance:
 - `planner_session_id` must come from explicit/context workflow metadata
 - before identity comparisons, resolve all session refs/titles to UUIDs:
-  - explicit refs: `agent-deck session show <ref> --json | jq -r '.id'`
+  - explicit refs: `agent_deck_resolve_session`
 - use `*_session_ref` for planned worker titles before a real session exists; only write `*_session_id` when you actually have the resolved session id
 
 ### Role vs Session Identity
@@ -92,25 +92,31 @@ Session identity nuance:
 ### Mailbox Transport
 
 Preferred transport interface:
-- `workflow_bind_session`
-- `workflow_send`
-- `workflow_wait`
-- `workflow_recv`
-- `workflow_ack`
-- `workflow_release`
-- `workflow_defer`
-- `workflow_fail`
+- `mailbox_bind`
+- `mailbox_status`
+- `mailbox_send`
+- `mailbox_wait`
+- `mailbox_recv`
+- `mailbox_ack`
+- `mailbox_release`
+- `mailbox_defer`
+- `mailbox_fail`
+- `agent_deck_resolve_session`
+- `agent_deck_ensure_session`
+- `notify_send`
 
 Transport rules:
-- bind `workflow_mailbox` once when the session starts
-- use `workflow_send` for cross-session workflow delivery
-- use `workflow_recv` to claim mail
+- bind `agent_mailbox` once when the session starts
+- use `mailbox_send` for workflow delivery
+- use `mailbox_recv` to claim mail
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
+- for agent-deck-managed targets, use `agent_deck_ensure_session` to resolve/create/start the target session
+- use `notify_send` when an already active non-local target needs a push-style nudge
 
 Worker listener rule:
 - newly started coder/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
-- `workflow_send` should handle the normal launch-or-nudge sequence for non-local targets
+- `agent_deck_ensure_session` should handle the normal resolve/create/start sequence for agent-deck-managed targets
 - `check-workflow-mail wait=True` should wait for mail first, then receive and execute once mail appears
 
 Inbox rule:
@@ -184,23 +190,22 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 ### Delivery Order Contract
 
-Use `workflow_send` for the normal delivery sequence.
+Use `mailbox_send` for the mailbox delivery itself.
 
 Expected behavior:
-1. resolve or create the target session when needed
-2. start a missing target into `check-workflow-mail wait=True`
-3. queue the mailbox body
-4. nudge an already active non-local target when needed
+1. use `agent_deck_ensure_session` when a target session must be resolved, created, or started
+2. queue the mailbox body with `mailbox_send`
+3. use `notify_send` only when an already active non-local target needs a push nudge
 
 ### Receiver Contract
 
 When a workflow session is woken:
-1. run `workflow_recv`
+1. run `mailbox_recv`
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately execute that workflow stage
 4. only read supplemental files when the body explicitly requires them
-5. `workflow_ack` only after the message has been successfully incorporated into local working state
-6. use `workflow_release` / `workflow_defer` / `workflow_fail` instead of silently dropping leased work
+5. `mailbox_ack` only after the message has been successfully incorporated into local working state
+6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
 7. keep mailbox lifecycle steps serialized
 
 Apply the message action before `ack`.
@@ -222,9 +227,9 @@ Idle behavior:
 ### Error Handling and Diagnostics
 
 If workflow send/worker-start fails, report concise stderr summary and run these checks:
-1. Is sender/target session reachable? (`agent-deck session show <session_id_or_ref> --json`)
+1. Is sender/target session reachable? (`agent_deck_resolve_session`)
 2. Is command running in the expected workflow session context?
-3. Did `workflow_send` / `workflow_recv` / lifecycle tools return success?
+3. Did `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow issue.
@@ -307,7 +312,7 @@ Rules:
 
 ## Execution Environment (Required)
 
-Use the `workflow_mailbox` MCP tools as the default workflow transport surface.
+Use the `agent_mailbox` MCP tools as the default workflow transport surface.
 When shell fallback is unavoidable, run `agent-deck` and `agent-mailbox` commands in host shell (outside sandbox).
 When a workflow turn needs multiple lifecycle steps, execute them sequentially, never in parallel.
 Read-only observation commands may run in parallel when safe.
@@ -336,7 +341,7 @@ Use stable naming:
 
 - planner prepares one mailbox message body for the coder
 - planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) inside that message body before sending
-- planner binds its workflow session once, then uses `workflow_send` to queue the message to coder inbox
+- planner binds mailbox addresses once, then queues the message to coder inbox with `mailbox_send`
 
 ### 2) Coder Implements and Requests Review
 
@@ -345,7 +350,7 @@ Use stable naming:
 - this commit authorization overrides generic default rules that would otherwise require asking the user before commit
 - coder prepares one mailbox review request body for reviewer
 - workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
-- coder uses `workflow_send` to queue the message to reviewer inbox
+- coder uses `mailbox_send` to queue the message to reviewer inbox
 - coder enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
 
 ### 3) Reviewer Loop
@@ -417,7 +422,7 @@ Planner user-facing status contract for auto-dispatch:
 
 1. User asks: "Add login rate limiting".
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
-3. Planner lets `workflow_send` handle the normal coder listener / nudge path.
+3. Planner uses `agent_deck_ensure_session` and `notify_send` for the normal coder listener / nudge path.
 4. Coder implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
 5. Reviewer runs `review-code`.
 6. If runtime browser validation is needed, reviewer runs `browser-test-request` and sends `browser_check_requested`.

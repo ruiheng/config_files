@@ -1,0 +1,592 @@
+#!/usr/bin/env node
+
+const { spawnSync } = require("node:child_process");
+const { existsSync } = require("node:fs");
+const path = require("node:path");
+const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
+const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
+const z = require("zod");
+
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const ACTIVE_SESSION_STATUSES = new Set(["running", "waiting", "idle"]);
+
+const STATE = {
+  bound_addresses: [],
+  default_sender: null,
+  default_workdir: null,
+};
+
+const DEFAULT_LISTENER_MESSAGE =
+  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then use the check-workflow-mail skill now with wait=True. Watch for pending workflow mail, then receive it and execute its requested action.";
+
+const DEFAULT_NOTIFY_MESSAGE =
+  "Use the check-workflow-mail skill now. Receive the pending message and execute its requested action.";
+
+const SERVER_INSTRUCTIONS =
+  "Bootstrap this MCP process once per agent-managed session. " +
+  "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind` with `agent-deck/<id>` and `codex/<id>`. " +
+  "Use `agent-deck/<id>` as the default sender. " +
+  "Pass `default_workdir` when you want later `agent_deck_ensure_session` calls to create sessions in the current project. " +
+  "Later reuse the bound addresses until MCP state is lost.";
+
+function fail(message, data) {
+  const error = new Error(message);
+  error.data = data;
+  throw error;
+}
+
+function runCmd(args, options = {}) {
+  const {
+    inputText = null,
+    okCodes = [0],
+  } = options;
+
+  const proc = spawnSync(args[0], args.slice(1), {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    input: inputText,
+  });
+
+  if (!okCodes.includes(proc.status)) {
+    const detail =
+      (proc.stderr || "").trim() ||
+      (proc.stdout || "").trim() ||
+      `exit code ${proc.status}`;
+    fail(`command failed: ${args.join(" ")} :: ${detail}`, {
+      args,
+      returncode: proc.status,
+    });
+  }
+
+  return proc;
+}
+
+function parseJsonOutput(text, context) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    fail(`${context} returned invalid JSON: ${error}`, { output: text });
+  }
+}
+
+function dedupe(values) {
+  const out = [];
+  const seen = new Set();
+  for (const value of values) {
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    out.push(value);
+    seen.add(value);
+  }
+  return out;
+}
+
+function parseAddress(address) {
+  const match = /^([^/]+)\/(.+)$/.exec(address);
+  if (!match) {
+    fail(`invalid address: ${address}`);
+  }
+  return {
+    scheme: match[1],
+    id: match[2],
+  };
+}
+
+function agentDeckAddresses(sessionId) {
+  return [
+    `agent-deck/${sessionId}`,
+    `codex/${sessionId}`,
+  ];
+}
+
+function mailboxAddresses(args = {}) {
+  if (args.addresses && args.addresses.length > 0) {
+    return dedupe(args.addresses);
+  }
+  if (STATE.bound_addresses.length > 0) {
+    return STATE.bound_addresses.slice();
+  }
+  fail("no mailbox addresses provided and no mailbox addresses are bound");
+}
+
+function senderAddress(args = {}) {
+  return args.from_address || STATE.default_sender || STATE.bound_addresses[0] || null;
+}
+
+function resolveSessionShow(identifier) {
+  const proc = spawnSync("agent-deck", ["session", "show", identifier, "--json"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+  if (proc.status !== 0) {
+    return null;
+  }
+  const data = parseJsonOutput(proc.stdout, "agent-deck session show");
+  if (data && data.success === false) {
+    return null;
+  }
+  return data;
+}
+
+function sessionInfoFromData(data, sessionRef = null) {
+  if (!data) {
+    return null;
+  }
+  const sessionId = data.id;
+  if (typeof sessionId !== "string" || !sessionId) {
+    return null;
+  }
+  return {
+    session_id: sessionId,
+    session_ref: sessionRef || data.title || sessionId,
+    title: data.title || null,
+    session_status: data.status || null,
+    addresses: agentDeckAddresses(sessionId),
+  };
+}
+
+function parseSendTokens(output) {
+  const result = {
+    message_id: null,
+    delivery_id: null,
+    blob_id: null,
+  };
+  for (const token of output.split(/\s+/)) {
+    if (token.startsWith("message_id=")) {
+      result.message_id = token.slice("message_id=".length);
+    } else if (token.startsWith("delivery_id=")) {
+      result.delivery_id = token.slice("delivery_id=".length);
+    } else if (token.startsWith("blob_id=")) {
+      result.blob_id = token.slice("blob_id=".length);
+    }
+  }
+  return result;
+}
+
+function makeToolResult(result) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+    structuredContent: result,
+  };
+}
+
+function buildServer() {
+  const server = new McpServer({
+    name: "agent_mailbox",
+    version: "0.3.0",
+    instructions: SERVER_INSTRUCTIONS,
+  });
+
+  server.registerTool(
+    "mailbox_bind",
+    {
+      description: "Bind one or more mailbox addresses into MCP server state.",
+      inputSchema: {
+        addresses: z.array(z.string()).min(1),
+        default_sender: z.string().optional(),
+        default_workdir: z.string().optional(),
+      },
+    },
+    async ({ addresses, default_sender, default_workdir }) => {
+      const boundAddresses = dedupe(addresses);
+      const sender = default_sender || boundAddresses[0] || null;
+      STATE.bound_addresses = boundAddresses;
+      STATE.default_sender = sender;
+      STATE.default_workdir = default_workdir || null;
+      return makeToolResult({
+        status: "bound",
+        bound_addresses: STATE.bound_addresses,
+        default_sender: STATE.default_sender,
+        default_workdir: STATE.default_workdir,
+      });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_status",
+    {
+      description: "Show the currently bound mailbox addresses, default sender, and default workdir stored in this MCP server.",
+      inputSchema: {},
+    },
+    async () =>
+      makeToolResult({
+        bound_addresses: STATE.bound_addresses,
+        default_sender: STATE.default_sender,
+        default_workdir: STATE.default_workdir,
+      })
+  );
+
+  server.registerTool(
+    "mailbox_send",
+    {
+      description: "Send one mailbox message.",
+      inputSchema: {
+        to_address: z.string(),
+        from_address: z.string().optional(),
+        subject: z.string(),
+        body: z.string(),
+        content_type: z.string().optional(),
+        schema_version: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const fromAddress = senderAddress(args);
+      if (!fromAddress) {
+        fail("mailbox_send requires from_address or a bound default_sender");
+      }
+
+      const contentType = args.content_type || "text/markdown";
+      const schemaVersion = args.schema_version || "1";
+
+      const sendProc = runCmd(
+        [
+          "agent-mailbox",
+          "send",
+          "--to",
+          args.to_address,
+          "--from",
+          fromAddress,
+          "--subject",
+          args.subject,
+          "--content-type",
+          contentType,
+          "--schema-version",
+          schemaVersion,
+          "--body-file",
+          "-",
+        ],
+        { inputText: args.body }
+      );
+      const sendIds = parseSendTokens(sendProc.stdout);
+
+      return makeToolResult({
+        status: "sent",
+        from_address: fromAddress,
+        to_address: args.to_address,
+        subject: args.subject,
+        message_id: sendIds.message_id,
+        delivery_id: sendIds.delivery_id,
+        blob_id: sendIds.blob_id,
+      });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_wait",
+    {
+      description: "Observe whether mail is available without claiming it. Agent-managed session inbox addresses typically look like agent-deck/<session-id> or codex/<session-id>.",
+      inputSchema: {
+        addresses: z.array(z.string()).optional(),
+        timeout: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const addresses = mailboxAddresses(args);
+      const cmd = ["agent-mailbox", "wait"];
+      for (const address of addresses) {
+        cmd.push("--for", address);
+      }
+      if (args.timeout) {
+        cmd.push("--timeout", args.timeout);
+      }
+      cmd.push("--json");
+      const proc = runCmd(cmd, { okCodes: [0, 2] });
+      if (proc.status === 2) {
+        return makeToolResult({
+          status: "no_message",
+          addresses,
+        });
+      }
+      return makeToolResult({
+        status: "message_available",
+        addresses,
+        delivery: parseJsonOutput(proc.stdout, "agent-mailbox wait"),
+      });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_recv",
+    {
+      description: "Receive mail. Uses bound addresses by default; pass addresses only to override. With wait=true, wait for mail, then claim one message.",
+      inputSchema: {
+        addresses: z.array(z.string()).optional(),
+        wait: z.boolean().optional(),
+        timeout: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const addresses = mailboxAddresses(args);
+      if (args.wait) {
+        const waitResult = await server.server.callTool({
+          name: "mailbox_wait",
+          arguments: {
+            addresses,
+            timeout: args.timeout,
+          },
+        });
+        const structured = waitResult.structuredContent;
+        if (structured && structured.status === "no_message") {
+          return waitResult;
+        }
+      }
+
+      const cmd = ["agent-mailbox", "recv"];
+      for (const address of addresses) {
+        cmd.push("--for", address);
+      }
+      cmd.push("--json");
+      const proc = runCmd(cmd, { okCodes: [0, 2] });
+      if (proc.status === 2) {
+        return makeToolResult({
+          status: "no_message",
+          addresses,
+        });
+      }
+      return makeToolResult({
+        status: "received",
+        addresses,
+        delivery: parseJsonOutput(proc.stdout, "agent-mailbox recv"),
+      });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_ack",
+    {
+      description: "Acknowledge a claimed mailbox delivery.",
+      inputSchema: {
+        delivery_id: z.string(),
+        lease_token: z.string(),
+      },
+    },
+    async ({ delivery_id, lease_token }) => {
+      runCmd(["agent-mailbox", "ack", "--delivery", delivery_id, "--lease-token", lease_token]);
+      return makeToolResult({ status: "acked", delivery_id });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_release",
+    {
+      description: "Release a claimed mailbox delivery back to the queue.",
+      inputSchema: {
+        delivery_id: z.string(),
+        lease_token: z.string(),
+      },
+    },
+    async ({ delivery_id, lease_token }) => {
+      runCmd(["agent-mailbox", "release", "--delivery", delivery_id, "--lease-token", lease_token]);
+      return makeToolResult({ status: "released", delivery_id });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_defer",
+    {
+      description: "Defer a claimed mailbox delivery until a later RFC3339 time.",
+      inputSchema: {
+        delivery_id: z.string(),
+        lease_token: z.string(),
+        until: z.string(),
+      },
+    },
+    async ({ delivery_id, lease_token, until }) => {
+      runCmd([
+        "agent-mailbox",
+        "defer",
+        "--delivery",
+        delivery_id,
+        "--lease-token",
+        lease_token,
+        "--until",
+        until,
+      ]);
+      return makeToolResult({ status: "deferred", delivery_id, until });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_fail",
+    {
+      description: "Fail a claimed mailbox delivery with a reason.",
+      inputSchema: {
+        delivery_id: z.string(),
+        lease_token: z.string(),
+        reason: z.string(),
+      },
+    },
+    async ({ delivery_id, lease_token, reason }) => {
+      runCmd([
+        "agent-mailbox",
+        "fail",
+        "--delivery",
+        delivery_id,
+        "--lease-token",
+        lease_token,
+        "--reason",
+        reason,
+      ]);
+      return makeToolResult({ status: "failed", delivery_id, reason });
+    }
+  );
+
+  server.registerTool(
+    "agent_deck_resolve_session",
+    {
+      description: "Resolve an agent-deck session ref or id and return its canonical session id, status, and mailbox addresses.",
+      inputSchema: {
+        session: z.string(),
+      },
+    },
+    async ({ session }) => {
+      const data = resolveSessionShow(session);
+      if (!data) {
+        return makeToolResult({
+          status: "not_found",
+          session_ref: session,
+        });
+      }
+      return makeToolResult({
+        status: "found",
+        ...sessionInfoFromData(data, session),
+      });
+    }
+  );
+
+  server.registerTool(
+    "agent_deck_ensure_session",
+    {
+      description: "Resolve or create an agent-deck session. If the target exists but is not active, start it; if it is already active, return notify_needed=true.",
+      inputSchema: {
+        session_id: z.string().optional(),
+        session_ref: z.string().optional(),
+        ensure_title: z.string().optional(),
+        ensure_cmd: z.string().optional(),
+        parent_session_id: z.string().optional(),
+        workdir: z.string().optional(),
+        listener_message: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const identifier = args.session_id || args.session_ref || null;
+      const listenerMessage = args.listener_message || DEFAULT_LISTENER_MESSAGE;
+      let workdir = args.workdir || STATE.default_workdir || null;
+      let data = identifier ? resolveSessionShow(identifier) : null;
+
+      let createdTarget = false;
+      let startedSession = false;
+      let notifyNeeded = false;
+      let listenerStatus = "not_needed";
+
+      if (!data) {
+        if (!args.ensure_title) {
+          fail("target session missing: provide session_id, session_ref, or ensure_title");
+        }
+        if (!args.ensure_cmd) {
+          fail("ensure_cmd is required when creating a target session");
+        }
+        if (!args.parent_session_id) {
+          fail("parent_session_id is required when creating a target session");
+        }
+        if (!workdir) {
+          fail("workdir is required when creating a target session");
+        }
+        if (!existsSync(workdir)) {
+          fail(`workdir does not exist: ${workdir}`);
+        }
+
+        const launchArgs = [
+          "agent-deck",
+          "launch",
+          "--json",
+          "--title",
+          args.ensure_title,
+          "--parent",
+          args.parent_session_id,
+          "--cmd",
+          args.ensure_cmd,
+          "--message",
+          listenerMessage,
+          workdir,
+        ];
+        const proc = runCmd(launchArgs);
+        data = parseJsonOutput(proc.stdout, "agent-deck launch");
+        createdTarget = true;
+        startedSession = true;
+        listenerStatus = "started_waiting";
+      } else {
+        const status = data.status || null;
+        if (ACTIVE_SESSION_STATUSES.has(status)) {
+          notifyNeeded = true;
+          listenerStatus = "not_needed_existing_session";
+        } else {
+          const startArgs = ["agent-deck", "session", "start", "--json", data.id];
+          if (listenerMessage) {
+            startArgs.splice(4, 0, "-m", listenerMessage);
+          }
+          runCmd(startArgs);
+          data = resolveSessionShow(data.id) || data;
+          startedSession = true;
+          listenerStatus = listenerMessage ? "started_waiting" : "started";
+        }
+      }
+
+      return makeToolResult({
+        status: "ready",
+        ...sessionInfoFromData(data, args.session_ref || args.ensure_title || identifier),
+        created_target: createdTarget,
+        started_session: startedSession,
+        notify_needed: notifyNeeded,
+        listener_status: listenerStatus,
+      });
+    }
+  );
+
+  server.registerTool(
+    "notify_send",
+    {
+      description: "Send a push-style nudge to one session address. For agent-deck-managed sessions, both agent-deck/<id> and codex/<id> currently route through agent-deck session send.",
+      inputSchema: {
+        address: z.string(),
+        message: z.string().optional(),
+      },
+    },
+    async ({ address, message }) => {
+      const parsed = parseAddress(address);
+      const notifyMessage = message || DEFAULT_NOTIFY_MESSAGE;
+
+      switch (parsed.scheme) {
+        case "agent-deck":
+        case "codex":
+          runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
+          return makeToolResult({
+            status: "sent",
+            address,
+            scheme: parsed.scheme,
+          });
+        default:
+          fail(`unsupported notify address scheme: ${parsed.scheme}`, { address });
+      }
+    }
+  );
+
+  return server;
+}
+
+async function main() {
+  const server = buildServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((error) => {
+  console.error(error && error.stack ? error.stack : String(error));
+  process.exit(1);
+});
