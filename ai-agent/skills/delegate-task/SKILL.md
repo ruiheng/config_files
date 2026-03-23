@@ -71,8 +71,18 @@ Resolve by priority:
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
   - `reviewer_tool` selects how the reviewer session is created/resumed; it does not collapse reviewer role into the current planner/coder session
   - if planner/coder and reviewer all use Codex, still keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicitly requested in workflow context
-- `workflow_policy` (optional): explicit -> context -> omit when not set
+- `workflow_policy` (optional): explicit -> context -> infer from clear user automation intent -> omit when not set
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
+
+Workflow policy inference:
+- if the user clearly requests unattended execution, set:
+  - `mode = "unattended"`
+  - `auto_accept_if_no_must_fix = true`
+- if the user clearly requests automatic next-task dispatch, set:
+  - `auto_dispatch_next_task = true`
+- if the user clearly requests unattended execution without changing UI confirmation behavior, keep:
+  - `ui_manual_confirmation = "auto"`
+- write inferred automation choices into `## Workflow Policy`; do not leave them implicit in prose
 
 ## 3) Mailbox Body Template
 
