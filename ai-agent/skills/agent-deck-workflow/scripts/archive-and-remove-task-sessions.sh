@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Archive task-session resume metadata, then optionally remove coder/reviewer sessions.
+Archive task-session resume metadata, then optionally remove coder/reviewer/architect sessions.
 
 Usage:
   ./scripts/archive-and-remove-task-sessions.sh [options]
@@ -13,9 +13,10 @@ Options:
   --planner-session-id <id|title>   Planner session ref (default: planner)
   --coder-session-id <id|title>     Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
+  --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
-  --apply                        Remove coder/reviewer sessions after archiving
+  --apply                        Remove coder/reviewer/architect sessions after archiving
   -h, --help                     Show help
 
 Outputs:
@@ -52,6 +53,7 @@ task_id=""
 planner_session_ref="planner"
 coder_session_ref=""
 reviewer_session_ref=""
+architect_session_ref=""
 artifact_root=".agent-artifacts"
 profile=""
 apply=0
@@ -62,6 +64,7 @@ while [[ $# -gt 0 ]]; do
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
     --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
+    --architect-session-id) architect_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --apply) apply=1; shift 1 ;;
@@ -77,6 +80,9 @@ if [[ -z "$coder_session_ref" ]]; then
 fi
 if [[ -z "$reviewer_session_ref" ]]; then
   reviewer_session_ref="reviewer-${task_id}"
+fi
+if [[ -z "$architect_session_ref" ]]; then
+  architect_session_ref="architect-${task_id}"
 fi
 
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck not found in PATH"
@@ -599,6 +605,7 @@ process_session() {
 
 process_session "coder" "$coder_session_ref"
 process_session "reviewer" "$reviewer_session_ref"
+process_session "architect" "$architect_session_ref"
 
 sessions_json="$(jq -s '.' "$entries_file")"
 archived_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

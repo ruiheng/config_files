@@ -27,6 +27,7 @@ Options:
   --planner-session-id <id|title>  Planner session ref (default: planner)
   --coder-session-id <id|title>    Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
+  --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
   --profile <name>                 Agent-deck profile (used by optional health gate)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
@@ -77,6 +78,7 @@ progress_file=""
 planner_session_ref="planner"
 coder_session_ref=""
 reviewer_session_ref=""
+architect_session_ref=""
 profile=""
 merge_mode="ff-only"
 allow_dirty=0
@@ -95,6 +97,7 @@ while [[ $# -gt 0 ]]; do
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
     --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
+    --architect-session-id) architect_session_ref="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
@@ -130,6 +133,9 @@ if [[ -z "$coder_session_ref" ]]; then
 fi
 if [[ -z "$reviewer_session_ref" ]]; then
   reviewer_session_ref="reviewer-${task_id}"
+fi
+if [[ -z "$architect_session_ref" ]]; then
+  architect_session_ref="architect-${task_id}"
 fi
 
 command -v git >/dev/null 2>&1 || die "git is required"
@@ -296,6 +302,7 @@ if (( run_health_gate )); then
       --planner-session-id "$planner_session_ref"
       --coder-session-id "$coder_session_ref"
       --reviewer-session-id "$reviewer_session_ref"
+      --architect-session-id "$architect_session_ref"
       --artifact-root "$artifact_root"
       --max-worker-sessions 2
     )

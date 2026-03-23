@@ -7,7 +7,8 @@ This document describes the multi-agent workflow built around the skills in this
 - Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
-- Agent 4, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
+- Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews committed design docs and reports advice back to the requester session
+- Agent 5, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - User: makes acceptance decisions when the workflow is human-gated
 
 ## Core Transport
@@ -23,24 +24,29 @@ This document describes the multi-agent workflow built around the skills in this
 
 1. User asks Planner to prepare work.
 2. Planner runs `delegate-task` and sends one delegate workflow message.
-3. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
-4. Coder runs `review-request` from that committed state and sends one review-request workflow message.
-5. Reviewer runs `review-code` and sends either:
+3. Planner or Coder may send a committed tech-design snapshot on `tech-design/<task_id>` to `architect-<task_id>` and receive a `tech_design_review_report`.
+4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
+5. Coder runs `review-request` from that committed state and sends one review-request workflow message.
+6. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
    - `stop_recommended` to the user decision point.
-6. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
-7. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
-8. Repeat until the user decides quality is acceptable, or policy auto-accepts.
-9. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
-10. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
-11. Coder, Reviewer, and Browser Tester can be fully exited.
+7. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
+8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
+9. Repeat until the user decides quality is acceptable, or policy auto-accepts.
+10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
+11. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
+12. Coder, Reviewer, and Architect can be fully exited; Browser Tester stays long-lived.
 
 ## Flow Diagram
 
 ```mermaid
 flowchart TD
     P[Planner] -->|mailbox: execute_delegate_task| C[Coder]
+    P -->|mailbox: tech_design_review_requested| A[Architect]
+    C -->|mailbox: tech_design_review_requested| A
+    A -->|mailbox: tech_design_review_report| P
+    A -->|mailbox: tech_design_review_report| C
     C -->|mailbox: review_requested| R[Reviewer]
     R -->|mailbox: browser_check_requested| B[Browser Tester]
     X[Requester] -->|mailbox: browser_check_requested| B
@@ -56,6 +62,7 @@ flowchart TD
 ## Operational Notes
 
 - `review-code` remains the authoritative full review output
+- `tech-design-review` is a separate advisory lane for committed design docs; it does not replace code review
 - `review-request` should record coder-run lint / build / compile / test results so reviewer can usually reuse them instead of rerunning the same slow checks
 - `browser-test` is primarily runtime evidence; when explicitly allowed, Browser Tester may directly adjust display-adjacent code on its own branch before reporting back
 - requester should provide browser-test login/auth/setup context whenever possible; Browser Tester may ask requester or user for missing access details
@@ -70,8 +77,8 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `coder-<task_id>` and `reviewer-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
-3. Keep coder/reviewer in `check-workflow-mail wait=True` when they are idle; keep `browser-tester` in `check-workflow-mail wait=True` whenever it is not actively executing a request.
+2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
+3. Keep coder/reviewer/architect in `check-workflow-mail wait=True` when they are idle; keep `browser-tester` in `check-workflow-mail wait=True` whenever it is not actively executing a request.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
@@ -80,6 +87,8 @@ Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
 - Receiver wake handler: `check-workflow-mail` (`ai-agent/skills/check-workflow-mail/SKILL.md`)
+- Tech-design review request: `tech-design-review-request` (`ai-agent/skills/tech-design-review-request/SKILL.md`)
+- Architect review: `tech-design-review` (`ai-agent/skills/tech-design-review/SKILL.md`)
 - Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)
 - Browser tester: `browser-test` (`ai-agent/skills/browser-test/SKILL.md`)
 - Agent Deck skill + docs bundle: `ai-agent/skills/agent-deck/SKILL.md` and `ai-agent/skills/agent-deck/references/`

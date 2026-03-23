@@ -6,7 +6,7 @@ usage() {
 Closeout health gate for agent-deck workflow.
 
 This script runs one-shot post-closeout checks with minimal agent-side orchestration:
-1) archive+cleanup coder/reviewer sessions
+1) archive+cleanup coder/reviewer/architect sessions
 2) verify cleanup result for this task
 3) verify global worker-session cap (to prevent unattended error accumulation)
 
@@ -18,6 +18,7 @@ Options:
   --planner-session-id <id|title>   Planner session ref (default: planner)
   --coder-session-id <id|title>     Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
+  --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
   --max-worker-sessions <n>      Max allowed lingering worker sessions (default: 2)
@@ -53,6 +54,7 @@ task_id=""
 planner_session_ref="planner"
 coder_session_ref=""
 reviewer_session_ref=""
+architect_session_ref=""
 artifact_root=".agent-artifacts"
 profile=""
 max_worker_sessions=2
@@ -64,6 +66,7 @@ while [[ $# -gt 0 ]]; do
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
     --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
+    --architect-session-id) architect_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --max-worker-sessions) max_worker_sessions="${2:-}"; shift 2 ;;
@@ -81,6 +84,9 @@ if [[ -z "$coder_session_ref" ]]; then
 fi
 if [[ -z "$reviewer_session_ref" ]]; then
   reviewer_session_ref="reviewer-${task_id}"
+fi
+if [[ -z "$architect_session_ref" ]]; then
+  architect_session_ref="architect-${task_id}"
 fi
 
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck not found in PATH"
@@ -105,7 +111,7 @@ count_worker_sessions() {
     if type != "array" then
       -1
     else
-      [ .[] | select(((.title // "") | test("^(coder|reviewer)-"))) ] | length
+      [ .[] | select(((.title // "") | test("^(coder|reviewer|architect)-"))) ] | length
     end
   ' <<<"$list_json" 2>/dev/null || echo "-1"
 }
@@ -137,6 +143,7 @@ cleanup_cmd=(
   --planner-session-id "$planner_session_ref"
   --coder-session-id "$coder_session_ref"
   --reviewer-session-id "$reviewer_session_ref"
+  --architect-session-id "$architect_session_ref"
   --artifact-root "$artifact_root"
   --apply
 )

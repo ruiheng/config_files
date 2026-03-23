@@ -1,12 +1,12 @@
 ---
 name: agent-deck-workflow
-description: Human-led planner/coder/reviewer workflow protocol with an optional browser-tester worker, using agent-mailbox as the authoritative message layer and agent-deck only for wakeups.
+description: Human-led planner/coder/reviewer workflow protocol with a per-task architect lane and an optional browser-tester worker, using agent-mailbox as the authoritative message layer and agent-deck only for wakeups.
 ---
 
 # Agent Deck Workflow
 
 Use this skill as the single source of truth for the workflow roles:
-`planner` (long-lived), `coder` (per-task), `reviewer` (per-task), and optional long-lived `browser-tester` workers.
+`planner` (long-lived), `coder` (per-task), `reviewer` (per-task), `architect` (per-task), and optional long-lived `browser-tester` workers.
 
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
@@ -32,8 +32,8 @@ Default role/session rule:
 
 ## Scope
 
-- Workflow shape: one long-lived `planner`, per-task `coder` + `reviewer`, plus optional long-lived `browser-tester` sessions
-- Default session mapping: planner, coder, and reviewer are separate sessions; browser-tester is optional, shared, and requester-scoped
+- Workflow shape: one long-lived `planner`, per-task `coder` + `reviewer` + `architect`, plus optional long-lived `browser-tester` sessions
+- Default session mapping: planner, coder, reviewer, and architect are separate sessions; browser-tester is optional, shared, and requester-scoped
 - Same-session planner+reviewer is allowed only when explicitly assigned by workflow context
 - Runtime shape: single shared workspace
 - Governance: human-led; user confirmation gates remain required at stop/closeout points unless policy override is present
@@ -66,7 +66,7 @@ Session identity nuance:
 
 ### Role vs Session Identity
 
-- Default mapping is one distinct session per active role: `planner_session_id`, `coder_session_id`, and `reviewer_session_id` should differ unless workflow context explicitly assigns an exception
+- Default mapping is one distinct session per active role: `planner_session_id`, `coder_session_id`, `reviewer_session_id`, and `architect_session_id` should differ unless workflow context explicitly assigns an exception
 - A session may hold multiple roles for the same task only when workflow context explicitly assigns that multi-role mapping
 - `*_session_id` fields identify which session currently holds each role mapping
 - Tool/provider choice is separate from session identity
@@ -115,7 +115,7 @@ Transport rules:
 - use `notify_send` when an already active non-local target needs a push-style nudge
 
 Worker listener rule:
-- newly started coder/reviewer/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
+- newly started coder/reviewer/architect/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
 - `agent_deck_ensure_session` should handle the normal resolve/create/start sequence for agent-deck-managed targets
 - `check-workflow-mail wait=True` should wait for mail first, then receive and execute once mail appears
 
@@ -151,6 +151,8 @@ Then include normal Markdown sections. Required meaning:
 Required action names:
 - `execute_delegate_task`
 - `review_requested`
+- `tech_design_review_requested`
+- `tech_design_review_report`
 - `browser_check_requested`
 - `browser_check_report`
 - `rework_required`
@@ -160,6 +162,8 @@ Required action names:
 Sender invariants:
 - `execute_delegate_task`: sender is planner
 - `review_requested`: sender is coder
+- `tech_design_review_requested`: sender is the requesting workflow session
+- `tech_design_review_report`: sender is architect
 - `browser_check_requested`: sender is the requesting workflow session
 - `browser_check_report`: sender is browser-tester
 - `rework_required`, `user_requested_iteration`, `closeout_delivered`: sender is reviewer
@@ -168,6 +172,8 @@ Sender invariants:
 Action contract:
 - `execute_delegate_task`: planner starts delegated implementation
 - `review_requested`: coder asks reviewer to run full review from a delivery commit, includes the coder's already-run verification record, and reviewer must proactively send the next workflow message
+- `tech_design_review_requested`: planner or coder asks architect to review a committed tech-design snapshot from a dedicated branch and return advisory guidance to the requester
+- `tech_design_review_report`: architect returns advisory tech-design feedback to the original requester session
 - `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence; when the request explicitly allows it, browser-tester may directly modify display-adjacent code on its own branch before reporting back
 - `browser_check_report`: browser-tester returns PASS / FAIL / UNKNOWN evidence to the original requester session
 - `rework_required`: reviewer blocks and sends must-fix follow-up to coder
@@ -180,11 +186,24 @@ Review disagreement policy:
 - when coder disagrees, the next `review_requested` body should state the disagreement and rationale clearly
 - if coder and reviewer cannot converge, either role may stop and ask user for a decision
 
+Tech-design disagreement policy:
+- architect feedback is advisory, not a user decision
+- requester must evaluate architect feedback critically and adopt only the changes that are technically justified
+- architect and requester may iterate over the design and argue specific points directly
+- either side may stop and ask user for a decision when the disagreement becomes subjective, strategic, or stuck
+
 Review-request continuity:
 - first `review_requested` to a reviewer session carries the full task and review context
 - later `review_requested` messages to that same reviewer session carry only the delta since the previous review round
 - if the reviewer session changes, resend the full review context to the new reviewer session
 - `review_requested` should carry a concise record of coder-run lint, build/link, compile/type-check, test, and other verification results so reviewer can usually avoid rerunning the same slow checks
+
+Tech-design review continuity:
+- first `tech_design_review_requested` to an architect session carries the full tech-design context
+- later `tech_design_review_requested` messages to that same architect session carry only the delta since the previous architect round
+- if the architect session changes, resend the full tech-design context to the new architect session
+- `tech_design_review_requested` is based on committed design docs, not uncommitted working tree notes
+- default tech-design branch is `tech-design/<task_id>`
 
 User-facing responses should provide readable decisions, not raw mailbox JSON.
 
@@ -213,6 +232,8 @@ Apply the message action before `ack`.
 Action execution defaults after `recv`:
 - `execute_delegate_task`: start the delegated implementation flow immediately
 - `review_requested`: start review immediately
+- `tech_design_review_requested`: start tech-design review immediately
+- `tech_design_review_report`: requester resumes design decision-making immediately
 - `browser_check_requested`: start browser validation immediately
 - `browser_check_report`: requester resumes decision-making immediately
 - `rework_required`: continue coder iteration immediately
@@ -221,7 +242,7 @@ Action execution defaults after `recv`:
 - only pause for user input when the message body explicitly requires a user decision
 
 Idle behavior:
-- when coder or reviewer is waiting for the next workflow message, use `check-workflow-mail wait=True` instead of relying on a later `agent-deck session send`
+- when coder, reviewer, or architect is waiting for the next workflow message, use `check-workflow-mail wait=True` instead of relying on a later `agent-deck session send`
 - planner may also use `check-workflow-mail wait=True` when running unattended and waiting for workflow mail
 
 ### Error Handling and Diagnostics
@@ -265,6 +286,18 @@ Reviewer decision rules:
 5. If user chooses closeout, run `review-closeout` and send `closeout_delivered` to planner
 6. If user chooses another iteration, send `user_requested_iteration` to coder
 
+### Architect Loop
+
+Architect rules:
+1. `architect` is a per-task focused session, not a shared long-lived service
+2. requester may be planner or coder
+3. input is a committed tech-design snapshot, typically on `tech-design/<task_id>`
+4. architect reviews docs and design rationale; it does not edit code or docs in this lane
+5. architect sends one `tech_design_review_report` back to the original requester
+6. requester decides whether to revise the design docs, proceed, or ask for another architect round
+7. architect feedback is advisory; requester may disagree and continue the discussion
+8. either architect or requester may ask the user to decide when the disagreement is fundamentally subjective or strategic
+
 ### Browser Tester Loop
 
 Browser tester rules:
@@ -300,8 +333,8 @@ Planner may include per-task `workflow_policy`, for example:
 
 Rules:
 - If absent, apply human-gated defaults
-- If present, coder and reviewer carry it forward unchanged for the same `task_id`
-- If `special_requirements` is present in context, planner/coder/reviewer carry it forward unchanged for the same `task_id`
+- If present, coder, reviewer, and architect carry it forward unchanged for the same `task_id`
+- If `special_requirements` is present in context, planner/coder/reviewer/architect carry it forward unchanged for the same `task_id`
 - Safety checks and must-fix handling remain unchanged
 - Unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`) enables strict post-closeout health gate
 
@@ -327,9 +360,11 @@ Use full recommended commands unless the user explicitly supplied a different fu
 Use stable naming:
 - coder session: `coder-<task_id>`
 - reviewer session: `reviewer-<task_id>`
+- architect session: `architect-<task_id>`
 - browser-tester session: use a stable long-lived title such as `browser-tester`; do not default to `browser-tester-<task_id>`
 - inbox address: `agent-deck/<agent-deck-session-id>`
 - default dedicated task branch: `task/<task_id>`
+- default dedicated tech-design branch: `tech-design/<task_id>`
 - default integration branch: planner's current branch at delegate creation when that branch is the intended landing line
 - existing topic branch reuse: allowed when planner determines the current branch already is the correct `task_branch`
 - `.agent-artifacts/` is for non-message supplemental material only; workflow should not create Markdown handoff artifacts as the default transport
@@ -352,6 +387,15 @@ Use stable naming:
 - workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
 - coder uses `mailbox_send` to queue the message to reviewer inbox
 - coder enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
+
+### 2a) Optional Tech-Design Review Lane
+
+- planner or coder may request architect feedback before implementation or during a design revision cycle
+- requester prepares committed design docs on `tech-design/<task_id>` or another explicit tech-design branch
+- requester sends `tech_design_review_requested` to `architect-<task_id>`
+- architect reviews and sends `tech_design_review_report` back to the requester
+- architect does not edit the tech-design docs in this lane
+- later rounds to the same architect session should send only the design delta since the previous round
 
 ### 3) Reviewer Loop
 
@@ -393,7 +437,7 @@ After closeout acceptance (explicit user or unattended policy):
 7. required in script: update progress record
 8. optional in script: hygiene (`prune-task-branches.sh`) and dispatch next task
 9. default in script: run closeout health gate and disposable worker cleanup
-10. reusable custom coder/reviewer sessions should be preserved; default cleanup should remove only disposable task-scoped sessions such as `coder-<task_id>` and `reviewer-<task_id>`
+10. reusable custom coder/reviewer/architect sessions should be preserved; default cleanup should remove only disposable task-scoped sessions such as `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>`
 
 If `workflow_policy.auto_dispatch_next_task=true`, planner may auto-dispatch next queued task after merge + progress update.
 When planner is dispatching from a known queued batch/plan, planner must proactively report queue progress before each new dispatch in `current/total` form (for example `3/15`).
@@ -429,20 +473,22 @@ Planner user-facing status contract for auto-dispatch:
 7. Browser-tester runs `browser-test` and sends `browser_check_report` back to the requester.
 8. The requester interprets the report and chooses the next step.
 9. Planner merges recorded `task_branch` into recorded `integration_branch` and updates progress.
+10. Planner or coder may separately use the architect lane when committed tech-design review is needed.
 
 ## Role-Skill Mapping
 
 - Planner: `delegate-task`, `handoff`
+- Planner or Coder: `tech-design-review-request`, `browser-test-request`
 - Coder: `review-request`
 - Reviewer: `review-code`, `review-closeout`, `browser-test-request`
-- Planner or Coder may also use `browser-test-request` when runtime browser evidence is needed
+- Architect: `tech-design-review`
 - Browser tester: `browser-test`
 - Roles are task-scoped; same-session multi-role assignment is an explicit exception and must be stated in workflow context rather than inferred from provider/tool choice
 
 ## Operating Rules
 
 - keep the real workflow content in mailbox body
-- keep coder/reviewer in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
+- keep coder/reviewer/architect in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
 - keep long-lived browser-tester sessions in `check-workflow-mail wait=True` whenever they are not actively executing a request
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
