@@ -209,7 +209,6 @@ When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-acc
 
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
-- After sending `rework_required` or `user_requested_iteration`, reviewer immediately uses `check-workflow-mail wait=True` when expecting the next workflow message
 - For `stop_recommended` with manual decision, wait for explicit user choice
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages

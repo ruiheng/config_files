@@ -98,7 +98,6 @@ Execution flow:
    - `subject = "tech-design report: <task_id> r<round>"`
    - `body = <tech-design review report body>`
 6. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<requester_session_id>`
-7. after sending, immediately use `check-workflow-mail wait=True`
 
 ## Rules
 

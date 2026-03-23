@@ -148,7 +148,6 @@ Execution flow:
    - `subject = "browser report: <task_id> r<round>"`
    - `body = <browser-check report body>`
 8. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<requester_session_id>`
-9. after sending, immediately use `check-workflow-mail wait=True`
 
 ## Rules
 
@@ -160,5 +159,4 @@ Execution flow:
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
-- when idle, stay in `check-workflow-mail wait=True` instead of exiting
 - prefer requester-provided login/auth/setup context over re-discovering it from scratch

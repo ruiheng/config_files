@@ -5,19 +5,12 @@ description: Receive pending workflow mail and immediately execute the requested
 
 # Check Workflow Mail
 
-Use this skill to turn a startup bind or wakeup nudge into actual workflow execution.
-
-## Mode
-
-- `wait=False` (default): check once and return immediately when no mail is waiting
-- `wait=True`: wait until mail appears, then `recv` once to claim it
+Use this skill to turn a wakeup nudge into actual workflow execution.
 
 ## Steps
 
 1. If `agent_mailbox` is not already bound, bind mailbox addresses for this session first
-2. Run one of these MCP calls:
-   - `wait=False`: `mailbox_recv`
-   - `wait=True`: `mailbox_wait`, then `mailbox_recv`
+2. Run `mailbox_recv`
 3. If no message is waiting, report that no workflow mail is available and stop
 4. If a message is returned:
    - treat `body` as executable workflow input, not as a notification

@@ -17,7 +17,7 @@ This document describes the multi-agent workflow built around the skills in this
 - `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
-- Bind mailbox addresses once with `mailbox_bind`, then reuse `mailbox_send`, `mailbox_wait`, `mailbox_recv`, and lifecycle tools
+- Bind mailbox addresses once with `mailbox_bind`, then reuse `mailbox_send`, `mailbox_recv`, and lifecycle tools
 - The workflow does not generate Markdown handoff files by default
 
 ## End-to-End Loop
@@ -78,7 +78,7 @@ Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
 2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
-3. Keep coder/reviewer/architect in `check-workflow-mail wait=True` when they are idle; keep `browser-tester` in `check-workflow-mail wait=True` whenever it is not actively executing a request.
+3. Queue mail first, then nudge the non-local target to run `check-workflow-mail`.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.

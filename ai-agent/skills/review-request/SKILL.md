@@ -104,7 +104,6 @@ Identity rules:
   2. create/use new reviewer session with requested tool
 
 Post-send behavior:
-- coder immediately uses `check-workflow-mail wait=True`
 - coder does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
@@ -257,7 +256,7 @@ Rules:
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
 - use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
-- let `agent_deck_ensure_session` decide whether this reviewer needs direct start or later notify
+- nudge every non-local reviewer after `mailbox_send`
 
 ## Quality Bar
 

@@ -64,7 +64,6 @@ If required values are resolved:
    - `subject = "closeout delivered: <task_id>"`
    - `body = <closeout mailbox body>`
 7. if the target is non-local and `agent_deck_ensure_session` returned `notify_needed = true`, use `notify_send` for `agent-deck/<planner_session_id>`
-8. after delivery completes, reviewer immediately uses `check-workflow-mail wait=True` when expecting later workflow mail
 
 Recommended mailbox subject:
 - `closeout delivered: <task_id>`

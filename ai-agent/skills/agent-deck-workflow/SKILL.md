@@ -51,7 +51,7 @@ Enter Agent Deck mode when any condition matches:
 
 Session binding rule:
 - bind `agent_mailbox` once when the session starts
-- reuse the bound mailbox addresses for later `mailbox_wait`, `mailbox_recv`, and same-session checks
+- reuse the bound mailbox addresses for later `mailbox_recv` and same-session checks
 
 ### Context Resolution Priority
 
@@ -95,7 +95,6 @@ Preferred transport interface:
 - `mailbox_bind`
 - `mailbox_status`
 - `mailbox_send`
-- `mailbox_wait`
 - `mailbox_recv`
 - `mailbox_ack`
 - `mailbox_release`
@@ -114,10 +113,10 @@ Transport rules:
 - for agent-deck-managed targets, use `agent_deck_ensure_session` to resolve/create/start the target session
 - use `notify_send` when an already active non-local target needs a push-style nudge
 
-Worker listener rule:
-- newly started coder/reviewer/architect/browser-tester sessions should enter `check-workflow-mail wait=True` before the sender queues mailbox work
-- `agent_deck_ensure_session` should handle the normal resolve/create/start sequence for agent-deck-managed targets
-- `check-workflow-mail wait=True` should wait for mail first, then receive and execute once mail appears
+Worker wake rule:
+- use `agent_deck_ensure_session` to resolve/create/start agent-deck-managed targets
+- after `mailbox_send`, send a nudge to every non-local target
+- do not rely on long-running `check-workflow-mail wait=True` processes for delivery
 
 Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
@@ -214,7 +213,7 @@ Use `mailbox_send` for the mailbox delivery itself.
 Expected behavior:
 1. use `agent_deck_ensure_session` when a target session must be resolved, created, or started
 2. queue the mailbox body with `mailbox_send`
-3. use `notify_send` only when an already active non-local target needs a push nudge
+3. use `notify_send` for every non-local target after the mailbox body is queued
 
 ### Receiver Contract
 
@@ -242,8 +241,8 @@ Action execution defaults after `recv`:
 - only pause for user input when the message body explicitly requires a user decision
 
 Idle behavior:
-- when coder, reviewer, or architect is waiting for the next workflow message, use `check-workflow-mail wait=True` instead of relying on a later `agent-deck session send`
-- planner may also use `check-workflow-mail wait=True` when running unattended and waiting for workflow mail
+- do not rely on long-running wait loops to preserve workflow continuity
+- use `check-workflow-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
 
 ### Error Handling and Diagnostics
 
@@ -253,8 +252,7 @@ If workflow send/worker-start fails, report concise stderr summary and run these
 3. Did `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
-If a newly started target did not enter `check-workflow-mail wait=True`, treat that as a workflow issue.
-If an already active target missed the mailbox work, retry the nudge path instead of resending mailbox content.
+If a target missed the mailbox work, retry the nudge path instead of resending mailbox content.
 
 If closeout cleanup fails, include:
 1. blocked reason (`provider_guard_blocked`, `manual_close_required`, `worker_cap_exceeded`)
@@ -307,8 +305,8 @@ Browser tester rules:
 3. treat browser-tester as a long-lived service session that keeps browser state warm across tasks
 4. return one `browser_check_report` to the original requester with PASS / FAIL / UNKNOWN plus evidence
 5. if environment or test preconditions are missing, return `UNKNOWN` instead of guessing
-6. when browser-tester has no active request, it should be in `check-workflow-mail wait=True`
-7. after sending the report, browser-tester returns to `check-workflow-mail wait=True`
+6. browser-tester should rely on requester nudges rather than a long-running wait loop
+7. after sending the report, browser-tester does not need to enter a blocking wait state
 8. requester should provide required login, environment, and test data context in the request body whenever possible
 9. if required access or setup information is missing, browser-tester should first ask the requester session; browser-tester may ask the user directly when requester context is unavailable or user input is clearly required
 
@@ -386,7 +384,7 @@ Use stable naming:
 - coder prepares one mailbox review request body for reviewer
 - workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
 - coder uses `mailbox_send` to queue the message to reviewer inbox
-- coder enters `check-workflow-mail wait=True` and does not proactively poll reviewer unless user asks
+- coder does not proactively poll reviewer unless user asks
 
 ### 2a) Optional Tech-Design Review Lane
 
@@ -488,8 +486,7 @@ Planner user-facing status contract for auto-dispatch:
 ## Operating Rules
 
 - keep the real workflow content in mailbox body
-- keep coder/reviewer/architect in `check-workflow-mail wait=True` when they are idle and waiting for the next workflow step
-- keep long-lived browser-tester sessions in `check-workflow-mail wait=True` whenever they are not actively executing a request
+- keep delivery driven by post-send nudges, not by long-running wait loops
 - keep human confirmation gates in human-gated mode
 - treat accepted review residuals as planning input for follow-up tracking rather than silently discarding them
 - resolve and record branch plan at delegate start, then reuse it consistently through closeout
