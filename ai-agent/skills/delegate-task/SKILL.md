@@ -46,10 +46,11 @@ Resolve by priority:
 - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
   - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
 - `coder_tool`: explicit -> context -> default current AI tool
-  - if user/context provides a full command with arguments, preserve it unchanged
-  - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
-  - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
-  - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
+  - preserve full commands unchanged
+  - normalize provider-only names:
+    - `claude` -> `claude --model sonnet --permission-mode acceptEdits`
+    - `codex` -> `codex --model gpt-5.4 --ask-for-approval on-request`
+    - `gemini` -> `gemini --model gemini-3.1-pro`
 - `reviewer_tool`: explicit -> context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
   - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit
