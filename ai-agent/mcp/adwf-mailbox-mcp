@@ -80,6 +80,10 @@ function dedupe(values) {
   return out;
 }
 
+function sessionInboxAddress(sessionId) {
+  return `agent-deck/${sessionId}`;
+}
+
 function mailboxAddresses(args) {
   const raw = args.addresses;
   if (raw) {
@@ -95,7 +99,7 @@ function mailboxAddresses(args) {
   }
 
   return {
-    addresses: [`agent-deck/${sessionId}`],
+    addresses: [sessionInboxAddress(sessionId)],
     resolvedSessionId: sessionId,
   };
 }
@@ -297,8 +301,8 @@ function buildServer() {
       body = body.replaceAll("{{TO_SESSION_ID}}", toSessionId);
       body = body.replaceAll("{{TO_SESSION_REF}}", toSessionRef);
 
-      const fromAddress = `agent-deck/${fromSessionId}`;
-      const toAddress = `agent-deck/${toSessionId}`;
+      const fromAddress = sessionInboxAddress(fromSessionId);
+      const toAddress = sessionInboxAddress(toSessionId);
 
       let startStatus = "skipped_same_session";
       let listenerStatus = "skipped_same_session";
@@ -382,7 +386,7 @@ function buildServer() {
     "workflow_wait",
     {
       description:
-        "Observe whether workflow mail is available without claiming it.",
+        "Observe whether workflow mail is available without claiming it. AI agent session inbox addresses use the form agent-deck/<agent-deck-session-id>.",
       inputSchema: {
         session_id: z.string().optional(),
         addresses: z.array(z.string()).optional(),
@@ -420,7 +424,7 @@ function buildServer() {
     "workflow_recv",
     {
       description:
-        "Receive workflow mail. Uses the bound session by default; pass addresses to override. With wait=true, wait for mail, then claim one message.",
+        "Receive workflow mail. By default it uses the bound AI agent session inbox agent-deck/<agent-deck-session-id>; pass addresses only to override that target. With wait=true, wait for mail, then claim one message.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
         wait: z.boolean().optional(),

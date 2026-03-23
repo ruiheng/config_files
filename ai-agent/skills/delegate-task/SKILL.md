@@ -176,7 +176,7 @@ After sending:
   - selected `task_branch` / `integration_branch`
   - selected `coder_session_id` / `reviewer_session_ref`
   - selected `coder_tool` / `reviewer_tool`
-  - recipient inbox address (`agent-deck/<coder_session_id>`)
+  - recipient inbox address (`agent-deck/<agent-deck-session-id>`)
   - listener/send/nudge summary
 - Keep raw mailbox JSON internal unless user explicitly asks
 - If listener/send fails, report stderr summary and include shared diagnostics checklist from `agent-deck-workflow/SKILL.md`

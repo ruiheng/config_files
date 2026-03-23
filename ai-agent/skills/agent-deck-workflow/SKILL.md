@@ -23,7 +23,7 @@ Default role/session rule:
 - `task_id`: stable task identifier (`YYYYMMDD-HHMM-<slug>`)
 - `*_session_id`: Agent Deck session UUID (resolve with `agent-deck session show <session_id_or_ref> --json | jq -r '.id'`)
 - `*_session_ref`: human-friendly session reference (`title` or `id`)
-- `inbox_address`: derived mailbox endpoint address for one workflow session: `agent-deck/<session_id>`
+- `inbox_address`: derived mailbox endpoint address for one AI agent session: `agent-deck/<agent-deck-session-id>`
 - `start_branch`: planner's current git branch when `delegate-task` begins
 - `integration_branch`: branch where accepted work must land at closeout; this is the task-local mainline and is not assumed to be `main`/`master`
 - `task_branch`: coder working branch; may be a dedicated `task/<task_id>` branch or a reused existing topic branch
@@ -114,7 +114,7 @@ Worker listener rule:
 - `check-workflow-mail wait=True` should wait for mail first, then receive and execute once mail appears
 
 Inbox rule:
-- derive inbox address as `agent-deck/<session_id>`
+- derive inbox address as `agent-deck/<agent-deck-session-id>`
 - no separate registration step is needed
 - if multiple lifecycle operations are needed, run them one at a time and wait for success before the next step
 
@@ -323,7 +323,7 @@ Use stable naming:
 - coder session: `coder-<task_id>`
 - reviewer session: `reviewer-<task_id>`
 - browser-tester session: use a stable long-lived title such as `browser-tester`; do not default to `browser-tester-<task_id>`
-- inbox address: `agent-deck/<session_id>`
+- inbox address: `agent-deck/<agent-deck-session-id>`
 - default dedicated task branch: `task/<task_id>`
 - default integration branch: planner's current branch at delegate creation when that branch is the intended landing line
 - existing topic branch reuse: allowed when planner determines the current branch already is the correct `task_branch`

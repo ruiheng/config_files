@@ -28,6 +28,7 @@ The server is stdio-based and exposes these tools:
 
 `workflow_bind_session`
 - store one caller-provided `agent-deck` session id inside MCP server state
+- derive the AI agent inbox address as `agent-deck/<agent-deck-session-id>`
 - optionally store a `default_workdir` for later target creation
 - later `workflow_wait` / `workflow_recv` can omit session id arguments
 
@@ -42,11 +43,11 @@ The server is stdio-based and exposes these tools:
 - uses explicit `workdir` or bound `default_workdir` when creating a new target session
 
 `workflow_wait`
-- checks whether mail is available for the bound session, an explicit session, or explicit addresses
+- checks whether mail is available for the bound AI agent inbox `agent-deck/<agent-deck-session-id>` or explicit override addresses
 - does not claim the delivery
 
 `workflow_recv`
-- receives mail for the bound session, or explicit addresses
+- receives mail for the bound AI agent inbox `agent-deck/<agent-deck-session-id>` or explicit override addresses
 - with `wait=true`, first waits for mail to appear, then claims one delivery
 
 `workflow_ack` / `workflow_release` / `workflow_defer` / `workflow_fail`
