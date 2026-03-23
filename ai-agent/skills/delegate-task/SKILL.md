@@ -10,35 +10,20 @@ Create one concise, execution-ready mailbox message for another AI agent.
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 This skill only defines delegate-task-specific behavior.
 
-Use this skill only when delegation is justified. Default bias is not to delegate.
-If the task is simple, mostly mechanical, or documentation-only, do the work directly instead of invoking this skill.
+Use this skill only when delegation is justified.
 
 ## 1) Quick Check (Required)
 
 Before drafting the delegate message:
-- Reject delegation immediately when any of these are true:
-  - task is pure documentation, wording, summarization, or other non-code work
-  - task is a small or obvious code change that one agent can complete directly with low risk
-  - task is mostly file reading, inspection, or answering questions
-  - expected code change is narrow enough that splitting adds overhead instead of reducing risk
-- Delegate only when all of these are true:
-  - task requires meaningful code modification, not just docs or prompts
-  - task has enough complexity, scope, or validation burden that a separate coder is useful
-  - delegated execution creates a clearer ownership boundary or lowers delivery risk
-- Check whether splitting is useful:
-  - components can be implemented independently
-  - components can be validated independently
-  - split reduces risk
-- If delegation is not clearly worthwhile, do the work directly
-- If splitting is recommended, ask user to choose:
-  - keep one delegated task, or
-  - split into multiple delegated tasks
-- Wait for user decision before sending
+- Do not delegate pure docs, wording, summarization, inspection, or other non-code work.
+- Do not delegate a small obvious code change that one agent can finish directly.
+- Delegate only when a separate coder gives clearer ownership or lower delivery risk.
+- If delegation is not clearly worthwhile, do the work directly.
+- If splitting into multiple delegated tasks looks better than one task, ask the user before sending.
 
 Execution mode gates:
-- Unless there is explicit evidence parallel execution is safe, use serial mode
-- In serial mode, if one delegated task is in progress, wait for closeout before generating/sending the next task
-- In serial mode, handle only the current next sub-task
+- default to serial mode
+- in serial mode, wait for closeout before sending the next delegated task
 
 ## 2) Output Mode
 
@@ -46,9 +31,7 @@ Keep the delegate brief directly in the mailbox body.
 
 Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
-- Skill-specific planner identity rule:
-  - delegate creator is planner sender
-  - `planner_session_id` should resolve from explicit/context workflow metadata or the bound mailbox sender context
+- delegate creator is planner sender
 
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
@@ -69,20 +52,15 @@ Resolve by priority:
   - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
 - `reviewer_tool`: explicit -> context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
-  - `reviewer_tool` selects how the reviewer session is created/resumed; it does not collapse reviewer role into the current planner/coder session
-  - if planner/coder and reviewer all use Codex, still keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicitly requested in workflow context
+  - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit
 - `workflow_policy` (optional): explicit -> context -> infer from clear user automation intent -> omit when not set
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 
 Workflow policy inference:
-- if the user clearly requests unattended execution, set:
-  - `mode = "unattended"`
-  - `auto_accept_if_no_must_fix = true`
-- if the user clearly requests automatic next-task dispatch, set:
-  - `auto_dispatch_next_task = true`
-- if the user clearly requests unattended execution without changing UI confirmation behavior, keep:
-  - `ui_manual_confirmation = "auto"`
-- write inferred automation choices into `## Workflow Policy`; do not leave them implicit in prose
+- unattended => `mode = "unattended"` and `auto_accept_if_no_must_fix = true`
+- automatic next-task dispatch => `auto_dispatch_next_task = true`
+- unless user says otherwise, unattended keeps `ui_manual_confirmation = "auto"`
+- write inferred automation choices into `## Workflow Policy`
 
 ## 3) Mailbox Body Template
 
@@ -148,8 +126,8 @@ Round: 1
 ```
 
 Tool-routing rule:
-- If user specifies a full coder/reviewer command, persist it unchanged in the message body
-- If user specifies only provider preference (for example `claude`, `codex`, `gemini`), persist the normalized full command with recommended arguments
+- preserve full coder/reviewer commands when the user gives them
+- normalize provider-only preferences to the recommended full command
 
 ## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
 
@@ -178,18 +156,18 @@ Rules:
 - keep the full delegate brief in mailbox body
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
-- `ensure_target_cmd` only matters when creating a missing target session; existing sessions keep their original tool command
+- existing sessions keep their original tool command
 
 ## 5) User-Facing Output Contract
 
 After sending:
-- Return short confirmation:
+- Return short confirmation with:
   - mailbox subject
   - one-line objective summary
-  - selected `task_branch` / `integration_branch`
-  - selected `coder_session_id` / `reviewer_session_ref`
-  - selected `coder_tool` / `reviewer_tool`
-  - recipient inbox address (`agent-deck/<agent-deck-session-id>`)
+  - `task_branch` / `integration_branch`
+  - `coder_session_id` / `reviewer_session_ref`
+  - `coder_tool` / `reviewer_tool`
+  - recipient inbox address
   - listener/send/nudge summary
 - Keep raw mailbox JSON internal unless user explicitly asks
 - If listener/send fails, report stderr summary and include shared diagnostics checklist from `agent-deck-workflow/SKILL.md`
