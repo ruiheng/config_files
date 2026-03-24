@@ -14,7 +14,7 @@ This document describes the multi-agent workflow built around the skills in this
 ## Core Transport
 
 - `agent-mailbox` is the authoritative workflow message layer
-- `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
+- `agent-deck` is used to start target sessions or to nudge already active sessions to check mail
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
 - Bind mailbox addresses once with `mailbox_bind`, then reuse `mailbox_deliver`, `mailbox_recv`, and lifecycle tools
@@ -69,7 +69,7 @@ flowchart TD
 - `review-closeout` is the compact planner handoff after acceptance
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
-- Use `check-workflow-mail` as the receiver-side wake handler
+- Use `check-agent-mail` as the receiver-side wake handler
 - External files are supplemental references only, not the default transport
 
 ## Incremental Automation with Agent Deck
@@ -78,7 +78,7 @@ Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
 2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
-3. Queue mail first, then nudge the non-local target to run `check-workflow-mail`.
+3. Queue mail first, then nudge the non-local target to run `check-agent-mail`.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
@@ -86,7 +86,7 @@ Current recommended operating mode:
 Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
-- Receiver wake handler: `check-workflow-mail` (`ai-agent/skills/check-workflow-mail/SKILL.md`)
+- Receiver wake handler: `check-agent-mail` (`ai-agent/skills/check-agent-mail/SKILL.md`)
 - Tech-design review request: `tech-design-review-request` (`ai-agent/skills/tech-design-review-request/SKILL.md`)
 - Architect review: `tech-design-review` (`ai-agent/skills/tech-design-review/SKILL.md`)
 - Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)

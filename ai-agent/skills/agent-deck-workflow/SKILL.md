@@ -10,9 +10,9 @@ Use this skill as the single source of truth for the workflow roles:
 
 Core transport rule:
 - `agent-mailbox` carries the real workflow message
-- `agent-deck` is used either to start target sessions into mailbox-wait mode or to nudge already active sessions to check mail
+- `agent-deck` is used to start target sessions or to nudge already active sessions to check mail
 - use the `agent_mailbox` MCP tools as the default transport interface
-- use `check-workflow-mail` for receiver-side wake handling
+- use `check-agent-mail` for receiver-side wake handling
 
 Default role/session rule:
 - use one distinct session per role
@@ -117,7 +117,7 @@ Transport rules:
 Worker wake rule:
 - use `agent_deck_ensure_session` to resolve/create/start agent-deck-managed targets
 - after `mailbox_deliver`, the normal non-local nudge should already be handled
-- do not rely on long-running `check-workflow-mail wait=True` processes for delivery
+- do not rely on long-running agent-mail polling processes for delivery
 
 Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
@@ -242,7 +242,7 @@ Action execution defaults after `recv`:
 
 Idle behavior:
 - do not rely on long-running wait loops to preserve workflow continuity
-- use `check-workflow-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
+- use `check-agent-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
 
 ### Error Handling and Diagnostics
 
