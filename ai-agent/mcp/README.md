@@ -52,7 +52,7 @@ For an agent-deck-managed session `<id>`, bind both:
 
 `mailbox_recv`
 - receives mail for the bound addresses or explicit override addresses
-- with `wait=true`, first waits for mail to appear, then claims one delivery
+- claims one delivery immediately or returns no message
 
 `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
 - wrap the corresponding `agent-mailbox` lifecycle commands

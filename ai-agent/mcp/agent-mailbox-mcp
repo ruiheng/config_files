@@ -395,29 +395,13 @@ function buildServer() {
   server.registerTool(
     "mailbox_recv",
     {
-      description: "Receive mail. Uses bound addresses by default; pass addresses only to override. With wait=true, wait for mail, then claim one message.",
+      description: "Receive mail immediately. Uses bound addresses by default; pass addresses only to override.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
-        wait: z.boolean().optional(),
-        timeout: z.string().optional(),
       },
     },
     async (args) => {
       const addresses = mailboxAddresses(args);
-      if (args.wait) {
-        const waitResult = await server.server.callTool({
-          name: "mailbox_wait",
-          arguments: {
-            addresses,
-            timeout: args.timeout,
-          },
-        });
-        const structured = waitResult.structuredContent;
-        if (structured && structured.status === "no_message") {
-          return waitResult;
-        }
-      }
-
       const cmd = ["agent-mailbox", "recv"];
       for (const address of addresses) {
         cmd.push("--for", address);
