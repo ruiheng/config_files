@@ -69,6 +69,7 @@ For an agent-deck-managed session `<id>`, bind both:
 `agent_deck_ensure_session`
 - resolves an existing session or creates it when missing
 - starts an inactive target when needed
+- a newly created or newly started target should run `mailbox_wait` for its first mail before running `check-agent-mail`
 
 ## Notify Tool
 

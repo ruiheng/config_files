@@ -155,7 +155,7 @@ if [[ -z "$to_session_id" ]]; then
     [[ -d "$workdir" ]] || die "workdir does not exist: $workdir"
 
     if [[ -z "$listener_message" ]]; then
-      listener_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+      listener_message="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. Then run mailbox_wait for your current agent-deck session. When mail is available, use the check-agent-mail skill and execute its requested action."
     fi
     create_json="$(run_capture "agent-deck launch" agent-deck launch --json --title "$ensure_target_title" --parent "$parent_session_id" --cmd "$ensure_target_cmd" --message "$listener_message" "$workdir")"
     to_session_id="$(printf '%s' "$create_json" | json_get_field '.id')"
@@ -221,7 +221,7 @@ if [[ "$current_session_id" != "$to_session_id" ]]; then
         ;;
       *)
         if [[ -z "$listener_message" ]]; then
-          listener_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+          listener_message="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. Then run mailbox_wait for your current agent-deck session. When mail is available, use the check-agent-mail skill and execute its requested action."
         fi
         run_capture "agent-deck session start (${to_session_id})" agent-deck session start --json -m "$listener_message" "$to_session_id" >/dev/null
         start_status="started"

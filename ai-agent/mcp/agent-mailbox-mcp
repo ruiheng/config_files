@@ -17,7 +17,7 @@ const STATE = {
 };
 
 const DEFAULT_LISTENER_MESSAGE =
-  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then use the 'check-agent-mail' skill now. Receive the pending message for your current session and execute its requested action.";
+  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then run mailbox_wait for your current session. When mail is available, use the 'check-agent-mail' skill and execute its requested action.";
 
 const DEFAULT_NOTIFY_MESSAGE =
   "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";

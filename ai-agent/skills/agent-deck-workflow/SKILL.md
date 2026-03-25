@@ -117,6 +117,7 @@ Transport rules:
 Worker wake rule:
 - use `agent_deck_ensure_session` to resolve/create/start agent-deck-managed targets
 - after `mailbox_deliver`, the normal non-local nudge should already be handled
+- a newly created or newly started target should run `mailbox_wait` for its first mail before running `check-agent-mail`
 - do not rely on long-running agent-mail polling processes for delivery
 
 Inbox rule:
