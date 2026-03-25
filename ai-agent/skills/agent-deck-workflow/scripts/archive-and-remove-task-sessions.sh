@@ -10,7 +10,7 @@ Usage:
 
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)
-  --planner-session-id <id|title>   Planner session ref (default: planner)
+  --planner-session-id <id|title>   Planner session ref (default: current agent-deck session id)
   --coder-session-id <id|title>     Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
   --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
@@ -50,7 +50,7 @@ debug() {
 }
 
 task_id=""
-planner_session_ref="planner"
+planner_session_ref=""
 coder_session_ref=""
 reviewer_session_ref=""
 architect_session_ref=""
@@ -95,6 +95,14 @@ ad() {
   else
     agent-deck "$@"
   fi
+}
+
+resolve_current_session_id() {
+  local current_json current_id
+  current_json="$(ad session current --json 2>/dev/null || true)"
+  current_id="$(jq -r '.id // empty' <<<"$current_json" 2>/dev/null || true)"
+  [[ -n "$current_id" ]] || die "failed to resolve current agent-deck session id; pass --planner-session-id"
+  echo "$current_id"
 }
 
 is_disposable_task_session() {
@@ -399,6 +407,10 @@ state_db_path="$HOME/.agent-deck/profiles/${profile_name}/state.db"
 if [[ ! -f "$state_db_path" ]]; then
   debug "provider_id_source=db result=state_db_missing profile=${profile_name}"
   state_db_path=""
+fi
+
+if [[ -z "$planner_session_ref" ]]; then
+  planner_session_ref="$(resolve_current_session_id)"
 fi
 
 planner_shown="$(ad session show "$planner_session_ref" --json 2>/dev/null || true)"

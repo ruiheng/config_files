@@ -24,13 +24,14 @@ Options:
   --integration-branch <ref>       Integration branch (default: current branch; planner should normally pass the branch resolved at delegate start)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
-  --planner-session-id <id|title>  Planner session ref (default: planner)
+  --planner-session-id <id|title>  Planner session ref (default: current agent-deck session id)
   --coder-session-id <id|title>    Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
   --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
   --profile <name>                 Agent-deck profile (used by optional health gate)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
+  --allow-task-integration-branch  Allow a different task/* branch as integration branch
   --run-prune                      Run prune-task-branches.sh after required actions
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions
@@ -64,6 +65,14 @@ warn() {
   echo "WARN: $*" >&2
 }
 
+resolve_current_session_id() {
+  local current_json current_id
+  current_json="$(agent-deck session current --json 2>/dev/null || true)"
+  current_id="$(jq -r '.id // empty' <<<"$current_json" 2>/dev/null || true)"
+  [[ -n "$current_id" ]] || die "failed to resolve current agent-deck session id; pass --planner-session-id"
+  echo "$current_id"
+}
+
 debug() {
   if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
     echo "DEBUG: $*" >&2
@@ -75,13 +84,14 @@ task_branch=""
 integration_branch=""
 artifact_root=".agent-artifacts"
 progress_file=""
-planner_session_ref="planner"
+planner_session_ref=""
 coder_session_ref=""
 reviewer_session_ref=""
 architect_session_ref=""
 profile=""
 merge_mode="ff-only"
 allow_dirty=0
+allow_task_integration_branch=0
 run_prune=0
 prune_apply=0
 run_health_gate=1
@@ -101,6 +111,7 @@ while [[ $# -gt 0 ]]; do
     --profile) profile="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
+    --allow-task-integration-branch) allow_task_integration_branch=1; shift 1 ;;
     --run-prune) run_prune=1; shift 1 ;;
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
@@ -140,6 +151,10 @@ fi
 
 command -v git >/dev/null 2>&1 || die "git is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
+if [[ -z "$planner_session_ref" ]]; then
+  command -v agent-deck >/dev/null 2>&1 || die "agent-deck is required to infer planner session id; pass --planner-session-id"
+  planner_session_ref="$(resolve_current_session_id)"
+fi
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   die "must run inside a git repository"
@@ -152,6 +167,9 @@ fi
 
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
 [[ "$task_branch" != "$integration_branch" ]] || die "--task-branch must differ from integration branch"
+if [[ "$integration_branch" == task/* && "$integration_branch" != "$task_branch" && "$allow_task_integration_branch" -ne 1 ]]; then
+  die "refusing suspicious integration branch '${integration_branch}' for task branch '${task_branch}'; pass the recorded landing branch or --allow-task-integration-branch if this is intentional"
+fi
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
 git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"
