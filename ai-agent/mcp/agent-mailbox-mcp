@@ -17,10 +17,10 @@ const STATE = {
 };
 
 const DEFAULT_LISTENER_MESSAGE =
-  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then use $check-agent-mail now. Receive the pending message for your current session and execute its requested action.";
+  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then use the 'check-agent-mail' skill now. Receive the pending message for your current session and execute its requested action.";
 
 const DEFAULT_NOTIFY_MESSAGE =
-  "Use $check-agent-mail now. Receive the pending message and execute its requested action.";
+  "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
@@ -169,7 +169,7 @@ function parseSendTokens(output) {
 }
 
 function ensureCheckAgentMailHint(message) {
-  const requiredHint = "$check-agent-mail";
+  const requiredHint = "check-agent-mail";
   const trimmed = (message || "").trim();
   if (!trimmed) {
     return DEFAULT_NOTIFY_MESSAGE;
@@ -177,7 +177,7 @@ function ensureCheckAgentMailHint(message) {
   if (trimmed.includes(requiredHint)) {
     return trimmed;
   }
-  return `${trimmed}\n\nUse ${requiredHint} now.`;
+  return `${trimmed}\n\nUse the '${requiredHint}' skill now.`;
 }
 
 function makeToolResult(result) {
