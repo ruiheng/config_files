@@ -113,7 +113,7 @@ Skill-specific context resolution:
 Execution flow:
 1. review the committed tech-design snapshot referenced in the mailbox body
 2. produce one `tech_design_review_report`
-3. if `agent_mailbox` is not already bound for this session, bind it first
+3. use `agent_mailbox`; it should usually auto-bind from the current session
 4. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
 5. send the report back with `mailbox_send`
    - `from_address = agent-deck/<architect_session_id>`

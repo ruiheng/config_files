@@ -77,7 +77,7 @@ For browser-test work, default to `snapshot -i` to get stable element refs, then
 
 Before the first browser action in a workflow turn, run a minimal environment check:
 1. confirm `agent-browser` is available with `command -v agent-browser`
-2. confirm `agent_mailbox` is already bound for this session, or bind it before sending the report
+2. use `agent_mailbox`; it should usually auto-bind from the current session
 
 ## Output Format
 
@@ -140,7 +140,7 @@ Execution flow:
    - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
 3. collect runtime evidence
 4. produce one `browser_check_report`
-5. if `agent_mailbox` is not already bound for this session, bind it first
+5. `agent_mailbox` should usually auto-bind from the current session
 6. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
 7. send it back to the requester with `mailbox_send`
    - `from_address = agent-deck/<browser_tester_session_id>`

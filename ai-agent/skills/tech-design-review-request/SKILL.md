@@ -148,7 +148,7 @@ Recommended subject:
 - `tech-design review: <task_id> r<round>`
 
 Use the `agent_mailbox` MCP tools:
-1. if `agent_mailbox` is not already bound for this session, bind it first
+1. use `agent_mailbox`; it should usually auto-bind from the current session
 2. compose the body with `{{TO_SESSION_ID}}` where the real architect session id must appear
 3. call `agent_deck_ensure_session` with:
    - `session_ref = <architect_session_ref>`

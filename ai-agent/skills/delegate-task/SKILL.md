@@ -135,7 +135,7 @@ Tool-routing rule:
 Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
-1. if `agent_mailbox` is not already bound for this session, bind it first
+1. use `agent_mailbox`; it should usually auto-bind from the current session
 2. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
 3. call `agent_deck_ensure_session` with:
    - `session_ref = <coder_session_ref>`

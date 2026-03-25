@@ -24,7 +24,7 @@ const DEFAULT_NOTIFY_MESSAGE =
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
-  "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind` with `agent-deck/<id>` and `codex/<id>`. " +
+  "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind`. " +
   "Use `agent-deck/<id>` as the default sender. " +
   "Pass `default_workdir` when you want later `agent_deck_ensure_session` calls to create sessions in the current project. " +
   "Later reuse the bound addresses until MCP state is lost.";
@@ -93,17 +93,100 @@ function parseAddress(address) {
   };
 }
 
-function agentDeckAddresses(sessionId) {
-  return [
-    `agent-deck/${sessionId}`,
-    `codex/${sessionId}`,
-  ];
+function agentDeckAddress(sessionId) {
+  return `agent-deck/${sessionId}`;
+}
+
+function codexAddress(sessionId) {
+  return `codex/${sessionId}`;
+}
+
+function parsePsRow(text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  const match = /^(\d+)\s+(\d+)\s+(\S+)\s*(.*)$/.exec(trimmed);
+  if (!match) {
+    return null;
+  }
+  return {
+    pid: Number.parseInt(match[1], 10),
+    ppid: Number.parseInt(match[2], 10),
+    comm: match[3],
+    args: match[4] || "",
+  };
+}
+
+function getProcessRow(pid) {
+  if (!pid || pid <= 1) {
+    return null;
+  }
+  const proc = spawnSync("ps", ["-p", String(pid), "-o", "pid=,ppid=,comm=,args="], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+  if (proc.status !== 0) {
+    return null;
+  }
+  return parsePsRow(proc.stdout);
+}
+
+function extractCodexSessionIdFromArgs(args) {
+  const match = /\bresume\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i.exec(args || "");
+  return match ? match[1] : null;
+}
+
+function extractCodexSessionIdFromLsof(pid) {
+  if (!pid || pid <= 1) {
+    return null;
+  }
+  const proc = spawnSync("lsof", ["-p", String(pid)], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+  if (proc.status !== 0) {
+    return null;
+  }
+  const lines = proc.stdout.split("\n");
+  for (const line of lines) {
+    const match =
+      /\/\.codex\/sessions\/.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(
+        line
+      );
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+function detectCurrentCodexSessionId() {
+  const seen = new Set();
+  let pid = process.ppid;
+  while (pid && pid > 1 && !seen.has(pid)) {
+    seen.add(pid);
+    const row = getProcessRow(pid);
+    if (!row) {
+      break;
+    }
+    const looksLikeCodex =
+      row.comm === "codex" ||
+      /(^|\/)codex(\s|$)/.test(row.args) ||
+      row.args.includes("@openai/codex");
+    if (looksLikeCodex) {
+      return extractCodexSessionIdFromArgs(row.args) || extractCodexSessionIdFromLsof(row.pid);
+    }
+    pid = row.ppid;
+  }
+  return null;
 }
 
 function mailboxAddresses(args = {}) {
   if (args.addresses && args.addresses.length > 0) {
     return dedupe(args.addresses);
   }
+  ensureAutoBoundCurrentSession();
   if (STATE.bound_addresses.length > 0) {
     return STATE.bound_addresses.slice();
   }
@@ -111,10 +194,12 @@ function mailboxAddresses(args = {}) {
 }
 
 function senderAddress(args = {}) {
+  ensureAutoBoundCurrentSession();
   return args.from_address || STATE.default_sender || STATE.bound_addresses[0] || null;
 }
 
 function isLocalAddress(address) {
+  ensureAutoBoundCurrentSession();
   return STATE.bound_addresses.includes(address);
 }
 
@@ -133,6 +218,35 @@ function resolveSessionShow(identifier) {
   return data;
 }
 
+function ensureAutoBoundCurrentSession() {
+  if (STATE.bound_addresses.length > 0) {
+    return;
+  }
+
+  const proc = spawnSync("agent-deck", ["session", "current", "--json"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+  if (proc.status !== 0) {
+    return;
+  }
+
+  const data = parseJsonOutput(proc.stdout, "agent-deck session current");
+  const sessionId = typeof data?.id === "string" ? data.id.trim() : "";
+  if (!sessionId) {
+    return;
+  }
+
+  const addresses = [agentDeckAddress(sessionId)];
+  const codexSessionId = detectCurrentCodexSessionId();
+  if (codexSessionId) {
+    addresses.push(codexAddress(codexSessionId));
+  }
+
+  STATE.bound_addresses = dedupe(addresses);
+  STATE.default_sender = agentDeckAddress(sessionId);
+}
+
 function sessionInfoFromData(data, sessionRef = null) {
   if (!data) {
     return null;
@@ -146,7 +260,7 @@ function sessionInfoFromData(data, sessionRef = null) {
     session_ref: sessionRef || data.title || sessionId,
     title: data.title || null,
     session_status: data.status || null,
-    addresses: agentDeckAddresses(sessionId),
+    addresses: [agentDeckAddress(sessionId)],
   };
 }
 

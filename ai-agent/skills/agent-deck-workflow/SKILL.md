@@ -50,7 +50,7 @@ Enter Agent Deck mode when any condition matches:
 3. user explicitly asks for agent-deck workflow
 
 Session binding rule:
-- bind `agent_mailbox` once when the session starts
+- `agent_mailbox` should usually auto-bind from the current session
 - reuse the bound mailbox addresses for later `mailbox_recv` and same-session checks
 
 ### Context Resolution Priority
@@ -104,7 +104,8 @@ Preferred transport interface:
 - `agent_deck_ensure_session`
 
 Transport rules:
-- bind `agent_mailbox` once when the session starts
+- `agent_mailbox` should usually auto-bind from the current session
+- explicit `mailbox_bind` is mainly for custom addresses or when auto-bind fails
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
@@ -372,7 +373,7 @@ Use stable naming:
 
 - planner prepares one mailbox message body for the coder
 - planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) inside that message body before sending
-- planner binds mailbox addresses once, then queues the message to coder inbox with `mailbox_send`
+- planner ensures mailbox context is available, then queues the message to coder inbox with `mailbox_send`
 
 ### 2) Coder Implements and Requests Review
 
