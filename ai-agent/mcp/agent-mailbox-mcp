@@ -17,10 +17,10 @@ const STATE = {
 };
 
 const DEFAULT_LISTENER_MESSAGE =
-  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then use the check-agent-mail skill now. Receive the pending message for your current session and execute its requested action.";
+  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then use $check-agent-mail now. Receive the pending message for your current session and execute its requested action.";
 
 const DEFAULT_NOTIFY_MESSAGE =
-  "Use the check-agent-mail skill now. Receive the pending message and execute its requested action.";
+  "Use $check-agent-mail now. Receive the pending message and execute its requested action.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
@@ -166,6 +166,18 @@ function parseSendTokens(output) {
     }
   }
   return result;
+}
+
+function ensureCheckAgentMailHint(message) {
+  const requiredHint = "$check-agent-mail";
+  const trimmed = (message || "").trim();
+  if (!trimmed) {
+    return DEFAULT_NOTIFY_MESSAGE;
+  }
+  if (trimmed.includes(requiredHint)) {
+    return trimmed;
+  }
+  return `${trimmed}\n\nUse ${requiredHint} now.`;
 }
 
 function makeToolResult(result) {
@@ -331,7 +343,7 @@ function buildServer() {
         switch (parsed.scheme) {
           case "agent-deck":
           case "codex": {
-            const notifyMessage = args.notify_message || DEFAULT_NOTIFY_MESSAGE;
+            const notifyMessage = ensureCheckAgentMailHint(args.notify_message || DEFAULT_NOTIFY_MESSAGE);
             runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
             notifyStatus = "sent";
             notifyScheme = parsed.scheme;
@@ -625,7 +637,7 @@ function buildServer() {
     },
     async ({ address, message }) => {
       const parsed = parseAddress(address);
-      const notifyMessage = message || DEFAULT_NOTIFY_MESSAGE;
+      const notifyMessage = ensureCheckAgentMailHint(message || DEFAULT_NOTIFY_MESSAGE);
 
       switch (parsed.scheme) {
         case "agent-deck":
