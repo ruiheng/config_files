@@ -14,6 +14,7 @@ const STATE = {
   bound_addresses: [],
   default_sender: null,
   default_workdir: null,
+  auto_bind_attempted: false,
 };
 
 const DEFAULT_LISTENER_MESSAGE =
@@ -162,6 +163,11 @@ function extractCodexSessionIdFromLsof(pid) {
 }
 
 function detectCurrentCodexSessionId() {
+  const envSessionId = (process.env.CODEX_SESSION_ID || "").trim();
+  if (envSessionId) {
+    return envSessionId;
+  }
+
   const seen = new Set();
   let pid = process.ppid;
   while (pid && pid > 1 && !seen.has(pid)) {
@@ -175,7 +181,15 @@ function detectCurrentCodexSessionId() {
       /(^|\/)codex(\s|$)/.test(row.args) ||
       row.args.includes("@openai/codex");
     if (looksLikeCodex) {
-      return extractCodexSessionIdFromArgs(row.args) || extractCodexSessionIdFromLsof(row.pid);
+      const fromArgs = extractCodexSessionIdFromArgs(row.args);
+      if (fromArgs) {
+        return fromArgs;
+      }
+      const fromLsof = extractCodexSessionIdFromLsof(row.pid);
+      if (fromLsof) {
+        return fromLsof;
+      }
+      return null;
     }
     pid = row.ppid;
   }
@@ -186,21 +200,20 @@ function mailboxAddresses(args = {}) {
   if (args.addresses && args.addresses.length > 0) {
     return dedupe(args.addresses);
   }
-  ensureAutoBoundCurrentSession();
-  if (STATE.bound_addresses.length > 0) {
-    return STATE.bound_addresses.slice();
+  const bound = getBoundState();
+  if (bound.bound_addresses.length > 0) {
+    return bound.bound_addresses.slice();
   }
   fail("no mailbox addresses provided and no mailbox addresses are bound");
 }
 
 function senderAddress(args = {}) {
-  ensureAutoBoundCurrentSession();
-  return args.from_address || STATE.default_sender || STATE.bound_addresses[0] || null;
+  const bound = getBoundState();
+  return args.from_address || bound.default_sender || bound.bound_addresses[0] || null;
 }
 
 function isLocalAddress(address) {
-  ensureAutoBoundCurrentSession();
-  return STATE.bound_addresses.includes(address);
+  return getBoundState().bound_addresses.includes(address);
 }
 
 function resolveSessionShow(identifier) {
@@ -218,33 +231,55 @@ function resolveSessionShow(identifier) {
   return data;
 }
 
-function ensureAutoBoundCurrentSession() {
-  if (STATE.bound_addresses.length > 0) {
+function tryAutoBindCurrentSession() {
+  if (STATE.bound_addresses.length > 0 || STATE.auto_bind_attempted) {
     return;
   }
+  STATE.auto_bind_attempted = true;
 
-  const proc = spawnSync("agent-deck", ["session", "current", "--json"], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-  });
-  if (proc.status !== 0) {
-    return;
+  const envAgentDeckId = (process.env.AGENTDECK_INSTANCE_ID || "").trim();
+  let agentDeckSessionId = envAgentDeckId;
+  if (!agentDeckSessionId) {
+    const proc = spawnSync("agent-deck", ["session", "current", "--json"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    if (proc.status === 0) {
+      const data = parseJsonOutput(proc.stdout, "agent-deck session current");
+      agentDeckSessionId = typeof data?.id === "string" ? data.id.trim() : "";
+    }
   }
 
-  const data = parseJsonOutput(proc.stdout, "agent-deck session current");
-  const sessionId = typeof data?.id === "string" ? data.id.trim() : "";
-  if (!sessionId) {
-    return;
+  const addresses = [];
+  if (agentDeckSessionId) {
+    addresses.push(agentDeckAddress(agentDeckSessionId));
+    const data = resolveSessionShow(agentDeckSessionId);
+    const workdir = typeof data?.path === "string" ? data.path.trim() : "";
+    if (workdir) {
+      STATE.default_workdir = workdir;
+    }
   }
 
-  const addresses = [agentDeckAddress(sessionId)];
   const codexSessionId = detectCurrentCodexSessionId();
   if (codexSessionId) {
     addresses.push(codexAddress(codexSessionId));
   }
 
   STATE.bound_addresses = dedupe(addresses);
-  STATE.default_sender = agentDeckAddress(sessionId);
+  if (agentDeckSessionId) {
+    STATE.default_sender = agentDeckAddress(agentDeckSessionId);
+  } else if (codexSessionId) {
+    STATE.default_sender = codexAddress(codexSessionId);
+  }
+}
+
+function getBoundState() {
+  tryAutoBindCurrentSession();
+  return {
+    bound_addresses: STATE.bound_addresses,
+    default_sender: STATE.default_sender,
+    default_workdir: STATE.default_workdir,
+  };
 }
 
 function sessionInfoFromData(data, sessionRef = null) {
@@ -306,6 +341,15 @@ function makeToolResult(result) {
   };
 }
 
+function presentBoundStateForStatus() {
+  const bound = getBoundState();
+  return {
+    bound_addresses: bound.bound_addresses,
+    default_sender: bound.default_sender || "<unset>",
+    default_workdir: bound.default_workdir || "<unset>",
+  };
+}
+
 function buildServer() {
   const server = new McpServer({
     name: "agent_mailbox",
@@ -329,11 +373,10 @@ function buildServer() {
       STATE.bound_addresses = boundAddresses;
       STATE.default_sender = sender;
       STATE.default_workdir = default_workdir || null;
+      STATE.auto_bind_attempted = true;
       return makeToolResult({
         status: "bound",
-        bound_addresses: STATE.bound_addresses,
-        default_sender: STATE.default_sender,
-        default_workdir: STATE.default_workdir,
+        ...getBoundState(),
       });
     }
   );
@@ -344,12 +387,7 @@ function buildServer() {
       description: "Show the currently bound mailbox addresses, default sender, and default workdir stored in this MCP server.",
       inputSchema: {},
     },
-    async () =>
-      makeToolResult({
-        bound_addresses: STATE.bound_addresses,
-        default_sender: STATE.default_sender,
-        default_workdir: STATE.default_workdir,
-      })
+    async () => makeToolResult(presentBoundStateForStatus())
   );
 
   server.registerTool(
@@ -413,10 +451,11 @@ function buildServer() {
             notifyScheme = parsed.scheme;
             break;
           }
-          case "codex":
+          case "codex": {
             notifyStatus = "unsupported";
             notifyScheme = parsed.scheme;
             break;
+          }
           default:
             notifyStatus = "unsupported";
             notifyScheme = parsed.scheme;
@@ -621,9 +660,10 @@ function buildServer() {
       },
     },
     async (args) => {
+      const bound = getBoundState();
       const identifier = args.session_id || args.session_ref || null;
       const listenerMessage = args.listener_message || DEFAULT_LISTENER_MESSAGE;
-      let workdir = args.workdir || STATE.default_workdir || null;
+      let workdir = args.workdir || bound.default_workdir || null;
       let data = identifier ? resolveSessionShow(identifier) : null;
 
       let createdTarget = false;

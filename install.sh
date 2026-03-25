@@ -497,6 +497,7 @@ install_required_tools() {
     local required_tools=(
         tmux
         jq
+        yq
     )
     local tool_name
 
@@ -654,22 +655,38 @@ install_codex_agent_mailbox_mcp() {
 
     remove_codex_legacy_workflow_mailbox_mcp
 
-    if codex mcp get agent_mailbox >/dev/null 2>&1; then
+    if ! codex mcp get agent_mailbox >/dev/null 2>&1; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would run: codex mcp add agent_mailbox -- $launcher"
+            return 0
+        fi
+
+        if ! codex mcp add agent_mailbox -- "$launcher"; then
+            log_error "Failed to configure Codex MCP: agent_mailbox"
+            return 1
+        fi
+        log_ok "Configured Codex MCP: agent_mailbox"
+    else
         log_ok "Codex MCP already configured: agent_mailbox"
-        return 0
+    fi
+
+    local codex_config="$HOME/.codex/config.toml"
+    if [[ ! -f "$codex_config" ]]; then
+        log_error "Missing Codex config: $codex_config"
+        return 1
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: codex mcp add agent_mailbox -- $launcher"
+        log_dry "Would ensure TMUX passthrough in: $codex_config"
         return 0
     fi
 
-    if codex mcp add agent_mailbox -- "$launcher"; then
-        log_ok "Configured Codex MCP: agent_mailbox"
+    if yq -p toml -o toml -i '.mcp_servers.agent_mailbox.env_vars = ["TMUX"]' "$codex_config"; then
+        log_ok "Ensured Codex MCP TMUX passthrough: agent_mailbox"
         return 0
     fi
 
-    log_error "Failed to configure Codex MCP: agent_mailbox"
+    log_error "Failed to update Codex MCP TMUX passthrough: agent_mailbox"
     return 1
 }
 
