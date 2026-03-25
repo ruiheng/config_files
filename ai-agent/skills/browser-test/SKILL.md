@@ -142,7 +142,7 @@ Execution flow:
 4. produce one `browser_check_report`
 5. if `agent_mailbox` is not already bound for this session, bind it first
 6. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
-7. send it back to the requester with `mailbox_deliver`
+7. send it back to the requester with `mailbox_send`
    - `from_address = agent-deck/<browser_tester_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "browser report: <task_id> r<round>"`

@@ -115,7 +115,7 @@ Use the `agent_mailbox` MCP tools:
   - `ensure_title = <browser_tester_session_ref>`
   - `ensure_cmd = <browser_tester_tool>`
   - `parent_session_id = <requester_session_id>`
-- call `mailbox_deliver` with:
+- call `mailbox_send` with:
   - `from_address = agent-deck/<requester_session_id>`
   - `to_address = agent-deck/<browser_tester_session_id>`
   - `subject = "browser check: <task_id> r<round>"`

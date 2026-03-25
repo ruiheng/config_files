@@ -195,7 +195,7 @@ function makeToolResult(result) {
 function buildServer() {
   const server = new McpServer({
     name: "agent_mailbox",
-    version: "0.3.0",
+    version: "0.4.0",
     instructions: SERVER_INSTRUCTIONS,
   });
 
@@ -241,7 +241,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_send",
     {
-      description: "Send one mailbox message.",
+      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Pass an empty notify_message to disable notify for that send.",
       inputSchema: {
         to_address: z.string(),
         from_address: z.string().optional(),
@@ -249,6 +249,7 @@ function buildServer() {
         body: z.string(),
         content_type: z.string().optional(),
         schema_version: z.string().optional(),
+        notify_message: z.string().optional(),
       },
     },
     async (args) => {
@@ -281,61 +282,6 @@ function buildServer() {
       );
       const sendIds = parseSendTokens(sendProc.stdout);
 
-      return makeToolResult({
-        status: "sent",
-        from_address: fromAddress,
-        to_address: args.to_address,
-        subject: args.subject,
-        message_id: sendIds.message_id,
-        delivery_id: sendIds.delivery_id,
-        blob_id: sendIds.blob_id,
-      });
-    }
-  );
-
-  server.registerTool(
-    "mailbox_deliver",
-    {
-      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it.",
-      inputSchema: {
-        to_address: z.string(),
-        from_address: z.string().optional(),
-        subject: z.string(),
-        body: z.string(),
-        content_type: z.string().optional(),
-        schema_version: z.string().optional(),
-        notify_message: z.string().optional(),
-      },
-    },
-    async (args) => {
-      const fromAddress = senderAddress(args);
-      if (!fromAddress) {
-        fail("mailbox_deliver requires from_address or a bound default_sender");
-      }
-
-      const contentType = args.content_type || "text/markdown";
-      const schemaVersion = args.schema_version || "1";
-      const sendProc = runCmd(
-        [
-          "agent-mailbox",
-          "send",
-          "--to",
-          args.to_address,
-          "--from",
-          fromAddress,
-          "--subject",
-          args.subject,
-          "--content-type",
-          contentType,
-          "--schema-version",
-          schemaVersion,
-          "--body-file",
-          "-",
-        ],
-        { inputText: args.body }
-      );
-      const sendIds = parseSendTokens(sendProc.stdout);
-
       let notifyStatus = "skipped_local";
       let notifyScheme = null;
       const parsed = parseAddress(args.to_address);
@@ -343,6 +289,11 @@ function buildServer() {
         switch (parsed.scheme) {
           case "agent-deck":
           case "codex": {
+            if (typeof args.notify_message === "string" && args.notify_message.trim() === "") {
+              notifyStatus = "skipped_disabled";
+              notifyScheme = parsed.scheme;
+              break;
+            }
             const notifyMessage = ensureCheckAgentMailHint(args.notify_message || DEFAULT_NOTIFY_MESSAGE);
             runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
             notifyStatus = "sent";
@@ -357,7 +308,7 @@ function buildServer() {
       }
 
       return makeToolResult({
-        status: "delivered",
+        status: "sent",
         from_address: fromAddress,
         to_address: args.to_address,
         subject: args.subject,
@@ -623,34 +574,6 @@ function buildServer() {
         notify_needed: notifyNeeded,
         listener_status: listenerStatus,
       });
-    }
-  );
-
-  server.registerTool(
-    "notify_send",
-    {
-      description: "Send a push-style nudge to one session address. For agent-deck-managed sessions, both agent-deck/<id> and codex/<id> currently route through agent-deck session send.",
-      inputSchema: {
-        address: z.string(),
-        message: z.string().optional(),
-      },
-    },
-    async ({ address, message }) => {
-      const parsed = parseAddress(address);
-      const notifyMessage = ensureCheckAgentMailHint(message || DEFAULT_NOTIFY_MESSAGE);
-
-      switch (parsed.scheme) {
-        case "agent-deck":
-        case "codex":
-          runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
-          return makeToolResult({
-            status: "sent",
-            address,
-            scheme: parsed.scheme,
-          });
-        default:
-          fail(`unsupported notify address scheme: ${parsed.scheme}`, { address });
-      }
     }
   );
 

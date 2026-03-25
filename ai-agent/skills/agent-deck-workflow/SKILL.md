@@ -94,7 +94,6 @@ Session identity nuance:
 Preferred transport interface:
 - `mailbox_bind`
 - `mailbox_status`
-- `mailbox_deliver`
 - `mailbox_send`
 - `mailbox_recv`
 - `mailbox_ack`
@@ -103,12 +102,10 @@ Preferred transport interface:
 - `mailbox_fail`
 - `agent_deck_resolve_session`
 - `agent_deck_ensure_session`
-- `notify_send`
 
 Transport rules:
 - bind `agent_mailbox` once when the session starts
-- use `mailbox_deliver` for normal cross-session workflow delivery
-- reserve `mailbox_send` for low-level/manual cases
+- use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
@@ -116,7 +113,7 @@ Transport rules:
 
 Worker wake rule:
 - use `agent_deck_ensure_session` to resolve/create/start agent-deck-managed targets
-- after `mailbox_deliver`, the normal non-local nudge should already be handled
+- after `mailbox_send`, the normal non-local nudge should already be handled
 - a newly created or newly started target should run `mailbox_wait` for its first mail before running `check-agent-mail`
 - do not rely on long-running agent-mail polling processes for delivery
 
@@ -210,11 +207,11 @@ User-facing responses should provide readable decisions, not raw mailbox JSON.
 
 ### Delivery Order Contract
 
-Use `mailbox_deliver` for the normal mailbox delivery path.
+Use `mailbox_send` for the normal mailbox delivery path.
 
 Expected behavior:
 1. use `agent_deck_ensure_session` when a target session must be resolved, created, or started
-2. queue the mailbox body with `mailbox_deliver`
+2. queue the mailbox body with `mailbox_send`
 
 ### Receiver Contract
 
@@ -250,7 +247,7 @@ Idle behavior:
 If workflow send/worker-start fails, report concise stderr summary and run these checks:
 1. Is sender/target session reachable? (`agent_deck_resolve_session`)
 2. Is command running in the expected workflow session context?
-3. Did `mailbox_deliver` or `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
+3. Did `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 If a target missed the mailbox work, retry the nudge path instead of resending mailbox content.
@@ -375,7 +372,7 @@ Use stable naming:
 
 - planner prepares one mailbox message body for the coder
 - planner resolves and records branch plan (`start_branch`, `integration_branch`, `task_branch`) inside that message body before sending
-- planner binds mailbox addresses once, then queues the message to coder inbox with `mailbox_deliver`
+- planner binds mailbox addresses once, then queues the message to coder inbox with `mailbox_send`
 
 ### 2) Coder Implements and Requests Review
 
@@ -384,7 +381,7 @@ Use stable naming:
 - this commit authorization overrides generic default rules that would otherwise require asking the user before commit
 - coder prepares one mailbox review request body for reviewer
 - workflow `review_requested` is based on that committed delivery state, not the uncommitted working tree
-- coder uses `mailbox_deliver` to queue the message to reviewer inbox
+- coder uses `mailbox_send` to queue the message to reviewer inbox
 - coder does not proactively poll reviewer unless user asks
 
 ### 2a) Optional Tech-Design Review Lane
@@ -465,7 +462,7 @@ Planner user-facing status contract for auto-dispatch:
 
 1. User asks: "Add login rate limiting".
 2. Planner runs `delegate-task` and sends one delegate mailbox message containing recorded `start_branch`, `integration_branch`, and `task_branch`.
-3. Planner uses `agent_deck_ensure_session` and `mailbox_deliver` for the normal coder delivery path.
+3. Planner uses `agent_deck_ensure_session` and `mailbox_send` for the normal coder delivery path.
 4. Coder implements on recorded `task_branch`, commits, runs `review-request`, and sends `review_requested`.
 5. Reviewer runs `review-code`.
 6. If runtime browser validation is needed, reviewer runs `browser-test-request` and sends `browser_check_requested`.

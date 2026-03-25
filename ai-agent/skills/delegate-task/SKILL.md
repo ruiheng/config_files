@@ -143,7 +143,7 @@ Workflow send sequence:
    - `ensure_cmd = <coder_tool>`
    - `parent_session_id = <planner_session_id>`
 4. use the returned `session_id` as the authoritative `coder_session_id`
-5. fill the final body and call `mailbox_deliver` with:
+5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<planner_session_id>`
    - `to_address = agent-deck/<coder_session_id>`
    - `subject = "delegate: <task_id> -> coder"`
