@@ -31,7 +31,6 @@ Options:
   --profile <name>                 Agent-deck profile (used by optional health gate)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
-  --allow-task-integration-branch  Allow a different task/* branch as integration branch
   --run-prune                      Run prune-task-branches.sh after required actions
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions
@@ -91,7 +90,7 @@ architect_session_ref=""
 profile=""
 merge_mode="ff-only"
 allow_dirty=0
-allow_task_integration_branch=0
+integration_branch_source="inferred_current_branch"
 run_prune=0
 prune_apply=0
 run_health_gate=1
@@ -101,7 +100,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="${2:-}"; shift 2 ;;
     --task-branch) task_branch="${2:-}"; shift 2 ;;
-    --integration-branch) integration_branch="${2:-}"; shift 2 ;;
+    --integration-branch) integration_branch="${2:-}"; integration_branch_source="explicit"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --progress-file) progress_file="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
@@ -111,7 +110,6 @@ while [[ $# -gt 0 ]]; do
     --profile) profile="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
-    --allow-task-integration-branch) allow_task_integration_branch=1; shift 1 ;;
     --run-prune) run_prune=1; shift 1 ;;
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
@@ -167,8 +165,13 @@ fi
 
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
 [[ "$task_branch" != "$integration_branch" ]] || die "--task-branch must differ from integration branch"
-if [[ "$integration_branch" == task/* && "$integration_branch" != "$task_branch" && "$allow_task_integration_branch" -ne 1 ]]; then
-  die "refusing suspicious integration branch '${integration_branch}' for task branch '${task_branch}'; pass the recorded landing branch or --allow-task-integration-branch if this is intentional"
+task_scoped_integration_branch=0
+if [[ "$integration_branch" == task/* && "$integration_branch" != "$task_branch" ]]; then
+  task_scoped_integration_branch=1
+  if [[ "$integration_branch_source" == "inferred_current_branch" ]]; then
+    die "refusing implicit task-scoped integration branch '${integration_branch}' for task branch '${task_branch}'; pass the recorded --integration-branch explicitly"
+  fi
+  warn "task-scoped integration branch recorded explicitly: integration=${integration_branch} task_branch=${task_branch}"
 fi
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
@@ -259,10 +262,12 @@ progress_record="$(jq -nc \
   --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg integration_branch "$integration_branch" \
   --arg task_branch "$task_branch" \
+  --arg integration_branch_source "$integration_branch_source" \
   --arg started_branch "$started_branch" \
   --arg merged_sha "$merged_sha" \
   --arg status "required_complete" \
   --argjson switched_integration_branch "$switched_integration_branch" \
+  --argjson task_scoped_integration_branch "$task_scoped_integration_branch" \
   '{
     task_id: $task_id,
     timestamp: $timestamp,
@@ -270,6 +275,8 @@ progress_record="$(jq -nc \
     started_branch: $started_branch,
     integration_branch: $integration_branch,
     task_branch: $task_branch,
+    integration_branch_source: $integration_branch_source,
+    task_scoped_integration_branch: $task_scoped_integration_branch,
     merged_sha: $merged_sha,
     closeout_source: "mailbox_message",
     switched_integration_branch: $switched_integration_branch
@@ -368,10 +375,12 @@ jq -nc \
   --arg started_branch "$started_branch" \
   --arg integration_branch "$integration_branch" \
   --arg task_branch "$task_branch" \
+  --arg integration_branch_source "$integration_branch_source" \
   --arg progress_file "$progress_file" \
   --arg merged_sha "$merged_sha" \
   --arg merge_mode "$merge_mode" \
   --argjson switched_integration_branch "$switched_integration_branch" \
+  --argjson task_scoped_integration_branch "$task_scoped_integration_branch" \
   --arg prune_status "$prune_status" \
   --arg health_gate_status "$health_gate_status" \
   --arg next_dispatch_status "$next_dispatch_status" \
@@ -382,6 +391,8 @@ jq -nc \
     started_branch: $started_branch,
     integration_branch: $integration_branch,
     task_branch: $task_branch,
+    integration_branch_source: $integration_branch_source,
+    task_scoped_integration_branch: $task_scoped_integration_branch,
     closeout_source: "mailbox_message",
     progress_file: $progress_file,
     required_actions: {
