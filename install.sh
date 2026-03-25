@@ -497,7 +497,6 @@ install_required_tools() {
     local required_tools=(
         tmux
         jq
-        yq
     )
     local tool_name
 
@@ -681,7 +680,15 @@ install_codex_agent_mailbox_mcp() {
         return 0
     fi
 
-    if yq -p toml -o toml -i '.mcp_servers.agent_mailbox.env_vars = ["TMUX"]' "$codex_config"; then
+    if perl -0pi -e '
+        s{
+          (\[mcp_servers\.agent_mailbox\]\n(?:(?!\[).*\n)*)
+        }{
+          my $section = $1;
+          $section =~ s/^\s*env_vars\s*=.*\n//mg;
+          $section . qq{env_vars = [ "TMUX" ]\n};
+        }egms
+    ' "$codex_config"; then
         log_ok "Ensured Codex MCP TMUX passthrough: agent_mailbox"
         return 0
     fi
