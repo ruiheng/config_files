@@ -326,7 +326,7 @@ function ensureCheckAgentMailHint(message) {
   if (trimmed.includes(requiredHint)) {
     return trimmed;
   }
-  return `${trimmed}\n\nUse the '${requiredHint}' skill now.`;
+  return `${trimmed}\nUse the '${requiredHint}' skill now.`;
 }
 
 function makeToolResult(result) {
