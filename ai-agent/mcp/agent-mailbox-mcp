@@ -369,6 +369,7 @@ function buildServer() {
       for (const address of addresses) {
         cmd.push("--for", address);
       }
+      cmd.push("--max", "1");
       cmd.push("--json");
       const proc = runCmd(cmd, { okCodes: [0, 2] });
       if (proc.status === 2) {

@@ -49,6 +49,7 @@ For an agent-deck-managed session `<id>`, bind both:
 `mailbox_recv`
 - receives mail for the bound addresses or explicit override addresses
 - claims one delivery immediately or returns no message
+- calls `agent-mailbox recv --max 1` explicitly so the MCP contract stays single-message even if CLI defaults change
 
 `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
 - wrap the corresponding `agent-mailbox` lifecycle commands
