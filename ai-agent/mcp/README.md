@@ -31,7 +31,7 @@ The server is stdio-based and exposes three groups of tools.
 `mailbox_bind`
 - stores one or more mailbox addresses in MCP server state
 - optionally stores `default_sender` and `default_workdir`
-- most agent-deck-hosted sessions can skip this because the MCP will usually auto-bind from `agent-deck session current --json`
+- use this for custom addresses or recovery when mailbox context is missing
 
 For an agent-deck-managed session `<id>`, bind:
 - `agent-deck/<id>`
@@ -100,7 +100,4 @@ claude mcp add -s user agent_mailbox -- "$HOME/.local/bin/agent-mailbox-mcp"
 - This server does not change workflow prompts by itself.
 - Mailbox transport does not depend on `agent-deck`.
 - `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.
-- Typical bootstrap for an agent-deck-managed session is:
-  1. `agent-deck session current --json`
-  2. `mailbox_bind(addresses=["agent-deck/<id>"], default_sender="agent-deck/<id>")`
-- In normal Codex/agent-deck use, explicit bind is mainly for custom addresses or when auto-bind fails.
+- In normal Codex/agent-deck use, call mailbox tools directly; bind only when you need custom addresses or recovery from missing mailbox context.

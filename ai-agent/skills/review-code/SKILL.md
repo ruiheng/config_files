@@ -171,7 +171,7 @@ Mailbox subject (`rework_required`):
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
-- `agent_mailbox` should usually auto-bind from the current session
+- use `agent_mailbox`
 - first call `agent_deck_ensure_session` with `session_id = <coder_session_id>`
 - send it with `mailbox_send`
   - `from_address = agent-deck/<reviewer_session_id>`
@@ -187,7 +187,7 @@ Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
-- `agent_mailbox` should usually auto-bind from the current session
+- use `agent_mailbox`
 - first call `agent_deck_ensure_session` with `session_id = <coder_session_id>`
 - send it with `mailbox_send`
   - `from_address = agent-deck/<reviewer_session_id>`

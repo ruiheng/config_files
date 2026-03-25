@@ -56,7 +56,7 @@ If required values are resolved:
    - if `reviewer_session_id == planner_session_id`, skip cross-session delivery and continue locally
    - otherwise send `closeout_delivered` to planner through `mailbox_send`
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
-4. use `agent_mailbox`; it should usually auto-bind from the current session
+4. use `agent_mailbox`
 5. first call `agent_deck_ensure_session` with `session_id = <planner_session_id>`
 6. use `mailbox_send` with:
    - `from_address = agent-deck/<reviewer_session_id>`

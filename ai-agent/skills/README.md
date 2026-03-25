@@ -17,7 +17,7 @@ This document describes the multi-agent workflow built around the skills in this
 - `agent-deck` is used to start target sessions or to nudge already active sessions to check mail
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
-- `agent_mailbox` usually auto-binds from the current session; use `mailbox_bind` when custom addresses are needed or auto-bind fails
+- use mailbox tools directly; use `mailbox_bind` only when custom addresses are needed or mailbox context is missing
 - The workflow does not generate Markdown handoff files by default
 
 ## End-to-End Loop

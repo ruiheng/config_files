@@ -9,7 +9,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 
 ## Steps
 
-1. Run `mailbox_recv`; `agent_mailbox` should usually auto-bind from the current session
+1. Run `mailbox_recv`
 2. If no message is waiting, report that no agent mail is available and stop
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
@@ -24,4 +24,4 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - Keep lifecycle steps serialized
-- If mailbox auto-bind fails, bind mailbox addresses for this session and retry
+- If `mailbox_recv` fails because mailbox context is missing, bind and retry

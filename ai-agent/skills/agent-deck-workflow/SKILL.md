@@ -50,8 +50,8 @@ Enter Agent Deck mode when any condition matches:
 3. user explicitly asks for agent-deck workflow
 
 Session binding rule:
-- `agent_mailbox` should usually auto-bind from the current session
-- reuse the bound mailbox addresses for later `mailbox_recv` and same-session checks
+- use mailbox tools directly
+- bind only when mailbox context is actually missing
 
 ### Context Resolution Priority
 
@@ -104,11 +104,10 @@ Preferred transport interface:
 - `agent_deck_ensure_session`
 
 Transport rules:
-- `agent_mailbox` should usually auto-bind from the current session
-- explicit `mailbox_bind` is mainly for custom addresses or when auto-bind fails
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
+- use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
 - for agent-deck-managed targets, use `agent_deck_ensure_session` to resolve/create/start the target session
 

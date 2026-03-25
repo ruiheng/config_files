@@ -109,7 +109,7 @@ Recommended subject:
 - `browser check: <task_id> r<round>`
 
 Use the `agent_mailbox` MCP tools:
-- `agent_mailbox` should usually auto-bind from the current session
+- use `agent_mailbox`
 - call `agent_deck_ensure_session` with:
   - `session_ref = <browser_tester_session_ref>`
   - `ensure_title = <browser_tester_session_ref>`
