@@ -401,8 +401,7 @@ function buildServer() {
       const parsed = parseAddress(args.to_address);
       if (!isLocalAddress(args.to_address)) {
         switch (parsed.scheme) {
-          case "agent-deck":
-          case "codex": {
+          case "agent-deck": {
             if (typeof args.notify_message === "string" && args.notify_message.trim() === "") {
               notifyStatus = "skipped_disabled";
               notifyScheme = parsed.scheme;
@@ -414,6 +413,10 @@ function buildServer() {
             notifyScheme = parsed.scheme;
             break;
           }
+          case "codex":
+            notifyStatus = "unsupported";
+            notifyScheme = parsed.scheme;
+            break;
           default:
             notifyStatus = "unsupported";
             notifyScheme = parsed.scheme;

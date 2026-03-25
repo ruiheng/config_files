@@ -39,7 +39,8 @@ For an agent-deck-managed session `<id>`, bind:
 
 `mailbox_send`
 - sends one mailbox message
-- auto-notifies a non-local target when the address scheme supports push nudge
+- auto-notifies a non-local `agent-deck/...` target
+- `codex/...` addresses can be used for mailbox delivery, but do not currently imply an agent-deck wakeup target
 - uses `from_address` explicitly, or falls back to the bound `default_sender`
 - pass an empty `notify_message` to disable notify for that send
 
