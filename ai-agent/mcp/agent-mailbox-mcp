@@ -15,6 +15,8 @@ const STATE = {
   default_sender: null,
   default_workdir: null,
   auto_bind_attempted: false,
+  detected_agent_deck_session_id: null,
+  detected_agent_session_id: null,
 };
 
 const DEFAULT_LISTENER_MESSAGE =
@@ -252,6 +254,7 @@ function tryAutoBindCurrentSession() {
 
   const addresses = [];
   if (agentDeckSessionId) {
+    STATE.detected_agent_deck_session_id = agentDeckSessionId;
     addresses.push(agentDeckAddress(agentDeckSessionId));
     const data = resolveSessionShow(agentDeckSessionId);
     const workdir = typeof data?.path === "string" ? data.path.trim() : "";
@@ -262,6 +265,7 @@ function tryAutoBindCurrentSession() {
 
   const codexSessionId = detectCurrentCodexSessionId();
   if (codexSessionId) {
+    STATE.detected_agent_session_id = codexSessionId;
     addresses.push(codexAddress(codexSessionId));
   }
 
@@ -275,10 +279,23 @@ function tryAutoBindCurrentSession() {
 
 function getBoundState() {
   tryAutoBindCurrentSession();
+  const warnings = [];
+  if (!STATE.detected_agent_deck_session_id) {
+    warnings.push("unable to determine current agent-deck session id");
+  }
+  if (!STATE.detected_agent_session_id) {
+    warnings.push("unable to determine current AI agent session id");
+  }
+  if (STATE.bound_addresses.length === 0) {
+    warnings.push("no mailbox addresses are currently bound");
+  }
   return {
     bound_addresses: STATE.bound_addresses,
     default_sender: STATE.default_sender,
     default_workdir: STATE.default_workdir,
+    detected_agent_deck_session_id: STATE.detected_agent_deck_session_id,
+    detected_agent_session_id: STATE.detected_agent_session_id,
+    warnings,
   };
 }
 
