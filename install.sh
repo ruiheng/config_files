@@ -676,24 +676,56 @@ install_codex_agent_mailbox_mcp() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would ensure TMUX passthrough in: $codex_config"
+        log_dry "Would ensure TMUX and AGENTDECK_INSTANCE_ID passthrough in: $codex_config"
         return 0
     fi
 
     if perl -0pi -e '
-        s{
-          (\[mcp_servers\.agent_mailbox\]\n(?:(?!\[).*\n)*)
-        }{
-          my $section = $1;
-          $section =~ s/^\s*env_vars\s*=.*\n//mg;
-          $section . qq{env_vars = [ "TMUX" ]\n};
-        }egms
+        my @lines = split /\n/, $_, -1;
+        my @out = ();
+        my $found = 0;
+        my $in_section = 0;
+        my $inserted = 0;
+
+        for my $line (@lines) {
+          if ($line =~ /^\[mcp_servers\.agent_mailbox\]$/) {
+            $found = 1;
+            $in_section = 1;
+            $inserted = 0;
+            push @out, $line;
+            next;
+          }
+
+          if ($in_section && $line =~ /^\[/) {
+            push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID" ]} unless $inserted;
+            $inserted = 1;
+            $in_section = 0;
+          }
+
+          next if $in_section && $line =~ /^\s*env_vars\s*=/;
+          push @out, $line;
+        }
+
+        if ($in_section && !$inserted) {
+          push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID" ]};
+        }
+
+        die "agent_mailbox section not found\n" unless $found;
+
+        $_ = join("\n", @out);
+        $_ .= "\n" unless $_ =~ /\n\z/;
+    ' "$codex_config" && perl -0ne '
+        exit(
+          /\[mcp_servers\.agent_mailbox\][\s\S]*?^env_vars\s*=\s*\[\s*"TMUX"\s*,\s*"AGENTDECK_INSTANCE_ID"\s*\]/m
+            ? 0
+            : 1
+        );
     ' "$codex_config"; then
-        log_ok "Ensured Codex MCP TMUX passthrough: agent_mailbox"
+        log_ok "Ensured Codex MCP TMUX and AGENTDECK_INSTANCE_ID passthrough: agent_mailbox"
         return 0
     fi
 
-    log_error "Failed to update Codex MCP TMUX passthrough: agent_mailbox"
+    log_error "Failed to update Codex MCP TMUX and AGENTDECK_INSTANCE_ID passthrough: agent_mailbox"
     return 1
 }
 
