@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const path = require("node:path");
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
@@ -62,6 +62,114 @@ function runCmd(args, options = {}) {
   }
 
   return proc;
+}
+
+function runCmdAsync(args, options = {}) {
+  const {
+    inputText = null,
+    okCodes = [0],
+    signal = null,
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason || new Error("aborted"));
+      return;
+    }
+
+    let proc = null;
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const cleanupAbort = () => {
+      if (signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
+    };
+
+    const finishReject = (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanupAbort();
+      reject(error);
+    };
+
+    const finishResolve = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanupAbort();
+      resolve(value);
+    };
+
+    const onAbort = () => {
+      try {
+        proc?.kill("SIGTERM");
+      } catch {
+      }
+      finishReject(signal?.reason || new Error("aborted"));
+    };
+
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    proc = spawn(args[0], args.slice(1), {
+      cwd: REPO_ROOT,
+      stdio: "pipe",
+    });
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
+
+    proc.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    proc.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    proc.on("error", (error) => {
+      finishReject(error);
+    });
+    proc.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      if (!okCodes.includes(code)) {
+        const detail =
+          stderr.trim() ||
+          stdout.trim() ||
+          `exit code ${code}`;
+        finishReject(
+          Object.assign(new Error(`command failed: ${args.join(" ")} :: ${detail}`), {
+            data: { args, returncode: code },
+          })
+        );
+        return;
+      }
+
+      finishResolve({
+        status: code,
+        stdout,
+        stderr,
+      });
+    });
+
+    if (inputText !== null) {
+      proc.stdin.write(inputText);
+    }
+    proc.stdin.end();
+  });
 }
 
 function parseJsonOutput(text, context) {
@@ -503,7 +611,7 @@ function buildServer() {
         timeout: z.string().optional(),
       },
     },
-    async (args) => {
+    async (args, extra) => {
       const addresses = mailboxAddresses(args);
       const cmd = ["agent-mailbox", "wait"];
       for (const address of addresses) {
@@ -513,7 +621,10 @@ function buildServer() {
         cmd.push("--timeout", args.timeout);
       }
       cmd.push("--json");
-      const proc = runCmd(cmd, { okCodes: [0, 2] });
+      const proc = await runCmdAsync(cmd, {
+        okCodes: [0, 2],
+        signal: extra?.signal,
+      });
       if (proc.status === 2) {
         return makeToolResult({
           status: "no_message",
