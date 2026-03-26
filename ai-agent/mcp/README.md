@@ -49,7 +49,8 @@ For an agent-deck-managed session `<id>`, bind:
 - does not claim the delivery
 
 `mailbox_recv`
-- receives mail for the bound addresses or explicit override addresses
+- if `addresses` is omitted, receives mail for all bound addresses
+- if `addresses` is provided, uses only that explicit override address list for this call
 - claims one delivery immediately or returns no message
 - calls `agent-mailbox recv --max 1` explicitly so the MCP contract stays single-message even if CLI defaults change
 

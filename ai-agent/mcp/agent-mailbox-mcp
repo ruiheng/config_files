@@ -717,7 +717,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_recv",
     {
-      description: "Receive mail immediately. Uses bound addresses by default; pass addresses only to override.",
+      description: "Receive mail immediately. If addresses is omitted, receive from all bound addresses; pass addresses only to override that inbox set for this call.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
       },
