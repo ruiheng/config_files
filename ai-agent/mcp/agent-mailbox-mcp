@@ -862,14 +862,12 @@ function buildServer() {
         parent_session_id: z.string().optional(),
         workdir: z.string().optional(),
         listener_message: z.string().optional(),
-        startup_timeout_ms: z.number().int().positive().optional(),
       },
     },
     async (args, extra) => {
       const bound = getBoundState();
       const identifier = args.session_id || args.session_ref || null;
       const listenerMessage = args.listener_message || DEFAULT_LISTENER_MESSAGE;
-      const startupTimeoutMs = args.startup_timeout_ms ?? null;
       let workdir = args.workdir || bound.default_workdir || null;
       let data = identifier ? resolveSessionShow(identifier, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) : null;
 
@@ -910,7 +908,6 @@ function buildServer() {
           workdir,
         ];
         const proc = await runCmdAsync(launchArgs, {
-          timeoutMs: startupTimeoutMs,
           signal: extra?.signal,
         });
         data = parseJsonOutput(proc.stdout, "agent-deck launch");
@@ -928,7 +925,6 @@ function buildServer() {
             startArgs.splice(4, 0, "-m", listenerMessage);
           }
           await runCmdAsync(startArgs, {
-            timeoutMs: startupTimeoutMs,
             signal: extra?.signal,
           });
           data = resolveSessionShow(data.id, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) || data;
