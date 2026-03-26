@@ -170,7 +170,7 @@ Sender invariants:
 Action contract:
 - `execute_delegate_task`: planner starts delegated implementation
 - `review_requested`: coder asks reviewer to run full review from a delivery commit, includes the coder's already-run verification record, and reviewer must proactively send the next workflow message
-- `tech_design_review_requested`: planner or coder asks architect to review a committed tech-design snapshot from a dedicated branch and return advisory guidance to the requester
+- `tech_design_review_requested`: planner or coder asks architect to review the latest committed tech-design docs from a dedicated branch and return advisory guidance to the requester
 - `tech_design_review_report`: architect returns advisory tech-design feedback to the original requester session
 - `browser_check_requested`: any workflow session may ask browser-tester to validate a concrete browser flow and return runtime evidence; when the request explicitly allows it, browser-tester may directly modify display-adjacent code on its own branch before reporting back
 - `browser_check_report`: browser-tester returns PASS / FAIL / UNKNOWN evidence to the original requester session
@@ -200,7 +200,7 @@ Tech-design review continuity:
 - first `tech_design_review_requested` to an architect session carries the full tech-design context
 - later `tech_design_review_requested` messages to that same architect session carry only the delta since the previous architect round
 - if the architect session changes, resend the full tech-design context to the new architect session
-- `tech_design_review_requested` is based on committed design docs, not uncommitted working tree notes
+- `tech_design_review_requested` is based on the latest committed design docs on a branch, not uncommitted working tree notes
 - default tech-design branch is `tech-design/<task_id>`
 
 User-facing responses should provide readable decisions, not raw mailbox JSON.
@@ -287,7 +287,7 @@ Reviewer decision rules:
 Architect rules:
 1. `architect` is a per-task focused session, not a shared long-lived service
 2. requester may be planner or coder
-3. input is a committed tech-design snapshot, typically on `tech-design/<task_id>`
+3. input is the latest committed tech-design docs on a branch, typically `tech-design/<task_id>`
 4. architect reviews docs and design rationale; it does not edit code or docs in this lane
 5. architect sends one `tech_design_review_report` back to the original requester
 6. requester decides whether to revise the design docs, proceed, or ask for another architect round

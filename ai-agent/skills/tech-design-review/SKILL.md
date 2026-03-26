@@ -1,6 +1,6 @@
 ---
 name: tech-design-review
-description: Reviews a committed tech-design snapshot and sends an advisory report back to the requester session.
+description: Reviews the latest committed tech-design docs on a branch and sends an advisory report back to the requester session.
 ---
 
 # Tech-Design Review
@@ -16,7 +16,7 @@ Provide the mailbox body from `tech_design_review_requested`.
 
 ## Review Scope
 
-Review the committed tech-design snapshot for:
+Review the requested tech-design branch snapshot for:
 - problem framing and scope
 - constraints, assumptions, and success criteria
 - decision quality and tradeoffs
@@ -52,7 +52,6 @@ Use these lenses when judging the design:
 Before reviewing quality, verify:
 - problem statement is stated
 - tech-design branch is stated
-- tech-design commit is stated
 - in-scope design docs are stated
 - alternatives or rejected options are stated
 - major constraints are stated
@@ -111,7 +110,7 @@ Skill-specific context resolution:
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 
 Execution flow:
-1. review the committed tech-design snapshot referenced in the mailbox body
+1. review the latest committed tech-design docs on the referenced branch
 2. produce one `tech_design_review_report`
 3. use `agent_mailbox`
 4. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`

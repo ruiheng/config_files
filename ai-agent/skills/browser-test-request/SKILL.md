@@ -93,7 +93,8 @@ Round: <round>
 ## Evidence To Return
 - Decision: PASS / FAIL / UNKNOWN
 - Code changed: [yes/no]
-- Branch / commit: [value or `N/A`]
+- Branch: [branch name or `N/A`]
+- Commit: [short prefix or `N/A`]
 - Files changed: [list or `None`]
 - Findings with reproduction steps
 - Console and page errors summary

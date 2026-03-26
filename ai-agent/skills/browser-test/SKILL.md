@@ -103,7 +103,7 @@ PASS / FAIL / UNKNOWN
 ## Code Change Summary
 - Code changed: [yes/no]
 - Branch: [branch name or `N/A`]
-- Commit: [hash or `N/A`]
+- Commit: [short prefix or `N/A`]
 - Files changed: [list or `None`]
 
 ## Evidence

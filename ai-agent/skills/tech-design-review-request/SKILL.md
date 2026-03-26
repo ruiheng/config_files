@@ -1,11 +1,11 @@
 ---
 name: tech-design-review-request
-description: Generates a tech-design review mailbox message from committed design docs and sends it to a per-task architect session.
+description: Generates a tech-design review mailbox message from committed design docs on a branch and sends it to a per-task architect session.
 ---
 
 # Tech-Design Review Request
 
-Generate a concise mailbox message that asks an architect to review a committed tech-design snapshot.
+Generate a concise mailbox message that asks an architect to review the latest committed tech-design docs on a branch.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 This skill only defines tech-design-review-request-specific behavior.
@@ -17,7 +17,6 @@ This skill only defines tech-design-review-request-specific behavior.
 - `requester_role`
 - `architect_session_ref` or `architect_session_id`
 - `tech_design_branch`
-- `tech_design_commit`
 - `design_docs_in_scope`
 - `problem`
 - `goals`
@@ -32,14 +31,9 @@ This skill only defines tech-design-review-request-specific behavior.
 
 ## Required Git State
 
-- the review target must be a committed tech-design snapshot
+- the review target is the latest committed state on a tech-design branch
 - default branch is `tech-design/<task_id>`
-- use read-only git commands to collect context
-
-Minimum checks:
-- `git rev-parse --verify <tech_design_commit>`
-- `git branch --contains <tech_design_commit>`
-- `git show --stat --format=fuller <tech_design_commit>`
+- use read-only git commands only when needed to collect context
 
 ## Agent Deck Mode
 
@@ -53,7 +47,6 @@ Skill-specific context resolution:
 - `architect_session_ref`: explicit -> workflow context -> default `architect-<task_id>`
 - `architect_session_id`: explicit actual id -> workflow context actual id -> resolved/created from `architect_session_ref` before send
 - `tech_design_branch`: explicit -> workflow context -> default `tech-design/<task_id>`
-- `tech_design_commit`: explicit -> ask
 - `architect_tool`: explicit -> workflow context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
 - `round`: explicit -> workflow context -> default `1`
 
@@ -98,7 +91,6 @@ Round: <round>
 
 ## Tech Design Snapshot
 - Branch: [tech-design branch]
-- Commit: [commit hash]
 - Design docs in scope:
   - `path/to/doc1.md`
   - `path/to/doc2.md`
@@ -131,7 +123,6 @@ Round: <round>
 
 ## Updated Tech Design Snapshot
 - Branch: [tech-design branch]
-- Commit: [new commit hash]
 - Design docs changed this round:
   - `path/to/doc1.md`
 
@@ -165,6 +156,7 @@ Use the `agent_mailbox` MCP tools:
 ## Rules
 
 - send tech-design review from committed docs only
+- branch name is the authoritative review target; do not require a full commit hash
 - keep the body self-contained; architect should not need workflow files
 - architect is review-only in this lane
 - keep later rounds to the same architect session delta-only

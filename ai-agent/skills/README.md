@@ -7,7 +7,7 @@ This document describes the multi-agent workflow built around the skills in this
 - Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
-- Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews committed design docs and reports advice back to the requester session
+- Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
 - Agent 5, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - User: makes acceptance decisions when the workflow is human-gated
 
@@ -24,7 +24,7 @@ This document describes the multi-agent workflow built around the skills in this
 
 1. User asks Planner to prepare work.
 2. Planner runs `delegate-task` and sends one delegate workflow message.
-3. Planner or Coder may send a committed tech-design snapshot on `tech-design/<task_id>` to `architect-<task_id>` and receive a `tech_design_review_report`.
+3. Planner or Coder may send the latest committed tech-design docs on `tech-design/<task_id>` to `architect-<task_id>` and receive a `tech_design_review_report`.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
 5. Coder runs `review-request` from that committed state and sends one review-request workflow message.
 6. Reviewer runs `review-code` and sends either:
