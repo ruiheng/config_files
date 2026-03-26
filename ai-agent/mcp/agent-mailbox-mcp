@@ -682,7 +682,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_wait",
     {
-      description: "Observe whether mail is available without claiming it. Agent-managed session inbox addresses typically look like agent-deck/<session-id> or codex/<session-id>.",
+      description: "Observe whether mail is available without claiming it. Agent-managed session inbox addresses typically look like agent-deck/<session-id> or codex/<session-id>. Optional timeout is a duration string such as 30s, 5m, 120ms, or 1m30s.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
         timeout: z.string().optional(),

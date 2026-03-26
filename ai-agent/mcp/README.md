@@ -46,6 +46,7 @@ For an agent-deck-managed session `<id>`, bind:
 
 `mailbox_wait`
 - checks whether mail is available for the bound addresses or explicit override addresses
+- optional `timeout` uses duration-string format accepted by `agent-mailbox wait --timeout`, for example `30s`, `5m`, `120ms`, or `1m30s`
 - does not claim the delivery
 
 `mailbox_recv`
