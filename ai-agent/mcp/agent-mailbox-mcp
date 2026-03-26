@@ -10,6 +10,7 @@ const z = require("zod");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const ACTIVE_SESSION_STATUSES = new Set(["running", "waiting", "idle"]);
 const SYNC_CMD_TIMEOUT_MS = 10000;
+const ENSURE_SESSION_SHOW_TIMEOUT_MS = 30000;
 
 const STATE = {
   bound_addresses: [],
@@ -383,10 +384,11 @@ function isLocalAddress(address) {
   return getBoundState().bound_addresses.includes(address);
 }
 
-function resolveSessionShow(identifier) {
+function resolveSessionShow(identifier, options = {}) {
+  const { timeoutMs = SYNC_CMD_TIMEOUT_MS } = options;
   const proc = runProbe(
     ["agent-deck", "session", "show", identifier, "--json"],
-    { failOnError: true }
+    { timeoutMs, failOnError: true }
   );
   if (!proc) {
     return null;
@@ -869,7 +871,7 @@ function buildServer() {
       const listenerMessage = args.listener_message || DEFAULT_LISTENER_MESSAGE;
       const startupTimeoutMs = args.startup_timeout_ms ?? null;
       let workdir = args.workdir || bound.default_workdir || null;
-      let data = identifier ? resolveSessionShow(identifier) : null;
+      let data = identifier ? resolveSessionShow(identifier, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) : null;
 
       let createdTarget = false;
       let startedSession = false;
@@ -929,7 +931,7 @@ function buildServer() {
             timeoutMs: startupTimeoutMs,
             signal: extra?.signal,
           });
-          data = resolveSessionShow(data.id) || data;
+          data = resolveSessionShow(data.id, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) || data;
           startedSession = true;
           listenerStatus = listenerMessage ? "started_waiting" : "started";
         }
