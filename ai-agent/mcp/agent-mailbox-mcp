@@ -519,6 +519,27 @@ function parseSendTokens(output) {
   return result;
 }
 
+function validateSendReceipt(ids, output) {
+  const missing = [];
+  if (!ids.message_id) {
+    missing.push("message_id");
+  }
+  if (!ids.delivery_id) {
+    missing.push("delivery_id");
+  }
+  if (!ids.blob_id) {
+    missing.push("blob_id");
+  }
+  if (missing.length === 0) {
+    return ids;
+  }
+  const detail = (output || "").trim() || "<empty stdout>";
+  fail(`agent-mailbox send returned incomplete receipt: missing ${missing.join(", ")} :: ${detail}`, {
+    missing,
+    output,
+  });
+}
+
 function ensureCheckAgentMailHint(message) {
   const requiredHint = "check-agent-mail";
   const trimmed = (message || "").trim();
@@ -634,7 +655,7 @@ function buildServer() {
         ],
         { inputText: args.body }
       );
-      const sendIds = parseSendTokens(sendProc.stdout);
+      const sendIds = validateSendReceipt(parseSendTokens(sendProc.stdout), sendProc.stdout);
 
       let notifyStatus = "skipped_local";
       let notifyScheme = null;
@@ -953,7 +974,14 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch((error) => {
-  console.error(error && error.stack ? error.stack : String(error));
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error && error.stack ? error.stack : String(error));
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  parseSendTokens,
+  validateSendReceipt,
+};
