@@ -7,6 +7,7 @@ These guardrails apply to all software design and development tasks. The goal is
 1. Any unexpected state (empty value, `None`, invalid state, assertion failure, invariant violation) is treated as a bug by default.
 2. Before root cause is identified, do not:
 - Add default-value/fallback logic just to keep execution going
+- Add non-essential "just in case" guards or backup branches to paper over the failure
 - Swallow errors with broad `try/except`
 - Silently skip broken branches
 3. Provide first:
@@ -50,7 +51,8 @@ For routine workspace file creation or overwrite, use the built-in file-writing 
 
 1. Deliver the smallest complete fix first, then optimize.
 2. Avoid over-engineering and unrelated abstractions.
-3. Prefer fail-fast over silent masking on error paths.
+3. Unless absolutely necessary, prefer fail-fast over fallback-heavy error handling.
+4. Do not stack patch on patch; remove the broken path or fix the underlying path instead of layering another workaround on top.
 
 ## 8) Adaptive Bug Localization (SHOULD)
 
