@@ -45,8 +45,14 @@ Skill-specific context resolution:
 - `reviewer_session_id`: explicit -> review context -> ask
 - `workflow_policy` (optional): explicit -> review/report context -> default human-gated
 - `special_requirements` (optional fallback): explicit -> review/report context -> omit
-- `task_branch`: explicit -> review/report context -> default `task/<task_id>`
-- `integration_branch`: explicit -> review/report context -> ask if planner closeout will need it
+- `start_branch`: explicit -> review report text -> ask
+- `task_branch`: explicit -> review report text -> ask
+- `integration_branch`: explicit -> review report text -> ask
+
+Branch-plan rule:
+- do not infer, rename, or repair branch plan during closeout
+- use the recorded branch plan from the accepted review report unchanged
+- if any branch-plan field is missing, ask one short clarification question instead of guessing
 
 If required values are resolved:
 1. normalize identity values before any comparison:
@@ -77,6 +83,7 @@ Inclusion-first policy:
 - `Minor Suggestions`
 - `Verification Questions`
 - `UI Manual Confirmation Package`
+- `Recorded Branch Plan`
 
 Planner handoff rule:
 - when closeout happens after acceptance, convert surviving non-blocking findings into planner-usable follow-up input instead of leaving them as raw review debris
@@ -138,6 +145,12 @@ Then append only non-empty sections.
 - Track in progress/todo: [items worth recording for later follow-up, or `None`]
 - Consider as next task/subtask: [items worth queueing, or `None`]
 - No extra tracking needed: [items intentionally left as informational only, or `None`]
+
+#### Recorded Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Rule: use this recorded branch plan as the authoritative merge target; do not substitute `main`/`master`/current branch unless the user explicitly changed the plan
 
 #### UI Manual Confirmation Package
 - UI impact: [detected | none detected]

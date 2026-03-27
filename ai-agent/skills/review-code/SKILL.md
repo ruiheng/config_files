@@ -21,6 +21,7 @@ Provide one of:
 
 Before reviewing quality, verify:
 - scope is explicit (uncommitted / commit / branch and target)
+- branch plan is explicit (`start_branch`, `integration_branch`, `task_branch`)
 - review focus or risk angles are stated
 - verification evidence is present (tests, results, known gaps)
 
@@ -87,9 +88,16 @@ Round: <round>
 
 ### Request Completeness Check
 - Scope clarity: [PASS / FAIL]
+- Branch plan continuity: [PASS / FAIL]
 - Review focus/risk angles: [PASS / FAIL]
 - Verification evidence: [PASS / FAIL]
 If any FAIL, explain why in `Critical Issues`.
+
+### Recorded Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Stability rule: preserve this branch plan unchanged through closeout unless the user explicitly changes it
 
 ### Critical Issues
 Must fix before merge:
@@ -139,6 +147,9 @@ Skill-specific context resolution:
 - `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
 - `round`: explicit -> mailbox body `Round` header -> default `1`
+- `start_branch`: explicit -> mailbox body -> ask
+- `integration_branch`: explicit -> mailbox body -> ask
+- `task_branch`: explicit -> mailbox body -> ask
 - `workflow_policy` (optional): explicit -> request context -> human-gated defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
 - `checks_already_run` (optional): explicit -> mailbox body -> use for rerun decisions
@@ -154,6 +165,7 @@ Default policy when missing:
 
 Execution flow in Agent Deck mode:
 1. Produce the full review report in the format above
+   - preserve the recorded branch plan from `review_requested` unchanged in the review report
 2. Choose action:
    - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required

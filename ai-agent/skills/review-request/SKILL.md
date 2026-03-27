@@ -21,6 +21,10 @@ Workflow continuity rule:
 - In an ongoing implementation session, if scope is not explicit, inherit from active delegated task for current `task_id`
 - Ask a clarification question only when multiple scopes are equally plausible or no reliable scope can be inferred
 
+Branch plan continuity rule:
+- preserve recorded `start_branch`, `integration_branch`, and `task_branch` from delegated task context
+- treat that branch plan as immutable task context unless the user explicitly changes it
+
 ## Inputs
 
 - Scope type: `uncommitted` | `commit` | `branch`
@@ -31,6 +35,9 @@ Workflow continuity rule:
 - Optional:
   - `base_branch` (for branch scope)
   - `original_task`
+  - `start_branch`
+  - `integration_branch`
+  - `task_branch`
 
 ## Original Task Source (Required)
 
@@ -87,6 +94,9 @@ Skill-specific context resolution:
 - `reviewer_tool`: explicit -> delegated context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
 - `round`: explicit -> infer from context -> default `1`
+- `start_branch`: explicit -> delegated context -> ask
+- `integration_branch`: explicit -> delegated context -> ask
+- `task_branch`: explicit -> delegated context -> ask
 
 When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why.
 Reviewer feedback is advisory input, not automatic instructions.
@@ -130,6 +140,12 @@ Round: <round>
 
 ## Original Task
 [Original task text from explicit input or active session context. Use `Not provided` only after explicit clarification that no task text is available.]
+
+## Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Stability rule: treat this recorded branch plan as immutable task context unless the user explicitly changes it
 
 ## Review Focus
 - [Primary risk/review angle 1]
@@ -202,6 +218,12 @@ Round: <round>
 - Findings addressed: [adopted items]
 - Findings rejected: [rejected items + rationale]
 - New risks or open questions: [only if changed]
+
+## Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Change status: [unchanged | explicitly updated this round]
 
 ## Updated Implementation Summary
 [Only what changed since the last review request]
