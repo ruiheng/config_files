@@ -1,4 +1,3 @@
 {
-  "http.proxy": "http://vm-host:10809",
   "python.pythonPath": "python3"
 }
