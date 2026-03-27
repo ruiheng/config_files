@@ -9,6 +9,7 @@ This document describes the multi-agent workflow built around the skills in this
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
 - Agent 5, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
+- Refactor Reviewer (`refactor-review`): advisory reviewer that inspects existing code for duplication and simplification opportunities without making changes
 - User: makes acceptance decisions when the workflow is human-gated
 
 ## Core Transport
@@ -92,4 +93,6 @@ Use skills:
 - Architect review: `tech-design-review` (`ai-agent/skills/tech-design-review/SKILL.md`)
 - Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)
 - Browser tester: `browser-test` (`ai-agent/skills/browser-test/SKILL.md`)
+- Refactor review request: `refactor-review-request` (`ai-agent/skills/refactor-review-request/SKILL.md`)
+- Refactor advisor: `refactor-review` (`ai-agent/skills/refactor-review/SKILL.md`)
 - Agent Deck skill + docs bundle: `ai-agent/skills/agent-deck/SKILL.md` and `ai-agent/skills/agent-deck/references/`
