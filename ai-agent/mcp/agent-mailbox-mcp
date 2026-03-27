@@ -9,7 +9,7 @@ const z = require("zod");
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const ACTIVE_SESSION_STATUSES = new Set(["running", "waiting", "idle"]);
-const SYNC_CMD_TIMEOUT_MS = 10000;
+const SYNC_CMD_TIMEOUT_MS = 30000;
 const ENSURE_SESSION_SHOW_TIMEOUT_MS = 30000;
 
 const STATE = {
