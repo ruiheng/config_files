@@ -1277,6 +1277,10 @@ install_codex_skills() {
     install_skills_individually "Codex" "$HOME/.codex/skills"
 }
 
+install_opencode_skills() {
+    install_skills_individually "OpenCode" "$HOME/.config/opencode/skills"
+}
+
 install_codex_config() {
     log_info "Installing Codex config..."
 
@@ -1307,6 +1311,78 @@ install_codex_config() {
     fi
 
     install_codex_agent_mailbox_mcp
+}
+
+remove_opencode_legacy_workflow_mailbox_mcp() {
+    if ! command -v opencode &>/dev/null; then
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: opencode mcp remove workflow_mailbox"
+        return 0
+    fi
+
+    opencode mcp remove workflow_mailbox >/dev/null 2>&1 || true
+}
+
+install_opencode_agent_mailbox_mcp() {
+    local launcher="$HOME/.local/bin/agent-mailbox-mcp"
+
+    if ! command -v opencode &>/dev/null; then
+        log_warn "Skipping OpenCode MCP install (opencode not found)"
+        return 0
+    fi
+
+    remove_opencode_legacy_workflow_mailbox_mcp
+
+    if opencode mcp list 2>/dev/null | grep -Fq "agent_mailbox"; then
+        log_ok "OpenCode MCP already configured: agent_mailbox"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: opencode mcp add agent_mailbox -- $launcher"
+        return 0
+    fi
+
+    if opencode mcp add agent_mailbox -- "$launcher"; then
+        log_ok "Configured OpenCode MCP: agent_mailbox"
+        return 0
+    fi
+
+    log_error "Failed to configure OpenCode MCP: agent_mailbox"
+    return 1
+}
+
+install_opencode_config() {
+    log_info "Installing OpenCode config..."
+
+    local opencode_dir="$HOME/.config/opencode"
+
+    if [[ ! -d "$opencode_dir" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create directory: $opencode_dir"
+        else
+            mkdir -p "$opencode_dir"
+            log_info "Created directory: $opencode_dir"
+        fi
+    fi
+
+    # Link the main AGENTS.md file (OpenCode uses AGENTS.md natively)
+    link_file "ai-agent/AGENTS.md" "$opencode_dir/AGENTS.md"
+    # AGENTS.md uses @modules/* relative imports.
+    link_file "ai-agent/modules" "$opencode_dir/modules"
+
+    # Link skills individually for OpenCode
+    install_opencode_skills
+
+    if ! install_agent_mailbox_mcp_runtime; then
+        log_error "Failed to prepare agent_mailbox MCP runtime for OpenCode"
+        return 1
+    fi
+
+    install_opencode_agent_mailbox_mcp
 }
 
 install_serena_config() {
@@ -1571,6 +1647,7 @@ main() {
     install_claude_config
     install_gemini_config
     install_codex_config
+    install_opencode_config
     install_serena_config
 
     # OS-specific handling
