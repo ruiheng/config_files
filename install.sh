@@ -1281,6 +1281,22 @@ install_opencode_skills() {
     install_skills_individually "OpenCode" "$HOME/.config/opencode/skills"
 }
 
+opencode_config_file_path() {
+    local opencode_dir="$1"
+
+    if [[ -f "$opencode_dir/opencode.json" ]]; then
+        echo "$opencode_dir/opencode.json"
+        return 0
+    fi
+
+    if [[ -f "$opencode_dir/config.json" ]]; then
+        echo "$opencode_dir/config.json"
+        return 0
+    fi
+
+    echo "$opencode_dir/opencode.json"
+}
+
 install_codex_config() {
     log_info "Installing Codex config..."
 
@@ -1313,45 +1329,61 @@ install_codex_config() {
     install_codex_agent_mailbox_mcp
 }
 
-remove_opencode_legacy_workflow_mailbox_mcp() {
-    if ! command -v opencode &>/dev/null; then
-        return 0
-    fi
-
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: opencode mcp remove workflow_mailbox"
-        return 0
-    fi
-
-    opencode mcp remove workflow_mailbox >/dev/null 2>&1 || true
-}
-
 install_opencode_agent_mailbox_mcp() {
     local launcher="$HOME/.local/bin/agent-mailbox-mcp"
+    local opencode_dir="$HOME/.config/opencode"
+    local config_file
+    local tmp_file
 
-    if ! command -v opencode &>/dev/null; then
-        log_warn "Skipping OpenCode MCP install (opencode not found)"
-        return 0
-    fi
-
-    remove_opencode_legacy_workflow_mailbox_mcp
-
-    if opencode mcp list 2>/dev/null | grep -Fq "agent_mailbox"; then
-        log_ok "OpenCode MCP already configured: agent_mailbox"
-        return 0
-    fi
+    config_file="$(opencode_config_file_path "$opencode_dir")"
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: opencode mcp add agent_mailbox -- $launcher"
+        log_dry "Would ensure OpenCode MCP config in: $config_file"
         return 0
     fi
 
-    if opencode mcp add agent_mailbox -- "$launcher"; then
-        log_ok "Configured OpenCode MCP: agent_mailbox"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/opencode-mcp-config.XXXXXX")" || {
+        log_error "Failed to create temporary file for OpenCode MCP config"
+        return 1
+    }
+
+    if [[ -f "$config_file" ]]; then
+        if ! jq --arg launcher "$launcher" '
+            .["$schema"] //= "https://opencode.ai/config.json"
+            | .mcp = ((.mcp // {})
+                | del(.workflow_mailbox)
+                | .agent_mailbox = {
+                    type: "local",
+                    command: [$launcher]
+                })
+        ' "$config_file" > "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to update OpenCode MCP config: $config_file"
+            return 1
+        fi
+    elif ! jq -n --arg launcher "$launcher" '
+        {
+            "$schema": "https://opencode.ai/config.json",
+            mcp: {
+                agent_mailbox: {
+                    type: "local",
+                    command: [$launcher]
+                }
+            }
+        }
+    ' > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to create OpenCode MCP config: $config_file"
+        return 1
+    fi
+
+    if mv "$tmp_file" "$config_file"; then
+        log_ok "Ensured OpenCode MCP config: agent_mailbox"
         return 0
     fi
 
-    log_error "Failed to configure OpenCode MCP: agent_mailbox"
+    rm -f "$tmp_file"
+    log_error "Failed to write OpenCode MCP config: $config_file"
     return 1
 }
 
