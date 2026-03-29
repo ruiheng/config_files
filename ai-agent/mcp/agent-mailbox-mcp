@@ -503,17 +503,11 @@ function sessionInfoFromData(data, sessionRef = null) {
 
 function parseSendTokens(output) {
   const result = {
-    message_id: null,
     delivery_id: null,
-    blob_id: null,
   };
   for (const token of output.split(/\s+/)) {
-    if (token.startsWith("message_id=")) {
-      result.message_id = token.slice("message_id=".length);
-    } else if (token.startsWith("delivery_id=")) {
+    if (token.startsWith("delivery_id=")) {
       result.delivery_id = token.slice("delivery_id=".length);
-    } else if (token.startsWith("blob_id=")) {
-      result.blob_id = token.slice("blob_id=".length);
     }
   }
   return result;
@@ -521,14 +515,8 @@ function parseSendTokens(output) {
 
 function validateSendReceipt(ids, output) {
   const missing = [];
-  if (!ids.message_id) {
-    missing.push("message_id");
-  }
   if (!ids.delivery_id) {
     missing.push("delivery_id");
-  }
-  if (!ids.blob_id) {
-    missing.push("blob_id");
   }
   if (missing.length === 0) {
     return ids;
@@ -691,9 +679,7 @@ function buildServer() {
         from_address: fromAddress,
         to_address: args.to_address,
         subject: args.subject,
-        message_id: sendIds.message_id,
         delivery_id: sendIds.delivery_id,
-        blob_id: sendIds.blob_id,
         notify_status: notifyStatus,
         notify_scheme: notifyScheme,
       });
