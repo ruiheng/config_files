@@ -528,11 +528,11 @@ function validateSendReceipt(ids, output) {
   });
 }
 
-function ensureCheckAgentMailHint(message) {
+function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
   const requiredHint = "check-agent-mail";
   const trimmed = (message || "").trim();
   if (!trimmed) {
-    return DEFAULT_NOTIFY_MESSAGE;
+    return defaultMessage;
   }
   if (trimmed.includes(requiredHint)) {
     return trimmed;
@@ -874,7 +874,10 @@ function buildServer() {
     async (args, extra) => {
       const bound = getBoundState();
       const identifier = args.session_id || args.session_ref || null;
-      const listenerMessage = args.listener_message || DEFAULT_LISTENER_MESSAGE;
+      const listenerMessage = ensureCheckAgentMailHint(
+        args.listener_message || DEFAULT_LISTENER_MESSAGE,
+        DEFAULT_LISTENER_MESSAGE
+      );
       let workdir = args.workdir || bound.default_workdir || null;
       let data = identifier ? resolveSessionShow(identifier, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) : null;
 
