@@ -1,4 +1,7 @@
 {
+  "overrides": {
+    "path-to-regexp": "8.4.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1"
   }
