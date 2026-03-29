@@ -72,7 +72,7 @@ For an agent-deck-managed session `<id>`, bind:
 - resolves an existing session or creates it when missing
 - starts an inactive target when needed
 - a newly created or newly started target should run `mailbox_wait` for its first mail before running `check-agent-mail`
-- if `listener_message` is customized and omits `check-agent-mail`, the MCP server appends that hint automatically
+- if `listener_message` is customized and omits the wait-first flow, the MCP server appends a `mailbox_wait` then `check-agent-mail` hint automatically
 
 Typical workflow delivery:
 1. `agent_deck_ensure_session`
