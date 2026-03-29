@@ -1354,7 +1354,11 @@ install_opencode_agent_mailbox_mcp() {
                 | del(.workflow_mailbox)
                 | .agent_mailbox = {
                     type: "local",
-                    command: [$launcher]
+                    command: [$launcher],
+                    environment: {
+                        AGENTDECK_INSTANCE_ID: "{env:AGENTDECK_INSTANCE_ID}",
+                        TMUX: "{env:TMUX}"
+                    }
                 })
         ' "$config_file" > "$tmp_file"; then
             rm -f "$tmp_file"
@@ -1367,7 +1371,11 @@ install_opencode_agent_mailbox_mcp() {
             mcp: {
                 agent_mailbox: {
                     type: "local",
-                    command: [$launcher]
+                    command: [$launcher],
+                    environment: {
+                        AGENTDECK_INSTANCE_ID: "{env:AGENTDECK_INSTANCE_ID}",
+                        TMUX: "{env:TMUX}"
+                    }
                 }
             }
         }
