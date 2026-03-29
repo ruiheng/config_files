@@ -77,6 +77,24 @@ Choose the cheapest method that can produce high-confidence evidence.
 - Remove or downgrade temporary debug logs after verification
 - Summarize the evidence chain in the final report
 
+## 9) Convergence Discipline (MUST)
+
+Do not treat each new review finding as an isolated local fix request. Repeated fix-review-fix cycles are a signal that the current framing is wrong.
+
+1. Treat the work as non-converging if any of the following happens:
+- The same issue, invariant break, or behavior regression reappears after it was "fixed"
+- Review feedback alternates between related areas (for example, A then B then A again)
+- A seemingly simple issue requires multiple fix/review rounds without reaching a stable state
+- The latest fix only moves the failure to a nearby symptom instead of removing the underlying cause
+2. When non-convergence is detected, stop the local patch loop and reframe the problem before making another fix:
+- Summarize the iteration history in one place: original issue, each attempted fix, what changed, and what regressed
+- Identify the shared invariant, boundary, or design assumption behind the repeated symptoms
+- Re-examine the broader structure: data flow, ownership, module boundaries, state transitions, and duplicated logic
+- Produce a new root-cause hypothesis that explains the full pattern, not just the latest report item
+3. Do not continue with another narrow fix unless there is new evidence that the new approach will break the loop.
+4. If the issue sequence looks like A -> B -> C rather than A -> B -> A, do not assume this is healthy progress by default; first check whether the work is uncovering one deeper design flaw in slow motion.
+5. The correct response to repeated nearby issues is usually simplification or structural correction, not more localized patching.
+
 ## Default Output Order
 
 1. Root-cause analysis (hypotheses + evidence chain)
