@@ -65,3 +65,6 @@ node_modules/
 
 # Neovim plugin lock file (auto-generated)
 nvim/lazy-lock.json
+
+# Local machine overrides
+/nvim/coc-settings.local.json

@@ -219,6 +219,13 @@ The scripts automatically detect the OS and apply appropriate configurations:
 
 1. **No Overwrite by Default**: If a file already exists at the target (and is not a symlink), the script will skip it and report. Use `--force` to backup and replace, or `--interactive` to be prompted for each conflict.
 
+### Local Overrides
+
+Keep shared defaults in the repository and put machine-specific values in local override files instead of a separate branch.
+
+- Git loads `~/.gitconfig.local` after [`gitconfig.unix`](./gitconfig.unix). A sample is provided at [`gitconfig.local.example`](./gitconfig.local.example).
+- Coc can merge [`nvim/coc-settings.json`](./nvim/coc-settings.json) with an ignored local file at [`nvim/coc-settings.local.json`](./nvim/coc-settings.local.example.json). This is useful for per-machine proxies or other local-only settings.
+
 2. **Interactive Mode**: Use `--interactive` (or `-i`) to be prompted when a target exists:
    - `[s]kip` - Skip this file (default)
    - `[b]ackup` - Backup and replace this file

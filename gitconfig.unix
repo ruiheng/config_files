@@ -2,6 +2,9 @@
 	name = Gilbert Fine
 	email = gilbert.fine@gmail.com
 
+[include]
+	path = ~/.gitconfig.local
+
 [color]
 	ui = auto
 

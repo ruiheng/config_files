@@ -51,6 +51,7 @@ end
 
 vim.g.mapleader = " " -- make sure to set `mapleader` before lazy
 vim.g.maplocalleader = ","
+require('ruiheng.local_config').setup()
 
 vim.cmd.filetype("on")
 vim.cmd.filetype("plugin on")
