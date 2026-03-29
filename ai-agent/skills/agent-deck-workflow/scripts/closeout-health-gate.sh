@@ -21,7 +21,7 @@ Options:
   --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Agent-deck profile
-  --max-worker-sessions <n>      Max allowed lingering worker sessions (default: 2)
+  --max-worker-sessions <n>      Max allowed lingering active task-scoped worker sessions in this workspace (default: 2)
   --strict                       Fail-closed mode. Exit 3 when health gate fails.
   -h, --help                     Show help
 
@@ -112,17 +112,25 @@ ad() {
 }
 
 count_worker_sessions() {
+  local workspace_path="$1"
   local list_json
   list_json="$(ad list --json 2>/dev/null || true)"
   if [[ -z "$list_json" ]]; then
     echo "-1"
     return 0
   fi
-  jq -r '
+  jq -r --arg workspace_path "$workspace_path" '
     if type != "array" then
       -1
     else
-      [ .[] | select(((.title // "") | test("^(coder|reviewer|architect)-"))) ] | length
+      [
+        .[]
+        | select(
+            ((.title // "") | test("^(coder|reviewer|architect)-[0-9]{8}-[0-9]{4}-"))
+            and (.path // "") == $workspace_path
+            and ((.status // "") | test("^(running|waiting|idle)$"))
+          )
+      ] | length
     end
   ' <<<"$list_json" 2>/dev/null || echo "-1"
 }
@@ -182,7 +190,8 @@ if [[ -f "$archive_file" ]]; then
   residual_count="$(jq -r '[.sessions[]? | select(.found == true and (.delete_status != "deleted" and .delete_status != "not_found" and .delete_status != "skipped_non_disposable_session"))] | length' "$archive_file" 2>/dev/null || echo 0)"
 fi
 
-worker_session_count="$(count_worker_sessions)"
+workspace_path="$(pwd -P)"
+worker_session_count="$(count_worker_sessions "$workspace_path")"
 
 health_ok=true
 failure_reasons=()

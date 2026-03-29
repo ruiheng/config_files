@@ -29,6 +29,7 @@ Options:
   --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
   --architect-session-id <id|title> Architect session ref (default: architect-<task_id>)
   --profile <name>                 Agent-deck profile (used by optional health gate)
+  --max-worker-sessions <n>        Max allowed lingering active task-scoped worker sessions in this workspace for health gate (default: 2)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
   --run-prune                      Run prune-task-branches.sh after required actions
@@ -88,6 +89,7 @@ coder_session_ref=""
 reviewer_session_ref=""
 architect_session_ref=""
 profile=""
+max_worker_sessions=2
 merge_mode="ff-only"
 allow_dirty=0
 integration_branch_source="inferred_current_branch"
@@ -108,6 +110,7 @@ while [[ $# -gt 0 ]]; do
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
     --architect-session-id) architect_session_ref="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
+    --max-worker-sessions) max_worker_sessions="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
     --run-prune) run_prune=1; shift 1 ;;
@@ -121,6 +124,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$task_id" ]] || die "--task-id is required"
+[[ "$max_worker_sessions" =~ ^[0-9]+$ ]] || die "--max-worker-sessions must be a non-negative integer"
 
 case "$merge_mode" in
   ff-only|ff|no-ff) ;;
@@ -329,7 +333,7 @@ if (( run_health_gate )); then
       --reviewer-session-id "$reviewer_session_ref"
       --architect-session-id "$architect_session_ref"
       --artifact-root "$artifact_root"
-      --max-worker-sessions 2
+      --max-worker-sessions "$max_worker_sessions"
     )
     if [[ -n "$profile" ]]; then
       health_cmd+=(--profile "$profile")
