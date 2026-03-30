@@ -29,7 +29,6 @@ Provide one of:
 2. direct scope + refactoring goal + constraints
 
 Direct-use mode is valid.
-This skill may be run without mailbox workflow when the user wants an immediate local advisory review.
 
 ## Input Completeness Gate
 
@@ -42,9 +41,9 @@ If critical context is missing:
 - in direct-use mode, ask one short clarification question
 - in mailbox mode, continue and mark the missing items in `Scope Gaps`
 
-## Review Lens
+## Review Discipline
 
-Evaluate code using these principles:
+Judge code by these principles:
 
 - DRY: repeated logic, branching, data shaping, and tests
 - Explicit: intent should be clear without comments compensating for structure
@@ -65,15 +64,14 @@ Look for:
 - repeated test fixture and assertion patterns
 - dead code, stale compatibility shims, and pass-through layers
 
-## Decision Heuristics
+Prefer:
 
-- prefer deleting duplication before introducing new abstraction
-- prefer local consolidation before cross-module frameworking
-- prefer concrete helper names over generic utility buckets
-- prefer fewer concepts over more flexible concepts
-- preserve local style unless it is the problem being reviewed
-- only recommend high-risk refactors when the payoff is clear
-- call out when leaving code alone is the better choice
+- deleting duplication before introducing new abstraction
+- local consolidation before cross-module frameworking
+- concrete helper names over generic utility buckets
+- fewer concepts over more flexible concepts
+- preserving local style unless it is the problem being reviewed
+- leaving code alone when the payoff is weak or the refactor is high-risk
 
 ## Output Format
 
@@ -166,11 +164,3 @@ Execution flow in Agent Deck mode:
 - prefer high-leverage suggestions over long laundry lists
 - if the code is already reasonably simple, say so directly
 - do not turn advisory findings into implementation work inside this skill
-
-## Reference Principles
-
-Useful external references behind this skill:
-
-- Google Engineering Practices: review for complexity, over-engineering, names, tests, context, and code health
-- Martin Fowler / continuous design: DRY, explicit, simple, cohesive, decoupled, present-day, no speculative hooks
-- Anthropic prompting guidance: explicit instructions and fixed output structure improve reliability

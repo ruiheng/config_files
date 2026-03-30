@@ -55,44 +55,31 @@ If critical context is missing:
 - in direct-use mode, ask one short clarification question
 - in mailbox mode, continue and mark the missing items in `Scope Gaps`
 
-## Workflow
+## Inspection Order
 
-1. Define the system question.
+1. Frame the system question.
 - What keeps going wrong?
 - Is the pain local ugliness or structural instability?
 - Is the latest reported issue the real problem or just the latest symptom?
 
-2. Build evidence from the cheapest high-signal sources.
+2. Gather the cheapest high-signal evidence:
 - current code shape
 - tests and missing tests
-- recent bug-fix history in the same area
-- repeated decision patterns across modules
-- ownership, data flow, and state transition boundaries
+- repeated decision patterns
+- ownership, data flow, and state transitions
+- recent local history only when current code does not explain the fragility
 
-3. Classify the signals before giving advice.
-Read `references/signals.md` when deciding whether a symptom points to a structural problem or just local cleanup.
-
-4. Form one or two systemic hypotheses.
+3. Form one or two structural hypotheses.
 Each hypothesis should explain multiple symptoms, not just the latest report item.
 
-5. Stress-test the hypotheses.
+4. Stress-test the hypotheses:
 - Can the hypothesis explain bug concentration, slow review convergence, and testing pain at the same time?
 - Does the proposed direction remove special cases instead of adding guards?
 - Does it reduce future change surface instead of moving complexity around?
 
-6. Produce one prioritized report.
-Read `references/remediation-patterns.md` when proposing structural corrections.
-
-## History Review Rule
-
-When the current code alone does not explain why the area feels fragile, inspect recent history for:
-- repeated fixes in the same module or boundary
-- similar bug shapes expressed through different symptoms
-- patch-on-patch edits that preserve old complexity
-- files that absorb unrelated responsibilities over time
-
-Prefer recent, local history over broad repository archaeology.
-Do not summarize commit history mechanically; use history only to strengthen or falsify a structural hypothesis.
+5. Produce one prioritized report.
+Use `references/signals.md` to classify signals.
+Use `references/remediation-patterns.md` to shape recommendations.
 
 ## Review Lens
 
@@ -116,24 +103,18 @@ Look for:
 - tests that only verify top-level behavior because the internals are too entangled
 - state transitions encoded by scattered conditionals instead of a clear model
 
-## Evidence Rules
+## Decision Rules
 
 - prefer converging evidence across code shape, history, and tests
 - do not treat high churn alone as proof; correlate it with bug patterns or duplicated logic
 - do not treat the latest issue report as the whole problem definition
 - treat repeated nearby fixes as evidence of a wrong boundary, wrong ownership model, or missing structural simplification
-- treat a "simple" issue that takes many review rounds as a design smell, not as normal iteration
-- do not infer a redesign need from aesthetics alone; show how the structure reproduces maintenance cost or reliability risk
-
-## Decision Heuristics
-
+- treat a "simple" issue that takes many review rounds as a design smell
+- do not infer redesign from aesthetics alone; show how the structure creates maintenance cost or reliability risk
 - prefer one structural diagnosis that explains many failures over many local style complaints
-- prefer stronger types, explicit schemas, and narrower interfaces over "flexible" containers
-- prefer single-point ownership of business rules
-- prefer designs that make narrow regression tests easy to write
-- prefer deleting or consolidating logic before introducing new abstraction layers
-- call out when redesign is needed instead of pretending a small refactor will solve it
-- if the code is mostly healthy, say so directly instead of inventing work
+- prefer stronger types, explicit schemas, narrower interfaces, and single-point rule ownership
+- prefer recommendations that make focused regression tests easier to write
+- say directly when the code is locally messy but not structurally unhealthy
 
 ## Output Format
 
@@ -239,5 +220,4 @@ Execution flow in Agent Deck mode:
 - prefer high-leverage conclusions over long laundry lists
 - do not recommend a design pattern by name unless it clearly reduces complexity here
 - tie every recommendation to maintainability, reliability, or testability
-- say explicitly when the code is locally messy but not structurally unhealthy
 - do not turn advisory findings into implementation work inside this skill

@@ -22,6 +22,8 @@ Provide one of:
 Before reviewing quality, verify:
 - scope is explicit (uncommitted / commit / branch and target)
 - branch plan is explicit (`start_branch`, `integration_branch`, `task_branch`)
+- implementation intent is explicit (what change is meant to accomplish)
+- behavior/compatibility constraints are explicit (what must not change)
 - review focus or risk angles are stated
 - verification evidence is present (tests, results, known gaps)
 
@@ -29,6 +31,35 @@ If critical context is missing:
 - mark as `NEEDS_REVISION`
 - list missing items in `Critical Issues`
 - keep evidence factual; do not fabricate assumptions
+
+## Review Discipline
+
+Before enumerating issues, build a short frame:
+- intended change
+- invariants and existing behavior that must remain stable
+- declared non-goals or out-of-scope areas
+
+Use this frame to filter findings.
+Promote only findings that are:
+- supported by concrete evidence in code, tests, or behavior
+- relevant to the intended change, preserved invariants, or material future maintenance risk
+- specific enough that the implementer can act on it
+
+Demote or drop findings that are:
+- mostly style or taste
+- only weakly related to the task
+- a speculative future concern without present evidence
+- duplicative of a stronger finding
+
+If a concern may be real but evidence is incomplete, prefer:
+- `Design Concerns` for architectural caution
+- `Verification Questions` for missing proof
+
+Do not inflate the `Critical Issues` section with low-confidence or low-impact commentary.
+
+Default mode is single-reviewer, multi-lens analysis.
+Do not automatically launch extra agents or specialist lanes.
+Recommend a focused follow-up review only when one risk area is important, evidence is insufficient, and the extra review could change the decision.
 
 ## What to Review
 
@@ -89,9 +120,16 @@ Round: <round>
 ### Request Completeness Check
 - Scope clarity: [PASS / FAIL]
 - Branch plan continuity: [PASS / FAIL]
+- Intent clarity: [PASS / FAIL]
+- Behavior/compatibility constraints: [PASS / FAIL]
 - Review focus/risk angles: [PASS / FAIL]
 - Verification evidence: [PASS / FAIL]
 If any FAIL, explain why in `Critical Issues`.
+
+### Intent And Constraints
+- Intended change: [summary]
+- Must-preserve behavior: [summary]
+- Non-goals / out-of-scope: [summary or `None`]
 
 ### Recorded Branch Plan
 - Start branch: [start_branch]
