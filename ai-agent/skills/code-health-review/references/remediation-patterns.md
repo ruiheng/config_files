@@ -1,0 +1,89 @@
+# Remediation Patterns
+
+Use these patterns to recommend structural corrections without over-prescribing implementation details.
+
+## Consolidate Rule Ownership
+
+Use when:
+- the same business rule is re-implemented across files
+- reviewers keep finding nearby inconsistencies
+
+Preferred correction:
+- move rule evaluation to one clear owner
+- make other modules consume the result instead of re-deriving it
+
+## Strengthen Data Contracts
+
+Use when:
+- generic maps, dicts, or shape-shifting payloads cross important boundaries
+- invariants are described in comments but not enforced in code
+
+Preferred correction:
+- replace vague containers with explicit types or schemas
+- make invalid states harder to construct
+- narrow interfaces so callers cannot pass half-formed data
+
+## Separate Orchestration From Domain Logic
+
+Use when:
+- one function or module coordinates workflow, performs IO, and also decides business rules
+- tests need to boot too much machinery just to check one rule
+
+Preferred correction:
+- isolate pure decision logic from effectful plumbing
+- make domain behavior callable without full runtime setup
+
+## Remove Patch Layers
+
+Use when:
+- each new fix adds guards around an older fix
+- legacy branches remain active only because nobody removed the broken path
+
+Preferred correction:
+- rewrite the seam instead of stacking more exceptions
+- delete obsolete branches after the correct path is established
+
+## Clarify State Transitions
+
+Use when:
+- lifecycle rules are spread across unrelated conditionals
+- reviewers keep finding missing edge-case transitions
+
+Preferred correction:
+- make allowed states and transitions explicit
+- centralize transition checks and side effects
+
+## Reduce Change Amplification
+
+Use when:
+- one logical change requires touching many modules
+- similar edits must be kept in sync manually
+
+Preferred correction:
+- collapse duplicated shaping or routing logic
+- introduce one stable boundary where change can terminate
+
+## Improve Proof Surface
+
+Use when:
+- important behavior cannot be verified cheaply
+- regressions recur because tests are broad, fragile, or missing
+
+Preferred correction:
+- create seams that allow focused tests
+- add type assertions, invariants, and narrow regression tests around the corrected design
+
+## Recommendation Rule
+
+Prefer recommendations that:
+
+- eliminate a class of failures, not one instance
+- simplify ownership and boundaries
+- reduce future review churn
+- make correctness easier to prove
+
+Avoid recommendations that:
+
+- add abstraction without deleting complexity
+- introduce framework-like indirection for a small local problem
+- rename or reshuffle code without changing the failure mode
