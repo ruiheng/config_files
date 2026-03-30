@@ -193,6 +193,7 @@ Tech-design disagreement policy:
 Review-request continuity:
 - first `review_requested` to a reviewer session carries the full task and review context
 - later `review_requested` messages to that same reviewer session carry only the delta since the previous review round
+- later review rounds should stay terse; do not restate round 1 context unless it materially changed
 - if the reviewer session changes, resend the full review context to the new reviewer session
 - `review_requested` should carry a concise record of coder-run lint, build/link, compile/type-check, test, and other verification results so reviewer can usually avoid rerunning the same slow checks
 

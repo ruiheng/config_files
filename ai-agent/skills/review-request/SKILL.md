@@ -105,6 +105,11 @@ Review-request continuity rule:
 - round `1` uses the full review-request body
 - round `>1` to the same reviewer session uses a delta-only body
 - if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
+- delta-only means terse:
+  - do not repeat the original task, branch plan, file list, or unchanged verification
+  - summarize only what changed since the last review and what you want the reviewer to re-check
+  - if the whole message is effectively "please re-review after addressing the prior findings", prefer a short subject and a one-line body
+  - if the transport or tooling can support it, body can be minimal; otherwise keep it to a single short sentence
 
 Identity rules:
 - `review_requested` sender must be active coder session id
@@ -199,6 +204,11 @@ Your job is to stop a weak patch from slipping through by looking for what the p
 ```
 
 Round `>1` to the same reviewer session: send only delta.
+Keep the body as short as possible:
+- include only sections that changed
+- omit unchanged sections entirely
+- do not fill the template just because it exists
+- if the only meaningful update is "I addressed the prior findings, please re-review", use a one-line body
 
 Use this structure:
 
