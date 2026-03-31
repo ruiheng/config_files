@@ -199,7 +199,6 @@ For the implementer/author:
 Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 - `Agent Deck Mode Detection`
 - `Context Resolution Priority`
-- `Reviewer Decision Flow`
 - `Error Handling and Diagnostics`
 
 Skill-specific context resolution:
