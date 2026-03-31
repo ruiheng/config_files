@@ -1,6 +1,7 @@
 # Engineering Guardrails (Root-Cause First)
 
 These guardrails apply to all software design and development tasks. The goal is to avoid "make it run first" behavior and prioritize root-cause fixes with verifiable correctness.
+They also require reducing duplication at the source, because repeated logic, repeated workflows, and repeated structure are major causes of maintenance cost and review churn.
 
 ## 1) Root Cause First (MUST)
 
@@ -54,7 +55,25 @@ For routine workspace file creation or overwrite, use the built-in file-writing 
 3. Unless absolutely necessary, prefer fail-fast over fallback-heavy error handling.
 4. Do not stack patch on patch; remove the broken path or fix the underlying path instead of layering another workaround on top.
 
-## 8) Adaptive Bug Localization (SHOULD)
+## 8) Duplication Elimination (MUST)
+
+1. Treat duplication as a root-cause signal, not just a style issue.
+2. Check duplication at multiple levels:
+- literal code duplication
+- repeated business rules encoded in different branches or modules
+- repeated workflow or pipeline shapes with renamed variables or helper calls
+- near-duplicate feature variants that differ only by data, configuration, or one branch
+- repeated fallback, compatibility, or patch layers that preserve the same broken design in multiple places
+3. Before adding a new branch, helper, module, or adapter, check whether it is re-implementing an existing idea with cosmetic variation.
+4. Prefer one clear owner for each rule, transition, or transformation. Other code should consume the result, not re-derive it.
+5. Prefer representing variation as explicit data, schema, configuration, or narrow policy input when that removes duplicated control flow.
+6. Prefer subtraction over abstraction layering:
+- first try deleting duplicate paths by collapsing them into one owner
+- do not add a shared wrapper that still leaves several near-duplicate implementations alive underneath
+7. Treat net code reduction as a meaningful quality improvement when behavior, clarity, and compatibility are preserved.
+8. If the same fix shape appears repeatedly, stop and redesign the boundary, ownership model, or data model instead of applying the same patch again.
+
+## 9) Adaptive Bug Localization (SHOULD)
 
 Choose the cheapest method that can produce high-confidence evidence.
 
@@ -77,7 +96,7 @@ Choose the cheapest method that can produce high-confidence evidence.
 - Remove or downgrade temporary debug logs after verification
 - Summarize the evidence chain in the final report
 
-## 9) Convergence Discipline (MUST)
+## 10) Convergence Discipline (MUST)
 
 Do not treat each new review finding as an isolated local fix request. Repeated fix-review-fix cycles are a signal that the current framing is wrong.
 
@@ -95,7 +114,7 @@ Do not treat each new review finding as an isolated local fix request. Repeated 
 4. If the issue sequence looks like A -> B -> C rather than A -> B -> A, do not assume this is healthy progress by default; first check whether the work is uncovering one deeper design flaw in slow motion.
 5. The correct response to repeated nearby issues is usually simplification or structural correction, not more localized patching.
 
-## 10) Compatibility And Data Migration Gate (MUST)
+## 11) Compatibility And Data Migration Gate (MUST)
 
 Do not assume old data, old schemas, or old persisted state must be preserved by default.
 Compatibility is a product decision and an environment decision, not an automatic coding reflex.
@@ -125,3 +144,4 @@ Compatibility is a product decision and an environment decision, not an automati
 1. Root-cause analysis (hypotheses + evidence chain)
 2. Root-cause fix (and implementation)
 3. Optional temporary mitigation (not implemented unless explicitly approved)
+4. Duplication analysis when relevant: what repeated logic, repeated workflow, or repeated structure was removed or consolidated

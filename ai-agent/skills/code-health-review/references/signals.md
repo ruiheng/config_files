@@ -17,6 +17,8 @@ Interpretation rule:
 ## Code Structure Signals
 
 - the same business rule is encoded in multiple condition trees
+- the same control-flow shape appears in several modules with renamed helpers or field names
+- multiple features rebuild the same pipeline or state transition logic with small parameter changes
 - multiple modules reshape the same payload in slightly different ways
 - important boundaries pass generic maps, dicts, or loosely-typed blobs
 - orchestration, validation, IO, and business rules are mixed together
@@ -25,6 +27,8 @@ Interpretation rule:
 
 Interpretation rule:
 - repeated decision logic is usually more important than repeated lines
+- structural repetition counts even when names, file layout, or helper extraction make the code look different
+- if three places solve the same problem with slightly different branch trees, treat that as one ownership failure
 - branch-heavy code is not the disease by itself; the disease is often missing ownership or a missing model
 
 ## Testability Signals
@@ -54,6 +58,7 @@ Interpretation rule:
 Prioritize structural diagnosis when multiple signal classes point at the same area:
 
 - churn + repeated bug shape + duplicated logic
+- churn + pattern-level repetition + manual sync edits across near-duplicate flows
 - patch layering + weak typing + poor testability
 - review churn + scattered state rules + unclear ownership
 
@@ -70,5 +75,6 @@ These signals often mean the problem is local or transitional rather than archit
 - the same module changes often because it is the intended single owner
 - tests are narrow and strong even if the code style is imperfect
 - complexity is isolated at a real boundary such as protocol translation or compatibility adaptation
+- superficially similar code exists for genuinely different invariants or external protocol requirements
 
 Use counter-signals to keep recommendations proportional.

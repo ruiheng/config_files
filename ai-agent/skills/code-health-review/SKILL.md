@@ -1,6 +1,6 @@
 ---
 name: code-health-review
-description: Review codebases from a high-level maintainability and reliability perspective. Use when the goal is to identify systemic design problems rather than local cleanup, especially for repeated bug patterns, high-churn modules, patch-on-patch fixes, weak typing, duplicated decision logic, poor testability, or slow/non-converging fix-review cycles. Return advisory findings without making code changes.
+description: Review codebases from a high-level maintainability and reliability perspective. Use when the goal is to identify systemic design problems rather than local cleanup, especially for repeated bug patterns, high-churn modules, patch-on-patch fixes, weak typing, duplicated decision logic, pattern-level repetition, poor testability, or slow/non-converging fix-review cycles. Return advisory findings without making code changes.
 ---
 
 # Code Health Review
@@ -37,6 +37,7 @@ Useful pain signals include:
 - high-churn modules
 - patch-on-patch code
 - duplicated decision logic
+- repeated implementation patterns with minor local variations
 - weak or vague data contracts
 - code that is hard to test with confidence
 
@@ -65,6 +66,7 @@ If critical context is missing:
 - current code shape
 - tests and missing tests
 - repeated decision patterns
+- repeated implementation shapes hidden behind renamed variables, helper wrappers, or file splits
 - ownership, data flow, and state transitions
 - recent local history only when current code does not explain the fragility
 
@@ -88,6 +90,7 @@ Evaluate code using these lenses:
 - boundaries: whether modules have stable responsibilities and narrow interfaces
 - type discipline: whether the data model is explicit, checkable, and hard to misuse
 - decision locality: whether business rules live in one place or are re-encoded repeatedly
+- duplication pressure: whether the same shape of logic appears in multiple places with cosmetic variation
 - testability: whether important behavior can be proven with focused tests
 - change amplification: whether small changes spread across too many files or branches
 - bug concentration: whether certain modules or patterns keep attracting similar failures
@@ -95,6 +98,9 @@ Evaluate code using these lenses:
 Look for:
 
 - business rules copied across modules with minor variations
+- branches or helper stacks that are structurally the same algorithm with renamed nouns
+- parallel modules whose control flow is isomorphic but implemented separately
+- repeated "adapt-transform-validate-route" pipelines recreated per feature instead of owned once
 - `dict`-shaped or loosely-typed payloads crossing important boundaries
 - modules that both orchestrate workflow and implement business rules
 - patch layers that preserve a broken design by adding more branching
@@ -112,6 +118,9 @@ Look for:
 - do not infer redesign from aesthetics alone; show how the structure creates maintenance cost or reliability risk
 - prefer one structural diagnosis that explains many failures over many local style complaints
 - prefer stronger types, explicit schemas, narrower interfaces, and single-point rule ownership
+- treat pattern-level repetition as a first-class structural smell even when the text is not copied verbatim
+- prefer recommendations that delete repeated code paths and collapse near-duplicate workflows
+- treat net code reduction as a meaningful maintainability win when behavior and clarity are preserved
 - prefer recommendations that make focused regression tests easier to write
 - say directly when the code is locally messy but not structurally unhealthy
 
@@ -217,6 +226,7 @@ Execution flow in Agent Deck mode:
 - name exact modules, boundaries, or repeated patterns
 - distinguish structural faults from optional cleanup
 - prefer high-leverage conclusions over long laundry lists
+- call out pattern duplication directly, not just literal duplication
 - do not recommend a design pattern by name unless it clearly reduces complexity here
 - tie every recommendation to maintainability, reliability, or testability
 - do not turn advisory findings into implementation work inside this skill

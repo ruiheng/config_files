@@ -6,6 +6,7 @@ Use these patterns to recommend structural corrections without over-prescribing 
 
 Use when:
 - the same business rule is re-implemented across files
+- the same rule is hidden inside several similar workflows
 - reviewers keep finding nearby inconsistencies
 
 Preferred correction:
@@ -63,6 +64,29 @@ Preferred correction:
 - collapse duplicated shaping or routing logic
 - introduce one stable boundary where change can terminate
 
+## Collapse Pattern Duplication
+
+Use when:
+- several modules implement the same algorithmic shape with renamed variables or helper calls
+- feature variants differ mainly in data tables, configuration, or one or two branch conditions
+- AI-generated code has expanded one concept into many near-duplicate files or functions
+
+Preferred correction:
+- extract the shared model, transition, or pipeline owner first
+- represent the variation as data, policy inputs, or narrow extension points
+- delete the duplicate flows instead of wrapping them in another abstraction layer
+
+## Prefer Subtraction
+
+Use when:
+- a recommendation can remove whole branches, helpers, or modules without losing needed behavior
+- the current design is hard mainly because too many near-duplicate paths exist
+
+Preferred correction:
+- favor solutions that reduce total code and decision count
+- explicitly call out which repeated paths should disappear
+- treat code deletion as a primary success metric when the resulting owner and interface stay clear
+
 ## Improve Proof Surface
 
 Use when:
@@ -79,11 +103,13 @@ Prefer recommendations that:
 
 - eliminate a class of failures, not one instance
 - simplify ownership and boundaries
+- reduce duplicated structure and total decision surface
 - reduce future review churn
 - make correctness easier to prove
 
 Avoid recommendations that:
 
 - add abstraction without deleting complexity
+- preserve several near-duplicate implementations behind a thin shared wrapper
 - introduce framework-like indirection for a small local problem
 - rename or reshuffle code without changing the failure mode
