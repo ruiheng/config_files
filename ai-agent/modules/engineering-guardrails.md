@@ -95,6 +95,31 @@ Do not treat each new review finding as an isolated local fix request. Repeated 
 4. If the issue sequence looks like A -> B -> C rather than A -> B -> A, do not assume this is healthy progress by default; first check whether the work is uncovering one deeper design flaw in slow motion.
 5. The correct response to repeated nearby issues is usually simplification or structural correction, not more localized patching.
 
+## 10) Compatibility And Data Migration Gate (MUST)
+
+Do not assume old data, old schemas, or old persisted state must be preserved by default.
+Compatibility is a product decision and an environment decision, not an automatic coding reflex.
+
+1. Before adding compatibility logic, determine which case actually applies:
+- production or user-owned data that must remain readable
+- staged/shared environment data that likely needs migration planning
+- local/dev/test temporary data that can be discarded safely
+2. Do not add compatibility layers, fallback parsing, dual-read paths, schema shims, or legacy branches until the required compatibility scope is explicit.
+3. If compatibility scope is unclear, stop and ask the user which strategy is correct:
+- keep backward compatibility
+- provide a one-time migration
+- drop old data/state and rebuild/reset
+4. Prefer the simplest valid strategy:
+- if old data is disposable, delete/reset it instead of preserving it
+- if migration is required, prefer an explicit migration over permanent compatibility code
+- if long-term compatibility is required, define the boundary and keep the compatibility surface narrow
+5. In reports and proposals, state explicitly:
+- what data/state exists
+- whether it is real user/production data or disposable temporary data
+- chosen compatibility strategy
+- why a more conservative compatibility layer is unnecessary, if you are not preserving it
+6. Do not silently preserve low-value legacy paths just because they already exist; unnecessary compatibility code is technical debt and must be justified.
+
 ## Default Output Order
 
 1. Root-cause analysis (hypotheses + evidence chain)
