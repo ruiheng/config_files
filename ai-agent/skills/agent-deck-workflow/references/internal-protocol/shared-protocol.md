@@ -296,13 +296,14 @@ Use stable naming:
 6. accepted review becomes `closeout_delivered` to planner
 7. planner runs closeout, merges recorded `task_branch` into recorded `integration_branch`, updates progress, and decides residual follow-up tracking
 
-## Role/Skill Ownership
+## Skill Ownership Map
 
-- planner lane: `delegate-task`, `review-closeout`, `scripts/planner-closeout-batch.sh`
-- coder lane: `review-request`
-- reviewer lane: `review-code`, `review-closeout`, `browser-test-request`
-- architect lane: `tech-design-review-request`, `tech-design-review`
-- browser-tester lane: `browser-test-request`, `browser-test`
+- planner-only: `delegate-task`, `scripts/planner-closeout-batch.sh`
+- coder-only: `review-request`
+- reviewer-only: `review-code`, `review-closeout`
+- requester-side dispatch: `tech-design-review-request`, `browser-test-request`
+- architect worker: `tech-design-review`
+- browser-tester worker: `browser-test`
 
 ## Operating Rules
 

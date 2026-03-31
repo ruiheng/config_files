@@ -40,6 +40,21 @@ Interpret references like "follow shared protocol in `agent-deck-workflow/SKILL.
 - `references/internal-protocol/shared-protocol.md`
 - `references/internal-protocol/automation-policy.md`
 
+## Agent Deck Mode Detection
+
+Compatibility anchor for existing workflow skills.
+Read the real section in `references/internal-protocol/shared-protocol.md`.
+
+## Context Resolution Priority
+
+Compatibility anchor for existing workflow skills.
+Read the real section in `references/internal-protocol/shared-protocol.md`.
+
+## Error Handling and Diagnostics
+
+Compatibility anchor for existing workflow skills.
+Read the real section in `references/internal-protocol/shared-protocol.md`.
+
 ## Local Scripts
 
 - `scripts/planner-closeout-batch.sh`
