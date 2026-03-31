@@ -49,6 +49,7 @@ For an agent-deck-managed session `<id>`, bind:
 - checks whether mail is available for the bound addresses or explicit override addresses
 - optional `timeout` uses duration-string format accepted by `agent-mailbox wait --timeout`, for example `30s`, `5m`, `120ms`, or `1m30s`
 - does not claim the delivery
+- optional diagnostic/manual observation tool; not part of the normal workflow send + notify path
 
 `mailbox_recv`
 - if `addresses` is omitted, receives mail for all bound addresses
@@ -71,8 +72,8 @@ For an agent-deck-managed session `<id>`, bind:
 `agent_deck_ensure_session`
 - resolves an existing session or creates it when missing
 - starts an inactive target when needed
-- a newly created or newly started target should run `mailbox_wait` for its first mail before running `check-agent-mail`
-- if `listener_message` is customized and omits the wait-first flow, the MCP server appends a `mailbox_wait` then `check-agent-mail` hint automatically
+- a newly created or newly started target should follow the same wake path as any other target and run `check-agent-mail` when notified
+- if `listener_message` is customized and omits that receiver hint, the MCP server appends a `check-agent-mail` hint automatically
 
 Typical workflow delivery:
 1. `agent_deck_ensure_session`
@@ -101,7 +102,7 @@ claude mcp add -s user agent_mailbox -- "$HOME/.local/bin/agent-mailbox-mcp"
 
 ## Notes
 
-- This server does not change workflow prompts by itself.
+- This server does not rewrite mailbox body content, but `agent_deck_ensure_session` may append a receiver-side `check-agent-mail` hint to `listener_message`.
 - Mailbox transport does not depend on `agent-deck`.
 - `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.
 - In normal Codex/agent-deck use, call mailbox tools directly; bind only when you need custom addresses or recovery from missing mailbox context.

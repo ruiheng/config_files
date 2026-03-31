@@ -100,7 +100,7 @@ Current recommended operating mode:
 1. Keep `planner` as a long-lived session.
 2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
 3. Queue mail first, then nudge the non-local target to run `check-agent-mail`.
-   A newly created or newly started target should run `mailbox_wait` for its first mail before that first check.
+   Newly created or restarted targets use the same notify path; they do not need a special pre-check phase.
 4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.

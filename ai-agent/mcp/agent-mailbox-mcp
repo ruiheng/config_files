@@ -22,7 +22,7 @@ const STATE = {
 };
 
 const DEFAULT_LISTENER_MESSAGE =
-  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. Then run mailbox_wait for your current session. When mail is available, use the 'check-agent-mail' skill and execute its requested action.";
+  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. When a wakeup message arrives, use the 'check-agent-mail' skill and execute its requested action.";
 
 const DEFAULT_NOTIFY_MESSAGE =
   "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
@@ -540,15 +540,15 @@ function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_NOTIFY_MESSA
   return `${trimmed}\nUse the '${requiredHint}' skill now.`;
 }
 
-function ensureWaitThenCheckAgentMailHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE) {
+function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE) {
   const trimmed = (message || "").trim();
   if (!trimmed) {
     return defaultMessage;
   }
-  if (trimmed.includes("mailbox_wait") && trimmed.includes("check-agent-mail")) {
+  if (trimmed.includes("check-agent-mail")) {
     return trimmed;
   }
-  return `${trimmed}\nRun mailbox_wait for your current session. When mail is available, use the 'check-agent-mail' skill and execute its requested action.`;
+  return `${trimmed}\nWhen a wakeup message arrives, use the 'check-agent-mail' skill and execute its requested action.`;
 }
 
 function makeToolResult(result) {
@@ -885,7 +885,7 @@ function buildServer() {
     async (args, extra) => {
       const bound = getBoundState();
       const identifier = args.session_id || args.session_ref || null;
-      const listenerMessage = ensureWaitThenCheckAgentMailHint(
+      const listenerMessage = ensureCheckAgentMailHint(
         args.listener_message || DEFAULT_LISTENER_MESSAGE,
         DEFAULT_LISTENER_MESSAGE
       );

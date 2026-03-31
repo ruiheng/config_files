@@ -64,7 +64,7 @@ Transport rules:
 
 Worker wake rule:
 - after `mailbox_send`, the normal non-local nudge should already be handled
-- a newly created or newly started target should run `mailbox_wait` for its first mail before running `check-agent-mail`
+- a newly created or newly started target should use the same wake path as any other target: receive the sender nudge, then run `check-agent-mail`
 - do not rely on long-running agent-mail polling processes for delivery
 
 Inbox rule:
