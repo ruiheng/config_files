@@ -196,6 +196,7 @@ Review-request continuity:
 - later review rounds should stay terse; do not restate round 1 context unless it materially changed
 - if the reviewer session changes, resend the full review context to the new reviewer session
 - `review_requested` should carry a concise record of coder-run lint, build/link, compile/type-check, test, and other verification results so reviewer can usually avoid rerunning the same slow checks
+- later terse review requests do not reduce reviewer responsibility: when rounds accumulate or similar issues recur, reviewer should examine whether the work is failing to converge and should widen scope beyond the latest diff when needed
 
 Tech-design review continuity:
 - first `tech_design_review_requested` to an architect session carries the full tech-design context
@@ -402,6 +403,7 @@ Reviewer chooses one branch:
 - send to coder
 - coder evaluates the findings critically, applies the technically justified changes, and may disagree with specific points
 - next `review_requested` should summarize any disagreement or partial adoption clearly
+- if similar findings keep recurring across rounds, reviewer should shift from local diff review to broader design/convergence review
 - if coder and reviewer cannot converge, either may stop and ask user for a decision
 
 2. `stop_recommended`

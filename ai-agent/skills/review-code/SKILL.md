@@ -61,6 +61,18 @@ Default mode is single-reviewer, multi-lens analysis.
 Do not automatically launch extra agents or specialist lanes.
 Recommend a focused follow-up review only when one risk area is important, evidence is insufficient, and the extra review could change the decision.
 
+When `round > 1`, especially `round > 2`, check for non-convergence:
+- the same issue or invariant break reappears after being "fixed"
+- issues bounce between related areas (`A -> B -> A`)
+- the patch only moves the failure to a nearby symptom (`A -> B -> C`)
+- the implementation grows by patch-on-patch edits without making the design simpler
+
+If non-convergence is visible:
+- widen review scope beyond the latest diff
+- inspect the broader implementation, recent rounds, and affected boundaries
+- use `Design Concerns` to call out likely design failure, not just the latest local defect
+- recommend `code-health-review` or equivalent structural follow-up when a local fix is unlikely to converge
+
 ## What to Review
 
 - logic correctness
@@ -70,6 +82,7 @@ Recommend a focused follow-up review only when one risk area is important, evide
 - maintainability
 - compatibility/regression risk
 - verification coverage quality
+- convergence across rounds when this is not round `1`
 
 ## UI-Change Detection and Human Confirmation
 
