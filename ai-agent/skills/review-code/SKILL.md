@@ -61,17 +61,29 @@ Default mode is single-reviewer, multi-lens analysis.
 Do not automatically launch extra agents or specialist lanes.
 Recommend a focused follow-up review only when one risk area is important, evidence is insufficient, and the extra review could change the decision.
 
-When `round > 1`, especially `round > 2`, check for non-convergence:
+Use these thresholds unless overridden by `workflow_policy`:
+- `review_round_convergence_check_threshold = 3`
+- `review_round_hard_stop_threshold = 5`
+
+When `round >= review_round_convergence_check_threshold`, check for non-convergence:
 - the same issue or invariant break reappears after being "fixed"
 - issues bounce between related areas (`A -> B -> A`)
 - the patch only moves the failure to a nearby symptom (`A -> B -> C`)
 - the implementation grows by patch-on-patch edits without making the design simpler
 
+At or above `review_round_convergence_check_threshold`, also check whether coder is solving the wrong problem by preserving extra self-imposed constraints:
+- compatibility burdens not required by the task
+- abstractions or edge cases that were not actually requested
+- local design rules that are making convergence worse instead of improving correctness
+
 If non-convergence is visible:
 - widen review scope beyond the latest diff
 - inspect the broader implementation, recent rounds, and affected boundaries
+- check whether coder introduced extra self-imposed constraints, compatibility burdens, abstractions, or edge-case requirements that were not actually required by the task
 - use `Design Concerns` to call out likely design failure, not just the latest local defect
 - recommend `code-health-review` or equivalent structural follow-up when a local fix is unlikely to converge
+- if repeated rounds appear to be preserving unnecessary self-imposed constraints, say so explicitly and challenge those constraints directly
+- if `round >= review_round_hard_stop_threshold` and the work is still not converging, stop iterating with coder and escalate to the user instead of sending another normal rework loop
 
 ## What to Review
 
@@ -213,14 +225,17 @@ Default policy when missing:
 - `auto_accept_if_no_must_fix = false`
 - `auto_dispatch_next_task = false`
 - `ui_manual_confirmation = "auto"`
+- `review_round_convergence_check_threshold = 3`
+- `review_round_hard_stop_threshold = 5`
 
 Execution flow in Agent Deck mode:
 1. Produce the full review report in the format above
    - preserve the recorded branch plan from `review_requested` unchanged in the review report
 2. Choose action:
-   - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL
+   - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL, unless the non-convergence stop rule below applies
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
    - `stop_recommended` if no must-fix remains and browser validation is not required or already passed
+   - if `round >= review_round_hard_stop_threshold` and similar issues are still recurring or progress is clearly non-converging, do not send another routine `rework_required`; present the situation to the user and wait for a decision
 3. For `rework_required`, send the full review report as mailbox body to coder
 4. For `browser_check_requested`, run `browser-test-request`; the browser report will return to the requester session
 5. For `stop_recommended`:

@@ -183,6 +183,10 @@ Review disagreement policy:
 - coder must evaluate reviewer findings critically and adopt only the changes that are technically justified
 - when coder disagrees, the next `review_requested` body should state the disagreement and rationale clearly
 - if coder and reviewer cannot converge, either role may stop and ask user for a decision
+- reviewer should also check whether coder is preserving unnecessary self-imposed constraints that are making the task harder than required
+- two review-loop thresholds apply unless overridden by `workflow_policy`:
+  - `review_round_convergence_check_threshold = 3`
+  - `review_round_hard_stop_threshold = 5`
 
 Tech-design disagreement policy:
 - architect feedback is advisory, not a user decision
@@ -197,6 +201,8 @@ Review-request continuity:
 - if the reviewer session changes, resend the full review context to the new reviewer session
 - `review_requested` should carry a concise record of coder-run lint, build/link, compile/type-check, test, and other verification results so reviewer can usually avoid rerunning the same slow checks
 - later terse review requests do not reduce reviewer responsibility: when rounds accumulate or similar issues recur, reviewer should examine whether the work is failing to converge and should widen scope beyond the latest diff when needed
+- when `round >= review_round_convergence_check_threshold`, reviewer should become actively skeptical about false constraints, patch layering, and lack of convergence
+- when `round >= review_round_hard_stop_threshold`, reviewer should stop the normal coder-reviewer loop and escalate to the user instead of sending another routine rework pass
 
 Tech-design review continuity:
 - first `tech_design_review_requested` to an architect session carries the full tech-design context
@@ -325,7 +331,9 @@ Planner may include per-task `workflow_policy`, for example:
   "mode": "unattended",
   "auto_accept_if_no_must_fix": true,
   "auto_dispatch_next_task": true,
-  "ui_manual_confirmation": "auto"
+  "ui_manual_confirmation": "auto",
+  "review_round_convergence_check_threshold": 3,
+  "review_round_hard_stop_threshold": 5
 }
 ```
 
@@ -335,6 +343,12 @@ Rules:
 - If `special_requirements` is present in context, planner/coder/reviewer/architect carry it forward unchanged for the same `task_id`
 - Safety checks and must-fix handling remain unchanged
 - Unattended mode (`mode=unattended` or `auto_dispatch_next_task=true`) enables strict post-closeout health gate
+- Review-loop thresholds default to:
+  - `review_round_convergence_check_threshold = 3`
+  - `review_round_hard_stop_threshold = 5`
+- Threshold semantics:
+  - at or above `review_round_convergence_check_threshold`, reviewer should actively test whether the work is solving the wrong problem or preserving unnecessary self-imposed constraints
+  - at or above `review_round_hard_stop_threshold`, reviewer should stop routine iteration and escalate to the user
 
 `ui_manual_confirmation`:
 - `auto` (default): detect likely UI impact heuristically
@@ -405,6 +419,7 @@ Reviewer chooses one branch:
 - next `review_requested` should summarize any disagreement or partial adoption clearly
 - if similar findings keep recurring across rounds, reviewer should shift from local diff review to broader design/convergence review
 - if coder and reviewer cannot converge, either may stop and ask user for a decision
+- if `round >= review_round_hard_stop_threshold` and rounds are still stuck in a recurring loop, reviewer should stop the coder-reviewer loop and escalate to the user instead of sending another routine rework pass
 
 2. `stop_recommended`
 - provide user-facing summary to user and wait for user decision
