@@ -2,6 +2,26 @@
 
 This document describes the multi-agent workflow built around the skills in this directory.
 
+## SKILL.md Audience
+
+`SKILL.md` is runtime instruction text for the agent executing that skill.
+Write it for the agent that is doing the work now, not for the person maintaining the repo.
+
+Keep these out of `SKILL.md`:
+- prompt-authoring notes
+- repo-maintenance reminders
+- "this file intentionally..." explanations
+- editing guidance about where future rules should live
+- stale-guidance cleanup notes for future maintainers
+
+Put those into maintenance docs such as this `README.md` instead.
+
+Use `SKILL.md` for:
+- execution steps
+- runtime constraints
+- decision rules the executing agent must follow
+- references or scripts the executing agent should load or use
+
 ## Roles
 
 - Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox

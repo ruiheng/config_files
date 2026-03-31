@@ -8,7 +8,6 @@ description: Generates and sends a mailbox request for advisory refactor review 
 Generate a concise mailbox message that asks a refactor reviewer to inspect code for duplication and simplification opportunities.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines refactor-review-request-specific behavior.
 
 ## Inputs
 

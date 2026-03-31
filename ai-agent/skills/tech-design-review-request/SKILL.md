@@ -8,7 +8,6 @@ description: Generates a tech-design review mailbox message from committed desig
 Generate a concise mailbox message that asks an architect to review the latest committed tech-design docs on a branch.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines tech-design-review-request-specific behavior.
 
 ## Inputs
 

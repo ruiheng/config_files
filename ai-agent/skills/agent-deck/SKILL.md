@@ -41,7 +41,3 @@ Reasons:
 - Use `agent-deck session send` only for an already existing running/waiting/idle session.
 - Use `agent-deck session start` only for an already existing session that is not currently running.
 - Use `agent-deck add` only when you intentionally want to pre-register a session without launching it yet.
-
-## Repo Convention
-
-If a helper or prompt currently describes new-session creation as `agent-deck add` followed by `session send` or `session start`, treat that as stale guidance and update it to `agent-deck launch`.

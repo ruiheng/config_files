@@ -8,7 +8,6 @@ description: Extracts a concise closeout summary from a full review report and, 
 Extract a closeout summary from a full review report.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines closeout-specific behavior.
 
 ## Purpose
 

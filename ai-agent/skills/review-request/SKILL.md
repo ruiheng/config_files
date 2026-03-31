@@ -8,7 +8,6 @@ description: Generates a review-request mailbox message for code review from unc
 Generate a copy/paste-friendly mailbox message for code review.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines review-request-specific behavior.
 
 ## Required Scope Selection
 

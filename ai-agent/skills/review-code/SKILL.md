@@ -8,7 +8,6 @@ description: Reviews code changes for logical correctness, design quality, and s
 Review code changes for logical correctness, design quality, and security.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines review-code-specific behavior.
 
 ## Input
 

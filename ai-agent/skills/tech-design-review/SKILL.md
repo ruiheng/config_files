@@ -8,7 +8,6 @@ description: Reviews the latest committed tech-design docs on a branch and sends
 Review committed tech-design docs from a `tech_design_review_requested` mailbox body and return an advisory report to the requester session.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines architect-side review behavior.
 
 ## Input
 

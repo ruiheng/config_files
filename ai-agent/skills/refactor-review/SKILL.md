@@ -10,7 +10,6 @@ Review existing code for duplication, unnecessary abstraction, and simplificatio
 This skill is advisory only.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines refactor-review-specific behavior.
 
 ## Hard Boundary
 

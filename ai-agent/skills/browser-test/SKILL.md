@@ -8,7 +8,6 @@ description: Validates browser behavior with agent-browser and sends a browser-c
 Run browser validation from a `browser_check_requested` mailbox body and report the result back to the requester session.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines browser-test-specific behavior.
 
 ## Input
 

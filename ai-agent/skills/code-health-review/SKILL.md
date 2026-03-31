@@ -11,7 +11,6 @@ Prefer structural diagnoses that explain multiple symptoms at once instead of li
 This skill is advisory only.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines code-health-review-specific behavior.
 
 ## Hard Boundary
 

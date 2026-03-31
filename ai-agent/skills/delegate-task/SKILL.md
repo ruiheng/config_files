@@ -8,7 +8,6 @@ description: Use for non-trivial implementation tasks that require meaningful co
 Create one concise, execution-ready mailbox message for another AI agent.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
-This skill only defines delegate-task-specific behavior.
 
 Use this skill only when delegation is justified.
 
