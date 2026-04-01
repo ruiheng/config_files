@@ -28,7 +28,7 @@ const DEFAULT_NOTIFY_MESSAGE =
   "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
 
 const MAILBOX_RECOVERY_HINT =
-  "If context is lost later or you need to recover after ack, use `mailbox_read` on the latest `acked` delivery for this session. If you need an older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by delivery id.";
+  "If a work agent such as coder or reviewer loses context because the conversation grew too long and it forgets message details or the next workflow action after ack, use `mailbox_read` on the latest `acked` delivery for this session. If you need an older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by delivery id.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
