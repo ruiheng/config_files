@@ -47,6 +47,8 @@ Preferred transport interface:
 - `mailbox_status`
 - `mailbox_send`
 - `mailbox_recv`
+- `mailbox_list`
+- `mailbox_read`
 - `mailbox_ack`
 - `mailbox_release`
 - `mailbox_defer`
@@ -57,6 +59,8 @@ Preferred transport interface:
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
+- use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
+- use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
 - use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
@@ -112,8 +116,10 @@ When a workflow session is woken:
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
 5. `mailbox_ack` only after the message has been successfully incorporated into local working state
-6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
-7. keep mailbox lifecycle steps serialized
+6. if working context is lost later, recover with `mailbox_read` on the latest `acked` delivery for the current inbox before asking the sender to resend
+7. when you need a specific older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by `delivery_id`
+8. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
+9. keep mailbox lifecycle steps serialized
 
 Apply the message action before `ack`.
 

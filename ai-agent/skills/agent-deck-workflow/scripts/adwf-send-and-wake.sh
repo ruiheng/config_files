@@ -85,7 +85,7 @@ wake_message=""
 wake_delay_seconds="10"
 json_output=0
 
-DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action."
+DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action. If context is lost later or you need to recover after ack, reread the latest acked mail for this session with mailbox_read."
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -269,7 +269,7 @@ if (( nudge_after_send )); then
     sleep "$wake_delay_seconds"
   fi
   if [[ -z "$wake_message" ]]; then
-    wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+    wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action. If context is lost later, recover with mailbox_read on the latest acked delivery for this session."
   fi
   run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$wake_message" >/dev/null
   wakeup_status="sent"

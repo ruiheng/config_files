@@ -27,12 +27,16 @@ const DEFAULT_LISTENER_MESSAGE =
 const DEFAULT_NOTIFY_MESSAGE =
   "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
 
+const MAILBOX_RECOVERY_HINT =
+  "If context is lost later or you need to recover after ack, use `mailbox_read` on the latest `acked` delivery for this session. If you need an older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by delivery id.";
+
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
   "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind`. " +
   "Use `agent-deck/<id>` as the default sender. " +
   "Pass `default_workdir` when you want later `agent_deck_ensure_session` calls to create sessions in the current project. " +
-  "Later reuse the bound addresses until MCP state is lost.";
+  "Later reuse the bound addresses until MCP state is lost. " +
+  MAILBOX_RECOVERY_HINT;
 
 function fail(message, data) {
   const error = new Error(message);
@@ -528,16 +532,8 @@ function validateSendReceipt(ids, output) {
   });
 }
 
-function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
-  const requiredHint = "check-agent-mail";
-  const trimmed = (message || "").trim();
-  if (!trimmed) {
-    return defaultMessage;
-  }
-  if (trimmed.includes(requiredHint)) {
-    return trimmed;
-  }
-  return `${trimmed}\nUse the '${requiredHint}' skill now.`;
+function hasItems(values) {
+  return Array.isArray(values) && values.length > 0;
 }
 
 function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE) {
@@ -549,6 +545,21 @@ function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_LISTENER_MES
     return trimmed;
   }
   return `${trimmed}\nWhen a wakeup message arrives, use the 'check-agent-mail' skill and execute its requested action.`;
+}
+
+function ensureMailboxRecoveryHint(message) {
+  const trimmed = (message || "").trim();
+  if (!trimmed) {
+    return MAILBOX_RECOVERY_HINT;
+  }
+  if (trimmed.includes("mailbox_read") && trimmed.includes("acked")) {
+    return trimmed;
+  }
+  return `${trimmed}\n${MAILBOX_RECOVERY_HINT}`;
+}
+
+function ensureReceiverWorkflowHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE) {
+  return ensureMailboxRecoveryHint(ensureCheckAgentMailHint(message, defaultMessage));
 }
 
 function makeToolResult(result) {
@@ -667,7 +678,10 @@ function buildServer() {
               notifyScheme = parsed.scheme;
               break;
             }
-            const notifyMessage = ensureCheckAgentMailHint(args.notify_message || DEFAULT_NOTIFY_MESSAGE);
+            const notifyMessage = ensureReceiverWorkflowHint(
+              args.notify_message || DEFAULT_NOTIFY_MESSAGE,
+              DEFAULT_NOTIFY_MESSAGE
+            );
             runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
             notifyStatus = "sent";
             notifyScheme = parsed.scheme;
@@ -737,7 +751,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_recv",
     {
-      description: "Receive mail immediately. If addresses is omitted, receive from all bound addresses; pass addresses only to override that inbox set for this call.",
+      description: "Receive mail immediately. If addresses is omitted, receive from all bound addresses; pass addresses only to override that inbox set for this call. After ack, use mailbox_read to reread persisted deliveries when context is lost.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
       },
@@ -766,9 +780,132 @@ function buildServer() {
   );
 
   server.registerTool(
+    "mailbox_list",
+    {
+      description: "List persisted deliveries for one inbox. Use state='acked' to find deliveries that were already received and acknowledged before rereading them with mailbox_read.",
+      inputSchema: {
+        address: z.string().optional(),
+        as_person: z.string().optional(),
+        state: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const boundAddresses = args.address ? [] : mailboxAddresses();
+      const address = args.address || (boundAddresses.length === 1 ? boundAddresses[0] : null);
+      if (!address) {
+        fail("mailbox_list requires address when multiple mailbox addresses are bound");
+      }
+      if (args.as_person && args.state) {
+        fail("mailbox_list does not support state together with as_person");
+      }
+
+      const cmd = ["agent-mailbox", "list", "--for", address];
+      if (args.as_person) {
+        cmd.push("--as", args.as_person);
+      }
+      if (args.state) {
+        cmd.push("--state", args.state);
+      }
+      cmd.push("--json");
+
+      return makeToolResult({
+        status: "listed",
+        address,
+        as_person: args.as_person || null,
+        state: args.state || null,
+        deliveries: parseJsonOutput(runCmd(cmd).stdout, "agent-mailbox list"),
+      });
+    }
+  );
+
+  server.registerTool(
+    "mailbox_read",
+    {
+      description: "Read persisted mailbox messages or deliveries. Use latest=true with state='acked' to reread recently acknowledged mail after context loss.",
+      inputSchema: {
+        message_ids: z.array(z.string()).optional(),
+        delivery_ids: z.array(z.string()).optional(),
+        latest: z.boolean().optional(),
+        addresses: z.array(z.string()).optional(),
+        state: z.string().optional(),
+        limit: z.number().int().positive().optional(),
+      },
+    },
+    async (args) => {
+      const hasMessageIds = hasItems(args.message_ids);
+      const hasDeliveryIds = hasItems(args.delivery_ids);
+      const wantsLatest = Boolean(args.latest);
+      const modeCount = Number(hasMessageIds) + Number(hasDeliveryIds) + Number(wantsLatest);
+
+      if (modeCount !== 1) {
+        fail("mailbox_read requires exactly one mode: message_ids, delivery_ids, or latest=true");
+      }
+
+      const cmd = ["agent-mailbox", "read"];
+      let result = {
+        status: "read",
+        mode: "unknown",
+      };
+
+      if (wantsLatest) {
+        const addresses = mailboxAddresses(args);
+        cmd.push("--latest");
+        for (const address of addresses) {
+          cmd.push("--for", address);
+        }
+        if (args.state) {
+          cmd.push("--state", args.state);
+        }
+        if (typeof args.limit === "number") {
+          cmd.push("--limit", String(args.limit));
+        }
+        result = {
+          status: "read",
+          mode: "latest",
+          addresses,
+          state: args.state || "any",
+          limit: typeof args.limit === "number" ? args.limit : null,
+        };
+      } else if (hasMessageIds) {
+        if (args.addresses || args.state || typeof args.limit === "number") {
+          fail("mailbox_read message_ids mode does not support addresses, state, or limit");
+        }
+        const messageIds = dedupe(args.message_ids);
+        for (const messageId of messageIds) {
+          cmd.push("--message", messageId);
+        }
+        result = {
+          status: "read",
+          mode: "message_ids",
+          message_ids: messageIds,
+        };
+      } else {
+        if (args.addresses || args.state || typeof args.limit === "number") {
+          fail("mailbox_read delivery_ids mode does not support addresses, state, or limit");
+        }
+        const deliveryIds = dedupe(args.delivery_ids);
+        for (const deliveryId of deliveryIds) {
+          cmd.push("--delivery", deliveryId);
+        }
+        result = {
+          status: "read",
+          mode: "delivery_ids",
+          delivery_ids: deliveryIds,
+        };
+      }
+
+      cmd.push("--json");
+      return makeToolResult({
+        ...result,
+        ...parseJsonOutput(runCmd(cmd).stdout, "agent-mailbox read"),
+      });
+    }
+  );
+
+  server.registerTool(
     "mailbox_ack",
     {
-      description: "Acknowledge a claimed mailbox delivery.",
+      description: "Acknowledge a claimed mailbox delivery. Acked deliveries remain readable later through mailbox_read.",
       inputSchema: {
         delivery_id: z.string(),
         lease_token: z.string(),
@@ -885,7 +1022,7 @@ function buildServer() {
     async (args, extra) => {
       const bound = getBoundState();
       const identifier = args.session_id || args.session_ref || null;
-      const listenerMessage = ensureCheckAgentMailHint(
+      const listenerMessage = ensureReceiverWorkflowHint(
         args.listener_message || DEFAULT_LISTENER_MESSAGE,
         DEFAULT_LISTENER_MESSAGE
       );
@@ -982,6 +1119,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ensureReceiverWorkflowHint,
   parseSendTokens,
   validateSendReceipt,
 };

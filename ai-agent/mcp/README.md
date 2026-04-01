@@ -23,6 +23,8 @@ The server is stdio-based and exposes three groups of tools.
 - `mailbox_send`
 - `mailbox_wait`
 - `mailbox_recv`
+- `mailbox_list`
+- `mailbox_read`
 - `mailbox_ack`
 - `mailbox_release`
 - `mailbox_defer`
@@ -56,9 +58,21 @@ For an agent-deck-managed session `<id>`, bind:
 - if `addresses` is provided, uses only that explicit override address list for this call
 - claims one delivery immediately or returns no message
 - calls `agent-mailbox recv --max 1` explicitly so the MCP contract stays single-message even if CLI defaults change
+- after the delivery is acknowledged, use `mailbox_read` rather than asking the sender to resend when context is lost
+
+`mailbox_list`
+- lists persisted deliveries for one inbox
+- use `state: "acked"` to find deliveries that were already received and acknowledged
+- use this when you need a specific older `delivery_id` before calling `mailbox_read`
+
+`mailbox_read`
+- reads persisted messages or deliveries by id, or rereads the latest deliveries for one or more inboxes
+- use `latest: true` with `state: "acked"` to recover the most recent acknowledged mail after context loss
+- if `addresses` is omitted in `latest` mode, the tool reads from the currently bound inbox addresses
 
 `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
 - wrap the corresponding `agent-mailbox` lifecycle commands
+- acknowledged deliveries remain readable later through `mailbox_read`
 
 ## Agent-Deck Tools
 
@@ -103,6 +117,7 @@ claude mcp add -s user agent_mailbox -- "$HOME/.local/bin/agent-mailbox-mcp"
 ## Notes
 
 - This server does not rewrite mailbox body content, but `agent_deck_ensure_session` may append a receiver-side `check-agent-mail` hint to `listener_message`.
+- Receiver-side wake/recovery hints also tell the agent to use `mailbox_read` for the latest `acked` delivery if mailbox context is lost after `ack`.
 - Mailbox transport does not depend on `agent-deck`.
 - `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.
 - In normal Codex/agent-deck use, call mailbox tools directly; bind only when you need custom addresses or recovery from missing mailbox context.

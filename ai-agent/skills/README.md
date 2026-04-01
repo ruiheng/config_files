@@ -91,6 +91,8 @@ flowchart TD
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
+- If receiver context is lost after `mailbox_ack`, recover with `mailbox_read` on the latest `acked` delivery before asking for a resend
+- Use `mailbox_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
 - External files are supplemental references only, not the default transport
 
 ## Incremental Automation with Agent Deck
