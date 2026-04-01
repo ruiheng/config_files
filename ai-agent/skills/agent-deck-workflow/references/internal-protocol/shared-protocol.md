@@ -59,6 +59,7 @@ Preferred transport interface:
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
+- `mailbox_wait` is not recommended for normal workflow; keep it for manual diagnostics or observation
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
@@ -69,7 +70,7 @@ Transport rules:
 Worker wake rule:
 - after `mailbox_send`, the normal non-local nudge should already be handled
 - a newly created or newly started target should use the same wake path as any other target: receive the sender nudge, then run `check-agent-mail`
-- do not rely on long-running agent-mail polling processes for delivery
+- long-running agent-mail polling processes are not recommended for delivery
 
 Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
@@ -116,7 +117,7 @@ When a workflow session is woken:
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
 5. `mailbox_ack` only after the message has been successfully incorporated into local working state
-6. if a work agent such as coder or reviewer loses context later because the conversation got too long and it no longer remembers the mailbox details or next workflow action, recover with `mailbox_read` on the latest `acked` delivery for the current inbox
+6. if coder or reviewer forgets the mailbox details or next action later, recover with `mailbox_read` on the latest `acked` delivery for the current inbox
 7. when you need a specific older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by `delivery_id`
 8. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
 9. keep mailbox lifecycle steps serialized
@@ -124,7 +125,8 @@ When a workflow session is woken:
 Apply the message action before `ack`.
 
 Idle behavior:
-- do not rely on long-running wait loops to preserve workflow continuity
+- long-running wait loops are not recommended for workflow continuity
+- `mailbox_wait` is not the recommended receiver entrypoint
 - use `check-agent-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
 
 ## Error Handling And Diagnostics

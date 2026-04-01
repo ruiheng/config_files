@@ -51,7 +51,7 @@ For an agent-deck-managed session `<id>`, bind:
 - checks whether mail is available for the bound addresses or explicit override addresses
 - optional `timeout` uses duration-string format accepted by `agent-mailbox wait --timeout`, for example `30s`, `5m`, `120ms`, or `1m30s`
 - does not claim the delivery
-- optional diagnostic/manual observation tool; not part of the normal workflow send + notify path
+- optional diagnostic/manual observation tool; not recommended for normal workflow
 
 `mailbox_recv`
 - if `addresses` is omitted, receives mail for all bound addresses

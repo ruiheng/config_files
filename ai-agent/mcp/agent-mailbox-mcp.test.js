@@ -27,7 +27,7 @@ test("ensureReceiverWorkflowHint appends wake and recovery guidance", () => {
   assert.match(hint, /check-agent-mail/);
   assert.match(hint, /mailbox_read/);
   assert.match(hint, /acked/);
-  assert.match(hint, /next workflow action/);
+  assert.match(hint, /next action/);
 });
 
 test("ensureReceiverWorkflowHint keeps existing recovery guidance intact", () => {

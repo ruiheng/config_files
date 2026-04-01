@@ -28,13 +28,14 @@ const DEFAULT_NOTIFY_MESSAGE =
   "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
 
 const MAILBOX_RECOVERY_HINT =
-  "If a work agent such as coder or reviewer loses context because the conversation grew too long and it forgets message details or the next workflow action after ack, use `mailbox_read` on the latest `acked` delivery for this session. If you need an older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by delivery id.";
+  "If coder or reviewer forgets the mailbox details or next action after ack, use `mailbox_read` on the latest `acked` delivery for this session. For older mail, use `mailbox_list` with `state: acked` and then `mailbox_read` by delivery id.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
   "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind`. " +
   "Use `agent-deck/<id>` as the default sender. " +
   "Pass `default_workdir` when you want later `agent_deck_ensure_session` calls to create sessions in the current project. " +
+  "`mailbox_wait` is not recommended for normal workflow; prefer `mailbox_recv`, and use `mailbox_read` when you need persisted mail again. " +
   "Later reuse the bound addresses until MCP state is lost. " +
   MAILBOX_RECOVERY_HINT;
 
@@ -714,7 +715,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_wait",
     {
-      description: "Observe whether mail is available without claiming it. Agent-managed session inbox addresses typically look like agent-deck/<session-id> or codex/<session-id>. Optional timeout is a duration string such as 30s, 5m, 120ms, or 1m30s.",
+      description: "Observe whether mail is available without claiming it. Not recommended for normal workflow; prefer mailbox_recv. Use this only for manual diagnostics or observation. Agent-managed session inbox addresses typically look like agent-deck/<session-id> or codex/<session-id>. Optional timeout is a duration string such as 30s, 5m, 120ms, or 1m30s.",
       inputSchema: {
         addresses: z.array(z.string()).optional(),
         timeout: z.string().optional(),
