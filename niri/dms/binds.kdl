@@ -3,7 +3,8 @@ binds {
         spawn "dms" "ipc" "call" "spotlight" "toggle"; 
     }
 
-    Mod+V hotkey-overlay-title="Clipboard Manager" { 
+    // Avoid niri's default Mod+V floating/tiling toggle.
+    Mod+Alt+V hotkey-overlay-title="Clipboard Manager" { 
         spawn "dms" "ipc" "call" "clipboard" "toggle"; 
     }
 
@@ -11,7 +12,8 @@ binds {
         spawn "dms" "ipc" "call" "processlist" "toggle"; 
     }
 
-    Mod+Comma hotkey-overlay-title="Settings" { 
+    // Avoid niri's default Mod+Comma consume-window-into-column.
+    Mod+Alt+Comma hotkey-overlay-title="Settings" { 
         spawn "dms" "ipc" "call" "settings" "toggle"; 
     }
 
@@ -31,7 +33,8 @@ binds {
         spawn "dms" "ipc" "call" "lock" "lock"; 
     }
 
-    Ctrl+Alt+Delete hotkey-overlay-title="Task Manager" { 
+    // Avoid niri's default Ctrl+Alt+Delete exit bind.
+    Mod+Alt+Delete hotkey-overlay-title="Task Manager" { 
         spawn "dms" "ipc" "call" "processlist" "toggle"; 
     }    
 
