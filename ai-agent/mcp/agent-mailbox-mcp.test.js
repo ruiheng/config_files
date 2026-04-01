@@ -23,15 +23,21 @@ test("validateSendReceipt rejects an incomplete send receipt", () => {
 });
 
 test("ensureReceiverWorkflowHint appends wake and recovery guidance", () => {
-  const hint = ensureReceiverWorkflowHint("Handle the request.");
+  const hint = ensureReceiverWorkflowHint("Handle the request.", undefined, "coder-123");
   assert.match(hint, /check-agent-mail/);
   assert.match(hint, /mailbox_read/);
   assert.match(hint, /acked/);
   assert.match(hint, /next action/);
 });
 
-test("ensureReceiverWorkflowHint keeps existing recovery guidance intact", () => {
+test("ensureReceiverWorkflowHint keeps existing recovery guidance intact for worker targets", () => {
   const existing =
     "Use the check-agent-mail skill. If context is lost later, use mailbox_read on the latest acked delivery.";
-  assert.equal(ensureReceiverWorkflowHint(existing), existing);
+  assert.equal(ensureReceiverWorkflowHint(existing, undefined, "reviewer-123"), existing);
+});
+
+test("ensureReceiverWorkflowHint omits recovery guidance for planner targets", () => {
+  const hint = ensureReceiverWorkflowHint("Handle the request.", undefined, "planner");
+  assert.match(hint, /check-agent-mail/);
+  assert.doesNotMatch(hint, /mailbox_read/);
 });

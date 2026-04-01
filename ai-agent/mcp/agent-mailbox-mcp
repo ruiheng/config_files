@@ -35,9 +35,8 @@ const SERVER_INSTRUCTIONS =
   "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind`. " +
   "Use `agent-deck/<id>` as the default sender. " +
   "Pass `default_workdir` when you want later `agent_deck_ensure_session` calls to create sessions in the current project. " +
-  "`mailbox_wait` is not recommended for normal workflow; prefer `mailbox_recv`, and use `mailbox_read` when you need persisted mail again. " +
-  "Later reuse the bound addresses until MCP state is lost. " +
-  MAILBOX_RECOVERY_HINT;
+  "`mailbox_wait` is not recommended for normal workflow; prefer `mailbox_recv`. " +
+  "Later reuse the bound addresses until MCP state is lost.";
 
 function fail(message, data) {
   const error = new Error(message);
@@ -559,8 +558,17 @@ function ensureMailboxRecoveryHint(message) {
   return `${trimmed}\n${MAILBOX_RECOVERY_HINT}`;
 }
 
-function ensureReceiverWorkflowHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE) {
-  return ensureMailboxRecoveryHint(ensureCheckAgentMailHint(message, defaultMessage));
+function isWorkerSessionLabel(label) {
+  const trimmed = (label || "").trim().toLowerCase();
+  return /^(coder|reviewer|architect)(-|$)/.test(trimmed);
+}
+
+function ensureReceiverWorkflowHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE, targetLabel = "") {
+  const withWakeHint = ensureCheckAgentMailHint(message, defaultMessage);
+  if (!isWorkerSessionLabel(targetLabel)) {
+    return withWakeHint;
+  }
+  return ensureMailboxRecoveryHint(withWakeHint);
 }
 
 function makeToolResult(result) {
@@ -679,9 +687,12 @@ function buildServer() {
               notifyScheme = parsed.scheme;
               break;
             }
+            const targetSession = resolveSessionShowBestEffort(parsed.id);
+            const targetLabel = targetSession?.title || parsed.id;
             const notifyMessage = ensureReceiverWorkflowHint(
               args.notify_message || DEFAULT_NOTIFY_MESSAGE,
-              DEFAULT_NOTIFY_MESSAGE
+              DEFAULT_NOTIFY_MESSAGE,
+              targetLabel
             );
             runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
             notifyStatus = "sent";
@@ -1023,10 +1034,6 @@ function buildServer() {
     async (args, extra) => {
       const bound = getBoundState();
       const identifier = args.session_id || args.session_ref || null;
-      const listenerMessage = ensureReceiverWorkflowHint(
-        args.listener_message || DEFAULT_LISTENER_MESSAGE,
-        DEFAULT_LISTENER_MESSAGE
-      );
       let workdir = args.workdir || bound.default_workdir || null;
       let data = identifier ? resolveSessionShow(identifier, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) : null;
 
@@ -1052,6 +1059,12 @@ function buildServer() {
           fail(`workdir does not exist: ${workdir}`);
         }
 
+        const targetLabel = args.ensure_title || args.session_ref || identifier || "";
+        const listenerMessage = ensureReceiverWorkflowHint(
+          args.listener_message || DEFAULT_LISTENER_MESSAGE,
+          DEFAULT_LISTENER_MESSAGE,
+          targetLabel
+        );
         const launchArgs = [
           "agent-deck",
           "launch",
@@ -1074,6 +1087,12 @@ function buildServer() {
         startedSession = true;
         listenerStatus = "started_waiting";
       } else {
+        const targetLabel = data.title || args.session_ref || identifier || data.id;
+        const listenerMessage = ensureReceiverWorkflowHint(
+          args.listener_message || DEFAULT_LISTENER_MESSAGE,
+          DEFAULT_LISTENER_MESSAGE,
+          targetLabel
+        );
         const status = data.status || null;
         if (ACTIVE_SESSION_STATUSES.has(status)) {
           notifyNeeded = true;

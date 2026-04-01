@@ -85,7 +85,27 @@ wake_message=""
 wake_delay_seconds="10"
 json_output=0
 
-DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action. If you later forget the details or next action, reread the latest acked mail for this session with mailbox_read."
+DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action."
+MAILBOX_RECOVERY_HINT="If you later forget the details or next action, reread the latest acked mail for this session with mailbox_read."
+
+is_worker_session_ref() {
+  local ref="${1:-}"
+  [[ "$ref" =~ ^(coder|reviewer|architect)(-|$) ]]
+}
+
+append_worker_recovery_hint() {
+  local message="${1:-}"
+  local target_ref="${2:-}"
+  if ! is_worker_session_ref "$target_ref"; then
+    printf '%s' "$message"
+    return
+  fi
+  if [[ "$message" == *"mailbox_read"* && "$message" == *"acked"* ]]; then
+    printf '%s' "$message"
+    return
+  fi
+  printf '%s\n%s' "$message" "$MAILBOX_RECOVERY_HINT"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -143,6 +163,18 @@ get_session_status() {
   printf '%s' "$show_json" | json_get_field '.status'
 }
 
+get_session_title() {
+  local session="$1"
+  local show_json
+  if ! show_json="$(agent-deck session show "$session" --json 2>/dev/null)"; then
+    return 1
+  fi
+  if [[ "$(printf '%s' "$show_json" | json_get_field '.success')" == "false" ]]; then
+    return 1
+  fi
+  printf '%s' "$show_json" | json_get_field '.title'
+}
+
 if [[ -z "$to_session_id" ]]; then
   if [[ -n "$to_session_ref" ]]; then
     if resolved_id="$(resolve_session_id "$to_session_ref")" && [[ -n "$resolved_id" ]]; then
@@ -170,7 +202,22 @@ if [[ -z "$to_session_id" ]]; then
 fi
 
 if [[ -z "$to_session_ref" ]]; then
+  session_title="$(get_session_title "$to_session_id" || true)"
+  if [[ -n "$session_title" ]]; then
+    to_session_ref="$session_title"
+  fi
+fi
+
+if [[ -z "$to_session_ref" ]]; then
   to_session_ref="$to_session_id"
+fi
+
+DEFAULT_LISTENER_MESSAGE="$(append_worker_recovery_hint "$DEFAULT_LISTENER_MESSAGE" "$to_session_ref")"
+if [[ -n "$listener_message" ]]; then
+  listener_message="$(append_worker_recovery_hint "$listener_message" "$to_session_ref")"
+fi
+if [[ -n "$wake_message" ]]; then
+  wake_message="$(append_worker_recovery_hint "$wake_message" "$to_session_ref")"
 fi
 
 body=""
@@ -269,7 +316,8 @@ if (( nudge_after_send )); then
     sleep "$wake_delay_seconds"
   fi
   if [[ -z "$wake_message" ]]; then
-    wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action. If you later forget the details or next action, recover with mailbox_read on the latest acked delivery for this session."
+    wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+    wake_message="$(append_worker_recovery_hint "$wake_message" "$to_session_ref")"
   fi
   run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$wake_message" >/dev/null
   wakeup_status="sent"

@@ -117,10 +117,8 @@ When a workflow session is woken:
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
 5. `mailbox_ack` only after the message has been successfully incorporated into local working state
-6. if you forget the mailbox details or next action later, recover with `mailbox_read` on the latest `acked` delivery for the current inbox
-7. when you need a specific older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by `delivery_id`
-8. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
-9. keep mailbox lifecycle steps serialized
+6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
+7. keep mailbox lifecycle steps serialized
 
 Apply the message action before `ack`.
 

@@ -117,7 +117,7 @@ claude mcp add -s user agent_mailbox -- "$HOME/.local/bin/agent-mailbox-mcp"
 ## Notes
 
 - This server does not rewrite mailbox body content, but `agent_deck_ensure_session` may append a receiver-side `check-agent-mail` hint to `listener_message`.
-- Receiver-side wake/recovery hints also tell the agent to use `mailbox_read` for the latest `acked` delivery if mailbox context is lost after `ack`.
+- Worker-target wake hints may also tell the agent to use `mailbox_read` for the latest `acked` delivery after `ack`.
 - Mailbox transport does not depend on `agent-deck`.
 - `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.
 - In normal Codex/agent-deck use, call mailbox tools directly; bind only when you need custom addresses or recovery from missing mailbox context.
