@@ -280,6 +280,7 @@ window-rule {
 // This line starts waybar, a commonly used bar for Wayland compositors.
 // spawn-at-startup "waybar"
 
+spawn-at-startup "dms" "run"
 spawn-at-startup "vmware-user-suid-wrapper"
 // spawn-at-startup "clipboard-sync" // already run as user service
 spawn-at-startup "/home/ruiheng/niri-notice/run.sh"
@@ -628,3 +629,9 @@ binds {
     // moving the mouse or pressing any other key.
     Mod+Shift+P { power-off-monitors; }
 }
+
+
+include "dms/colors.kdl"
+include "dms/layout.kdl"
+include "dms/alttab.kdl"
+include "dms/binds.kdl"
