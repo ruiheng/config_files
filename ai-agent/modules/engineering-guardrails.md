@@ -139,6 +139,31 @@ Compatibility is a product decision and an environment decision, not an automati
 - why a more conservative compatibility layer is unnecessary, if you are not preserving it
 6. Do not silently preserve low-value legacy paths just because they already exist; unnecessary compatibility code is technical debt and must be justified.
 
+## 12) Git Write Serialization (MUST)
+
+1. Never run git write operations in parallel.
+2. Never put git write operations inside `multi_tool_use.parallel`.
+3. Treat at least these as git write operations:
+- `git add`
+- `git commit`
+- `git cherry-pick`
+- `git merge`
+- `git rebase`
+- `git reset`
+- `git checkout` / `git switch` when they modify the index or worktree
+- `git stash push` / `git stash pop`
+- `git apply` / `git am`
+4. Run git writes strictly one at a time, in order, and wait for each one to finish before deciding the next step.
+5. If you need parallelism, limit it to read-only inspection such as `git status`, `git diff`, `git show`, or file reads. Do not mix a git write with any other git write in the same parallel tool call.
+6. If a plan includes `git add` and `git commit`, they must be separate sequential steps. Do not queue them together and do not attempt to be clever about it.
+7. Explicit bad example:
+- `git add foo && git commit -m "msg"`
+- `multi_tool_use.parallel([git add ..., git commit ...])`
+8. Explicit good example:
+- first run `git add foo`
+- review result
+- then run `git commit -m "msg"`
+
 ## Default Output Order
 
 1. Root-cause analysis (hypotheses + evidence chain)
