@@ -16,7 +16,7 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
    - parse the `Action:` header
    - execute that workflow stage immediately
 4. Only `mailbox_ack` after the message has been incorporated into working state
-5. If coder or reviewer forgets the mailbox details or next action after `mailbox_ack`, use `mailbox_read` on the latest `acked` delivery for this session
+5. If you forget the mailbox details or next action after `mailbox_ack`, use `mailbox_read` on the latest `acked` delivery for this session
 6. If you need an older persisted delivery, use `mailbox_list` with `state: acked` and then `mailbox_read` by `delivery_id`
 7. If the message cannot be acted on yet, use `mailbox_release`, `mailbox_defer`, or `mailbox_fail` instead of silently dropping it
 

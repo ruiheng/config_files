@@ -85,7 +85,7 @@ wake_message=""
 wake_delay_seconds="10"
 json_output=0
 
-DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action. If coder or reviewer later forgets the details or next action, reread the latest acked mail for this session with mailbox_read."
+DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action. If you later forget the details or next action, reread the latest acked mail for this session with mailbox_read."
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
