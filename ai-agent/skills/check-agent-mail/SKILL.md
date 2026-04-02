@@ -3,10 +3,6 @@ name: check-agent-mail
 description: Receive pending agent mail and immediately execute the requested workflow action.
 ---
 
-# Check Agent Mail
-
-Use this skill to turn a wakeup nudge into actual workflow execution.
-
 ## Steps
 
 1. Run `mailbox_recv`
@@ -22,8 +18,11 @@ Use this skill to turn a wakeup nudge into actual workflow execution.
 
 - Treat the received mailbox body as executable workflow input
 - `mailbox_wait` is not recommended for normal pickup; use `mailbox_recv`
+- If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - Treat `mailbox_ack` as durable persistence, not as losing the message forever
+- If you need to recover the latest acknowledged workflow input after `mailbox_ack`, use `mailbox_read` on the latest `acked` delivery for this session
+- If you need an older acknowledged delivery, use `mailbox_list` with `state: acked`, then `mailbox_read` by delivery id
 - Keep lifecycle steps serialized
 - If `mailbox_recv` fails because mailbox context is missing, bind and retry
