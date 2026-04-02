@@ -21,14 +21,8 @@ const STATE = {
   detected_agent_session_id: null,
 };
 
-const DEFAULT_LISTENER_MESSAGE =
-  "If agent_mailbox is not bound yet, first run agent-deck session current --json and call mailbox_bind for this session. When a wakeup message arrives, use the 'check-agent-mail' skill and execute its requested action.";
-
 const DEFAULT_NOTIFY_MESSAGE =
   "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
-
-const MAILBOX_RECOVERY_HINT =
-  "If you forget the mailbox details or next action after ack, use `mailbox_read` on the latest `acked` delivery for this session. For older mail, use `mailbox_list` with `state: acked` and then `mailbox_read` by delivery id.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
@@ -536,7 +530,7 @@ function hasItems(values) {
   return Array.isArray(values) && values.length > 0;
 }
 
-function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE) {
+function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
   const trimmed = (message || "").trim();
   if (!trimmed) {
     return defaultMessage;
@@ -544,31 +538,7 @@ function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_LISTENER_MES
   if (trimmed.includes("check-agent-mail")) {
     return trimmed;
   }
-  return `${trimmed}\nWhen a wakeup message arrives, use the 'check-agent-mail' skill and execute its requested action.`;
-}
-
-function ensureMailboxRecoveryHint(message) {
-  const trimmed = (message || "").trim();
-  if (!trimmed) {
-    return MAILBOX_RECOVERY_HINT;
-  }
-  if (trimmed.includes("mailbox_read") && trimmed.includes("acked")) {
-    return trimmed;
-  }
-  return `${trimmed}\n${MAILBOX_RECOVERY_HINT}`;
-}
-
-function isWorkerSessionLabel(label) {
-  const trimmed = (label || "").trim().toLowerCase();
-  return /^(coder|reviewer|architect)(-|$)/.test(trimmed);
-}
-
-function ensureReceiverWorkflowHint(message, defaultMessage = DEFAULT_LISTENER_MESSAGE, targetLabel = "") {
-  const withWakeHint = ensureCheckAgentMailHint(message, defaultMessage);
-  if (!isWorkerSessionLabel(targetLabel)) {
-    return withWakeHint;
-  }
-  return ensureMailboxRecoveryHint(withWakeHint);
+  return `${trimmed}\nUse the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.`;
 }
 
 function makeToolResult(result) {
@@ -687,12 +657,9 @@ function buildServer() {
               notifyScheme = parsed.scheme;
               break;
             }
-            const targetSession = resolveSessionShowBestEffort(parsed.id);
-            const targetLabel = targetSession?.title || parsed.id;
-            const notifyMessage = ensureReceiverWorkflowHint(
+            const notifyMessage = ensureCheckAgentMailHint(
               args.notify_message || DEFAULT_NOTIFY_MESSAGE,
-              DEFAULT_NOTIFY_MESSAGE,
-              targetLabel
+              DEFAULT_NOTIFY_MESSAGE
             );
             runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
             notifyStatus = "sent";
@@ -1059,12 +1026,7 @@ function buildServer() {
           fail(`workdir does not exist: ${workdir}`);
         }
 
-        const targetLabel = args.ensure_title || args.session_ref || identifier || "";
-        const listenerMessage = ensureReceiverWorkflowHint(
-          args.listener_message || DEFAULT_LISTENER_MESSAGE,
-          DEFAULT_LISTENER_MESSAGE,
-          targetLabel
-        );
+        const listenerMessage = (args.listener_message || "").trim();
         const launchArgs = [
           "agent-deck",
           "launch",
@@ -1075,10 +1037,11 @@ function buildServer() {
           args.parent_session_id,
           "--cmd",
           args.ensure_cmd,
-          "--message",
-          listenerMessage,
           workdir,
         ];
+        if (listenerMessage) {
+          launchArgs.splice(10, 0, "--message", listenerMessage);
+        }
         const proc = await runCmdAsync(launchArgs, {
           signal: extra?.signal,
         });
@@ -1087,12 +1050,7 @@ function buildServer() {
         startedSession = true;
         listenerStatus = "started_waiting";
       } else {
-        const targetLabel = data.title || args.session_ref || identifier || data.id;
-        const listenerMessage = ensureReceiverWorkflowHint(
-          args.listener_message || DEFAULT_LISTENER_MESSAGE,
-          DEFAULT_LISTENER_MESSAGE,
-          targetLabel
-        );
+        const listenerMessage = (args.listener_message || "").trim();
         const status = data.status || null;
         if (ACTIVE_SESSION_STATUSES.has(status)) {
           notifyNeeded = true;
@@ -1139,7 +1097,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  ensureReceiverWorkflowHint,
   parseSendTokens,
   validateSendReceipt,
 };

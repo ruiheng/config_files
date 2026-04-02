@@ -85,28 +85,6 @@ wake_message=""
 wake_delay_seconds="10"
 json_output=0
 
-DEFAULT_LISTENER_MESSAGE="If agent_mailbox is not bound yet, first bind mailbox addresses for this session. When a wakeup message arrives, use the check-agent-mail skill and execute its requested action."
-MAILBOX_RECOVERY_HINT="If you later forget the details or next action, reread the latest acked mail for this session with mailbox_read."
-
-is_worker_session_ref() {
-  local ref="${1:-}"
-  [[ "$ref" =~ ^(coder|reviewer|architect)(-|$) ]]
-}
-
-append_worker_recovery_hint() {
-  local message="${1:-}"
-  local target_ref="${2:-}"
-  if ! is_worker_session_ref "$target_ref"; then
-    printf '%s' "$message"
-    return
-  fi
-  if [[ "$message" == *"mailbox_read"* && "$message" == *"acked"* ]]; then
-    printf '%s' "$message"
-    return
-  fi
-  printf '%s\n%s' "$message" "$MAILBOX_RECOVERY_HINT"
-}
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from-session-id) from_session_id="${2:-}"; shift 2 ;;
@@ -188,10 +166,18 @@ if [[ -z "$to_session_id" ]]; then
     [[ -n "$parent_session_id" ]] || die "--parent-session-id is required when creating target session"
     [[ -d "$workdir" ]] || die "workdir does not exist: $workdir"
 
-    if [[ -z "$listener_message" ]]; then
-      listener_message="$DEFAULT_LISTENER_MESSAGE"
+    launch_cmd=(
+      agent-deck launch
+      --json
+      --title "$ensure_target_title"
+      --parent "$parent_session_id"
+      --cmd "$ensure_target_cmd"
+    )
+    if [[ -n "$listener_message" ]]; then
+      launch_cmd+=(--message "$listener_message")
     fi
-    create_json="$(run_capture "agent-deck launch" agent-deck launch --json --title "$ensure_target_title" --parent "$parent_session_id" --cmd "$ensure_target_cmd" --message "$listener_message" "$workdir")"
+    launch_cmd+=("$workdir")
+    create_json="$(run_capture "agent-deck launch" "${launch_cmd[@]}")"
     to_session_id="$(printf '%s' "$create_json" | json_get_field '.id')"
     [[ -n "$to_session_id" ]] || die "failed to parse created target session id"
     if [[ -z "$to_session_ref" ]]; then
@@ -210,14 +196,6 @@ fi
 
 if [[ -z "$to_session_ref" ]]; then
   to_session_ref="$to_session_id"
-fi
-
-DEFAULT_LISTENER_MESSAGE="$(append_worker_recovery_hint "$DEFAULT_LISTENER_MESSAGE" "$to_session_ref")"
-if [[ -n "$listener_message" ]]; then
-  listener_message="$(append_worker_recovery_hint "$listener_message" "$to_session_ref")"
-fi
-if [[ -n "$wake_message" ]]; then
-  wake_message="$(append_worker_recovery_hint "$wake_message" "$to_session_ref")"
 fi
 
 body=""
@@ -258,7 +236,11 @@ nudge_after_send=0
 if [[ "$current_session_id" != "$to_session_id" ]]; then
   if (( created_target )); then
     start_status="started"
-    listener_status="started"
+    if [[ -n "$listener_message" ]]; then
+      listener_status="sent"
+    else
+      listener_status="not_sent"
+    fi
     nudge_after_send=1
   else
     target_status="$(get_session_status "$to_session_id" || true)"
@@ -269,12 +251,18 @@ if [[ "$current_session_id" != "$to_session_id" ]]; then
         nudge_after_send=1
         ;;
       *)
-        if [[ -z "$listener_message" ]]; then
-          listener_message="$DEFAULT_LISTENER_MESSAGE"
+        start_cmd=(agent-deck session start --json)
+        if [[ -n "$listener_message" ]]; then
+          start_cmd+=(-m "$listener_message")
         fi
-        run_capture "agent-deck session start (${to_session_id})" agent-deck session start --json -m "$listener_message" "$to_session_id" >/dev/null
+        start_cmd+=("$to_session_id")
+        run_capture "agent-deck session start (${to_session_id})" "${start_cmd[@]}" >/dev/null
         start_status="started"
-        listener_status="started"
+        if [[ -n "$listener_message" ]]; then
+          listener_status="sent"
+        else
+          listener_status="not_sent"
+        fi
         nudge_after_send=1
         ;;
     esac
@@ -317,7 +305,6 @@ if (( nudge_after_send )); then
   fi
   if [[ -z "$wake_message" ]]; then
     wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
-    wake_message="$(append_worker_recovery_hint "$wake_message" "$to_session_ref")"
   fi
   run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$wake_message" >/dev/null
   wakeup_status="sent"
