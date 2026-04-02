@@ -34,7 +34,7 @@ ALL_REPLACE=0
 
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
-AGENT_MAILBOX_MCP_READY=0
+AGENT_MAILBOX_MCP_AVAILABLE=0
 
 # Colors for output
 RED='\033[0;31m'
@@ -547,82 +547,60 @@ install_agent_browser() {
     return 1
 }
 
-install_agent_mailbox_mcp_runtime() {
-    if [[ $AGENT_MAILBOX_MCP_READY -eq 1 ]]; then
-        log_ok "agent_mailbox MCP runtime already prepared"
+ensure_agent_mailbox_mcp_command() {
+    if [[ $AGENT_MAILBOX_MCP_AVAILABLE -eq 1 ]]; then
+        log_ok "agent_mailbox MCP command already available"
         return 0
     fi
 
-    log_info "Checking agent_mailbox MCP runtime..."
+    log_info "Checking built-in agent_mailbox MCP command..."
 
-    if ! ensure_required_command "node"; then
-        log_error "agent_mailbox MCP requires node"
+    if ! command -v agent-mailbox &>/dev/null; then
+        log_error "Missing required command: agent-mailbox"
+        log_info "Install or update agent-mailbox so 'agent-mailbox mcp' is available, then rerun the installer"
         return 1
     fi
 
-    if ! ensure_required_command "npm"; then
-        log_error "agent_mailbox MCP requires npm"
+    if ! agent-mailbox mcp --help >/dev/null 2>&1; then
+        log_error "Installed agent-mailbox does not expose the built-in MCP server"
+        log_info "Update agent-mailbox so 'agent-mailbox mcp' is supported, then rerun the installer"
         return 1
     fi
 
-    local mcp_dir="$SCRIPT_DIR/ai-agent/mcp"
-    local lockfile="$mcp_dir/package-lock.json"
-
-    if [[ ! -f "$lockfile" ]]; then
-        log_error "Missing agent_mailbox MCP lockfile: $lockfile"
-        return 1
-    fi
-
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm ci --prefix $mcp_dir"
-        return 0
-    fi
-
-    log_info "Running: npm ci --prefix $mcp_dir"
-    if npm ci --prefix "$mcp_dir"; then
-        AGENT_MAILBOX_MCP_READY=1
-        log_ok "Installed agent_mailbox MCP dependencies"
-        return 0
-    fi
-
-    log_error "Failed to install agent_mailbox MCP dependencies"
-    return 1
+    AGENT_MAILBOX_MCP_AVAILABLE=1
+    log_ok "Found built-in agent_mailbox MCP server: agent-mailbox mcp"
+    return 0
 }
 
-remove_gemini_legacy_workflow_mailbox_mcp() {
+remove_gemini_stale_agent_mailbox_mcps() {
     if ! command -v gemini &>/dev/null; then
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
         log_dry "Would run: gemini mcp remove workflow_mailbox"
+        log_dry "Would run: gemini mcp remove agent_mailbox"
         return 0
     fi
 
     gemini mcp remove workflow_mailbox >/dev/null 2>&1 || true
+    gemini mcp remove agent_mailbox >/dev/null 2>&1 || true
 }
 
 install_gemini_agent_mailbox_mcp() {
-    local launcher="$HOME/.local/bin/agent-mailbox-mcp"
-
     if ! command -v gemini &>/dev/null; then
         log_warn "Skipping Gemini MCP install (gemini not found)"
         return 0
     fi
 
-    remove_gemini_legacy_workflow_mailbox_mcp
-
-    if gemini mcp list 2>/dev/null | grep -Fq "agent_mailbox"; then
-        log_ok "Gemini MCP already configured: agent_mailbox"
-        return 0
-    fi
+    remove_gemini_stale_agent_mailbox_mcps
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: gemini mcp add -s user agent_mailbox $launcher"
+        log_dry "Would run: gemini mcp add -s user agent_mailbox agent-mailbox mcp"
         return 0
     fi
 
-    if gemini mcp add -s user agent_mailbox "$launcher"; then
+    if gemini mcp add -s user agent_mailbox agent-mailbox mcp; then
         log_ok "Configured Gemini MCP: agent_mailbox"
         return 0
     fi
@@ -644,9 +622,14 @@ remove_codex_legacy_workflow_mailbox_mcp() {
     codex mcp remove workflow_mailbox >/dev/null 2>&1 || true
 }
 
-install_codex_agent_mailbox_mcp() {
-    local launcher="$HOME/.local/bin/agent-mailbox-mcp"
+codex_agent_mailbox_uses_builtin_command() {
+    local mcp_config
 
+    mcp_config="$(codex mcp get agent_mailbox 2>/dev/null)" || return 1
+    [[ "$mcp_config" == *"command: agent-mailbox"* ]] && [[ "$mcp_config" == *"args: mcp"* ]]
+}
+
+install_codex_agent_mailbox_mcp() {
     if ! command -v codex &>/dev/null; then
         log_warn "Skipping Codex MCP install (codex not found)"
         return 0
@@ -654,19 +637,27 @@ install_codex_agent_mailbox_mcp() {
 
     remove_codex_legacy_workflow_mailbox_mcp
 
-    if ! codex mcp get agent_mailbox >/dev/null 2>&1; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would run: codex mcp add agent_mailbox -- $launcher"
-            return 0
+    if codex_agent_mailbox_uses_builtin_command; then
+        log_ok "Codex MCP already configured: agent_mailbox"
+    else
+        if codex mcp get agent_mailbox >/dev/null 2>&1; then
+            if [[ $DRY_RUN -eq 1 ]]; then
+                log_dry "Would run: codex mcp remove agent_mailbox"
+            else
+                codex mcp remove agent_mailbox >/dev/null 2>&1 || true
+            fi
         fi
 
-        if ! codex mcp add agent_mailbox -- "$launcher"; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would run: codex mcp add agent_mailbox -- agent-mailbox mcp"
+        elif ! codex mcp add agent_mailbox -- agent-mailbox mcp; then
             log_error "Failed to configure Codex MCP: agent_mailbox"
             return 1
         fi
-        log_ok "Configured Codex MCP: agent_mailbox"
-    else
-        log_ok "Codex MCP already configured: agent_mailbox"
+
+        if [[ $DRY_RUN -ne 1 ]]; then
+            log_ok "Configured Codex MCP: agent_mailbox"
+        fi
     fi
 
     local codex_config="$HOME/.codex/config.toml"
@@ -729,40 +720,35 @@ install_codex_agent_mailbox_mcp() {
     return 1
 }
 
-remove_claude_legacy_workflow_mailbox_mcp() {
+remove_claude_stale_agent_mailbox_mcps() {
     if ! command -v claude &>/dev/null; then
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
         log_dry "Would run: claude mcp remove -s user workflow_mailbox"
+        log_dry "Would run: claude mcp remove -s user agent_mailbox"
         return 0
     fi
 
     claude mcp remove -s user workflow_mailbox >/dev/null 2>&1 || true
+    claude mcp remove -s user agent_mailbox >/dev/null 2>&1 || true
 }
 
 install_claude_agent_mailbox_mcp() {
-    local launcher="$HOME/.local/bin/agent-mailbox-mcp"
-
     if ! command -v claude &>/dev/null; then
         log_warn "Skipping Claude MCP install (claude not found)"
         return 0
     fi
 
-    remove_claude_legacy_workflow_mailbox_mcp
-
-    if claude mcp list 2>/dev/null | grep -Fq "agent_mailbox"; then
-        log_ok "Claude MCP already configured: agent_mailbox"
-        return 0
-    fi
+    remove_claude_stale_agent_mailbox_mcps
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: claude mcp add -s user agent_mailbox -- $launcher"
+        log_dry "Would run: claude mcp add -s user agent_mailbox -- agent-mailbox mcp"
         return 0
     fi
 
-    if claude mcp add -s user agent_mailbox -- "$launcher"; then
+    if claude mcp add -s user agent_mailbox -- agent-mailbox mcp; then
         log_ok "Configured Claude MCP: agent_mailbox"
         return 0
     fi
@@ -771,20 +757,26 @@ install_claude_agent_mailbox_mcp() {
     return 1
 }
 
-remove_legacy_agent_mailbox_launcher() {
-    local legacy_launcher="$HOME/.local/bin/adwf-mailbox-mcp"
+remove_obsolete_agent_mailbox_launchers() {
+    local legacy_launchers=(
+        "$HOME/.local/bin/adwf-mailbox-mcp"
+        "$HOME/.local/bin/agent-mailbox-mcp"
+    )
+    local legacy_launcher
 
-    if [[ ! -e "$legacy_launcher" ]] && [[ ! -L "$legacy_launcher" ]]; then
-        return 0
-    fi
+    for legacy_launcher in "${legacy_launchers[@]}"; do
+        if [[ ! -e "$legacy_launcher" ]] && [[ ! -L "$legacy_launcher" ]]; then
+            continue
+        fi
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would remove legacy launcher: $legacy_launcher"
-        return 0
-    fi
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would remove obsolete launcher: $legacy_launcher"
+            continue
+        fi
 
-    rm -f "$legacy_launcher"
-    log_info "Removed legacy launcher: $legacy_launcher"
+        rm -f "$legacy_launcher"
+        log_info "Removed obsolete launcher: $legacy_launcher"
+    done
 }
 
 suggest_lsof_install() {
@@ -1159,10 +1151,9 @@ install_claude_config() {
     fi
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
-    link_file "ai-agent/mcp/agent-mailbox-mcp" "$bin_dir/agent-mailbox-mcp"
-    remove_legacy_agent_mailbox_launcher
-    if ! install_agent_mailbox_mcp_runtime; then
-        log_error "Failed to prepare agent_mailbox MCP runtime for Claude"
+    remove_obsolete_agent_mailbox_launchers
+    if ! ensure_agent_mailbox_mcp_command; then
+        log_error "Failed to verify built-in agent_mailbox MCP command for Claude"
         return 1
     fi
     install_claude_agent_mailbox_mcp
@@ -1265,8 +1256,8 @@ install_gemini_config() {
         log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
     fi
 
-    if ! install_agent_mailbox_mcp_runtime; then
-        log_error "Failed to prepare agent_mailbox MCP runtime for Gemini"
+    if ! ensure_agent_mailbox_mcp_command; then
+        log_error "Failed to verify built-in agent_mailbox MCP command for Gemini"
         return 1
     fi
 
@@ -1321,8 +1312,8 @@ install_codex_config() {
         log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
     fi
 
-    if ! install_agent_mailbox_mcp_runtime; then
-        log_error "Failed to prepare agent_mailbox MCP runtime for Codex"
+    if ! ensure_agent_mailbox_mcp_command; then
+        log_error "Failed to verify built-in agent_mailbox MCP command for Codex"
         return 1
     fi
 
@@ -1330,7 +1321,6 @@ install_codex_config() {
 }
 
 install_opencode_agent_mailbox_mcp() {
-    local launcher="$HOME/.local/bin/agent-mailbox-mcp"
     local opencode_dir="$HOME/.config/opencode"
     local config_file
     local tmp_file
@@ -1348,13 +1338,13 @@ install_opencode_agent_mailbox_mcp() {
     }
 
     if [[ -f "$config_file" ]]; then
-        if ! jq --arg launcher "$launcher" '
+        if ! jq '
             .["$schema"] //= "https://opencode.ai/config.json"
             | .mcp = ((.mcp // {})
                 | del(.workflow_mailbox)
                 | .agent_mailbox = {
                     type: "local",
-                    command: [$launcher],
+                    command: ["agent-mailbox", "mcp"],
                     environment: {
                         AGENTDECK_INSTANCE_ID: "{env:AGENTDECK_INSTANCE_ID}",
                         TMUX: "{env:TMUX}"
@@ -1365,13 +1355,13 @@ install_opencode_agent_mailbox_mcp() {
             log_error "Failed to update OpenCode MCP config: $config_file"
             return 1
         fi
-    elif ! jq -n --arg launcher "$launcher" '
+    elif ! jq -n '
         {
             "$schema": "https://opencode.ai/config.json",
             mcp: {
                 agent_mailbox: {
                     type: "local",
-                    command: [$launcher],
+                    command: ["agent-mailbox", "mcp"],
                     environment: {
                         AGENTDECK_INSTANCE_ID: "{env:AGENTDECK_INSTANCE_ID}",
                         TMUX: "{env:TMUX}"
@@ -1417,8 +1407,8 @@ install_opencode_config() {
     # Link skills individually for OpenCode
     install_opencode_skills
 
-    if ! install_agent_mailbox_mcp_runtime; then
-        log_error "Failed to prepare agent_mailbox MCP runtime for OpenCode"
+    if ! ensure_agent_mailbox_mcp_command; then
+        log_error "Failed to verify built-in agent_mailbox MCP command for OpenCode"
         return 1
     fi
 
