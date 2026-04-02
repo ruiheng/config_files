@@ -237,9 +237,12 @@ Execution flow in Agent Deck mode:
 3. For `rework_required`, send the full review report as mailbox body to coder
 4. For `browser_check_requested`, run `browser-test-request`; the browser report will return to the requester session
 5. For `stop_recommended`:
-   - if `auto_accept_if_no_must_fix=true`, run `review-closeout`
-   - else present user decision summary and wait
-   - in human-gated mode, request manual UI confirmation when required
+   - if `auto_accept_if_no_must_fix=true`, the final no-must-fix review report should proceed to `review-closeout`
+   - normally, the agent that currently holds the final review report should run `review-closeout`
+   - if the same final no-must-fix report is delivered to coder in unattended flow, coder may run `review-closeout` from that report instead of treating it as another rework round
+   - else present user decision summary and wait for explicit acceptance or iteration decision
+   - after explicit acceptance in human-gated flow, run `review-closeout`
+   - in human-gated mode, request manual UI confirmation when required before acceptance and closeout
 
 Mailbox subject (`rework_required`):
 - `rework required: <task_id> r<round>`
@@ -283,11 +286,13 @@ When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-acc
 
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
-- For `stop_recommended` with manual decision, wait for explicit user choice
+- For `stop_recommended` with manual decision, wait for explicit user choice; if accepted, run `review-closeout`; if iteration is requested, send `user_requested_iteration`
+- In unattended flow, any accepted final no-must-fix report that lands with reviewer or coder must be treated as `review-closeout` input, not as another rework cycle
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks
 - Use `mailbox_send` for normal cross-session reviewer messages
 
 Sender identity rule:
-- reviewer-originated actions (`rework_required`, `user_requested_iteration`, `closeout_delivered`) use `from_session_id = reviewer_session_id`
+- reviewer-originated actions (`rework_required`, `user_requested_iteration`) use `from_session_id = reviewer_session_id`
+- `closeout_delivered` uses the session id of the agent that actually executes `review-closeout`; preserve `reviewer_session_id` in the closeout body as the source of the accepted review

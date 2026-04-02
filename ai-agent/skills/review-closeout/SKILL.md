@@ -11,18 +11,19 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 ## Purpose
 
-Use this skill when a full review report exists and only remaining follow-up items are needed.
+Use this skill when an accepted full review report exists and only remaining follow-up items are needed.
 For UI-related tasks, carry forward human-run UI confirmation package into closeout output.
 Closeout should also give planner a compact summary of residual accepted findings that may need later tracking.
 
-Role intent:
-- required role: reviewer role for the current task
-- role is task-scoped: the same AI/session may also hold planner role when workflow context explicitly assigns both
-- dispatch eligibility must come from resolved reviewer context, not session title naming
+Input gate:
+- run this skill only after acceptance has already been established by workflow policy or explicit decision
+- use this skill only for an accepted final review report
+- do not run this skill for pending review, iteration requests, or any report that still has unresolved must-fix items
+- determine eligibility from accepted review context and workflow policy, not from session title naming
 
 ## Input
 
-Provide the full review report text.
+Provide the accepted full review report text.
 
 ## Output Mode (Fixed)
 
@@ -41,6 +42,8 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 Skill-specific context resolution:
 - `task_id`: explicit -> review report text -> ask
 - `planner_session_id`: explicit -> review context -> ask
+- `closeout_sender_session_id`: explicit -> current session id -> review context -> ask
+- `closeout_sender_role`: explicit -> current workflow role -> review context -> default `closeout_executor`
 - `reviewer_session_id`: explicit -> review context -> ask
 - `workflow_policy` (optional): explicit -> review/report context -> default human-gated
 - `special_requirements` (optional fallback): explicit -> review/report context -> omit
@@ -55,16 +58,16 @@ Branch-plan rule:
 
 If required values are resolved:
 1. normalize identity values before any comparison:
-   - resolve `planner_session_id` / `reviewer_session_id` refs to UUID via `agent_deck_resolve_session`
+   - resolve `planner_session_id` / `closeout_sender_session_id` / `reviewer_session_id` refs to UUID via `agent_deck_resolve_session`
    - if normalization fails for required identity, ask one short clarification question before sending
 2. send mode:
-   - if `reviewer_session_id == planner_session_id`, skip cross-session delivery and continue locally
+   - if `closeout_sender_session_id == planner_session_id`, skip cross-session delivery and continue locally
    - otherwise send `closeout_delivered` to planner through `mailbox_send`
 3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
 4. use `agent_mailbox`
 5. first call `agent_deck_ensure_session` with `session_id = <planner_session_id>`
 6. use `mailbox_send` with:
-   - `from_address = agent-deck/<reviewer_session_id>`
+   - `from_address = agent-deck/<closeout_sender_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "closeout delivered: <task_id>"`
    - `body = <closeout mailbox body>`
@@ -129,10 +132,11 @@ Always start with:
 ```markdown
 Task: <task_id>
 Action: closeout_delivered
-From: reviewer <reviewer_session_id>
+From: <closeout_sender_role> <closeout_sender_session_id>
 To: planner <planner_session_id>
 Planner: <planner_session_id>
 Round: final
+Accepted Review By: reviewer <reviewer_session_id>
 
 ### Review Closeout
 ```
