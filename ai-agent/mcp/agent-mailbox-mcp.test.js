@@ -2,8 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  ensureReceiverWorkflowHint,
   parseSendTokens,
+  resolveNotifyMessage,
   validateSendReceipt,
 } = require("./agent-mailbox-mcp");
 
@@ -22,22 +22,22 @@ test("validateSendReceipt rejects an incomplete send receipt", () => {
   );
 });
 
-test("ensureReceiverWorkflowHint appends wake and recovery guidance", () => {
-  const hint = ensureReceiverWorkflowHint("Handle the request.", undefined, "coder-123");
-  assert.match(hint, /check-agent-mail/);
-  assert.match(hint, /mailbox_read/);
-  assert.match(hint, /acked/);
-  assert.match(hint, /next action/);
+test("resolveNotifyMessage keeps the fixed wake text when custom text is provided", () => {
+  const notify = resolveNotifyMessage("New narrow refactor task: do something.");
+  assert.equal(
+    notify,
+    "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+  );
 });
 
-test("ensureReceiverWorkflowHint keeps existing recovery guidance intact for worker targets", () => {
-  const existing =
-    "Use the check-agent-mail skill. If context is lost later, use mailbox_read on the latest acked delivery.";
-  assert.equal(ensureReceiverWorkflowHint(existing, undefined, "reviewer-123"), existing);
+test("resolveNotifyMessage disables wakeup only for an explicit empty string", () => {
+  assert.equal(resolveNotifyMessage(""), "");
 });
 
-test("ensureReceiverWorkflowHint omits recovery guidance for planner targets", () => {
-  const hint = ensureReceiverWorkflowHint("Handle the request.", undefined, "planner");
-  assert.match(hint, /check-agent-mail/);
-  assert.doesNotMatch(hint, /mailbox_read/);
+test("resolveNotifyMessage uses the fixed wake text when unset", () => {
+  const notify = resolveNotifyMessage(undefined);
+  assert.equal(
+    notify,
+    "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+  );
 });

@@ -26,7 +26,7 @@ Optional:
   --content-type <type>          Mailbox content type (default: text/markdown)
   --schema-version <value>       Mailbox schema version (default: 1)
   --listener-message <text>      Override session-start listener instruction
-  --wake-message <text>          Override active-session wake instruction
+  --wake-message <text>          Ignored; active-session wake instruction is fixed
   --wake-delay-seconds <n>       Delay before active-session wake send (default: 10)
   --json                         Emit JSON summary
   -h, --help                     Show help
@@ -84,6 +84,7 @@ listener_message=""
 wake_message=""
 wake_delay_seconds="10"
 json_output=0
+readonly fixed_wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -303,10 +304,7 @@ if (( nudge_after_send )); then
   if [[ -n "$wake_delay_seconds" && "$wake_delay_seconds" != "0" ]]; then
     sleep "$wake_delay_seconds"
   fi
-  if [[ -z "$wake_message" ]]; then
-    wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
-  fi
-  run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$wake_message" >/dev/null
+  run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$fixed_wake_message" >/dev/null
   wakeup_status="sent"
 fi
 

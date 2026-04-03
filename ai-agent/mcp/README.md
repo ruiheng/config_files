@@ -45,6 +45,7 @@ For an agent-deck-managed session `<id>`, bind:
 - `codex/...` addresses can be used for mailbox delivery, but do not currently imply an agent-deck wakeup target
 - uses `from_address` explicitly, or falls back to the bound `default_sender`
 - follows the compact default `agent-mailbox send` receipt and returns the resulting `delivery_id`
+- wakeup text is fixed; non-empty `notify_message` values are ignored
 - pass an empty `notify_message` to disable notify for that send
 
 `mailbox_wait`

@@ -22,7 +22,7 @@ const STATE = {
 };
 
 const DEFAULT_NOTIFY_MESSAGE =
-  "Use the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.";
+  "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
@@ -530,15 +530,11 @@ function hasItems(values) {
   return Array.isArray(values) && values.length > 0;
 }
 
-function ensureCheckAgentMailHint(message, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
-  const trimmed = (message || "").trim();
-  if (!trimmed) {
-    return defaultMessage;
+function resolveNotifyMessage(message, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
+  if (typeof message === "string" && message.trim() === "") {
+    return "";
   }
-  if (trimmed.includes("check-agent-mail")) {
-    return trimmed;
-  }
-  return `${trimmed}\nUse the 'check-agent-mail' skill now. Receive the pending message and execute its requested action.`;
+  return defaultMessage;
 }
 
 function makeToolResult(result) {
@@ -605,7 +601,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_send",
     {
-      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Pass an empty notify_message to disable notify for that send.",
+      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Pass an empty notify_message to disable notify for that send; non-empty custom wake text is ignored.",
       inputSchema: {
         to_address: z.string(),
         from_address: z.string().optional(),
@@ -652,15 +648,15 @@ function buildServer() {
       if (!isLocalAddress(args.to_address)) {
         switch (parsed.scheme) {
           case "agent-deck": {
-            if (typeof args.notify_message === "string" && args.notify_message.trim() === "") {
+            const notifyMessage = resolveNotifyMessage(
+              args.notify_message,
+              DEFAULT_NOTIFY_MESSAGE
+            );
+            if (!notifyMessage) {
               notifyStatus = "skipped_disabled";
               notifyScheme = parsed.scheme;
               break;
             }
-            const notifyMessage = ensureCheckAgentMailHint(
-              args.notify_message || DEFAULT_NOTIFY_MESSAGE,
-              DEFAULT_NOTIFY_MESSAGE
-            );
             runCmd(["agent-deck", "session", "send", "--no-wait", parsed.id, notifyMessage]);
             notifyStatus = "sent";
             notifyScheme = parsed.scheme;
@@ -1097,6 +1093,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  resolveNotifyMessage,
   parseSendTokens,
   validateSendReceipt,
 };
