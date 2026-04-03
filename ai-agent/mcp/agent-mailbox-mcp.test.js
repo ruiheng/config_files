@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   parseSendTokens,
-  resolveNotifyMessage,
+  resolveWakeNotifyMessage,
   validateSendReceipt,
 } = require("./agent-mailbox-mcp");
 
@@ -22,20 +22,20 @@ test("validateSendReceipt rejects an incomplete send receipt", () => {
   );
 });
 
-test("resolveNotifyMessage keeps the fixed wake text when custom text is provided", () => {
-  const notify = resolveNotifyMessage("New narrow refactor task: do something.");
+test("resolveWakeNotifyMessage uses the fixed wake text when disable flag is unset", () => {
+  const notify = resolveWakeNotifyMessage(undefined);
   assert.equal(
     notify,
     "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
   );
 });
 
-test("resolveNotifyMessage disables wakeup only for an explicit empty string", () => {
-  assert.equal(resolveNotifyMessage(""), "");
+test("resolveWakeNotifyMessage disables wakeup only when flag is true", () => {
+  assert.equal(resolveWakeNotifyMessage(true), "");
 });
 
-test("resolveNotifyMessage uses the fixed wake text when unset", () => {
-  const notify = resolveNotifyMessage(undefined);
+test("resolveWakeNotifyMessage keeps wakeup enabled when flag is false", () => {
+  const notify = resolveWakeNotifyMessage(false);
   assert.equal(
     notify,
     "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."

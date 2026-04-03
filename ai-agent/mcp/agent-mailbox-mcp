@@ -530,8 +530,8 @@ function hasItems(values) {
   return Array.isArray(values) && values.length > 0;
 }
 
-function resolveNotifyMessage(message, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
-  if (typeof message === "string" && message.trim() === "") {
+function resolveWakeNotifyMessage(disableNotifyMessage, defaultMessage = DEFAULT_NOTIFY_MESSAGE) {
+  if (disableNotifyMessage === true) {
     return "";
   }
   return defaultMessage;
@@ -601,7 +601,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_send",
     {
-      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Pass an empty notify_message to disable notify for that send; non-empty custom wake text is ignored.",
+      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Set disable_notify_message=true to skip notify for that send.",
       inputSchema: {
         to_address: z.string(),
         from_address: z.string().optional(),
@@ -609,7 +609,7 @@ function buildServer() {
         body: z.string(),
         content_type: z.string().optional(),
         schema_version: z.string().optional(),
-        notify_message: z.string().optional(),
+        disable_notify_message: z.boolean().optional(),
       },
     },
     async (args) => {
@@ -648,8 +648,8 @@ function buildServer() {
       if (!isLocalAddress(args.to_address)) {
         switch (parsed.scheme) {
           case "agent-deck": {
-            const notifyMessage = resolveNotifyMessage(
-              args.notify_message,
+            const notifyMessage = resolveWakeNotifyMessage(
+              args.disable_notify_message,
               DEFAULT_NOTIFY_MESSAGE
             );
             if (!notifyMessage) {
@@ -1093,7 +1093,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  resolveNotifyMessage,
+  resolveWakeNotifyMessage,
   parseSendTokens,
   validateSendReceipt,
 };
