@@ -27,6 +27,7 @@ Execution mode gates:
 ## 2) Output Mode
 
 Keep the delegate brief directly in the mailbox body.
+Keep it locally actionable, but include enough upstream context that coder can optimize for the parent goal instead of only the local wording.
 
 Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
@@ -55,6 +56,8 @@ Resolve by priority:
   - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit
 - `workflow_policy` (optional): explicit -> context -> infer from clear user automation intent -> omit when not set
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
+- `big_picture` (required when available): explicit -> context -> infer from current user goal / active plan -> ask only when task framing would otherwise be misleading
+- `escalation_triggers` (optional): explicit -> context -> infer from task risk / boundary uncertainty -> omit when empty
 
 Workflow policy inference:
 - unattended => `mode = "unattended"` and `auto_accept_if_no_must_fix = true`
@@ -76,6 +79,11 @@ Round: 1
 
 ## Summary
 [One-line objective summary]
+
+## Big Picture
+- Parent goal: [what larger task or outcome this delegated task serves]
+- Why this task exists: [why planner split this piece out]
+- Must not break: [upstream constraint, invariant, or user-facing outcome]
 
 ## Objective
 [One sentence]
@@ -99,6 +107,10 @@ Round: 1
 - Read before starting: [...]
 - Reference as needed: [...]
 - Know it exists: [...]
+
+## Escalate Back To Planner
+- Ask planner before proceeding if: [scope no longer matches evidence, local optimum appears to hurt the parent goal, or the task needs a material boundary/plan change]
+- Keep moving without asking only when: [the remaining uncertainty is local and does not change the parent goal or branch plan]
 
 ## Acceptance Criteria
 - [testable completion item]
@@ -157,9 +169,11 @@ Recommended subject:
 
 Rules:
 - keep the full delegate brief in mailbox body
+- include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
+- if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion
 - leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
 
 ## 5) User-Facing Output Contract
