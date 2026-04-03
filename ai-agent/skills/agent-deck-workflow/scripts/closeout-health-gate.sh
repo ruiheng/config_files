@@ -232,11 +232,6 @@ if (( ${#failure_reasons[@]} > 0 )); then
 fi
 
 if [[ "$health_ok" == "true" ]]; then
-  notify_event \
-    "health_gate_ok" \
-    "info" \
-    "Health gate passed: ${task_id}" \
-    "Cleanup succeeded and worker sessions are within cap (${worker_session_count}/${max_worker_sessions})."
   echo "health_ok task_id=${task_id} checked_at=${checked_at} archive_file=${archive_file} worker_sessions=${worker_session_count}/${max_worker_sessions}"
   exit 0
 fi

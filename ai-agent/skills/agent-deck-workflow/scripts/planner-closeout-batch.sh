@@ -231,11 +231,6 @@ state_file="${artifact_root%/}/workflow-progress/closeout-state-${task_id}.json"
 mkdir -p "$(dirname "$state_file")"
 
 debug "required.start task_id=${task_id} integration=${integration_branch} task_branch=${task_branch} merge_mode=${merge_mode}"
-notify_event \
-  "planner_closeout_start" \
-  "info" \
-  "Planner closeout started: ${task_id}" \
-  "Required actions started on ${integration_branch} <- ${task_branch}."
 
 merge_cmd=(git merge)
 case "$merge_mode" in
@@ -416,11 +411,13 @@ jq -nc \
 mv "$tmp_state" "$state_file"
 
 if (( optional_fail_count > 0 )); then
-  notify_event \
-    "planner_closeout_required_ok_optional_warn" \
-    "warn" \
-    "Planner closeout required actions done: ${task_id}" \
-    "Required actions succeeded; ${optional_fail_count} optional action(s) failed."
+  if ! (( optional_fail_count == 1 )) || [[ "$health_gate_status" != "failed" ]]; then
+    notify_event \
+      "planner_closeout_required_ok_optional_warn" \
+      "warn" \
+      "Planner closeout required actions done: ${task_id}" \
+      "Required actions succeeded; ${optional_fail_count} optional action(s) failed."
+  fi
   echo "planner_closeout_ok_with_optional_warn task_id=${task_id} state=${state_file} optional_fail_count=${optional_fail_count}"
   exit 0
 fi
