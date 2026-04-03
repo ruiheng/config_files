@@ -572,6 +572,48 @@ ensure_agent_mailbox_mcp_command() {
     return 0
 }
 
+rewrite_gemini_agent_mailbox_config() {
+    local gemini_config="$HOME/.gemini/settings.json"
+    local tmp_file
+
+    if [[ ! -f "$gemini_config" ]]; then
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would rewrite Gemini MCP config in: $gemini_config"
+        return 0
+    fi
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/gemini-mcp-config.XXXXXX")" || {
+        log_error "Failed to create temporary file for Gemini MCP config"
+        return 1
+    }
+
+    if ! jq '
+        .mcpServers = ((.mcpServers // {})
+            | del(.workflow_mailbox)
+            | .agent_mailbox = (
+                (.agent_mailbox // {})
+                | .command = "agent-mailbox"
+                | .args = ["mcp"]
+            ))
+    ' "$gemini_config" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to rewrite Gemini MCP config: $gemini_config"
+        return 1
+    fi
+
+    if mv "$tmp_file" "$gemini_config"; then
+        log_ok "Rewrote Gemini MCP config: agent_mailbox"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_error "Failed to write Gemini MCP config: $gemini_config"
+    return 1
+}
+
 remove_gemini_stale_agent_mailbox_mcps() {
     if ! command -v gemini &>/dev/null; then
         return 0
@@ -588,6 +630,11 @@ remove_gemini_stale_agent_mailbox_mcps() {
 }
 
 install_gemini_agent_mailbox_mcp() {
+    if [[ -f "$HOME/.gemini/settings.json" ]]; then
+        rewrite_gemini_agent_mailbox_config || return 1
+        return 0
+    fi
+
     if ! command -v gemini &>/dev/null; then
         log_warn "Skipping Gemini MCP install (gemini not found)"
         return 0
@@ -720,6 +767,50 @@ install_codex_agent_mailbox_mcp() {
     return 1
 }
 
+rewrite_claude_agent_mailbox_config() {
+    local claude_config="$HOME/.claude.json"
+    local tmp_file
+
+    if [[ ! -f "$claude_config" ]]; then
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would rewrite Claude MCP config in: $claude_config"
+        return 0
+    fi
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/claude-mcp-config.XXXXXX")" || {
+        log_error "Failed to create temporary file for Claude MCP config"
+        return 1
+    }
+
+    if ! jq '
+        .mcpServers = ((.mcpServers // {})
+            | del(.workflow_mailbox)
+            | del(.["adwf-mailbox"])
+            | .agent_mailbox = (
+                (.agent_mailbox // {})
+                | .type = (.type // "stdio")
+                | .command = "agent-mailbox"
+                | .args = ["mcp"]
+            ))
+    ' "$claude_config" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to rewrite Claude MCP config: $claude_config"
+        return 1
+    fi
+
+    if mv "$tmp_file" "$claude_config"; then
+        log_ok "Rewrote Claude MCP config: agent_mailbox"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_error "Failed to write Claude MCP config: $claude_config"
+    return 1
+}
+
 remove_claude_stale_agent_mailbox_mcps() {
     if ! command -v claude &>/dev/null; then
         return 0
@@ -736,6 +827,11 @@ remove_claude_stale_agent_mailbox_mcps() {
 }
 
 install_claude_agent_mailbox_mcp() {
+    if [[ -f "$HOME/.claude.json" ]]; then
+        rewrite_claude_agent_mailbox_config || return 1
+        return 0
+    fi
+
     if ! command -v claude &>/dev/null; then
         log_warn "Skipping Claude MCP install (claude not found)"
         return 0

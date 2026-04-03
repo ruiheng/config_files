@@ -11,7 +11,7 @@ Goals:
 Command:
 
 ```bash
-$HOME/.local/bin/agent-mailbox-mcp
+agent-mailbox mcp
 ```
 
 The server is stdio-based and exposes three groups of tools.
@@ -99,19 +99,20 @@ Codex:
 
 ```toml
 [mcp_servers.agent_mailbox]
-command = "$HOME/.local/bin/agent-mailbox-mcp"
+command = "agent-mailbox"
+args = ["mcp"]
 ```
 
 Gemini:
 
 ```bash
-gemini mcp add -s user agent_mailbox "$HOME/.local/bin/agent-mailbox-mcp"
+gemini mcp add -s user agent_mailbox agent-mailbox mcp
 ```
 
 Claude Code:
 
 ```bash
-claude mcp add -s user agent_mailbox -- "$HOME/.local/bin/agent-mailbox-mcp"
+claude mcp add -s user agent_mailbox -- agent-mailbox mcp
 ```
 
 ## Notes
