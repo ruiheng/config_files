@@ -983,7 +983,7 @@ function buildServer() {
   server.registerTool(
     "agent_deck_ensure_session",
     {
-      description: "Resolve or create an agent-deck session. If the target exists but is not active, start it; if it is already active, return notify_needed=true.",
+      description: "Resolve or create an agent-deck session. If the target exists but is not active, start it; if it is already active, return notify_needed=true. Leave listener_message empty in normal workflow; use it only for rare bootstrap/control cases before mailbox pickup.",
       inputSchema: {
         session_id: z.string().optional(),
         session_ref: z.string().optional(),

@@ -25,7 +25,7 @@ Optional target creation:
 Optional:
   --content-type <type>          Mailbox content type (default: text/markdown)
   --schema-version <value>       Mailbox schema version (default: 1)
-  --listener-message <text>      Override session-start listener instruction
+  --listener-message <text>      Rare bootstrap-only session-start instruction; leave empty for normal workflow
   --wake-message <text>          Ignored; active-session wake instruction is fixed
   --wake-delay-seconds <n>       Delay before active-session wake send (default: 10)
   --json                         Emit JSON summary

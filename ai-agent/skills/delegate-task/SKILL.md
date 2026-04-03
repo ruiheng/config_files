@@ -144,6 +144,7 @@ Workflow send sequence:
    - `ensure_title = <coder_session_ref>`
    - `ensure_cmd = <coder_tool>`
    - `parent_session_id = <planner_session_id>`
+   - normal workflow: do not pass `listener_message`
 4. use the returned `session_id` as the authoritative `coder_session_id`
 5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<planner_session_id>`
@@ -159,6 +160,7 @@ Rules:
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
+- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
 
 ## 5) User-Facing Output Contract
 

@@ -145,6 +145,7 @@ Use the `agent_mailbox` MCP tools:
    - `ensure_title = <architect_session_ref>`
    - `ensure_cmd = <architect_tool>`
    - `parent_session_id = <planner_session_id_or_requester_session_id>`
+   - normal workflow: do not pass `listener_message`
 4. use the returned `session_id` as the authoritative `architect_session_id`
 5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
@@ -163,3 +164,4 @@ Use the `agent_mailbox` MCP tools:
 - treat architect feedback as advisory input, not as a user decision
 - when disagreeing, state the disagreement and rationale clearly in the next round
 - either requester or architect may ask the user to decide when the disagreement becomes subjective or stuck
+- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction

@@ -275,6 +275,7 @@ Workflow send sequence:
    - `ensure_title = <reviewer_session_ref>`
    - `ensure_cmd = <reviewer_tool>`
    - `parent_session_id = <planner_session_id>`
+   - normal workflow: do not pass `listener_message`
 4. use the returned `session_id` as the authoritative `reviewer_session_id`
 5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<coder_session_id>`
@@ -290,6 +291,7 @@ Rules:
 - for each recorded check, include enough command/result detail to show scope and outcome
 - use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
 - `mailbox_send` handles the normal non-local reviewer nudge
+- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
 
 ## Quality Bar
 

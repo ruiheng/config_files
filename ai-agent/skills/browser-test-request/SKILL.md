@@ -115,6 +115,7 @@ Use the `agent_mailbox` MCP tools:
   - `ensure_title = <browser_tester_session_ref>`
   - `ensure_cmd = <browser_tester_tool>`
   - `parent_session_id = <requester_session_id>`
+  - normal workflow: do not pass `listener_message`
 - call `mailbox_send` with:
   - `from_address = agent-deck/<requester_session_id>`
   - `to_address = agent-deck/<browser_tester_session_id>`
@@ -139,3 +140,4 @@ codex -m gpt-5.4 -c model_reasoning_effort="medium"
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code
 - requester should provide required login, auth, environment, and test-data context whenever possible
+- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction

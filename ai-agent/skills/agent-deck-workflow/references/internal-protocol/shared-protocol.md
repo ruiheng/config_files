@@ -66,6 +66,7 @@ Transport rules:
 - use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
 - for agent-deck-managed targets, use `agent_deck_ensure_session` to resolve, create, or start the target session
+- leave `listener_message` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
 
 Worker wake rule:
 - after `mailbox_send`, the normal non-local nudge should already be handled
@@ -107,6 +108,7 @@ Use `mailbox_send` for the normal mailbox delivery path.
 
 Expected behavior:
 1. use `agent_deck_ensure_session` when a target session must be resolved, created, or started
+   - normal workflow: do not pass `listener_message`
 2. queue the mailbox body with `mailbox_send`
 
 ## Receiver Contract
