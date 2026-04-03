@@ -1,6 +1,6 @@
 ---
 name: review-request
-description: Generates a review-request mailbox message for code review from uncommitted changes, a specific commit, or a branch.
+description: Generates a review-request mailbox message for code review from uncommitted changes, a specific short commit ref, or a branch.
 ---
 
 # Review Request
@@ -13,7 +13,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 Before generating the message, determine one scope:
 1. `uncommitted changes`
-2. `specific commit`
+2. `specific short commit ref`
 3. `branch`
 
 Workflow continuity rule:
@@ -29,7 +29,7 @@ Branch plan continuity rule:
 - Scope type: `uncommitted` | `commit` | `branch`
 - Scope value:
   - `uncommitted`: no value
-  - `commit`: commit hash
+  - `commit`: short commit ref
   - `branch`: branch name
 - Optional:
   - `base_branch` (for branch scope)
@@ -55,7 +55,7 @@ Use read-only git commands only.
   - `git diff --cached --name-status`
   - `git ls-files --others --exclude-standard`
 - Commit:
-  - `git show --name-status --format=fuller <commit>`
+  - `git show --name-status --format=fuller <short-commit-ref>`
 - Branch:
   - choose base: `base_branch` -> `main` -> `master`
   - `git log --oneline <base>..<branch>`
@@ -117,6 +117,9 @@ Identity rules:
   1. keep existing reviewer session/tool
   2. create/use new reviewer session with requested tool
 
+Commit reference rule:
+- in mailbox content, use a short commit ref, not a full 40-char hash
+
 Post-send behavior:
 - coder does not proactively poll reviewer unless user explicitly asks
 
@@ -139,7 +142,7 @@ Round: <round>
 
 ## Scope
 - Type: [uncommitted | commit | branch]
-- Target: [working tree | commit hash | branch name]
+- Target: [working tree | short commit ref | branch name]
 - Base (if branch): [base branch or N/A]
 
 ## Original Task
