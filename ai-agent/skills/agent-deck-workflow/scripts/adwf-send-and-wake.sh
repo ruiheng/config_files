@@ -84,7 +84,7 @@ listener_message=""
 wake_message=""
 wake_delay_seconds="10"
 json_output=0
-readonly fixed_wake_message="Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+readonly fixed_wake_message="Use the check-agent-mail skill now. Receive the pending message and execute its requested action."
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

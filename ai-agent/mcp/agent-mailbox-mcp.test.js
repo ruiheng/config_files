@@ -26,7 +26,7 @@ test("resolveWakeNotifyMessage uses the fixed wake text when disable flag is uns
   const notify = resolveWakeNotifyMessage(undefined);
   assert.equal(
     notify,
-    "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+    "Use the check-agent-mail skill now. Receive the pending message and execute its requested action."
   );
 });
 
@@ -38,6 +38,6 @@ test("resolveWakeNotifyMessage keeps wakeup enabled when flag is false", () => {
   const notify = resolveWakeNotifyMessage(false);
   assert.equal(
     notify,
-    "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action."
+    "Use the check-agent-mail skill now. Receive the pending message and execute its requested action."
   );
 });

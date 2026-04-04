@@ -22,7 +22,7 @@ const STATE = {
 };
 
 const DEFAULT_NOTIFY_MESSAGE =
-  "Use the check-agent-mail skill now. Receive the pending message for your current agent-deck session and execute its requested action.";
+  "Use the check-agent-mail skill now. Receive the pending message and execute its requested action.";
 
 const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
