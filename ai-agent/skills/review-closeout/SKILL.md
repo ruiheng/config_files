@@ -164,6 +164,7 @@ Then append only non-empty sections.
 
 #### Planner Follow-up Recommendation
 - Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --task-branch <task_branch> --integration-branch <integration_branch>`.
+- If this closeout is being handled from a leased mailbox delivery, pass `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` so the script can ack after required closeout state is written.
 - Required by script: switch to the target integration branch when needed, then merge the task branch and update planner progress records.
 - Default by script: run closeout health gate and clean up disposable task-scoped worker sessions.
 - Before or during closeout, inspect this closeout message and decide whether residual accepted findings should update progress/todo or next-task planning.

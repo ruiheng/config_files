@@ -37,17 +37,21 @@ Options:
   --run-health-gate                Run closeout-health-gate.sh after required actions
   --skip-health-gate               Skip closeout-health-gate.sh
   --next-dispatch-cmd <command>    Optional command executed after required actions
+  --ack-delivery-id <id>           Optional mailbox delivery id to ack after required closeout state write
+  --ack-lease-token <token>        Optional mailbox lease token paired with --ack-delivery-id
   -h, --help                       Show help
 
 State/outputs:
   - Appends one json line to progress file when required actions complete.
   - Writes per-task idempotency state:
       <artifact-root>/workflow-progress/closeout-state-<task_id>.json
+  - When ack args are provided, records mailbox ack state in the per-task state file.
 
 Exit codes:
   0: required actions completed (optional actions may fail but are reported)
   2: usage/dependency/runtime precondition error
   3: required merge/progress action failed
+  4: required closeout actions completed but requested mailbox ack failed
 EOF
 }
 
@@ -59,6 +63,11 @@ die() {
 required_fail() {
   echo "REQUIRED_ACTION_FAILED: $*" >&2
   exit 3
+}
+
+ack_fail() {
+  echo "MAILBOX_ACK_FAILED: $*" >&2
+  exit 4
 }
 
 warn() {
@@ -97,6 +106,8 @@ run_prune=0
 prune_apply=0
 run_health_gate=1
 next_dispatch_cmd=""
+ack_delivery_id=""
+ack_lease_token=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -118,6 +129,8 @@ while [[ $# -gt 0 ]]; do
     --run-health-gate) run_health_gate=1; shift 1 ;;
     --skip-health-gate) run_health_gate=0; shift 1 ;;
     --next-dispatch-cmd) next_dispatch_cmd="${2:-}"; shift 2 ;;
+    --ack-delivery-id) ack_delivery_id="${2:-}"; shift 2 ;;
+    --ack-lease-token) ack_lease_token="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
   esac
@@ -133,6 +146,11 @@ esac
 
 if (( prune_apply == 1 && run_prune == 0 )); then
   die "--prune-apply requires --run-prune"
+fi
+
+if [[ -n "$ack_delivery_id" || -n "$ack_lease_token" ]]; then
+  [[ -n "$ack_delivery_id" ]] || die "--ack-lease-token requires --ack-delivery-id"
+  [[ -n "$ack_lease_token" ]] || die "--ack-delivery-id requires --ack-lease-token"
 fi
 
 if [[ -z "$task_branch" ]]; then
@@ -153,6 +171,9 @@ fi
 
 command -v git >/dev/null 2>&1 || die "git is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
+if [[ -n "$ack_delivery_id" ]]; then
+  command -v agent-mailbox >/dev/null 2>&1 || die "agent-mailbox is required when ack args are provided"
+fi
 if [[ -z "$planner_session_ref" ]]; then
   command -v agent-deck >/dev/null 2>&1 || die "agent-deck is required to infer planner session id; pass --planner-session-id"
   planner_session_ref="$(resolve_current_session_id)"
@@ -226,6 +247,69 @@ notify_event() {
   fi
 }
 
+write_state_file() {
+  local tmp_state
+  tmp_state="$(mktemp)"
+  jq -nc \
+    --arg task_id "$task_id" \
+    --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg started_branch "$started_branch" \
+    --arg integration_branch "$integration_branch" \
+    --arg task_branch "$task_branch" \
+    --arg integration_branch_source "$integration_branch_source" \
+    --arg progress_file "$progress_file" \
+    --arg merged_sha "$merged_sha" \
+    --arg merge_mode "$merge_mode" \
+    --arg prune_status "$prune_status" \
+    --arg health_gate_status "$health_gate_status" \
+    --arg next_dispatch_status "$next_dispatch_status" \
+    --arg ack_delivery_id "$ack_delivery_id" \
+    --arg ack_status "$mailbox_ack_status" \
+    --argjson switched_integration_branch "$switched_integration_branch" \
+    --argjson task_scoped_integration_branch "$task_scoped_integration_branch" \
+    --argjson optional_fail_count "$optional_fail_count" \
+    --argjson mailbox_ack_requested "$mailbox_ack_requested" \
+    --argjson mailbox_ack_completed "$mailbox_ack_completed" \
+    '{
+      task_id: $task_id,
+      updated_at: $updated_at,
+      started_branch: $started_branch,
+      integration_branch: $integration_branch,
+      task_branch: $task_branch,
+      integration_branch_source: $integration_branch_source,
+      task_scoped_integration_branch: $task_scoped_integration_branch,
+      closeout_source: "mailbox_message",
+      progress_file: $progress_file,
+      required_actions: {
+        switched_integration_branch: $switched_integration_branch,
+        merge_mode: $merge_mode,
+        merge_completed: true,
+        merged_sha: $merged_sha,
+        progress_updated: true,
+        mailbox_ack_requested: $mailbox_ack_requested,
+        mailbox_ack_completed: $mailbox_ack_completed,
+        mailbox_ack: (
+          if $mailbox_ack_requested then
+            {
+              delivery_id: $ack_delivery_id,
+              status: $ack_status,
+              lease_token_present: true
+            }
+          else
+            null
+          end
+        )
+      },
+      optional_actions: {
+        prune: $prune_status,
+        health_gate: $health_gate_status,
+        next_dispatch: $next_dispatch_status
+      },
+      optional_fail_count: $optional_fail_count
+    }' >"$tmp_state"
+  mv "$tmp_state" "$state_file"
+}
+
 mkdir -p "$(dirname "$progress_file")"
 state_file="${artifact_root%/}/workflow-progress/closeout-state-${task_id}.json"
 mkdir -p "$(dirname "$state_file")"
@@ -292,6 +376,40 @@ prune_status="skipped"
 health_gate_status="skipped"
 next_dispatch_status="skipped"
 optional_fail_count=0
+mailbox_ack_requested=0
+mailbox_ack_completed=0
+mailbox_ack_status="not_requested"
+
+if [[ -n "$ack_delivery_id" ]]; then
+  mailbox_ack_requested=1
+  mailbox_ack_status="pending"
+  if [[ -f "$state_file" ]] && jq -e --arg delivery_id "$ack_delivery_id" '.required_actions.mailbox_ack_completed == true and .required_actions.mailbox_ack.delivery_id == $delivery_id' "$state_file" >/dev/null 2>&1; then
+    mailbox_ack_completed=1
+    mailbox_ack_status="already_recorded"
+  fi
+fi
+
+write_state_file
+
+if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
+  set +e
+  ack_output="$(agent-mailbox ack --delivery "$ack_delivery_id" --lease-token "$ack_lease_token" 2>&1)"
+  ack_rc=$?
+  set -e
+  if (( ack_rc != 0 )); then
+    notify_event \
+      "planner_closeout_mailbox_ack_fail" \
+      "error" \
+      "Planner closeout ack failed: ${task_id}" \
+      "Required closeout actions succeeded, but mailbox ack failed for delivery ${ack_delivery_id}."
+    echo "$ack_output" >&2
+    ack_fail "ack failed delivery='${ack_delivery_id}'"
+  fi
+  mailbox_ack_completed=1
+  mailbox_ack_status="ok"
+  write_state_file
+  echo "$ack_output"
+fi
 
 if (( run_prune )); then
   if [[ -x "$prune_script" ]]; then
@@ -367,48 +485,7 @@ if [[ -n "$next_dispatch_cmd" ]]; then
   fi
 fi
 
-tmp_state="$(mktemp)"
-jq -nc \
-  --arg task_id "$task_id" \
-  --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg started_branch "$started_branch" \
-  --arg integration_branch "$integration_branch" \
-  --arg task_branch "$task_branch" \
-  --arg integration_branch_source "$integration_branch_source" \
-  --arg progress_file "$progress_file" \
-  --arg merged_sha "$merged_sha" \
-  --arg merge_mode "$merge_mode" \
-  --argjson switched_integration_branch "$switched_integration_branch" \
-  --argjson task_scoped_integration_branch "$task_scoped_integration_branch" \
-  --arg prune_status "$prune_status" \
-  --arg health_gate_status "$health_gate_status" \
-  --arg next_dispatch_status "$next_dispatch_status" \
-  --argjson optional_fail_count "$optional_fail_count" \
-  '{
-    task_id: $task_id,
-    updated_at: $updated_at,
-    started_branch: $started_branch,
-    integration_branch: $integration_branch,
-    task_branch: $task_branch,
-    integration_branch_source: $integration_branch_source,
-    task_scoped_integration_branch: $task_scoped_integration_branch,
-    closeout_source: "mailbox_message",
-    progress_file: $progress_file,
-    required_actions: {
-      switched_integration_branch: $switched_integration_branch,
-      merge_mode: $merge_mode,
-      merge_completed: true,
-      merged_sha: $merged_sha,
-      progress_updated: true
-    },
-    optional_actions: {
-      prune: $prune_status,
-      health_gate: $health_gate_status,
-      next_dispatch: $next_dispatch_status
-    },
-    optional_fail_count: $optional_fail_count
-  }' >"$tmp_state"
-mv "$tmp_state" "$state_file"
+write_state_file
 
 if (( optional_fail_count > 0 )); then
   if ! (( optional_fail_count == 1 )) || [[ "$health_gate_status" != "failed" ]]; then
