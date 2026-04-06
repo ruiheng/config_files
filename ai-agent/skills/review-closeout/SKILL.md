@@ -184,3 +184,4 @@ Then append only non-empty sections.
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
 9. Use `mailbox_send` for normal cross-session closeout delivery
+10. Do not naturally end after drafting the closeout text; this workflow turn is complete only after the required local continuation or `mailbox_send` delivery step has succeeded

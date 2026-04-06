@@ -27,3 +27,7 @@ description: Receive pending agent mail and immediately execute the requested wo
 - If you need an older acknowledged delivery, use `mailbox_list` with `state: acked`, then `mailbox_read` by delivery id
 - Keep lifecycle steps serialized
 - If `mailbox_recv` fails because mailbox context is missing, bind and retry
+- After `mailbox_recv` returns a workflow message, do not naturally end this turn until the message's required workflow action is complete
+- Before ending, explicitly check whether this action still requires `mailbox_send`, `mailbox_ack`, `mailbox_release`, `mailbox_defer`, or `mailbox_fail`
+- Do not treat "the main work is done" as completion when the required workflow send-back step is still pending
+- If compaction or interruption made the workflow obligation unclear, reread the current workflow input from the mailbox body or recover it with `mailbox_read` before deciding to stop

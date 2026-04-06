@@ -158,3 +158,4 @@ Execution flow:
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
 - prefer requester-provided login/auth/setup context over re-discovering it from scratch
+- Do not naturally end after writing the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded

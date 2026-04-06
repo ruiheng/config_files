@@ -130,3 +130,4 @@ Execution flow:
 - ask the user to decide when the disagreement becomes subjective, strategic, or stuck
 - prefer concrete design objections over generic taste comments
 - focus on the highest-leverage risks first: wrong problem, bad tradeoff, hidden coupling, broken migration, weak operational story
+- Do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded

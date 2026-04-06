@@ -292,6 +292,7 @@ Required interaction behavior:
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks
 - Use `mailbox_send` for normal cross-session reviewer messages
+- Do not naturally end after writing the review report; if this action requires `rework_required`, `user_requested_iteration`, or `review-closeout`, complete that workflow step before ending the turn
 
 Sender identity rule:
 - reviewer-originated actions (`rework_required`, `user_requested_iteration`) use `from_session_id = reviewer_session_id`

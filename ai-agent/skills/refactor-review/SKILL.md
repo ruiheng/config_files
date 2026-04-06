@@ -163,3 +163,4 @@ Execution flow in Agent Deck mode:
 - prefer high-leverage suggestions over long laundry lists
 - if the code is already reasonably simple, say so directly
 - do not turn advisory findings into implementation work inside this skill
+- Do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded

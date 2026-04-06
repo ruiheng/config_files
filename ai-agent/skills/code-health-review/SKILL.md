@@ -230,3 +230,4 @@ Execution flow in Agent Deck mode:
 - do not recommend a design pattern by name unless it clearly reduces complexity here
 - tie every recommendation to maintainability, reliability, or testability
 - do not turn advisory findings into implementation work inside this skill
+- Do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded

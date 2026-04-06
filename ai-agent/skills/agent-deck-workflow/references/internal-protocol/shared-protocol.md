@@ -129,6 +129,23 @@ Idle behavior:
 - `mailbox_wait` is not the recommended receiver entrypoint
 - use `check-agent-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
 
+## Natural End Gate
+
+Do not naturally end a workflow turn just because the main task work looks finished.
+
+Natural end is allowed only when one of these is true:
+- all required workflow actions for this turn are already done, including any required `mailbox_send` / `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
+- this turn is an explicit same-session continuation and control has already been handed to the next local step
+- this turn was only a mailbox check and `mailbox_recv` returned no message
+
+Before ending a workflow turn, check:
+- did I finish the required send-back or handoff step for this action?
+- did I finish the required mailbox lifecycle step for the message I received?
+- if context feels incomplete after compaction or interruption, can I recover the current workflow input from the mailbox body or `mailbox_read` before deciding to stop?
+
+If the task work is done but the required workflow send-back step is still pending, do not end. Send the required mailbox message first.
+If the task is blocked and cannot continue, do not end silently. Use the appropriate lifecycle/reporting step first.
+
 ## Error Handling And Diagnostics
 
 If workflow send or worker start fails, report concise stderr summary and run these checks:
