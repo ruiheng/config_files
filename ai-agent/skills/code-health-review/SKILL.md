@@ -22,6 +22,19 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - do not implement refactors
 - do not produce commit-ready diffs unless the user explicitly asks for them later
 
+## When This Skill Fits
+
+Use this skill when the real question is structural, for example:
+- why the same module keeps attracting bugs
+- why fixes are slow or non-converging
+- why review cycles keep surfacing nearby failures
+- why the code is hard to test with confidence
+
+Do not use this skill for:
+- a single local bug review with no sign of a broader pattern; use `review-code`
+- style-only inconsistency or cleanup with no maintainability or reliability signal
+- implementation work that expects code changes in the same turn
+
 ## Input
 
 Provide one of:
@@ -55,20 +68,26 @@ If critical context is missing:
 - in direct-use mode, ask one short clarification question
 - in mailbox mode, continue and mark the missing items in `Scope Gaps`
 
+When asking a clarification question, prioritize the missing fact that most affects whether the problem is local or systemic, usually:
+- how many times this failure or bug shape has appeared
+- which files or boundaries were touched by the most recent fixes
+- which behavior or compatibility boundary must stay stable
+
 ## Inspection Order
 
 1. Frame the system question.
-- What keeps going wrong?
-- Is the pain local ugliness or structural instability?
-- Is the latest reported issue the real problem or just the latest symptom?
+- Answer these before deep inspection:
+  - What keeps going wrong?
+  - Is the pain local ugliness, weak proof, or structural instability?
+  - Is the latest reported issue the real problem or just the latest symptom?
+  - If the latest symptom were patched in isolation, where would the same failure likely reappear?
+  - Which boundary, ownership rule, or data contract would have to change to reduce this whole bug class?
 
 2. Gather the cheapest high-signal evidence:
-- current code shape
-- tests and missing tests
-- repeated decision patterns
-- repeated implementation shapes hidden behind renamed variables, helper wrappers, or file splits
-- ownership, data flow, and state transitions
-- recent local history only when current code does not explain the fragility
+- first: current code shape, preserved invariants, and tests or missing tests
+- next: repeated decision patterns and repeated implementation shapes hidden behind renamed variables, helper wrappers, or file splits
+- then: ownership, data flow, and state transitions
+- last: recent local history only when current code does not explain the fragility
 
 3. Form one or two structural hypotheses.
 Each hypothesis should explain multiple symptoms, not just the latest report item.
@@ -95,7 +114,7 @@ Evaluate code using these lenses:
 - change amplification: whether small changes spread across too many files or branches
 - bug concentration: whether certain modules or patterns keep attracting similar failures
 
-Look for:
+Highest-signal patterns under those lenses:
 
 - business rules copied across modules with minor variations
 - branches or helper stacks that are structurally the same algorithm with renamed nouns
@@ -110,6 +129,10 @@ Look for:
 
 ## Decision Rules
 
+- Verdict guidance:
+  - `critical`: structural faults are causing recurring bugs, non-converging fixes, or behavior that cannot be proven cheaply
+  - `concerning`: ownership, duplication, or boundary problems are already raising maintenance risk, but the system still works with acceptable proof cost
+  - `acceptable`: the code may be locally ugly, but the current structure is stable enough and does not show meaningful systemic risk
 - prefer converging evidence across code shape, history, and tests
 - do not treat high churn alone as proof; correlate it with bug patterns or duplicated logic
 - do not treat the latest issue report as the whole problem definition
@@ -123,6 +146,7 @@ Look for:
 - treat net code reduction as a meaningful maintainability win when behavior and clarity are preserved
 - prefer recommendations that make focused regression tests easier to write
 - say directly when the code is locally messy but not structurally unhealthy
+- mark an area as a hotspot only when churn aligns with repeated bug shape, patch layering, weak proof, or repeated nearby fixes; churn alone is not enough
 
 ## Output Format
 
