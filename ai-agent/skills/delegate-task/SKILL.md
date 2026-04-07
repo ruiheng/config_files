@@ -54,15 +54,16 @@ Resolve by priority:
 - `reviewer_tool`: explicit -> context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
   - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit
-- `workflow_policy` (optional): explicit -> context -> infer from clear user automation intent -> omit when not set
+- `workflow_policy` (optional): explicit -> context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 - `big_picture` (required when available): explicit -> context -> infer from current user goal / active plan -> ask only when task framing would otherwise be misleading
 - `escalation_triggers` (optional): explicit -> context -> infer from task risk / boundary uncertainty -> omit when empty
 
 Workflow policy inference:
-- unattended => `mode = "unattended"` and `auto_accept_if_no_must_fix = true`
+- default to unattended => `mode = "unattended"` and `auto_accept_if_no_must_fix = true`
+- human-gated only when the user explicitly asks for a human acceptance gate
 - automatic next-task dispatch => `auto_dispatch_next_task = true`
-- unless user says otherwise, unattended keeps `ui_manual_confirmation = "auto"`
+- unless user says otherwise, unattended keeps `ui_manual_confirmation = "skip"`
 - write inferred automation choices into `## Workflow Policy`
 
 ## 3) Mailbox Body Template
@@ -134,7 +135,7 @@ Round: 1
 - Reviewer tool: [reviewer_tool]
 
 ## Workflow Policy
-[only when present]
+[resolved workflow policy]
 
 ## Special Requirements
 [only when present]

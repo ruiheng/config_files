@@ -30,7 +30,7 @@ Use `SKILL.md` for:
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
 - Agent 5, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - Refactor Reviewer (`refactor-review`): advisory reviewer that inspects existing code for duplication and simplification opportunities without making changes
-- User: makes acceptance decisions when the workflow is human-gated
+- User: makes acceptance decisions only when the workflow explicitly requires human gating
 
 ## Core Transport
 
@@ -51,10 +51,10 @@ Use `SKILL.md` for:
 6. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
-   - `stop_recommended` to the user decision point.
+   - `stop_recommended` to the workflow acceptance gate.
 7. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
 8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
-9. Repeat until the user decides quality is acceptable, or policy auto-accepts.
+9. Repeat until quality is acceptable under workflow policy; unattended mode auto-accepts no-must-fix results by default unless the user or policy explicitly requires a human gate.
 10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
 11. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
 12. Coder, Reviewer, and Architect can be fully exited; Browser Tester stays long-lived.
@@ -72,7 +72,7 @@ flowchart TD
     R -->|mailbox: browser_check_requested| B[Browser Tester]
     X[Requester] -->|mailbox: browser_check_requested| B
     B -->|mailbox: browser_check_report| X
-    R -->|review result| DEC{Quality Accepted?}
+    R -->|review result| DEC{Accepted By Policy/User?}
     DEC -- No --> C
     DEC -- Yes --> R
     R -->|mailbox: closeout_delivered| P
@@ -102,7 +102,7 @@ Current recommended operating mode:
 2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
 3. Queue mail first, then nudge the non-local target to run `check-agent-mail`.
    Newly created or restarted targets use the same notify path; they do not need a special pre-check phase.
-4. Keep user confirmation as the gate before final acceptance/closeout unless workflow policy overrides it.
+4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
 

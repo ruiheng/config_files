@@ -12,7 +12,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 ## Purpose
 
 Use this skill when an accepted full review report exists and only remaining follow-up items are needed.
-For UI-related tasks, carry forward human-run UI confirmation package into closeout output.
+For UI-related tasks, carry forward any UI confirmation package that exists in the accepted review context into closeout output.
 Closeout should also give planner a compact summary of residual accepted findings that may need later tracking.
 
 Input gate:
@@ -45,7 +45,7 @@ Skill-specific context resolution:
 - `closeout_sender_session_id`: explicit -> current session id -> review context -> ask
 - `closeout_sender_role`: explicit -> current workflow role -> review context -> default `closeout_executor`
 - `reviewer_session_id`: explicit -> review context -> ask
-- `workflow_policy` (optional): explicit -> review/report context -> default human-gated
+- `workflow_policy` (optional): explicit -> review/report context -> default unattended
 - `special_requirements` (optional fallback): explicit -> review/report context -> omit
 - `start_branch`: explicit -> review report text -> ask
 - `task_branch`: explicit -> review report text -> ask

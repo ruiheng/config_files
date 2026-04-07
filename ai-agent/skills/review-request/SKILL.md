@@ -83,7 +83,7 @@ Skill-specific context resolution:
 - `coder_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `reviewer_session_id`: explicit actual id -> delegated context actual id -> resolved/created from `reviewer_session_ref` before send
-- `workflow_policy` (optional): explicit -> delegated context -> omit
+- `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `coder_tool`: explicit -> delegated context -> default current AI tool
   - if user/context provides a full command with arguments, preserve it unchanged
@@ -196,7 +196,7 @@ Your job is to stop a weak patch from slipping through by looking for what the p
 - Coverage Gaps: [known missing tests or validation gaps; if none write: None identified]
 
 ## Workflow Policy
-[only when present]
+[resolved workflow policy]
 
 ## Special Requirements
 [only when present]

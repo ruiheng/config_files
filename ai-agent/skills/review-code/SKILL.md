@@ -95,9 +95,9 @@ If non-convergence is visible:
 - verification coverage quality
 - convergence across rounds when this is not round `1`
 
-## UI-Change Detection and Human Confirmation
+## UI-Change Detection and Confirmation Policy
 
-In human-gated mode, detect likely user-facing UI changes.
+Detect likely user-facing UI changes. Human confirmation is opt-in by workflow policy, not the default.
 
 Heuristics:
 - frontend/template/style files changed (`*.tsx`, `*.jsx`, `*.vue`, `*.svelte`, `*.html`, `*.css`, `*.scss`, `*.less`)
@@ -106,12 +106,13 @@ Heuristics:
 - browser-tool validation required
 
 Policy rules:
-- default: if UI change detected and no must-fix remains, require human UI confirmation before closeout
+- default: record UI impact in the report, but do not require human UI confirmation before closeout
 - override via `workflow_policy.ui_manual_confirmation`:
-  - `auto` (default)
+  - `skip` (default)
   - `required`
-  - `skip`
-- unattended mode may auto-closeout when policy allows
+  - `auto`
+- use `required` only when the user or workflow policy explicitly wants a human UI gate
+- `auto` is an explicit heuristic mode, not the default
 
 ## What Not to Review
 
@@ -211,7 +212,7 @@ Skill-specific context resolution:
 - `start_branch`: explicit -> mailbox body -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
 - `task_branch`: explicit -> mailbox body -> ask
-- `workflow_policy` (optional): explicit -> request context -> human-gated defaults
+- `workflow_policy` (optional): explicit -> request context -> unattended defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
 - `checks_already_run` (optional): explicit -> mailbox body -> use for rerun decisions
 
@@ -219,10 +220,10 @@ Important identity clarification:
 - `planner_session_id` must come from explicit/context workflow metadata
 
 Default policy when missing:
-- `mode = "human_gated"`
-- `auto_accept_if_no_must_fix = false`
+- `mode = "unattended"`
+- `auto_accept_if_no_must_fix = true`
 - `auto_dispatch_next_task = false`
-- `ui_manual_confirmation = "auto"`
+- `ui_manual_confirmation = "skip"`
 - `review_round_convergence_check_threshold = 3`
 - `review_round_hard_stop_threshold = 5`
 
@@ -240,9 +241,9 @@ Execution flow in Agent Deck mode:
    - if `auto_accept_if_no_must_fix=true`, the final no-must-fix review report should proceed to `review-closeout`
    - normally, the agent that currently holds the final review report should run `review-closeout`
    - if the same final no-must-fix report is delivered to coder in unattended flow, coder may run `review-closeout` from that report instead of treating it as another rework round
-   - else present user decision summary and wait for explicit acceptance or iteration decision
+   - only when `auto_accept_if_no_must_fix=false`, present user decision summary and wait for explicit acceptance or iteration decision
    - after explicit acceptance in human-gated flow, run `review-closeout`
-   - in human-gated mode, request manual UI confirmation when required before acceptance and closeout
+   - request human UI confirmation before acceptance/closeout only when `ui_manual_confirmation=required`, or when `ui_manual_confirmation=auto` and explicit policy wants heuristic UI gating
 
 Mailbox subject (`rework_required`):
 - `rework required: <task_id> r<round>`
@@ -286,7 +287,7 @@ When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-acc
 
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
-- For `stop_recommended` with manual decision, wait for explicit user choice; if accepted, run `review-closeout`; if iteration is requested, send `user_requested_iteration`
+- For `stop_recommended` with manual decision, do that only when `auto_accept_if_no_must_fix=false`; wait for explicit user choice, then either run `review-closeout` or send `user_requested_iteration`
 - In unattended flow, any accepted final no-must-fix report that lands with reviewer or coder must be treated as `review-closeout` input, not as another rework cycle
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
