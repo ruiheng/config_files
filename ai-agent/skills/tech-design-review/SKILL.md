@@ -5,17 +5,21 @@ description: Reviews the latest committed tech-design docs on a branch and sends
 
 # Tech-Design Review
 
-Review committed tech-design docs from a `tech_design_review_requested` mailbox body and return an advisory report to the requester session.
+Review committed tech-design docs and return an advisory report.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 ## Input
 
-Provide the mailbox body from `tech_design_review_requested`.
+Provide one of:
+1. the mailbox body from `tech_design_review_requested`
+2. direct scope + committed design docs + problem/goals/constraints
 
-## Review Scope
+Direct-use mode is valid.
 
-Review the requested tech-design branch snapshot for:
+## Review Dimensions
+
+Review the requested tech-design snapshot using these dimensions:
 - problem framing and scope
 - constraints, assumptions, and success criteria
 - decision quality and tradeoffs
@@ -34,17 +38,22 @@ Review this like a senior engineer in a mature production environment:
 - protective of compatibility and operational clarity
 - intolerant of unclear ownership, hidden coupling, and weak migration stories
 
-## Review Lens
+## Inspection Order
 
-Use these lenses when judging the design:
-- Problem and scope: does the doc solve a real problem, define non-goals, and avoid overreach?
-- Decision quality: are the chosen approach, rejected alternatives, and tradeoffs explicit and defensible?
-- Simplicity and coupling: does the design remove special cases, keep ownership clear, and avoid unnecessary abstraction?
-- Compatibility and migration: does it preserve existing behavior where needed, and explain rollout, migration, and rollback?
-- Operational shape: does it explain deployability, observability, failure modes, recovery, and ongoing ownership?
-- Security and data boundaries: are trust boundaries, sensitive data handling, and abuse/failure cases covered?
-- Evidence: are key claims backed by constraints, experiments, prior incidents, or other concrete reasons instead of taste alone?
-- Decision hygiene: are open questions, follow-up decisions, and out-of-scope items clearly recorded?
+1. Validate the problem and scope first.
+- Is this solving a real problem?
+- Are non-goals, constraints, and success conditions clear enough to judge the proposal?
+
+2. Review the proposed design through the dimensions above.
+- Focus first on decision quality, coupling, and change surface.
+- Then review migration, operations, and security.
+
+3. Distinguish missing evidence from design failure.
+- A weakly justified claim is not automatically a wrong design, but it is still a reviewable gap.
+- Call out when the proposal direction looks sound but the support, constraints, or rollout detail is too thin.
+
+4. Produce one advisory report.
+- Prioritize the few objections or caveats most likely to change implementation confidence.
 
 ## Required Baseline
 
@@ -55,13 +64,21 @@ Before reviewing quality, verify:
 - alternatives or rejected options are stated
 - major constraints are stated
 
-If critical context is missing:
+Hard block:
+- if problem statement or in-scope design docs are missing, ask one short clarification question in direct-use mode
+- in mailbox mode, continue but mark the report as `NEEDS_REVISION` and list the missing critical items under `Major Risks`
+
+Soft gaps:
+- if alternatives/rejected options or major constraints are missing, continue the review
+- record the missing items under `Design Gaps`
+
+If critical context is still missing after one clarification in direct-use mode:
 - mark the report as `NEEDS_REVISION`
 - list the missing items under `Major Risks`
 
 ## Output Format
 
-Use this exact structure as the mailbox body:
+Mailbox mode uses the full structure below:
 
 ```markdown
 Task: <task_id>
@@ -74,8 +91,14 @@ Round: <round>
 ## Summary
 [One-line architect summary]
 
+## Reviewed Scope
+- Branch: [tech-design branch]
+- Docs reviewed:
+  - `path/to/doc1.md`
+  - `path/to/doc2.md`
+
 ## Decision
-SOUND | NEEDS_REVISION
+SOUND | SOUND_WITH_CAVEATS | NEEDS_REVISION
 
 ## Major Risks
 - [risk or `None`]
@@ -95,6 +118,20 @@ SOUND | NEEDS_REVISION
 ## Residual Risk
 [What remains uncertain after this review]
 ```
+
+Direct-use mode skips the mailbox header block and starts at `## Summary`.
+
+Decision guidance:
+- `SOUND`: the design is coherent and implementation-ready with no material blockers
+- `SOUND_WITH_CAVEATS`: the core direction is sound, but specific gaps or caveats should be resolved before or during implementation
+- `NEEDS_REVISION`: the current design is missing critical framing, contains a material flaw, or is too incomplete to trust as the implementation basis
+
+## Direct-Use Mode
+
+When invoked directly by the user instead of mailbox workflow:
+- skip the mailbox header block
+- keep the same review sections starting at `## Summary`
+- return the report directly in the conversation
 
 ## Agent Deck Mode
 
@@ -118,6 +155,7 @@ Execution flow:
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "tech-design report: <task_id> r<round>"`
    - `body = <tech-design review report body>`
+6. do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
 
 ## Rules
 
@@ -130,4 +168,4 @@ Execution flow:
 - ask the user to decide when the disagreement becomes subjective, strategic, or stuck
 - prefer concrete design objections over generic taste comments
 - focus on the highest-leverage risks first: wrong problem, bad tradeoff, hidden coupling, broken migration, weak operational story
-- Do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
+- acknowledge design strengths that should be preserved during implementation, especially when they create useful constraints or simplify the solution space
