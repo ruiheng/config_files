@@ -67,6 +67,7 @@ Before reviewing, verify:
 If critical context is missing:
 - in direct-use mode, ask one short clarification question
 - in mailbox mode, continue and mark the missing items in `Scope Gaps`
+- if no clarification arrives, continue best-effort and mark the missing assumptions in `Scope Gaps`
 
 When asking a clarification question, prioritize the missing fact that most affects whether the problem is local or systemic, usually:
 - how many times this failure or bug shape has appeared
@@ -84,6 +85,7 @@ When asking a clarification question, prioritize the missing fact that most affe
   - Which boundary, ownership rule, or data contract would have to change to reduce this whole bug class?
 
 2. Gather the cheapest high-signal evidence:
+- use the Review Lens below to decide what to inspect
 - first: current code shape, preserved invariants, and tests or missing tests
 - next: repeated decision patterns and repeated implementation shapes hidden behind renamed variables, helper wrappers, or file splits
 - then: ownership, data flow, and state transitions
@@ -96,6 +98,7 @@ Each hypothesis should explain multiple symptoms, not just the latest report ite
 - Can the hypothesis explain bug concentration, slow review convergence, and testing pain at the same time?
 - Does the proposed direction remove special cases instead of adding guards?
 - Does it reduce future change surface instead of moving complexity around?
+- Check the hypothesis against counter-signals in `references/signals.md`.
 
 5. Produce one prioritized report.
 Use `references/signals.md` to classify signals.
@@ -117,13 +120,9 @@ Evaluate code using these lenses:
 Highest-signal patterns under those lenses:
 
 - business rules copied across modules with minor variations
-- branches or helper stacks that are structurally the same algorithm with renamed nouns
-- parallel modules whose control flow is isomorphic but implemented separately
-- repeated "adapt-transform-validate-route" pipelines recreated per feature instead of owned once
 - `dict`-shaped or loosely-typed payloads crossing important boundaries
 - modules that both orchestrate workflow and implement business rules
 - patch layers that preserve a broken design by adding more branching
-- high-churn files with repeated bug-fix commits of similar shape
 - tests that only verify top-level behavior because the internals are too entangled
 - state transitions encoded by scattered conditionals instead of a clear model
 
@@ -133,6 +132,9 @@ Highest-signal patterns under those lenses:
   - `critical`: structural faults are causing recurring bugs, non-converging fixes, or behavior that cannot be proven cheaply
   - `concerning`: ownership, duplication, or boundary problems are already raising maintenance risk, but the system still works with acceptable proof cost
   - `acceptable`: the code may be locally ugly, but the current structure is stable enough and does not show meaningful systemic risk
+
+## Review Principles
+
 - prefer converging evidence across code shape, history, and tests
 - do not treat high churn alone as proof; correlate it with bug patterns or duplicated logic
 - do not treat the latest issue report as the whole problem definition
@@ -150,7 +152,7 @@ Highest-signal patterns under those lenses:
 
 ## Output Format
 
-Use this exact structure for both direct-use output and mailbox report body:
+Mailbox mode uses the full structure below:
 
 ```markdown
 Task: <task_id_or_N/A>
@@ -204,6 +206,8 @@ If none, write: `- None.`
 If none, write: `- None.`
 ```
 
+Direct-use mode skips the header block and starts at `## Code Health Assessment`.
+
 ## References
 
 - Read `references/signals.md` when judging whether a code smell is local or systemic.
@@ -213,11 +217,7 @@ If none, write: `- None.`
 
 When invoked directly by the user instead of mailbox workflow:
 
-- use `Task: N/A`
-- use `From: code-health-reviewer N/A`
-- use `To: user N/A`
-- use `Planner: N/A`
-- use `Round: N/A`
+- skip the mailbox header block
 - return the report directly in the conversation
 
 ## Agent Deck Mode
@@ -242,6 +242,7 @@ Execution flow in Agent Deck mode:
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "code health review report: <task_id> r<round>"`
    - `body = <code health review report body>`
+6. do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
 
 ## Rules
 
@@ -254,4 +255,3 @@ Execution flow in Agent Deck mode:
 - do not recommend a design pattern by name unless it clearly reduces complexity here
 - tie every recommendation to maintainability, reliability, or testability
 - do not turn advisory findings into implementation work inside this skill
-- Do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
