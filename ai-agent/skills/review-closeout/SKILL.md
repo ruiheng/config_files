@@ -63,7 +63,7 @@ If required values are resolved:
 2. send mode:
    - if `closeout_sender_session_id == planner_session_id`, skip cross-session delivery and continue locally
    - otherwise send `closeout_delivered` to planner through `mailbox_send`
-3. include planner follow-up recommendation in the closeout body (explicitly recommend `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh`)
+3. include planner follow-up recommendation in the closeout body
 4. use `agent_mailbox`
 5. first call `agent_deck_ensure_session` with `session_id = <planner_session_id>`
 6. use `mailbox_send` with:
@@ -163,10 +163,8 @@ Then append only non-empty sections.
 - Notes: [optional]
 
 #### Planner Follow-up Recommendation
-- Required: run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh --task-id <task_id> --task-branch <task_branch> --integration-branch <integration_branch>`.
-- If this closeout is being handled from a leased mailbox delivery, pass `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` so the script can ack after required closeout state is written.
-- Required by script: switch to the target integration branch when needed, then merge the task branch and update planner progress records.
-- Default by script: run closeout health gate and clean up disposable task-scoped worker sessions.
+- Required planner-side closeout: use the recorded branch plan, merge the task branch into the integration branch, and update planner progress records.
+- Continue planner-side closeout using planner-owned workflow tools and policy.
 - Before or during closeout, inspect this closeout message and decide whether residual accepted findings should update progress/todo or next-task planning.
 - Optional: plan and dispatch next task when appropriate.
 - If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.

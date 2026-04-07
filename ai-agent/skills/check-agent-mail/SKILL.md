@@ -21,7 +21,9 @@ description: Receive pending agent mail and immediately execute the requested wo
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
-- If the concrete action handler accepts the leased `delivery_id` and `lease_token` and owns the post-persist ack itself, let that handler perform the serialized ack instead of doing an extra standalone ack step afterward
+- The current session owns the claimed delivery lifecycle from `mailbox_recv` through final `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
+- The action skill decides the exact serialized handoff point for `mailbox_ack` or the alternate lifecycle step
+- Determine workflow behavior from this mailbox input plus the current action skill; you do not need to inspect another role's implementation details
 - Treat `mailbox_ack` as durable persistence, not as losing the message forever
 - If you need to recover the latest acknowledged workflow input after `mailbox_ack`, use `mailbox_read` on the latest `acked` delivery for this session
 - If you need an older acknowledged delivery, use `mailbox_list` with `state: acked`, then `mailbox_read` by delivery id
