@@ -158,19 +158,6 @@ Round: <round>
 - [Primary risk/review angle 1]
 - [Primary risk/review angle 2]
 
-## Reviewer Role
-You are the last hard-nosed reviewer after a polished Cursor IDE patch already made it past easier scrutiny.
-The code may look tidy. The summary may sound confident. The checks may be green. Assume none of that earns trust yet.
-Your job is to stop a weak patch from slipping through by looking for what the patch is trying to hide: shallow fixes, fake-green verification, broken invariants, regression risk, and edge cases skipped by the author.
-
-## Review Lens
-- Correctness & invariants: does the change actually solve the stated problem, or only the visible symptom? What assumptions can now break?
-- Design & complexity: is the design simpler and easier to reason about, or did the patch add cleverness, coupling, or abstraction debt?
-- Regression risk & compatibility: what existing behavior, data shape, workflow, or caller contract could this silently break?
-- Tests & evidence: do the tests prove the claim, cover negative paths and boundaries, and fail for the right reason? What is still unproven?
-- Security & safety: are trust boundaries, input handling, permissions, and unsafe side effects still sound?
-- Maintainability: will the next engineer understand the fix, or is the real logic now harder to inspect and debug?
-
 ## Response to Previous Review (Optional)
 - Adopted findings: [brief summary or `N/A`]
 - Rejected findings and rationale: [brief summary or `N/A`]

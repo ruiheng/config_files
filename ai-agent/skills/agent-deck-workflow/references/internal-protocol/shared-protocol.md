@@ -97,6 +97,8 @@ Round: <round_or_final>
 
 Envelope rules:
 - `Action:` must be a stable machine-readable token chosen by the concrete action skill
+- when a role has a dedicated action skill for that workflow action, treat that skill as the runtime handler for the received message
+- `closeout_delivered` is a planner-handled workflow action; use a planner-side closeout skill for it
 - body is the primary task input
 - file paths may appear in body, but only as supplemental references
 - receiver should not go hunting for external files unless the body explicitly says they are needed

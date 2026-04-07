@@ -89,16 +89,6 @@ Round: <round>
 - Branch: [branch name or `N/A`]
 - Scope: [display-adjacent only | read-only]
 
-## Evidence To Return
-- Decision: PASS / FAIL / UNKNOWN
-- Code changed: [yes/no]
-- Branch: [branch name or `N/A`]
-- Commit: [short prefix or `N/A`]
-- Files changed: [list or `None`]
-- Findings with reproduction steps
-- Console and page errors summary
-- Screenshots only when they add evidence
-
 ## Known Constraints
 [Any known setup limits or missing prerequisites]
 ```

@@ -1,0 +1,79 @@
+---
+name: planner-closeout
+description: Handles a `closeout_delivered` workflow message and completes planner-side closeout.
+---
+
+# Planner Closeout
+
+Complete planner-side closeout from a `closeout_delivered` workflow message.
+
+Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+
+## Input
+
+Provide the mailbox body from `closeout_delivered`.
+
+## Agent Deck Mode
+
+Follow shared protocol in `agent-deck-workflow/SKILL.md`:
+- `Agent Deck Mode Detection`
+- `Context Resolution Priority`
+- `Error Handling and Diagnostics`
+
+Skill-specific context resolution:
+- `task_id`: explicit -> mailbox body -> ask
+- `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
+- `reviewer_session_id`: explicit -> mailbox body `Accepted Review By` header -> ask
+- `start_branch`: explicit -> mailbox body -> ask
+- `integration_branch`: explicit -> mailbox body -> ask
+- `task_branch`: explicit -> mailbox body -> ask
+- `workflow_policy` (optional): explicit -> mailbox body -> default unattended policy
+- `delivery_id` (optional): explicit leased delivery context -> omit when unavailable
+- `lease_token` (optional): explicit leased delivery context -> omit when unavailable
+
+Branch-plan rule:
+- use the recorded branch plan from `closeout_delivered` unchanged
+- do not infer, rename, or repair branch plan during planner closeout
+- if any required branch-plan field is missing, ask one short clarification question instead of guessing
+
+## Execution Flow
+
+1. resolve `task_id`, planner identity, and the recorded branch plan from the closeout message
+2. inspect `Residual Follow-up For Planner`, `UI Manual Confirmation Package`, and `workflow_policy` before running planner closeout
+3. run the planner closeout batch script with the recorded branch plan
+4. if this turn started from a claimed `closeout_delivered` delivery, pass `--ack-delivery-id` and `--ack-lease-token` so the script can ack after required closeout state is written
+5. if planner context includes a real next-dispatch command and `workflow_policy.auto_dispatch_next_task=true`, pass it with `--next-dispatch-cmd`
+6. report the result after planner closeout finishes
+
+Required closeout command shape:
+
+```bash
+~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh \
+  --task-id <task_id> \
+  --task-branch <task_branch> \
+  --integration-branch <integration_branch> \
+  --planner-session-id <planner_session_id>
+```
+
+Optional command additions:
+- add `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` when this turn owns a claimed `closeout_delivered` delivery
+- add `--next-dispatch-cmd <command>` only when planner already has a concrete next-dispatch command to run
+
+## Rules
+
+- this skill is the planner-side runtime handler for `closeout_delivered`
+- use the closeout body as the primary planner handoff; do not reread the full review unless the closeout body is insufficient
+- planner closeout owns merge, progress recording, optional next dispatch, and planner-side cleanup
+- preserve `workflow_policy` semantics when deciding whether to dispatch the next queued task
+- if planner closeout fails, report the blocker and the exact manual action from the script output
+- keep mailbox JSON internal unless the user explicitly asks
+- do not naturally end after deciding what to do; this turn is complete only after planner closeout succeeds or a concrete blocker is reported
+
+## User-Facing Output
+
+After planner closeout:
+- report whether required closeout actions succeeded
+- include the merged branch pair and task id
+- include whether mailbox ack ran
+- include whether next dispatch ran
+- include any manual unblock step when closeout or cleanup failed

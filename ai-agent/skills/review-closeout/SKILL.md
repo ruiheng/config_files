@@ -63,10 +63,9 @@ If required values are resolved:
 2. send mode:
    - if `closeout_sender_session_id == planner_session_id`, skip cross-session delivery and continue locally
    - otherwise send `closeout_delivered` to planner through `mailbox_send`
-3. include planner follow-up recommendation in the closeout body
-4. use `agent_mailbox`
-5. first call `agent_deck_ensure_session` with `session_id = <planner_session_id>`
-6. use `mailbox_send` with:
+3. use `agent_mailbox`
+4. first call `agent_deck_ensure_session` with `session_id = <planner_session_id>`
+5. use `mailbox_send` with:
    - `from_address = agent-deck/<closeout_sender_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "closeout delivered: <task_id>"`
@@ -161,14 +160,6 @@ Then append only non-empty sections.
 - Manual check steps (human-run): [short checklist]
 - Expected visible outcomes: [what user should see]
 - Notes: [optional]
-
-#### Planner Follow-up Recommendation
-- Required planner-side closeout: use the recorded branch plan, merge the task branch into the integration branch, and update planner progress records.
-- Continue planner-side closeout using planner-owned workflow tools and policy.
-- Before or during closeout, inspect this closeout message and decide whether residual accepted findings should update progress/todo or next-task planning.
-- Optional: plan and dispatch next task when appropriate.
-- If `workflow_policy.auto_dispatch_next_task=true`, dispatch next queued task automatically after required closeout actions.
-- When planner auto-dispatches from a known queue, planner should show dispatch progress in `current/total` form (for example `3/15`) before each newly dispatched task.
 ```
 
 ## Guidelines

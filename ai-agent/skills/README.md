@@ -24,7 +24,7 @@ Use `SKILL.md` for:
 
 ## Roles
 
-- Agent 1, **Planner** (`delegate-task`): planning agent, prepares the execution brief and sends it through mailbox
+- Agent 1, **Planner** (`delegate-task`, `planner-closeout`): planning agent, prepares the execution brief and completes planner-side closeout
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
@@ -56,7 +56,7 @@ Use `SKILL.md` for:
 8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
 9. Repeat until quality is acceptable under workflow policy; unattended mode auto-accepts no-must-fix results by default unless the user or policy explicitly requires a human gate.
 10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
-11. Planner reads the closeout mailbox body, then batches merge/progress/next-task work.
+11. Planner runs `planner-closeout` from that `closeout_delivered` body and batches merge/progress/next-task work.
 12. Coder, Reviewer, and Architect can be fully exited; Browser Tester stays long-lived.
 
 ## Flow Diagram
@@ -88,6 +88,7 @@ flowchart TD
 - `browser-test` is primarily runtime evidence; when explicitly allowed, Browser Tester may directly adjust display-adjacent code on its own branch before reporting back
 - requester should provide browser-test login/auth/setup context whenever possible; Browser Tester may ask requester or user for missing access details
 - `review-closeout` is the compact planner handoff after acceptance
+- `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
@@ -110,6 +111,7 @@ Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
 - Receiver wake handler: `check-agent-mail` (`ai-agent/skills/check-agent-mail/SKILL.md`)
+- Planner closeout: `planner-closeout` (`ai-agent/skills/planner-closeout/SKILL.md`)
 - Tech-design review request: `tech-design-review-request` (`ai-agent/skills/tech-design-review-request/SKILL.md`)
 - Architect review: `tech-design-review` (`ai-agent/skills/tech-design-review/SKILL.md`)
 - Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)

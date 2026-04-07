@@ -118,13 +118,10 @@ Round: 1
 
 ## Required Workflow Step
 - After first delivery commit, coder must immediately run the `review-request` skill and send the review-request mailbox message, unless the user explicitly waived review
-- Spell the skill name exactly as `review-request`; do not write `review_request` or other variants
 
 ## Important Notes
 - Coder git writes and commits for this delegated task are pre-authorized
-- This workflow authorization overrides any generic repo-level default that would normally require asking the user before commit
 - Coder must follow the recorded branch plan and must not invent a different working branch
-- Matching provider names do not merge roles: "reviewer uses codex" means use/create the recorded `reviewer_session_ref` with a Codex command unless workflow context explicitly says planner and reviewer are the same session
 
 ## Agent Deck Context
 - Planner session: [planner_session_id]
