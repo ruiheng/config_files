@@ -1179,6 +1179,63 @@ prepare_skills_target_dir() {
     return 0
 }
 
+resolve_symlink_target_path() {
+    local link_path="$1"
+    local target
+    target="$(readlink "$link_path")" || return 1
+
+    if [[ "$target" == /* ]]; then
+        printf '%s\n' "$target"
+        return 0
+    fi
+
+    local link_dir
+    link_dir="$(cd "$(dirname "$link_path")" 2>/dev/null && pwd -P)" || return 1
+    printf '%s/%s\n' "$link_dir" "$target"
+}
+
+cleanup_dead_skill_links() {
+    local tool_name="$1"
+    local tool_skills_dir="$2"
+    local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
+
+    if [[ ! -d "$tool_skills_dir" ]]; then
+        return 0
+    fi
+
+    for installed_skill in "$tool_skills_dir"/*; do
+        if [[ ! -e "$installed_skill" ]] && [[ ! -L "$installed_skill" ]]; then
+            continue
+        fi
+        if [[ ! -L "$installed_skill" ]]; then
+            continue
+        fi
+
+        local skill_name
+        skill_name=$(basename "$installed_skill")
+        local src_skill_dir="$src_skills_dir/$skill_name"
+        if [[ -e "$src_skill_dir" ]]; then
+            continue
+        fi
+
+        local target_path
+        target_path="$(resolve_symlink_target_path "$installed_skill")" || continue
+        if [[ "$target_path" != */ai-agent/skills/* ]]; then
+            continue
+        fi
+        if [[ -e "$target_path" ]]; then
+            continue
+        fi
+
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would remove dead $tool_name skill link: $installed_skill -> $target_path"
+        else
+            rm "$installed_skill"
+            log_info "Removed dead $tool_name skill link: $installed_skill -> $target_path"
+        fi
+    done
+}
+
 install_skills_individually() {
     local tool_name="$1"
     local tool_skills_dir="$2"
@@ -1189,6 +1246,8 @@ install_skills_individually() {
     if ! prepare_skills_target_dir "$tool_name" "$tool_skills_dir"; then
         return 0
     fi
+
+    cleanup_dead_skill_links "$tool_name" "$tool_skills_dir"
 
     if [[ -d "$src_skills_dir" ]]; then
         for skill_dir in "$src_skills_dir"/*; do
@@ -1265,6 +1324,8 @@ cleanup_gemini_duplicate_skill_links() {
     if [[ ! -d "$gemini_skills_dir" ]]; then
         return 0
     fi
+
+    cleanup_dead_skill_links "Gemini CLI" "$gemini_skills_dir"
 
     for skill_dir in "$src_skills_dir"/*; do
         if [[ -d "$skill_dir" ]]; then
