@@ -10,6 +10,7 @@ Required actions (hard-fail):
 2) update planner progress record
 
 Optional actions (soft-fail):
+- release workspace active-task lock
 - prune stale task branches
 - dispatch next task command
 - desktop notifications
@@ -263,6 +264,7 @@ write_state_file() {
     --arg prune_status "$prune_status" \
     --arg health_gate_status "$health_gate_status" \
     --arg next_dispatch_status "$next_dispatch_status" \
+    --arg workspace_lock_status "$workspace_lock_status" \
     --arg ack_delivery_id "$ack_delivery_id" \
     --arg ack_status "$mailbox_ack_status" \
     --argjson switched_integration_branch "$switched_integration_branch" \
@@ -301,6 +303,7 @@ write_state_file() {
         )
       },
       optional_actions: {
+        workspace_lock: $workspace_lock_status,
         prune: $prune_status,
         health_gate: $health_gate_status,
         next_dispatch: $next_dispatch_status
@@ -375,6 +378,7 @@ fi
 prune_status="skipped"
 health_gate_status="skipped"
 next_dispatch_status="skipped"
+workspace_lock_status="not_checked"
 optional_fail_count=0
 mailbox_ack_requested=0
 mailbox_ack_completed=0
@@ -409,6 +413,31 @@ if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
   mailbox_ack_status="ok"
   write_state_file
   echo "$ack_output"
+fi
+
+lock_dir="${artifact_root%/}/active-task.lock"
+lock_file="${lock_dir}/lock.json"
+if [[ -d "$lock_dir" ]]; then
+  lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
+  if [[ -z "$lock_task_id" ]]; then
+    workspace_lock_status="metadata_missing"
+    optional_fail_count=$((optional_fail_count + 1))
+    warn "workspace active-task lock metadata missing: ${lock_file}; remove ${lock_dir} manually if the task is already finished"
+  elif [[ "$lock_task_id" != "$task_id" ]]; then
+    workspace_lock_status="task_mismatch"
+    optional_fail_count=$((optional_fail_count + 1))
+    warn "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}; remove it manually after verification"
+  else
+    if rm -rf "$lock_dir"; then
+      workspace_lock_status="released"
+    else
+      workspace_lock_status="release_failed"
+      optional_fail_count=$((optional_fail_count + 1))
+      warn "failed to remove workspace active-task lock: ${lock_dir}; remove it manually after verification"
+    fi
+  fi
+else
+  workspace_lock_status="not_present"
 fi
 
 if (( run_prune )); then

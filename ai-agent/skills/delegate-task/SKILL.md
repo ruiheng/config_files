@@ -164,6 +164,9 @@ Workflow send sequence:
    - `to_address = agent-deck/<coder_session_id>`
    - `subject = "delegate: <task_id> -> coder"`
    - `body = <delegate mailbox body>`
+   - delegate dispatch is workspace-lock enforced at `.agent-artifacts/active-task.lock/`
+   - if that lock directory already exists, do not send another task; stop and report the existing active task instead
+   - do not work around this by sending through another path
 
 Recommended subject:
 - `delegate: <task_id> -> coder`
@@ -176,6 +179,7 @@ Rules:
 - existing sessions keep their original tool command
 - if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion
 - leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
+- planner closeout releases the workspace lock; if dispatch or closeout leaves the lock behind, manual recovery is to delete `.agent-artifacts/active-task.lock/`
 
 ## 5) User-Facing Output Contract
 

@@ -47,6 +47,8 @@ For an agent-deck-managed session `<id>`, bind:
 - follows the compact default `agent-mailbox send` receipt and returns the resulting `delivery_id`
 - wakeup text is fixed
 - set `disable_notify_message = true` to disable notify for that send
+- when mailbox body has `Action: execute_delegate_task`, this tool also enforces a single active-task lock for the bound workspace at `.agent-artifacts/active-task.lock/`
+- if that lock directory already exists, delegate dispatch is refused until it is manually removed or released by planner closeout
 
 `mailbox_wait`
 - checks whether mail is available for the bound addresses or explicit override addresses
