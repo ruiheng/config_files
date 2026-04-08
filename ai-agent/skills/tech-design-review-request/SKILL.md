@@ -162,6 +162,9 @@ Use the `agent_mailbox` MCP tools:
 - keep later rounds to the same architect session delta-only
 - if architect continuity changes, resend full context
 - treat architect feedback as advisory input, not as a user decision
+- treat architect progress as asynchronous with unbounded duration; do not assume a report will arrive within this turn
+- after sending, do independent requester work only when it does not depend on architect feedback; otherwise report current state and stop instead of waiting
+- after sending, do not sleep, poll, or proactively check mail just to await the architect report
 - when disagreeing, state the disagreement and rationale clearly in the next round
 - either requester or architect may ask the user to decide when the disagreement becomes subjective or stuck
 - leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction

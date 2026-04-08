@@ -45,7 +45,7 @@ Use `SKILL.md` for:
 
 1. User asks Planner to prepare work.
 2. Planner runs `delegate-task` and sends one delegate workflow message.
-3. Planner or Coder may send the latest committed tech-design docs on `tech-design/<task_id>` to `architect-<task_id>` and receive a `tech_design_review_report`.
+3. Planner or Coder may request architect review for the latest committed tech-design docs on `tech-design/<task_id>`.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
 5. Coder runs `review-request` from that committed state and sends one review-request workflow message.
 6. Reviewer runs `review-code` and sends either:
@@ -92,8 +92,8 @@ flowchart TD
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
-- coder/reviewer progress is asynchronous and may take unbounded time; planner must not treat delegate dispatch as a synchronous substep that will finish soon
-- after delegate dispatch, planner either does independent non-interfering work or stops; do not sleep, poll, or proactively wait for coder/reviewer progress
+- coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not treat cross-session dispatch as a synchronous substep that will finish soon
+- after cross-session dispatch, planner either does independent non-interfering work or stops; do not sleep, poll, or proactively wait for another agent's progress
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - Use `mailbox_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
 - External files are supplemental references only, not the default transport
