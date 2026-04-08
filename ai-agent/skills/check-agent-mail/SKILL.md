@@ -1,6 +1,6 @@
 ---
 name: check-agent-mail
-description: Receive pending agent mail and immediately execute the requested workflow action.
+description: Claim pending agent mail with `mailbox_recv` and immediately execute the requested workflow action.
 ---
 
 ## Steps
