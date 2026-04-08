@@ -22,7 +22,7 @@ Before drafting the delegate message:
 
 Execution mode gates:
 - default to serial mode
-- in serial mode, wait for closeout before sending the next delegated task
+- in serial mode, do not send the next delegated task until closeout completes
 
 ## 2) Output Mode
 
@@ -173,6 +173,10 @@ Rules:
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
 - if `mailbox_send` reports an existing active task, surface that result instead of retrying through another send path
+- treat coder/reviewer progress as asynchronous with unbounded duration; do not assume a closeout or reply will arrive within this turn
+- after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise report current state and stop instead of waiting
+- after sending, do not sleep, poll, or proactively check mail just to await coder/reviewer progress
+- in the shared workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
 - if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion
 - leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
 

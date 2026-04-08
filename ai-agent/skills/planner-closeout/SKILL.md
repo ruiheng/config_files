@@ -12,6 +12,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 ## Input
 
 Provide the mailbox body from `closeout_delivered`.
+Use this skill only after that closeout message is actually received.
 
 ## Agent Deck Mode
 
@@ -63,8 +64,11 @@ Optional command additions:
 
 - this skill is the planner-side runtime handler for `closeout_delivered`
 - use the closeout body as the primary planner handoff; do not reread the full review unless the closeout body is insufficient
+- coder/reviewer execution is asynchronous and may take unbounded time; this skill starts only after the closeout message actually arrives
+- do not start planner closeout speculatively while coder or reviewer work is still in progress
 - planner closeout owns merge, progress recording, optional next dispatch, and planner-side cleanup
 - preserve `workflow_policy` semantics when deciding whether to dispatch the next queued task
+- if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
 - keep mailbox JSON internal unless the user explicitly asks
 - do not naturally end after deciding what to do; this turn is complete only after planner closeout succeeds or a concrete blocker is reported

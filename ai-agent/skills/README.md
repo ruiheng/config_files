@@ -92,6 +92,9 @@ flowchart TD
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
+- coder/reviewer progress is asynchronous and may take unbounded time; planner must not treat delegate dispatch as a synchronous substep that will finish soon
+- after delegate dispatch, planner either does independent non-interfering work or stops; do not sleep, poll, or proactively wait for coder/reviewer progress
+- in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - Use `mailbox_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
 - External files are supplemental references only, not the default transport
 
