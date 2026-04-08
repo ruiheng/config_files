@@ -33,8 +33,10 @@ Skill-specific context resolution:
 - `lease_token` (optional): explicit leased delivery context -> omit when unavailable
 
 Branch-plan rule:
+- `integration_branch` is the existing non-task branch that receives the completed task; `task_branch` is merged into it
 - use the recorded branch plan from `closeout_delivered` unchanged
 - do not infer, rename, or repair branch plan during planner closeout
+- if recorded `integration_branch` looks like `task/*`, stop and ask for the real integration branch before running closeout
 - if any required branch-plan field is missing, ask one short clarification question instead of guessing
 
 ## Execution Flow

@@ -22,7 +22,7 @@ Usage:
 Options:
   --task-id <id>                   Required task id (YYYYMMDD-HHMM-<slug>)
   --task-branch <ref>              Task branch (default: task/<task_id>; pass explicitly when reusing an existing topic branch)
-  --integration-branch <ref>       Integration branch (default: current branch; planner should normally pass the branch resolved at delegate start)
+  --integration-branch <ref>       Integration branch (default: current branch; must be a non-task landing branch)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
   --planner-session-id <id|title>  Planner session ref (default: current agent-deck session id)
@@ -87,6 +87,13 @@ debug() {
   if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
     echo "DEBUG: $*" >&2
   fi
+}
+
+is_task_branch_ref() {
+  case "$1" in
+    task/*|refs/heads/task/*|refs/remotes/*/task/*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 task_id=""
@@ -190,15 +197,12 @@ fi
 [[ -n "$integration_branch" ]] || die "failed to resolve current branch; pass --integration-branch"
 
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
-[[ "$task_branch" != "$integration_branch" ]] || die "--task-branch must differ from integration branch"
 task_scoped_integration_branch=0
-if [[ "$integration_branch" == task/* && "$integration_branch" != "$task_branch" ]]; then
+if is_task_branch_ref "$integration_branch"; then
   task_scoped_integration_branch=1
-  if [[ "$integration_branch_source" == "inferred_current_branch" ]]; then
-    die "refusing implicit task-scoped integration branch '${integration_branch}' for task branch '${task_branch}'; pass the recorded --integration-branch explicitly"
-  fi
-  warn "task-scoped integration branch recorded explicitly: integration=${integration_branch} task_branch=${task_branch}"
+  die "refusing task-scoped integration branch '${integration_branch}' for task branch '${task_branch}'; pass the real non-task landing branch with --integration-branch"
 fi
+[[ "$task_branch" != "$integration_branch" ]] || die "--task-branch must differ from integration branch"
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
 git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"

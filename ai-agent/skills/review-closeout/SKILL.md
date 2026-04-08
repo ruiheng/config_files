@@ -54,6 +54,7 @@ Skill-specific context resolution:
 Branch-plan rule:
 - do not infer, rename, or repair branch plan during closeout
 - use the recorded branch plan from the accepted review report unchanged
+- if recorded `integration_branch` looks like `task/*`, treat the branch plan as invalid and ask for the real integration branch
 - if any branch-plan field is missing, ask one short clarification question instead of guessing
 
 If required values are resolved:

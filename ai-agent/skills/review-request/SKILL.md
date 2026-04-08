@@ -97,6 +97,9 @@ Skill-specific context resolution:
 - `integration_branch`: explicit -> delegated context -> ask
 - `task_branch`: explicit -> delegated context -> ask
 
+Branch-plan guard:
+- `integration_branch` must be the non-task landing branch; if it looks like `task/*`, ask for the real integration branch instead of sending the review request
+
 When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why.
 Reviewer feedback is advisory input, not automatic instructions.
 

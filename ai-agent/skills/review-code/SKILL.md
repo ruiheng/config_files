@@ -216,6 +216,9 @@ Skill-specific context resolution:
 - `special_requirements` (optional fallback): explicit -> request context -> omit
 - `checks_already_run` (optional): explicit -> mailbox body -> use for rerun decisions
 
+Branch-plan guard:
+- `integration_branch` must be the non-task landing branch; if it looks like `task/*`, treat branch plan continuity as FAIL and ask for the real integration branch before approval/closeout
+
 Important identity clarification:
 - `planner_session_id` must come from explicit/context workflow metadata
 

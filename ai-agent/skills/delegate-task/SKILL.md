@@ -33,11 +33,18 @@ Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
 - delegate creator is planner sender
 
+Branch-plan terms:
+- `integration_branch` is the existing non-task branch that should receive the completed task at closeout
+- `task_branch` is the branch where the delegated implementation is done
+- normal closeout merges `task_branch` into `integration_branch`
+
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
 - `planner_session_id`: explicit -> context -> bound mailbox sender context -> ask
 - `start_branch`: detected current git branch when delegation begins -> explicit -> context -> ask
-- `integration_branch`: explicit -> context -> if `start_branch` is the intended landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
+- `integration_branch`: explicit -> context -> if `start_branch` is the intended non-task landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
+  - integration branch must be the non-task landing branch; never use `task/*` as `integration_branch`
+  - if `start_branch` is `task/*`, treat it as the task branch and ask for the real integration branch unless context already records it
   - never assume `main`/`master`; branch names are evidence, not truth
 - `coder_session_ref`: explicit -> context -> default `coder-<task_id>`
 - `coder_session_id`: explicit actual id -> context actual id -> helper output after target resolution -> omit until known
