@@ -85,7 +85,10 @@ fi
 
 CURRENT_BRANCH="$(git symbolic-ref --quiet --short HEAD || true)"
 
-mapfile -t BRANCH_LINES < <(
+BRANCH_LINES=()
+while IFS= read -r line; do
+  BRANCH_LINES+=("$line")
+done < <(
   git for-each-ref \
     --sort=-committerdate \
     --format='%(refname:short)|%(committerdate:short)|%(committerdate:unix)' \
