@@ -111,6 +111,12 @@ Round: 1
 ## Constraints & Risks
 - [hard constraint / risk / mitigation]
 
+## Implementation Discipline
+- Optimize for the smallest conflict surface that still completes the task
+- Do not perform unrelated refactors, renames, file moves, or broad cleanups
+- Keep touched files and mechanical rewrites to the minimum needed for this task
+- If a larger cleanup seems useful, report it back to planner instead of folding it into this task
+
 ## Context to Acquire
 - Read before starting: [...]
 - Reference as needed: [...]
@@ -154,16 +160,17 @@ Tool-routing rule:
 Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
-1. use `agent_mailbox`
-2. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-3. call `agent_deck_ensure_session` with:
+1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
+2. use `agent_mailbox`
+3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
+4. call `agent_deck_ensure_session` with:
    - `session_ref = <coder_session_ref>`
    - `ensure_title = <coder_session_ref>`
    - `ensure_cmd = <coder_tool>`
    - `parent_session_id = <planner_session_id>`
    - normal workflow: do not pass `listener_message`
-4. use the returned `session_id` as the authoritative `coder_session_id`
-5. fill the final body and call `mailbox_send` with:
+5. use the returned `session_id` as the authoritative `coder_session_id`
+6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<planner_session_id>`
    - `to_address = agent-deck/<coder_session_id>`
    - `subject = "delegate: <task_id> -> coder"`
@@ -176,6 +183,8 @@ Recommended subject:
 Rules:
 - keep the full delegate brief in mailbox body
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
+- make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
+- keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command

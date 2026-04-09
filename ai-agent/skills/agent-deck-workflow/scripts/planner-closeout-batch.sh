@@ -207,6 +207,23 @@ fi
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
 git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"
 
+planner_workspace_file="${artifact_root%/}/planner-workspace.json"
+[[ -f "$planner_workspace_file" ]] || die "planner workspace record missing: ${planner_workspace_file}"
+planner_workspace_integration_branch="$(jq -r '.integration_branch // empty' "$planner_workspace_file" 2>/dev/null || true)"
+[[ -n "$planner_workspace_integration_branch" ]] || die "planner workspace record missing integration_branch: ${planner_workspace_file}"
+[[ "$planner_workspace_integration_branch" == "$integration_branch" ]] || die "planner workspace integration branch mismatch: record='${planner_workspace_integration_branch}' closeout='${integration_branch}'"
+
+lock_dir="${artifact_root%/}/active-task.lock"
+lock_file="${lock_dir}/lock.json"
+if [[ -d "$lock_dir" ]]; then
+  lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
+  [[ -n "$lock_task_id" ]] || die "workspace active-task lock metadata missing: ${lock_file}"
+  [[ "$lock_task_id" == "$task_id" ]] || die "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}"
+  lock_integration_branch="$(jq -r '.integration_branch // empty' "$lock_file" 2>/dev/null || true)"
+  [[ -n "$lock_integration_branch" ]] || die "workspace active-task lock missing integration_branch: ${lock_file}"
+  [[ "$lock_integration_branch" == "$integration_branch" ]] || die "workspace active-task lock integration branch mismatch: lock='${lock_integration_branch}' closeout='${integration_branch}'"
+fi
+
 if (( allow_dirty == 0 )); then
   if ! git diff --quiet || ! git diff --cached --quiet; then
     die "dirty worktree/index; commit or stash first (or pass --allow-dirty)"
@@ -419,8 +436,6 @@ if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
   echo "$ack_output"
 fi
 
-lock_dir="${artifact_root%/}/active-task.lock"
-lock_file="${lock_dir}/lock.json"
 if [[ -d "$lock_dir" ]]; then
   lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
   if [[ -z "$lock_task_id" ]]; then
