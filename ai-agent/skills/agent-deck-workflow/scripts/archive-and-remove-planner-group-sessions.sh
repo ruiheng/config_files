@@ -78,7 +78,16 @@ archive_file="${archive_dir}/session-archive-$(date -u +%Y%m%dT%H%M%SZ).json"
 mkdir -p "$archive_dir"
 
 entries_file="$(mktemp)"
+session_cache_dir="$(mktemp -d)"
 delete_failed=0
+declare -A remaining parent_session_id_of
+ordered_ids=()
+
+cleanup_tmp() {
+  rm -f "$entries_file"
+  rm -rf "$session_cache_dir"
+}
+trap cleanup_tmp EXIT
 
 while IFS= read -r session_id; do
   [[ -n "$session_id" ]] || continue
@@ -96,14 +105,47 @@ while IFS= read -r session_id; do
     continue
   fi
 
+  printf '%s\n' "$shown" >"${session_cache_dir}/${session_id}.json"
+  remaining["$session_id"]=1
+  parent_session_id_of["$session_id"]="$(jq -r '.parent_session_id // empty' <<<"$shown" 2>/dev/null || true)"
+done <<<"$session_ids"
+
+while ((${#remaining[@]} > 0)); do
+  progressed=0
+  for session_id in "${!remaining[@]}"; do
+    has_child=0
+    for other_id in "${!remaining[@]}"; do
+      if [[ "$other_id" != "$session_id" ]] && [[ "${parent_session_id_of[$other_id]:-}" == "$session_id" ]]; then
+        has_child=1
+        break
+      fi
+    done
+    if (( has_child == 0 )); then
+      ordered_ids+=("$session_id")
+      unset 'remaining[$session_id]'
+      progressed=1
+    fi
+  done
+  if (( progressed == 0 )); then
+    for session_id in "${!remaining[@]}"; do
+      ordered_ids+=("$session_id")
+      unset 'remaining[$session_id]'
+    done
+  fi
+done
+
+for session_id in "${ordered_ids[@]}"; do
+  shown="$(cat "${session_cache_dir}/${session_id}.json")"
   delete_status="skipped_no_apply"
   deleted=false
+  delete_error=""
   if (( apply )); then
-    if ad remove "$session_id" >/dev/null 2>&1; then
+    if remove_output="$(ad remove "$session_id" 2>&1)"; then
       delete_status="deleted"
       deleted=true
     else
       delete_status="delete_failed"
+      delete_error="${remove_output}"
       delete_failed=1
     fi
   fi
@@ -111,6 +153,7 @@ while IFS= read -r session_id; do
   jq -nc \
     --argjson shown "$shown" \
     --arg delete_status "$delete_status" \
+    --arg delete_error "$delete_error" \
     --argjson deleted "$deleted" \
     --argjson delete_applied "$apply" \
     '{
@@ -118,12 +161,12 @@ while IFS= read -r session_id; do
       session_show: $shown,
       delete_applied: ($delete_applied == 1),
       deleted: $deleted,
-      delete_status: $delete_status
+      delete_status: $delete_status,
+      delete_error: (if $delete_error == "" then null else $delete_error end)
     }' >>"$entries_file"
-done <<<"$session_ids"
+done
 
 sessions_json="$(jq -s '.' "$entries_file")"
-rm -f "$entries_file"
 
 jq -n \
   --arg planner_group "$planner_group" \
@@ -140,16 +183,24 @@ jq -n \
 echo "planner_group_archive_ok file=${archive_file} mode=$([[ "$apply" -eq 1 ]] && echo apply || echo preview)"
 
 group_delete_status="skipped_no_apply"
+remaining_sessions_json="[]"
 if (( apply )); then
-  remaining_after_delete="$(ad list --json 2>/dev/null | jq -r --arg planner_group "$planner_group" '
+  remaining_sessions_json="$(ad list --json 2>/dev/null | jq -c --arg planner_group "$planner_group" '
     [
       .[]
       | select(
           (.group // "") == $planner_group
           or ((.group // "") | startswith($planner_group + "/"))
         )
-    ] | length
-  ' 2>/dev/null || echo -1)"
+      | {
+          id,
+          title: (.title // null),
+          group: (.group // null),
+          parent_session_id: (.parent_session_id // null)
+        }
+    ]
+  ' 2>/dev/null || echo '[]')"
+  remaining_after_delete="$(jq -r 'length' <<<"$remaining_sessions_json" 2>/dev/null || echo -1)"
 
   if (( remaining_after_delete == 0 )); then
     if ad group delete "$planner_group" >/dev/null 2>&1; then
@@ -165,6 +216,19 @@ if (( apply )); then
 fi
 
 echo "planner_group_cleanup planner_group=${planner_group} group_delete_status=${group_delete_status}"
+if (( apply )) && (( delete_failed != 0 )); then
+  jq -r '
+    .[]
+    | select(.delete_status == "delete_failed")
+    | "planner_group_delete_failed session_id=\(.session_show.id // "unknown") title=\(.session_show.title // "unknown") parent_session_id=\(.session_show.parent_session_id // "") error=\(.delete_error // "unknown")"
+  ' <<<"$sessions_json"
+  if [[ "$remaining_sessions_json" != "[]" ]]; then
+    jq -r '
+      .[]
+      | "planner_group_remaining session_id=\(.id) title=\(.title // "unknown") group=\(.group // "") parent_session_id=\(.parent_session_id // "")"
+    ' <<<"$remaining_sessions_json"
+  fi
+fi
 
 if (( delete_failed != 0 )); then
   exit 3
