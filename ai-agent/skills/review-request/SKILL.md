@@ -270,10 +270,18 @@ Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
 1. use `agent_mailbox`
-2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-scoped-session.sh --session-ref <reviewer_session_ref> --session-cmd <reviewer_tool>`
-4. use the returned `session_id` as the authoritative `reviewer_session_id`
-5. fill the final body and call `mailbox_send` with:
+2. when this review belongs to an active planner workspace, read `planner_group` from `.agent-artifacts/planner-workspace.json`
+3. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
+4. call `agent_deck_ensure_session`
+   - identify target with `session_id` or `session_ref = <reviewer_session_ref>`
+   - when creation may be needed, also pass:
+     - `ensure_title = <reviewer_session_ref>`
+     - `ensure_cmd = <reviewer_tool>`
+     - `workdir = <current workspace>`
+     - `group_path = <planner_group>` when this review belongs to an active planner workspace
+     - `no_parent_link = true`
+5. use the returned `session_id` as the authoritative `reviewer_session_id`
+6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
@@ -285,8 +293,8 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
-- use `reviewer-<task_id>` as a session ref until the planner-scoped session helper resolves the real `reviewer_session_id`
-- keep reviewer sessions in the recorded planner group; do not depend on parent-child session depth
+- use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
+- keep reviewer sessions in the recorded planner group through `agent_deck_ensure_session`; do not depend on parent-child session depth
 - `mailbox_send` handles the normal non-local reviewer nudge
 
 ## Quality Bar

@@ -7,10 +7,13 @@ const path = require("node:path");
 const {
   acquireActiveTaskLock,
   activeTaskLockPaths,
+  buildChildGroupPath,
+  buildEnsureSessionLaunchArgs,
   parseSendTokens,
   parseWorkflowEnvelope,
   readActiveTaskLock,
   resolveWakeNotifyMessage,
+  sanitizeGroupSegment,
   validateSendReceipt,
 } = require("./agent-mailbox-mcp");
 
@@ -92,5 +95,70 @@ test("acquireActiveTaskLock rejects a second delegate lock in the same workspace
         action: "execute_delegate_task",
       }),
     /active task lock exists/
+  );
+});
+
+test("sanitizeGroupSegment keeps agent-deck-safe planner group names", () => {
+  assert.equal(
+    sanitizeGroupSegment("Planner-Entry-Attach@Runtime_Reliability"),
+    "planner-entry-attach@runtime_reliability"
+  );
+});
+
+test("buildChildGroupPath derives a nested planner group from the supervisor group", () => {
+  assert.equal(
+    buildChildGroupPath("agent-deck-z", "Planner Line 1"),
+    "agent-deck-z/planner-line-1"
+  );
+});
+
+test("buildEnsureSessionLaunchArgs supports group placement without parent wiring", () => {
+  assert.deepEqual(
+    buildEnsureSessionLaunchArgs({
+      ensureTitle: "planner-line1",
+      ensureCmd: "codex --model gpt-5.4",
+      workdir: "/tmp/worktree",
+      groupPath: "agent-deck-z/planner-line1",
+      noParentLink: true,
+    }),
+    [
+      "agent-deck",
+      "launch",
+      "--json",
+      "--title",
+      "planner-line1",
+      "--cmd",
+      "codex --model gpt-5.4",
+      "--group",
+      "agent-deck-z/planner-line1",
+      "--no-parent",
+      "/tmp/worktree",
+    ]
+  );
+});
+
+test("buildEnsureSessionLaunchArgs keeps parent linking when explicitly requested", () => {
+  assert.deepEqual(
+    buildEnsureSessionLaunchArgs({
+      ensureTitle: "reviewer-demo",
+      ensureCmd: "codex",
+      workdir: "/tmp/worktree",
+      parentSessionId: "sess_parent",
+      listenerMessage: "check-agent-mail",
+    }),
+    [
+      "agent-deck",
+      "launch",
+      "--json",
+      "--title",
+      "reviewer-demo",
+      "--cmd",
+      "codex",
+      "--parent",
+      "sess_parent",
+      "--message",
+      "check-agent-mail",
+      "/tmp/worktree",
+    ]
   );
 });

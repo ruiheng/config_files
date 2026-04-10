@@ -29,12 +29,13 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - this dispatch targets one planner in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
 - `integration_branch` must be provided explicitly; do not infer it from the worktree path, current branch, or repo metadata
+- if `planner_tool` is omitted, reuse the current session tool/command from agent-deck session metadata; do not infer it from environment variables
 - default `per_task_review = required`
 - default `final_review = skip`
 - blockers stop with a user question; do not add blocker mail to supervisor
 - planner reports back only after the assigned goal is complete or blocked
-- normal path is direct execution: resolve required inputs, run the planner-session helper, then send the mailbox body
-- do not inspect `--help`, environment variables, or repo docs first unless the helper or send step actually fails
+- normal path is direct execution: resolve required inputs, ensure the planner session through MCP, then send the mailbox body
+- do not inspect `--help`, environment variables, or repo docs first unless the MCP ensure or send step actually fails
 
 ## Mailbox Body Template
 
@@ -74,8 +75,15 @@ Round: 1
 ## Mailbox Send
 
 1. use `agent_mailbox`
-2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-supervised-planner-session.sh --planner-session-ref <planner_session_ref> --planner-cmd <planner_tool> --planner-workspace <planner_workspace>`
-   - add `--planner-group-name <planner_group_name>` when the plan already names a specific subgroup
+2. call `agent_deck_ensure_session` for the planner target
+   - identify target with `session_id` or `session_ref = <planner_session_ref>`
+   - when creation may be needed, also pass:
+     - `ensure_title = <planner_session_ref>`
+     - `ensure_cmd = <planner_tool>`
+     - `workdir = <planner_workspace>`
+     - `group_parent_session_id = <supervisor_session_id>`
+     - `child_group_name = <planner_group_name>` when present; otherwise let the tool derive a safe child-group name from the planner ref
+     - `no_parent_link = true`
 3. use the returned `session_id` as the authoritative `planner_session_id`
 4. fill `{{TO_SESSION_ID}}`
 5. send with:
@@ -85,6 +93,6 @@ Round: 1
    - `body = <execute-plan mailbox body>`
 
 Rules:
-- use the supervisor-side planner-session helper instead of creating planner sessions with direct parent-child wiring
-- planner subgroup placement is part of the session helper, not part of mailbox transport
-- treat the planner-session helper as a synchronous step; wait for it to return before composing or sending mailbox content
+- use `agent_deck_ensure_session`; do not create planner sessions through direct `agent-deck` CLI in the normal path
+- planner subgroup placement belongs to MCP session ensure, not mailbox transport
+- treat MCP session ensure as a synchronous step; wait for it to return before composing or sending mailbox content

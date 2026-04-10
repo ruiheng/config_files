@@ -495,8 +495,104 @@ function sessionInfoFromData(data, sessionRef = null) {
     session_ref: sessionRef || data.title || sessionId,
     title: data.title || null,
     session_status: data.status || null,
+    group: data.group || null,
+    path: data.path || null,
     addresses: [agentDeckAddress(sessionId)],
   };
+}
+
+function sanitizeGroupSegment(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._@-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized;
+}
+
+function buildChildGroupPath(parentGroup, childGroupName) {
+  const parent = String(parentGroup || "").trim().replace(/\/+$/g, "");
+  const child = sanitizeGroupSegment(childGroupName);
+  if (!parent) {
+    fail("cannot derive child group path without a parent group");
+  }
+  if (!child) {
+    fail("child group name resolves to an empty segment");
+  }
+  return `${parent}/${child}`;
+}
+
+function buildEnsureSessionLaunchArgs({
+  ensureTitle,
+  ensureCmd,
+  workdir,
+  parentSessionId = null,
+  noParentLink = false,
+  listenerMessage = "",
+  groupPath = null,
+}) {
+  const launchArgs = [
+    "agent-deck",
+    "launch",
+    "--json",
+    "--title",
+    ensureTitle,
+    "--cmd",
+    ensureCmd,
+  ];
+  if (groupPath) {
+    launchArgs.push("--group", groupPath);
+  }
+  if (noParentLink) {
+    launchArgs.push("--no-parent");
+  } else if (parentSessionId) {
+    launchArgs.push("--parent", parentSessionId);
+  }
+  if (listenerMessage) {
+    launchArgs.push("--message", listenerMessage);
+  }
+  launchArgs.push(workdir);
+  return launchArgs;
+}
+
+function listGroupPaths() {
+  const proc = runCmd(["agent-deck", "group", "list", "--json"]);
+  const data = parseJsonOutput(proc.stdout, "agent-deck group list");
+  return new Set(
+    Array.isArray(data.groups)
+      ? data.groups
+          .map((group) => (typeof group.path === "string" ? group.path.trim() : ""))
+          .filter(Boolean)
+      : []
+  );
+}
+
+async function ensureGroupPath(groupPath, extra) {
+  const trimmed = String(groupPath || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  const existing = listGroupPaths();
+  let current = "";
+  for (const rawSegment of trimmed.split("/")) {
+    const segment = rawSegment.trim();
+    if (!segment) {
+      fail(`invalid group path: ${groupPath}`);
+    }
+    const next = current ? `${current}/${segment}` : segment;
+    if (!existing.has(next)) {
+      const createArgs = ["agent-deck", "group", "create", segment];
+      if (current) {
+        createArgs.push("--parent", current);
+      }
+      await runCmdAsync(createArgs, {
+        signal: extra?.signal,
+      });
+      existing.add(next);
+    }
+    current = next;
+  }
+  return trimmed;
 }
 
 function parseSendTokens(output) {
@@ -1087,13 +1183,17 @@ function buildServer() {
   server.registerTool(
     "agent_deck_ensure_session",
     {
-      description: "Resolve or create an agent-deck session. If the target exists but is not active, start it; if it is already active, return notify_needed=true. Leave listener_message empty in normal workflow; use it only for rare bootstrap/control cases before mailbox pickup.",
+      description: "Resolve or create an agent-deck session. If the target exists but is not active, start it; if it is already active, return notify_needed=true. Can also ensure explicit group placement without relying on direct parent-child session wiring. Leave listener_message empty in normal workflow; use it only for rare bootstrap/control cases before mailbox pickup.",
       inputSchema: {
         session_id: z.string().optional(),
         session_ref: z.string().optional(),
         ensure_title: z.string().optional(),
         ensure_cmd: z.string().optional(),
         parent_session_id: z.string().optional(),
+        group_path: z.string().optional(),
+        group_parent_session_id: z.string().optional(),
+        child_group_name: z.string().optional(),
+        no_parent_link: z.boolean().optional(),
         workdir: z.string().optional(),
         listener_message: z.string().optional(),
       },
@@ -1103,11 +1203,39 @@ function buildServer() {
       const identifier = args.session_id || args.session_ref || null;
       let workdir = args.workdir || bound.default_workdir || null;
       let data = identifier ? resolveSessionShow(identifier, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) : null;
+      const noParentLink = args.no_parent_link === true;
 
       let createdTarget = false;
       let startedSession = false;
       let notifyNeeded = false;
       let listenerStatus = "not_needed";
+      let targetGroupPath = (args.group_path || "").trim() || null;
+
+      if (noParentLink && args.parent_session_id) {
+        fail("no_parent_link cannot be combined with parent_session_id");
+      }
+      if (!targetGroupPath && args.group_parent_session_id) {
+        const parentData = resolveSessionShow(args.group_parent_session_id, {
+          timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS,
+        });
+        if (!parentData) {
+          fail(`group_parent_session_id not found: ${args.group_parent_session_id}`);
+        }
+        const parentGroup = typeof parentData.group === "string" ? parentData.group.trim() : "";
+        if (!parentGroup) {
+          fail("group_parent_session_id must belong to a non-root group");
+        }
+        const childGroupName =
+          (args.child_group_name || "").trim() ||
+          args.ensure_title ||
+          args.session_ref ||
+          args.session_id ||
+          "";
+        targetGroupPath = buildChildGroupPath(parentGroup, childGroupName);
+      }
+      if (targetGroupPath) {
+        await ensureGroupPath(targetGroupPath, extra);
+      }
 
       if (!data) {
         if (!args.ensure_title) {
@@ -1127,21 +1255,15 @@ function buildServer() {
         }
 
         const listenerMessage = (args.listener_message || "").trim();
-        const launchArgs = [
-          "agent-deck",
-          "launch",
-          "--json",
-          "--title",
-          args.ensure_title,
-          "--parent",
-          args.parent_session_id,
-          "--cmd",
-          args.ensure_cmd,
+        const launchArgs = buildEnsureSessionLaunchArgs({
+          ensureTitle: args.ensure_title,
+          ensureCmd: args.ensure_cmd,
           workdir,
-        ];
-        if (listenerMessage) {
-          launchArgs.splice(10, 0, "--message", listenerMessage);
-        }
+          parentSessionId: args.parent_session_id || null,
+          noParentLink,
+          listenerMessage,
+          groupPath: targetGroupPath,
+        });
         const proc = await runCmdAsync(launchArgs, {
           signal: extra?.signal,
         });
@@ -1152,6 +1274,17 @@ function buildServer() {
       } else {
         const listenerMessage = (args.listener_message || "").trim();
         const status = data.status || null;
+        const existingPath = typeof data.path === "string" ? data.path.trim() : "";
+        if (workdir && existingPath && existingPath !== workdir) {
+          fail(`session path mismatch: existing='${existingPath}' expected='${workdir}'`);
+        }
+        const existingGroup = typeof data.group === "string" ? data.group.trim() : "";
+        if (targetGroupPath && existingGroup !== targetGroupPath) {
+          await runCmdAsync(["agent-deck", "group", "move", data.id, targetGroupPath], {
+            signal: extra?.signal,
+          });
+          data = resolveSessionShow(data.id, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) || data;
+        }
         if (ACTIVE_SESSION_STATUSES.has(status)) {
           notifyNeeded = true;
           listenerStatus = "not_needed_existing_session";
@@ -1197,11 +1330,14 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildChildGroupPath,
+  buildEnsureSessionLaunchArgs,
   resolveWakeNotifyMessage,
   parseWorkflowEnvelope,
   activeTaskLockPaths,
   acquireActiveTaskLock,
   readActiveTaskLock,
+  sanitizeGroupSegment,
   parseSendTokens,
   validateSendReceipt,
 };

@@ -89,6 +89,9 @@ For an agent-deck-managed session `<id>`, bind:
 `agent_deck_ensure_session`
 - resolves an existing session or creates it when missing
 - starts an inactive target when needed
+- can place the ensured session into an explicit `group_path`
+- can derive and ensure a child group under `group_parent_session_id` by using `child_group_name`
+- can create sessions with `no_parent_link = true` so workflow grouping does not depend on one-level parent-child session depth
 - a newly created or newly started target should follow the same wake path as any other target and run `check-agent-mail` when notified
 - if `listener_message` is customized and omits that receiver hint, the MCP server appends a `check-agent-mail` hint automatically
 
