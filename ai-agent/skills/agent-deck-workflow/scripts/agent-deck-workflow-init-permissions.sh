@@ -18,6 +18,13 @@ INSTALLED_WORKFLOW_SCRIPTS="$INSTALLED_SKILLS_DIR/agent-deck-workflow/scripts"
 INSTALLED_WORKFLOW_SCRIPTS_TILDE="$INSTALLED_SKILLS_DIR_TILDE/agent-deck-workflow/scripts"
 INSTALLED_LOCAL_BIN="$HOME/.local/bin"
 INSTALLED_LOCAL_BIN_TILDE="~/.local/bin"
+WORKFLOW_HELPER_SCRIPTS=(
+    "planner-closeout-batch.sh"
+    "ensure-planner-workspace.sh"
+    "ensure-supervised-planner-session.sh"
+    "ensure-planner-scoped-session.sh"
+    "archive-and-remove-planner-group-sessions.sh"
+)
 
 # Colors
 RED='\033[0;31m'
@@ -165,6 +172,8 @@ configure_claude() {
     local installed_skills_read_permission_tilde="Read(${INSTALLED_SKILLS_DIR_TILDE}/**)"
     local installed_skills_read_permission_abs="Read(${INSTALLED_SKILLS_DIR}/**)"
     local git_readonly_permissions_json
+    local workflow_script_permissions_json=""
+    local script_name
 
     git_readonly_permissions_json=$(cat <<'EOF'
   "Bash(git diff)",
@@ -179,6 +188,11 @@ configure_claude() {
   "Bash(git rev-parse *)",
 EOF
 )
+
+    for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
+        workflow_script_permissions_json+="  \"Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/${script_name} *)\","$'\n'
+        workflow_script_permissions_json+="  \"Bash(${INSTALLED_WORKFLOW_SCRIPTS}/${script_name} *)\","$'\n'
+    done
 
     log_info "Configuring Claude Code permissions..."
 
@@ -204,8 +218,7 @@ EOF
 $git_readonly_permissions_json
   "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
   "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
-  "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
-  "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
+$workflow_script_permissions_json
   "$installed_skills_read_permission_tilde",
   "$installed_skills_read_permission_abs",
   "Write(/.agent-artifacts/**)"
@@ -234,8 +247,7 @@ EOF
 $git_readonly_permissions_json
       "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
       "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
+$workflow_script_permissions_json
       "$installed_skills_read_permission_tilde",
       "$installed_skills_read_permission_abs",
       "Write(/.agent-artifacts/**)"
@@ -260,8 +272,7 @@ EOF
 $git_readonly_permissions_json
       "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
       "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/planner-closeout-batch.sh *)",
-      "Bash(${INSTALLED_WORKFLOW_SCRIPTS}/planner-closeout-batch.sh *)",
+$workflow_script_permissions_json
       "$installed_skills_read_permission_tilde",
       "$installed_skills_read_permission_abs",
       "Write(/.agent-artifacts/**)"
@@ -281,10 +292,28 @@ configure_codex() {
     local codex_dir="$PROJECT_DIR/.codex"
     local rules_dir="$codex_dir/rules"
     local rules_file="$rules_dir/agent-deck-workflow.rules"
+    local workflow_script_prefix_rules=""
+    local script_name
 
     log_info "Configuring Codex escalation rules..."
 
     mkdir -p "$rules_dir"
+
+    for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
+        workflow_script_prefix_rules+="prefix_rule(
+    pattern = [\"$INSTALLED_WORKFLOW_SCRIPTS_TILDE/${script_name}\"],
+    decision = \"allow\",
+    justification = \"Workflow helper script (installed path, tilde)\",
+)
+
+prefix_rule(
+    pattern = [\"$INSTALLED_WORKFLOW_SCRIPTS/${script_name}\"],
+    decision = \"allow\",
+    justification = \"Workflow helper script (installed path, absolute)\",
+)
+
+"
+    done
 
     cat > "$rules_file" << EOF
 # Agent Deck Workflow - Auto-approve rules
@@ -336,17 +365,7 @@ prefix_rule(
     justification = "Workflow send+wakeup helper (installed local bin, absolute)",
 )
 
-prefix_rule(
-    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS_TILDE/planner-closeout-batch.sh"],
-    decision = "allow",
-    justification = "Workflow closeout script (installed path, tilde)",
-)
-
-prefix_rule(
-    pattern = ["$INSTALLED_WORKFLOW_SCRIPTS/planner-closeout-batch.sh"],
-    decision = "allow",
-    justification = "Workflow closeout script (installed path, absolute)",
-)
+$workflow_script_prefix_rules
 EOF
 
     cat >> "$rules_file" << 'EOF'
@@ -369,10 +388,19 @@ configure_gemini() {
     local gemini_dir="$PROJECT_DIR/.gemini"
     local policies_dir="$gemini_dir/policies"
     local policy_file="$policies_dir/agent-deck-workflow.toml"
+    local workflow_script_rules=""
+    local script_name
 
     log_info "Configuring Gemini CLI shell policies..."
 
     mkdir -p "$policies_dir"
+
+    for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
+        workflow_script_rules+="[[rules]]
+pattern = \"^${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/${script_name//./\\.}( .*)?$\"\naction = \"allow\"\ndescription = \"Workflow helper script (tilde)\"\n\n"
+        workflow_script_rules+="[[rules]]
+pattern = \".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/${script_name//./\\.}( .*)?$\"\naction = \"allow\"\ndescription = \"Workflow helper script (absolute)\"\n\n"
+    done
 
     cat > "$policy_file" << 'EOF'
 # Agent Deck Workflow - Shell policy rules
@@ -402,16 +430,10 @@ description = "Workflow send+wakeup helper (tilde)"
 pattern = ".*/\\.local/bin/adwf-send-and-wake( .*)?$"
 action = "allow"
 description = "Workflow send+wakeup helper (absolute)"
+EOF
 
-[[rules]]
-pattern = "^~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch\.sh .*"
-action = "allow"
-description = "Workflow closeout script (tilde)"
-
-[[rules]]
-pattern = ".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch\.sh .*"
-action = "allow"
-description = "Workflow closeout script (absolute)"
+    printf "%b" "$workflow_script_rules" >> "$policy_file"
+    cat >> "$policy_file" << 'EOF'
 
 # Note: Gemini file write permissions are controlled separately
 # and may still require approval for .agent-artifacts writes

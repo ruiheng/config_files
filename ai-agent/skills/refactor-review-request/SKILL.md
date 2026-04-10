@@ -113,12 +113,7 @@ Recommended subject:
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. call `agent_deck_ensure_session` with:
-   - `session_ref = <refactor_reviewer_session_ref>`
-   - `ensure_title = <refactor_reviewer_session_ref>`
-   - `ensure_cmd = <reviewer_tool>`
-   - `parent_session_id = <planner_session_id_or_requester_session_id>`
-   - normal workflow: do not pass `listener_message`
+3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-scoped-session.sh --session-ref <refactor_reviewer_session_ref> --session-cmd <reviewer_tool>`
 4. use the returned `session_id` as the authoritative `refactor_reviewer_session_id`
 5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
@@ -134,4 +129,4 @@ Use the `agent_mailbox` MCP tools:
 - focus on one coherent code area or one review goal per request
 - later rounds to the same reviewer should be delta-only
 - if reviewer continuity changes, resend full context
-- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
+- keep planner-owned refactor-reviewer sessions in the recorded planner group

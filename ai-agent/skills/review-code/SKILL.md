@@ -135,7 +135,7 @@ Use this exact structure as the full review report. When reviewer sends follow-u
 Task: <task_id>
 Action: <rework_required | stop_recommended>
 From: reviewer <reviewer_session_id>
-To: coder <coder_session_id>
+To: <requester_role> <requester_session_id>
 Planner: <planner_session_id>
 Round: <round>
 
@@ -205,7 +205,9 @@ Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body -> ask
 - `reviewer_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `coder_session_id`: explicit -> mailbox body `From` header -> ask
+- `requester_role`: explicit -> mailbox body `From` header label -> default `coder`
+- `requester_session_id`: explicit -> mailbox body `From` header -> ask
+- `review_lane`: explicit -> mailbox body -> default `task`
 - `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
 - `round`: explicit -> mailbox body `Round` header -> default `1`
@@ -238,14 +240,16 @@ Execution flow in Agent Deck mode:
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
    - `stop_recommended` if no must-fix remains and browser validation is not required or already passed
    - if `round >= review_round_hard_stop_threshold` and similar issues are still recurring or progress is clearly non-converging, do not send another routine `rework_required`; present the situation to the user and wait for a decision
-3. For `rework_required`, send the full review report as mailbox body to coder
+3. For `rework_required`, send the full review report back to the requester session from `review_requested`
+   - requester may be `coder` or `planner`
 4. For `browser_check_requested`, run `browser-test-request`; the browser report will return to the requester session
 5. For `stop_recommended`:
-   - if `auto_accept_if_no_must_fix=true`, the final no-must-fix review report should proceed to `review-closeout`
-   - normally, the agent that currently holds the final review report should run `review-closeout`
-   - if the same final no-must-fix report is delivered to coder in unattended flow, coder may run `review-closeout` from that report instead of treating it as another rework round
+   - if `review_lane = integration_final`, return the final review result to requester and let planner decide whether to fix locally, spawn another task, or finish the plan
+   - otherwise, if `auto_accept_if_no_must_fix=true`, the final no-must-fix review report should proceed to `review-closeout`
+   - otherwise, normally, the agent that currently holds the final review report should run `review-closeout`
+   - if the same final no-must-fix task-lane report is delivered to requester in unattended flow, requester may run `review-closeout` from that report instead of treating it as another rework round
    - only when `auto_accept_if_no_must_fix=false`, present user decision summary and wait for explicit acceptance or iteration decision
-   - after explicit acceptance in human-gated flow, run `review-closeout`
+   - after explicit acceptance in human-gated flow, run `review-closeout` for task-lane review, or finish the integration review for `integration_final`
    - request human UI confirmation before acceptance/closeout only when `ui_manual_confirmation=required`, or when `ui_manual_confirmation=auto` and explicit policy wants heuristic UI gating
 
 Mailbox subject (`rework_required`):
@@ -255,13 +259,13 @@ Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
 - use `agent_mailbox`
-- first call `agent_deck_ensure_session` with `session_id = <coder_session_id>`
+- first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
 - send it with `mailbox_send`
   - `from_address = agent-deck/<reviewer_session_id>`
-  - `to_address = agent-deck/<coder_session_id>`
+  - `to_address = agent-deck/<requester_session_id>`
   - `subject = "rework required: <task_id> r<round>"`
   - `body = <full review report>`
-- include enough evidence and fix guidance that coder can continue from the mailbox body alone
+- include enough evidence and fix guidance that the requester can continue from the mailbox body alone
 
 Mailbox subject (`user_requested_iteration` after user chooses iterate):
 - `iteration requested: <task_id> r<round>`
@@ -271,10 +275,10 @@ Mailbox body rules (`user_requested_iteration`):
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
 - use `agent_mailbox`
-- first call `agent_deck_ensure_session` with `session_id = <coder_session_id>`
+- first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
 - send it with `mailbox_send`
   - `from_address = agent-deck/<reviewer_session_id>`
-  - `to_address = agent-deck/<coder_session_id>`
+  - `to_address = agent-deck/<requester_session_id>`
   - `subject = "iteration requested: <task_id> r<round>"`
   - `body = <iteration mailbox body>`
 
@@ -291,7 +295,8 @@ When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-acc
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
 - For `stop_recommended` with manual decision, do that only when `auto_accept_if_no_must_fix=false`; wait for explicit user choice, then either run `review-closeout` or send `user_requested_iteration`
-- In unattended flow, any accepted final no-must-fix report that lands with reviewer or coder must be treated as `review-closeout` input, not as another rework cycle
+- In unattended flow, accepted no-must-fix task-lane reports that land with reviewer or requester must be treated as `review-closeout` input, not as another rework cycle
+- In unattended flow, accepted `integration_final` reports return directly to planner/requester; do not route them into `review-closeout`
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep mailbox JSON internal unless user explicitly asks

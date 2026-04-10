@@ -62,6 +62,8 @@ Resolve by priority:
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
   - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit
 - `workflow_policy` (optional): explicit -> context -> default unattended policy
+- `per_task_review` (optional): explicit -> context -> default `required`
+- `final_review` (optional): explicit -> context -> default `skip`
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 - `big_picture` (required when available): explicit -> context -> infer from current user goal / active plan -> ask only when task framing would otherwise be misleading
 - `escalation_triggers` (optional): explicit -> context -> infer from task risk / boundary uncertainty -> omit when empty
@@ -117,6 +119,10 @@ Round: 1
 - Keep touched files and mechanical rewrites to the minimum needed for this task
 - If a larger cleanup seems useful, report it back to planner instead of folding it into this task
 
+## Review Policy
+- Per-task review: [required | skip]
+- Final integration review: [planner-managed | required | skip]
+
 ## Context to Acquire
 - Read before starting: [...]
 - Reference as needed: [...]
@@ -130,7 +136,8 @@ Round: 1
 - [testable completion item]
 
 ## Required Workflow Step
-- After first delivery commit, coder must immediately run the `review-request` skill and send the review-request mailbox message, unless the user explicitly waived review
+- If `Per-task review: required`, coder must run the `review-request` skill and send the review-request mailbox message after the delivery commit
+- If `Per-task review: skip`, do not start reviewer for this task unless planner explicitly requests review later
 
 ## Important Notes
 - Coder git writes and commits for this delegated task are pre-authorized
@@ -163,12 +170,7 @@ Workflow send sequence:
 1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
 2. use `agent_mailbox`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-4. call `agent_deck_ensure_session` with:
-   - `session_ref = <coder_session_ref>`
-   - `ensure_title = <coder_session_ref>`
-   - `ensure_cmd = <coder_tool>`
-   - `parent_session_id = <planner_session_id>`
-   - normal workflow: do not pass `listener_message`
+4. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-scoped-session.sh --session-ref <coder_session_ref> --session-cmd <coder_tool>`
 5. use the returned `session_id` as the authoritative `coder_session_id`
 6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<planner_session_id>`
@@ -185,7 +187,8 @@ Rules:
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
-- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
+- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the planner-scoped session helper resolves real session ids
+- create planner-owned worker sessions in the recorded planner group; do not rely on direct parent-child session wiring
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
 - if `mailbox_send` reports an existing active task, surface that result instead of retrying through another send path
@@ -194,7 +197,6 @@ Rules:
 - after sending, do not sleep, poll, or proactively check mail just to await coder/reviewer progress
 - in the shared workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
 - if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion
-- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
 
 ## 5) User-Facing Output Contract
 

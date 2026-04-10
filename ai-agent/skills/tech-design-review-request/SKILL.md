@@ -140,12 +140,7 @@ Recommended subject:
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real architect session id must appear
-3. call `agent_deck_ensure_session` with:
-   - `session_ref = <architect_session_ref>`
-   - `ensure_title = <architect_session_ref>`
-   - `ensure_cmd = <architect_tool>`
-   - `parent_session_id = <planner_session_id_or_requester_session_id>`
-   - normal workflow: do not pass `listener_message`
+3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-scoped-session.sh --session-ref <architect_session_ref> --session-cmd <architect_tool>`
 4. use the returned `session_id` as the authoritative `architect_session_id`
 5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
@@ -167,4 +162,4 @@ Use the `agent_mailbox` MCP tools:
 - after sending, do not sleep, poll, or proactively check mail just to await the architect report
 - when disagreeing, state the disagreement and rationale clearly in the next round
 - either requester or architect may ask the user to decide when the disagreement becomes subjective or stuck
-- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
+- keep architect sessions in the recorded planner group when this review belongs to an active planner workspace

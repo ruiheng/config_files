@@ -24,7 +24,8 @@ Use `SKILL.md` for:
 
 ## Roles
 
-- Agent 1, **Planner** (`delegate-task`, `planner-closeout`): planning agent, prepares the execution brief and completes planner-side closeout
+- Agent 1, **Planner** (`delegate-task`, `execute-plan`, `planner-closeout`): planning agent, prepares execution briefs, can execute a supervisor-assigned task list inside one workspace, and completes planner-side closeout
+- Supervisor: generic upstream report target; may dispatch a plan to a planner and receive one final plan report back
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
@@ -47,7 +48,7 @@ Use `SKILL.md` for:
 2. Planner runs `delegate-task` and sends one delegate workflow message.
 3. Planner or Coder may request architect review for the latest committed tech-design docs on `tech-design/<task_id>`.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
-5. Coder runs `review-request` from that committed state and sends one review-request workflow message.
+5. Task-level review is planner-controlled: coder either runs `review-request` from that committed state or returns control to planner without reviewer involvement.
 6. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
@@ -58,6 +59,14 @@ Use `SKILL.md` for:
 10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
 11. Planner runs `planner-closeout` from that `closeout_delivered` body and batches merge/progress/next-task work.
 12. Coder, Reviewer, and Architect can be fully exited; Browser Tester stays long-lived.
+
+## Supervisor-To-Planner Plan Execution
+
+1. Supervisor runs `dispatch-plan` and sends one `execute_plan` message to a planner.
+2. That planner owns one workspace and the internal task decomposition needed to complete the assigned goal.
+3. For each task, planner may choose `Per-task review: required` or `skip`.
+4. After the assigned goal is complete, planner may request one final integrated review from its own integration branch.
+5. Planner sends one `plan_report_delivered` summary back to supervisor.
 
 ## Flow Diagram
 
@@ -89,12 +98,17 @@ flowchart TD
 - requester should provide browser-test login/auth/setup context whenever possible; Browser Tester may ask requester or user for missing access details
 - `review-closeout` is the compact planner handoff after acceptance
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
+- `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
+- `plan-report` is the supervisor-side runtime action for the final report from that planner
+- derived planner sessions live in their own child agent-deck group under the supervisor group
+- planner-owned coder/reviewer/architect/refactor-reviewer sessions live in that planner group; do not rely on one-level parent-child session depth
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
 - coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not treat cross-session dispatch as a synchronous substep that will finish soon
 - after cross-session dispatch, planner either does independent non-interfering work or stops; do not sleep, poll, or proactively wait for another agent's progress
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
+- planner may skip per-task review when its current plan policy allows it; final integrated review can be requested later from the planner-owned integration branch
 - Use `mailbox_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
 - External files are supplemental references only, not the default transport
 
@@ -109,12 +123,16 @@ Current recommended operating mode:
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
+7. When supervisor finishes integrating a planner result, clean up that planner group and its sessions together.
 
 Use skills:
 
 - Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
 - Receiver wake handler: `check-agent-mail` (`ai-agent/skills/check-agent-mail/SKILL.md`)
 - Planner closeout: `planner-closeout` (`ai-agent/skills/planner-closeout/SKILL.md`)
+- Plan dispatch: `dispatch-plan` (`ai-agent/skills/dispatch-plan/SKILL.md`)
+- Plan execution: `execute-plan` (`ai-agent/skills/execute-plan/SKILL.md`)
+- Plan report: `plan-report` (`ai-agent/skills/plan-report/SKILL.md`)
 - Tech-design review request: `tech-design-review-request` (`ai-agent/skills/tech-design-review-request/SKILL.md`)
 - Architect review: `tech-design-review` (`ai-agent/skills/tech-design-review/SKILL.md`)
 - Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)

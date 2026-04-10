@@ -33,7 +33,7 @@ Skill-specific context resolution:
 - `lease_token` (optional): explicit leased delivery context -> omit when unavailable
 
 Branch-plan rule:
-- `integration_branch` is the existing non-task branch that receives the completed task; `task_branch` is merged into it
+- `integration_branch` is the existing non-task branch that receives the completed task; `task_branch` is the completed task line named by the recorded plan
 - use the recorded branch plan from `closeout_delivered` unchanged
 - do not infer, rename, or repair branch plan during planner closeout
 - if recorded `integration_branch` looks like `task/*`, stop and ask for the real integration branch before running closeout
@@ -68,7 +68,7 @@ Optional command additions:
 - use the closeout body as the primary planner handoff; do not reread the full review unless the closeout body is insufficient
 - coder/reviewer execution is asynchronous and may take unbounded time; this skill starts only after the closeout message actually arrives
 - do not start planner closeout speculatively while coder or reviewer work is still in progress
-- planner closeout owns merge, progress recording, optional next dispatch, and planner-side cleanup
+- the planner closeout script owns required closeout actions, progress recording, optional next dispatch, and planner-side cleanup
 - preserve `workflow_policy` semantics when deciding whether to dispatch the next queued task
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
@@ -79,7 +79,7 @@ Optional command additions:
 
 After planner closeout:
 - report whether required closeout actions succeeded
-- include the merged branch pair and task id
+- include the recorded branch pair and task id
 - include whether mailbox ack ran
 - include whether next dispatch ran
 - include any manual unblock step when closeout or cleanup failed

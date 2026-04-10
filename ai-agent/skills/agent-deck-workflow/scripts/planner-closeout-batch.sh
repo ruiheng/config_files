@@ -83,6 +83,14 @@ resolve_current_session_id() {
   echo "$current_id"
 }
 
+resolve_session_id() {
+  local shown session_id
+  shown="$(agent-deck session show "$1" --json 2>/dev/null || true)"
+  session_id="$(jq -r '.id // empty' <<<"$shown" 2>/dev/null || true)"
+  [[ -n "$session_id" ]] || die "failed to resolve agent-deck session id for '${1}'"
+  echo "$session_id"
+}
+
 debug() {
   if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
     echo "DEBUG: $*" >&2
@@ -209,8 +217,12 @@ git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does n
 
 planner_workspace_file="${artifact_root%/}/planner-workspace.json"
 [[ -f "$planner_workspace_file" ]] || die "planner workspace record missing: ${planner_workspace_file}"
+planner_workspace_planner_session_id="$(jq -r '.planner_session_id // empty' "$planner_workspace_file" 2>/dev/null || true)"
 planner_workspace_integration_branch="$(jq -r '.integration_branch // empty' "$planner_workspace_file" 2>/dev/null || true)"
+[[ -n "$planner_workspace_planner_session_id" ]] || die "planner workspace record missing planner_session_id: ${planner_workspace_file}"
 [[ -n "$planner_workspace_integration_branch" ]] || die "planner workspace record missing integration_branch: ${planner_workspace_file}"
+resolved_planner_session_id="$(resolve_session_id "$planner_session_ref")"
+[[ "$planner_workspace_planner_session_id" == "$resolved_planner_session_id" ]] || die "planner workspace planner mismatch: record='${planner_workspace_planner_session_id}' closeout='${resolved_planner_session_id}'"
 [[ "$planner_workspace_integration_branch" == "$integration_branch" ]] || die "planner workspace integration branch mismatch: record='${planner_workspace_integration_branch}' closeout='${integration_branch}'"
 
 lock_dir="${artifact_root%/}/active-task.lock"

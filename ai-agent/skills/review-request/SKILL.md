@@ -34,6 +34,9 @@ Branch plan continuity rule:
 - Optional:
   - `base_branch` (for branch scope)
   - `original_task`
+  - `requester_role`
+  - `requester_session_id`
+  - `review_lane`
   - `start_branch`
   - `integration_branch`
   - `task_branch`
@@ -80,9 +83,11 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> branch `task/<task_id>` -> delegated context -> ask
 - `planner_session_id`: explicit/context -> ask
-- `coder_session_id`: explicit -> current session id -> delegated context -> ask
+- `requester_role`: explicit -> delegated context -> current workflow role -> default `coder`
+- `requester_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `reviewer_session_id`: explicit actual id -> delegated context actual id -> resolved/created from `reviewer_session_ref` before send
+- `review_lane`: explicit -> delegated context -> default `task`
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `coder_tool`: explicit -> delegated context -> default current AI tool
@@ -114,7 +119,7 @@ Review-request continuity rule:
   - if the transport or tooling can support it, body can be minimal; otherwise keep it to a single short sentence
 
 Identity rules:
-- `review_requested` sender must be active coder session id
+- `review_requested` sender must be the active requester session id for this review lane
 - use the bound mailbox sender context for sender validation
 - If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
@@ -124,7 +129,7 @@ Commit reference rule:
 - in mailbox content, use a short commit ref, not a full 40-char hash
 
 Post-send behavior:
-- coder does not proactively poll reviewer unless user explicitly asks
+- requester does not proactively poll reviewer unless user explicitly asks
 
 ## Output Template
 
@@ -135,7 +140,7 @@ Use this exact structure as the mailbox body:
 ```markdown
 Task: <task_id>
 Action: review_requested
-From: coder <coder_session_id>
+From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: <round>
@@ -156,6 +161,9 @@ Round: <round>
 - Integration branch: [integration_branch]
 - Task branch: [task_branch]
 - Stability rule: treat this recorded branch plan as immutable task context unless the user explicitly changes it
+
+## Review Context
+- Lane: [task | integration_final]
 
 ## Review Focus
 - [Primary risk/review angle 1]
@@ -207,7 +215,7 @@ Use this structure:
 ```markdown
 Task: <task_id>
 Action: review_requested
-From: coder <coder_session_id>
+From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Round: <round>
@@ -226,6 +234,9 @@ Round: <round>
 - Integration branch: [integration_branch]
 - Task branch: [task_branch]
 - Change status: [unchanged | explicitly updated this round]
+
+## Review Context
+- Lane: [task | integration_final]
 
 ## Updated Implementation Summary
 [Only what changed since the last review request]
@@ -260,15 +271,10 @@ Preferred path: use the `agent_mailbox` MCP tools.
 Workflow send sequence:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. call `agent_deck_ensure_session` with:
-   - `session_ref = <reviewer_session_ref>`
-   - `ensure_title = <reviewer_session_ref>`
-   - `ensure_cmd = <reviewer_tool>`
-   - `parent_session_id = <planner_session_id>`
-   - normal workflow: do not pass `listener_message`
+3. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-scoped-session.sh --session-ref <reviewer_session_ref> --session-cmd <reviewer_tool>`
 4. use the returned `session_id` as the authoritative `reviewer_session_id`
 5. fill the final body and call `mailbox_send` with:
-   - `from_address = agent-deck/<coder_session_id>`
+   - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
    - `body = <review-request mailbox body>`
@@ -279,9 +285,9 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
-- use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
+- use `reviewer-<task_id>` as a session ref until the planner-scoped session helper resolves the real `reviewer_session_id`
+- keep reviewer sessions in the recorded planner group; do not depend on parent-child session depth
 - `mailbox_send` handles the normal non-local reviewer nudge
-- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
 
 ## Quality Bar
 
