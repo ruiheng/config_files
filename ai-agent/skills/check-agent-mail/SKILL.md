@@ -11,7 +11,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
    - execute that workflow stage immediately
-4. Only `mailbox_ack` after the message has been incorporated into working state
+4. Only `mailbox_ack` after the message's required workflow action is complete
 5. If the message cannot be acted on yet, use `mailbox_release`, `mailbox_defer`, or `mailbox_fail` instead of silently dropping it
 
 ## Rules
@@ -22,7 +22,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - The current session owns the claimed delivery lifecycle from `mailbox_recv` through final `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
-- The action skill decides the exact serialized handoff point for `mailbox_ack` or the alternate lifecycle step
+- The action skill decides the exact serialized completion point for `mailbox_ack` or the alternate lifecycle step
 - Determine workflow behavior from this mailbox input plus the current action skill; you do not need to inspect another role's implementation details
 - Treat `mailbox_ack` as durable persistence, not as losing the message forever
 - If you need to recover the latest acknowledged workflow input after `mailbox_ack`, use `mailbox_read` on the latest `acked` delivery for this session

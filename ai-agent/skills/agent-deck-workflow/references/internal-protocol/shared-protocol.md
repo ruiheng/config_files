@@ -122,11 +122,11 @@ When a workflow session is woken:
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
-5. `mailbox_ack` only after the message has been successfully incorporated into local working state
+5. `mailbox_ack` only after the message's required workflow action has completed
 6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
 7. keep mailbox lifecycle steps serialized
 
-Apply the message action before `ack`.
+Complete the message's required workflow action before `ack`.
 
 Idle behavior:
 - long-running wait loops are not recommended for workflow continuity
