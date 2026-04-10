@@ -2,6 +2,8 @@
 
 This document describes the multi-agent workflow built around the skills in this directory.
 
+For prompt-authoring rules and known pitfalls, see `PROMPT-WRITING.md`.
+
 ## SKILL.md Audience
 
 `SKILL.md` is runtime instruction text for the agent executing that skill.
