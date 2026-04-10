@@ -96,6 +96,7 @@ flowchart TD
 
 - `review-code` remains the authoritative full review output
 - `tech-design-review` is a separate advisory lane for committed design docs; it does not replace code review
+- Accepted tech-design docs are product artifacts: merge the tech-design branch back into its recorded base branch with `git merge`; do not squash, rebase, cherry-pick, or copy the docs manually
 - `review-request` should record coder-run lint / build / compile / test results so reviewer can usually reuse them instead of rerunning the same slow checks
 - `browser-test` is primarily runtime evidence; when explicitly allowed, Browser Tester may directly adjust display-adjacent code on its own branch before reporting back
 - requester should provide browser-test login/auth/setup context whenever possible; Browser Tester may ask requester or user for missing access details

@@ -13,9 +13,12 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 Provide one of:
 1. the mailbox body from `tech_design_review_requested`
-2. direct scope + committed design docs + problem/goals/constraints
+2. direct scope + committed design docs + base branch + problem/goals/constraints
 
 Direct-use mode is valid.
+In mailbox mode, treat the body as a review brief and committed-doc pointer, not as the full design source.
+Inspect the latest committed docs on the stated branch before judging the design.
+For later rounds, derive document changes from git instead of trusting any hand-written diff.
 
 ## Review Dimensions
 
@@ -60,6 +63,7 @@ Review this like a senior engineer in a mature production environment:
 Before reviewing quality, verify:
 - problem statement is stated
 - tech-design branch is stated
+- tech-design base branch is stated
 - in-scope design docs are stated
 - alternatives or rejected options are stated
 - major constraints are stated
@@ -69,7 +73,7 @@ Hard block:
 - in mailbox mode, continue but mark the report as `NEEDS_REVISION` and list the missing critical items under `Major Risks`
 
 Soft gaps:
-- if alternatives/rejected options or major constraints are missing, continue the review
+- if tech-design base branch, alternatives/rejected options, or major constraints are missing, continue the review
 - record the missing items under `Design Gaps`
 
 If critical context is still missing after one clarification in direct-use mode:
@@ -92,7 +96,9 @@ Round: <round>
 [One-line architect summary]
 
 ## Reviewed Scope
+- Base branch: [branch the tech-design branch started from]
 - Branch: [tech-design branch]
+- Commit: [reviewed branch HEAD]
 - Docs reviewed:
   - `path/to/doc1.md`
   - `path/to/doc2.md`
@@ -114,6 +120,11 @@ SOUND | SOUND_WITH_CAVEATS | NEEDS_REVISION
 
 ## What Looks Good
 - [strength or `None`]
+
+## Post-Review Integration
+- Merge target: [tech-design base branch]
+- Design branch: [tech-design branch]
+- History rule: requester/planner merges the design branch after accepted review; architect does not merge
 
 ## Residual Risk
 [What remains uncertain after this review]
@@ -143,10 +154,13 @@ Skill-specific context resolution:
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask
 - `requester_role`: explicit -> mailbox body `From` header -> default `requester`
 - `planner_session_id`: explicit -> mailbox body `Planner` header -> omit when `N/A`
+- `tech_design_base_branch`: explicit -> mailbox body `Base branch` -> ask
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 
 Execution flow:
 1. review the latest committed tech-design docs on the referenced branch
+   - for round `>1` in the same architect session, compare current branch `HEAD` against the previous reviewed commit from the prior report/mailbox context
+   - if the previous reviewed commit is unavailable, use git history for the in-scope docs and state the baseline uncertainty under `Residual Risk`
 2. produce one `tech_design_review_report`
 3. use `agent_mailbox`
 4. first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
@@ -161,9 +175,13 @@ Execution flow:
 
 - architect is review-only in this lane
 - review docs and design rationale only
+- do not merge branches; post-review integration belongs to the requester/planner
 - keep feedback advisory, skeptical, and evidence-based
 - report back to the original requester session, not to planner by default
-- if the requester sends a later round to the same architect session, treat it as a continuation and focus on the delta
+- include the tech-design base branch and reviewed commit in the report so requester/planner can preserve the docs in git history
+- if the design is accepted, requester/planner should merge the tech-design branch into its recorded base branch with `git merge`; never tell them to squash, rebase, cherry-pick, or copy files manually
+- if the requester sends a later round to the same architect session, treat it as a continuation and focus on the git-derived delta
+- never rely on a request body's hand-written doc diff as the source of truth
 - do not treat your own feedback as final authority; the requester may disagree and argue the design tradeoff
 - ask the user to decide when the disagreement becomes subjective, strategic, or stuck
 - prefer concrete design objections over generic taste comments

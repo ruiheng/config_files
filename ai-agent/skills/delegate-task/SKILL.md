@@ -66,6 +66,7 @@ Resolve by priority:
 - `final_review` (optional): explicit -> context -> default `skip`
 - `special_requirements` (optional fallback): explicit -> context -> extract user constraints not represented by existing structured fields -> omit when empty
 - `big_picture` (required when available): explicit -> context -> infer from current user goal / active plan -> ask only when task framing would otherwise be misleading
+- `reviewed_design_docs` (required when task is based on `tech_design_review_report`): explicit -> architect report `Reviewed Scope` -> ask if unavailable
 - `escalation_triggers` (optional): explicit -> context -> infer from task risk / boundary uncertainty -> omit when empty
 
 Workflow policy inference:
@@ -127,6 +128,7 @@ Round: 1
 - Read before starting: [...]
 - Reference as needed: [...]
 - Know it exists: [...]
+- Reviewed design docs: [branch + commit + doc paths when this task is based on a tech-design review]
 
 ## Escalate Back To Planner
 - Ask planner before proceeding if: [scope no longer matches evidence, local optimum appears to hurt the parent goal, or the task needs a material boundary/plan change]
@@ -193,6 +195,7 @@ Recommended subject:
 Rules:
 - keep the full delegate brief in mailbox body
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
+- if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths in `Context to Acquire`
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
