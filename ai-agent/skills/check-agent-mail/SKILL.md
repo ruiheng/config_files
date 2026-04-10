@@ -16,7 +16,6 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Rules
 
-- Treat the received mailbox body as executable workflow input
 - `mailbox_wait` is not recommended for normal pickup; use `mailbox_recv`
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
@@ -27,9 +26,6 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 - Treat `mailbox_ack` as durable persistence, not as losing the message forever
 - If you need to recover the latest acknowledged workflow input after `mailbox_ack`, use `mailbox_read` on the latest `acked` delivery for this session
 - If you need an older acknowledged delivery, use `mailbox_list` with `state: acked`, then `mailbox_read` by delivery id
-- Keep lifecycle steps serialized
-- If `mailbox_recv` fails because mailbox context is missing, bind and retry
 - After `mailbox_recv` returns a workflow message, do not naturally end this turn until the message's required workflow action is complete
 - Before ending, explicitly check whether this action still requires `mailbox_send`, `mailbox_ack`, `mailbox_release`, `mailbox_defer`, or `mailbox_fail`
-- Do not treat "the main work is done" as completion when the required workflow send-back step is still pending
 - If compaction or interruption made the workflow obligation unclear, reread the current workflow input from the mailbox body or recover it with `mailbox_read` before deciding to stop

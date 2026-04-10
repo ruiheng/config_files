@@ -106,6 +106,8 @@ Use the `agent_mailbox` MCP tools:
   - `ensure_cmd = <browser_tester_tool>`
   - `parent_session_id = <requester_session_id>`
   - normal workflow: do not pass `listener_message`
+- use the returned `session_id` as the authoritative `browser_tester_session_id`
+- fill `{{TO_SESSION_ID}}` in the mailbox body before sending
 - call `mailbox_send` with:
   - `from_address = agent-deck/<requester_session_id>`
   - `to_address = agent-deck/<browser_tester_session_id>`
