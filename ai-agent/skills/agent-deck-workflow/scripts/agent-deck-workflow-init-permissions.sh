@@ -21,6 +21,7 @@ INSTALLED_LOCAL_BIN_TILDE="~/.local/bin"
 WORKFLOW_HELPER_SCRIPTS=(
     "planner-closeout-batch.sh"
     "ensure-planner-workspace.sh"
+    "prepare-planner-workspace.sh"
     "ensure-supervised-planner-session.sh"
     "ensure-planner-scoped-session.sh"
     "archive-and-remove-planner-group-sessions.sh"

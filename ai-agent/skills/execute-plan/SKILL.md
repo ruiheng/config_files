@@ -38,7 +38,7 @@ Skill-specific context resolution:
 ## Execution Flow
 
 1. read the goal, workspace contract, and review policy from the mailbox body
-2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
+2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
 5. for each implementation task, use `delegate-task` and pass the chosen `Per-task review` policy into the delegate brief
@@ -90,5 +90,6 @@ Round: final
 - keep plan execution serial inside this workspace
 - own the internal breakdown needed to complete the goal; do not ask supervisor to pre-split ordinary implementation tasks
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
-- keep the planner workspace record aligned with the current planner session; if the ensure script reports a live-session mismatch, stop instead of reusing the workspace
+- before doing planner work, prepare the workspace and make sure it is checked out to the explicit `integration_branch`
+- keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - do not naturally end after the last task if the final report to supervisor is still pending

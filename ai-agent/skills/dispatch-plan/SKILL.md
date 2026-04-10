@@ -15,7 +15,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `supervisor_session_id`
 - `planner_session_ref` or `planner_session_id`
 - `planner_workspace`
-- `integration_branch`
+- `integration_branch` (required, explicit; do not infer)
 - `goal`
 - optional `planner_tool`
 - optional `planner_group_name`
@@ -28,10 +28,13 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 - this dispatch targets one planner in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
+- `integration_branch` must be provided explicitly; do not infer it from the worktree path, current branch, or repo metadata
 - default `per_task_review = required`
 - default `final_review = skip`
 - blockers stop with a user question; do not add blocker mail to supervisor
 - planner reports back only after the assigned goal is complete or blocked
+- normal path is direct execution: resolve required inputs, run the planner-session helper, then send the mailbox body
+- do not inspect `--help`, environment variables, or repo docs first unless the helper or send step actually fails
 
 ## Mailbox Body Template
 
@@ -84,3 +87,4 @@ Round: 1
 Rules:
 - use the supervisor-side planner-session helper instead of creating planner sessions with direct parent-child wiring
 - planner subgroup placement is part of the session helper, not part of mailbox transport
+- treat the planner-session helper as a synchronous step; wait for it to return before composing or sending mailbox content
