@@ -9,6 +9,7 @@ const {
   activeTaskLockPaths,
   buildChildGroupPath,
   buildEnsureSessionLaunchArgs,
+  isActiveTaskLockStale,
   parseDelegateLockMetadata,
   parseSendTokens,
   parseWorkflowEnvelope,
@@ -111,6 +112,40 @@ test("acquireActiveTaskLock rejects a second delegate lock in the same workspace
         action: "execute_delegate_task",
       }),
     /active task lock exists/
+  );
+});
+
+test("acquireActiveTaskLock replaces a lock whose worker session no longer exists", () => {
+  const workdir = mkdtempSync(path.join(os.tmpdir(), "agent-mailbox-lock-"));
+  acquireActiveTaskLock(workdir, {
+    task_id: "20260407-1200-first",
+    action: "execute_delegate_task",
+    to_address: "agent-deck/missing-coder",
+    coder_session_ref: "missing-coder",
+  });
+  const lock = acquireActiveTaskLock(
+    workdir,
+    {
+      task_id: "20260407-1200-second",
+      action: "execute_delegate_task",
+      to_address: "agent-deck/new-coder",
+    },
+    { sessionResolver: () => null }
+  );
+  const metadata = readActiveTaskLock(lock.lock_file);
+  assert.equal(lock.stale_lock_replaced, true);
+  assert.equal(metadata.task_id, "20260407-1200-second");
+});
+
+test("isActiveTaskLockStale keeps a lock when any recorded worker session exists", () => {
+  const lock = {
+    to_address: "agent-deck/live-coder",
+    coder_session_ref: "missing-coder",
+    planner_session_id: "missing-planner",
+  };
+  assert.equal(
+    isActiveTaskLockStale(lock, (ref) => (ref === "live-coder" ? { id: ref } : null)),
+    false
   );
 });
 

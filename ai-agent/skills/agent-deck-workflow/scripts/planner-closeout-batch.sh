@@ -92,6 +92,73 @@ resolve_session_id() {
   echo "$session_id"
 }
 
+session_ref_exists() {
+  local shown session_id
+  shown="$(agent-deck session show "$1" --json 2>/dev/null || true)"
+  session_id="$(jq -r '.id // empty' <<<"$shown" 2>/dev/null || true)"
+  [[ -n "$session_id" ]]
+}
+
+clean_lock_scalar() {
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  if [[ "$value" == \`*\` && "$value" == *\` && ${#value} -ge 2 ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  echo "$value"
+}
+
+lock_json_value() {
+  local file="$1"
+  local key="$2"
+  clean_lock_scalar "$(jq -r --arg key "$key" '.[$key] // empty' "$file" 2>/dev/null || true)"
+}
+
+agent_deck_address_ref() {
+  local address
+  address="$(clean_lock_scalar "${1:-}")"
+  case "$address" in
+    agent-deck/*) echo "${address#agent-deck/}" ;;
+    *) echo "" ;;
+  esac
+}
+
+active_task_lock_is_stale() {
+  local file="$1"
+  local to_ref coder_ref planner_ref from_ref
+  local worker_refs=()
+  local fallback_refs=()
+  local refs=()
+  local ref
+
+  [[ -f "$file" ]] || return 1
+
+  to_ref="$(agent_deck_address_ref "$(lock_json_value "$file" "to_address")")"
+  coder_ref="$(lock_json_value "$file" "coder_session_ref")"
+  planner_ref="$(lock_json_value "$file" "planner_session_id")"
+  from_ref="$(agent_deck_address_ref "$(lock_json_value "$file" "from_address")")"
+
+  [[ -n "$to_ref" ]] && worker_refs+=("$to_ref")
+  [[ -n "$coder_ref" ]] && worker_refs+=("$coder_ref")
+  [[ -n "$planner_ref" ]] && fallback_refs+=("$planner_ref")
+  [[ -n "$from_ref" ]] && fallback_refs+=("$from_ref")
+
+  if (( ${#worker_refs[@]} > 0 )); then
+    refs=("${worker_refs[@]}")
+  else
+    refs=("${fallback_refs[@]}")
+  fi
+  (( ${#refs[@]} > 0 )) || return 1
+
+  for ref in "${refs[@]}"; do
+    if session_ref_exists "$ref"; then
+      return 1
+    fi
+  done
+  return 0
+}
+
 debug() {
   if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
     echo "DEBUG: $*" >&2
@@ -229,12 +296,17 @@ resolved_planner_session_id="$(resolve_session_id "$planner_session_ref")"
 lock_dir="${artifact_root%/}/active-task.lock"
 lock_file="${lock_dir}/lock.json"
 if [[ -d "$lock_dir" ]]; then
-  lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
-  [[ -n "$lock_task_id" ]] || die "workspace active-task lock metadata missing: ${lock_file}"
-  [[ "$lock_task_id" == "$task_id" ]] || die "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}"
-  lock_integration_branch="$(jq -r '.integration_branch // empty' "$lock_file" 2>/dev/null || true)"
-  [[ -n "$lock_integration_branch" ]] || die "workspace active-task lock missing integration_branch: ${lock_file}"
-  [[ "$lock_integration_branch" == "$integration_branch" ]] || die "workspace active-task lock integration branch mismatch: lock='${lock_integration_branch}' closeout='${integration_branch}'"
+  if active_task_lock_is_stale "$lock_file"; then
+    warn "stale workspace active-task lock ignored because its recorded session no longer exists: ${lock_dir}"
+    rm -rf "$lock_dir" || die "failed to remove stale workspace active-task lock: ${lock_dir}"
+  else
+    lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
+    [[ -n "$lock_task_id" ]] || die "workspace active-task lock metadata missing: ${lock_file}"
+    [[ "$lock_task_id" == "$task_id" ]] || die "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}"
+    lock_integration_branch="$(jq -r '.integration_branch // empty' "$lock_file" 2>/dev/null || true)"
+    [[ -n "$lock_integration_branch" ]] || die "workspace active-task lock missing integration_branch: ${lock_file}"
+    [[ "$lock_integration_branch" == "$integration_branch" ]] || die "workspace active-task lock integration branch mismatch: lock='${lock_integration_branch}' closeout='${integration_branch}'"
+  fi
 fi
 
 if (( allow_dirty == 0 )); then
@@ -450,22 +522,32 @@ if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
 fi
 
 if [[ -d "$lock_dir" ]]; then
-  lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
-  if [[ -z "$lock_task_id" ]]; then
-    workspace_lock_status="metadata_missing"
-    optional_fail_count=$((optional_fail_count + 1))
-    warn "workspace active-task lock metadata missing: ${lock_file}; remove ${lock_dir} manually if the task is already finished"
-  elif [[ "$lock_task_id" != "$task_id" ]]; then
-    workspace_lock_status="task_mismatch"
-    optional_fail_count=$((optional_fail_count + 1))
-    warn "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}; remove it manually after verification"
-  else
+  if active_task_lock_is_stale "$lock_file"; then
     if rm -rf "$lock_dir"; then
-      workspace_lock_status="released"
+      workspace_lock_status="stale_released"
     else
-      workspace_lock_status="release_failed"
+      workspace_lock_status="stale_release_failed"
       optional_fail_count=$((optional_fail_count + 1))
-      warn "failed to remove workspace active-task lock: ${lock_dir}; remove it manually after verification"
+      warn "failed to remove stale workspace active-task lock: ${lock_dir}; remove it manually after verification"
+    fi
+  else
+    lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
+    if [[ -z "$lock_task_id" ]]; then
+      workspace_lock_status="metadata_missing"
+      optional_fail_count=$((optional_fail_count + 1))
+      warn "workspace active-task lock metadata missing: ${lock_file}; remove ${lock_dir} manually if the task is already finished"
+    elif [[ "$lock_task_id" != "$task_id" ]]; then
+      workspace_lock_status="task_mismatch"
+      optional_fail_count=$((optional_fail_count + 1))
+      warn "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}; remove it manually after verification"
+    else
+      if rm -rf "$lock_dir"; then
+        workspace_lock_status="released"
+      else
+        workspace_lock_status="release_failed"
+        optional_fail_count=$((optional_fail_count + 1))
+        warn "failed to remove workspace active-task lock: ${lock_dir}; remove it manually after verification"
+      fi
     fi
   fi
 else

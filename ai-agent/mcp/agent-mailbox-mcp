@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { spawn, spawnSync } = require("node:child_process");
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
 const path = require("node:path");
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
@@ -683,33 +683,78 @@ function readActiveTaskLock(lockFile) {
   }
 }
 
-function acquireActiveTaskLock(workdir, metadata) {
+function agentDeckAddressSessionRef(address) {
+  if (typeof address !== "string" || !address.trim()) {
+    return null;
+  }
+  const parsed = parseAddress(address);
+  return parsed.scheme === "agent-deck" ? parsed.id : null;
+}
+
+function activeTaskLockSessionRefs(lock) {
+  const workerRefs = [];
+  const fallbackRefs = [];
+  const add = (refs, value) => {
+    if (typeof value !== "string") {
+      return;
+    }
+    const trimmed = value.trim();
+    if (trimmed && !refs.includes(trimmed)) {
+      refs.push(trimmed);
+    }
+  };
+
+  add(workerRefs, agentDeckAddressSessionRef(lock?.to_address));
+  add(workerRefs, lock?.coder_session_ref);
+  add(fallbackRefs, lock?.planner_session_id);
+  add(fallbackRefs, agentDeckAddressSessionRef(lock?.from_address));
+  return workerRefs.length > 0 ? workerRefs : fallbackRefs;
+}
+
+function isActiveTaskLockStale(lock, sessionResolver = resolveSessionShowBestEffort) {
+  const refs = activeTaskLockSessionRefs(lock);
+  if (refs.length === 0) {
+    return false;
+  }
+  return refs.every((ref) => !sessionResolver(ref));
+}
+
+function acquireActiveTaskLock(workdir, metadata, options = {}) {
   const { artifactRoot, lockDir, lockFile } = activeTaskLockPaths(workdir);
   mkdirSync(artifactRoot, { recursive: true });
+  let staleLockReplaced = false;
   try {
     mkdirSync(lockDir);
   } catch (error) {
     if (error && error.code === "EEXIST") {
       const existing = readActiveTaskLock(lockFile);
-      const existingTaskId =
-        existing && typeof existing.task_id === "string" && existing.task_id
-          ? existing.task_id
-          : "<unknown>";
-      fail(
-        `active task lock exists: ${lockDir} :: task_id=${existingTaskId} :: delete this directory manually after verifying the prior task is finished`,
-        {
-          lock_dir: lockDir,
-          lock_file: lockFile,
-          existing_lock: existing,
-        }
-      );
+      if (isActiveTaskLockStale(existing, options.sessionResolver)) {
+        rmSync(lockDir, { recursive: true, force: true });
+        mkdirSync(lockDir);
+        staleLockReplaced = true;
+      } else {
+        const existingTaskId =
+          existing && typeof existing.task_id === "string" && existing.task_id
+            ? existing.task_id
+            : "<unknown>";
+        fail(
+          `active task lock exists: ${lockDir} :: task_id=${existingTaskId} :: delete this directory manually after verifying the prior task is finished`,
+          {
+            lock_dir: lockDir,
+            lock_file: lockFile,
+            existing_lock: existing,
+          }
+        );
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
   writeFileSync(lockFile, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
   return {
     lock_dir: lockDir,
     lock_file: lockFile,
+    stale_lock_replaced: staleLockReplaced,
   };
 }
 
@@ -825,7 +870,7 @@ function buildServer() {
             subject: args.subject,
           })
         );
-        workspaceLockStatus = "acquired";
+        workspaceLockStatus = lock.stale_lock_replaced ? "stale_replaced" : "acquired";
         workspaceLockDir = lock.lock_dir;
       }
 
@@ -1349,7 +1394,9 @@ module.exports = {
   parseWorkflowEnvelope,
   parseDelegateLockMetadata,
   activeTaskLockPaths,
+  activeTaskLockSessionRefs,
   acquireActiveTaskLock,
+  isActiveTaskLockStale,
   readActiveTaskLock,
   sanitizeGroupSegment,
   parseSendTokens,
