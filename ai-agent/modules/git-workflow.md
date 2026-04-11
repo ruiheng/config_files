@@ -25,3 +25,11 @@ User approval is required before creating commits by default.
 
 - `master` / `main`: Primary branch for PRs
 - Feature branches: Create for non-trivial work
+
+## Branch Operations
+
+- Minimize checkout/switch operations. Do not checkout a branch unless the next step must modify that branch in this worktree.
+- To create a new branch from another branch/ref, use the source as a start-point; do not checkout the source first.
+  - Prefer: `git switch -c <new-branch> <start-point>` or `git branch <new-branch> <start-point>`
+  - Avoid: `git switch <start-point>` followed by `git switch -c <new-branch>`
+- In multi-worktree repos, treat branches held by other worktrees as read-only start-points unless you explicitly need to work in that worktree.
