@@ -9,6 +9,7 @@ const {
   activeTaskLockPaths,
   buildChildGroupPath,
   buildEnsureSessionLaunchArgs,
+  parseDelegateLockMetadata,
   parseSendTokens,
   parseWorkflowEnvelope,
   readActiveTaskLock,
@@ -63,6 +64,21 @@ demo`);
     task_id: "20260407-1200-demo",
     action: "execute_delegate_task",
   });
+});
+
+test("parseDelegateLockMetadata strips markdown inline code from branch fields", () => {
+  const metadata = parseDelegateLockMetadata(`## Branch Plan
+- Start branch: worktree/demo
+- Integration branch: \`worktree/agent-deck-z1\`
+- Task branch: \`task/20260407-1200-demo\`
+
+## Agent Deck Context
+- Coder session ref: \`coder-20260407-1200-demo\`
+`);
+
+  assert.equal(metadata.integration_branch, "worktree/agent-deck-z1");
+  assert.equal(metadata.task_branch, "task/20260407-1200-demo");
+  assert.equal(metadata.coder_session_ref, "coder-20260407-1200-demo");
 });
 
 test("acquireActiveTaskLock creates the fixed active-task lock directory and metadata", () => {

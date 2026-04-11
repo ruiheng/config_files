@@ -631,6 +631,19 @@ function matchTrimmed(text, regex) {
   return match ? match[1].trim() : null;
 }
 
+function cleanMarkdownScalar(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  const inlineCode = /^`([^`]+)`$/.exec(trimmed);
+  return inlineCode ? inlineCode[1].trim() : trimmed;
+}
+
+function matchMarkdownScalar(text, regex) {
+  return cleanMarkdownScalar(matchTrimmed(text, regex));
+}
+
 function parseWorkflowEnvelope(body) {
   const headerBlock = typeof body === "string" ? body.split(/\r?\n\r?\n/, 1)[0] : "";
   return {
@@ -647,9 +660,9 @@ function parseDelegateLockMetadata(body, defaults = {}) {
     from_address: defaults.from_address || null,
     to_address: defaults.to_address || null,
     subject: defaults.subject || null,
-    task_branch: matchTrimmed(body, /^- Task branch:\s*(.+)$/m),
-    integration_branch: matchTrimmed(body, /^- Integration branch:\s*(.+)$/m),
-    coder_session_ref: matchTrimmed(body, /^- Coder session ref:\s*(.+)$/m),
+    task_branch: matchMarkdownScalar(body, /^- Task branch:\s*(.+)$/m),
+    integration_branch: matchMarkdownScalar(body, /^- Integration branch:\s*(.+)$/m),
+    coder_session_ref: matchMarkdownScalar(body, /^- Coder session ref:\s*(.+)$/m),
     created_at: new Date().toISOString(),
   };
 }
@@ -1334,6 +1347,7 @@ module.exports = {
   buildEnsureSessionLaunchArgs,
   resolveWakeNotifyMessage,
   parseWorkflowEnvelope,
+  parseDelegateLockMetadata,
   activeTaskLockPaths,
   acquireActiveTaskLock,
   readActiveTaskLock,
