@@ -69,7 +69,7 @@ Use `SKILL.md` for:
 3. For each task, planner may choose `Per-task review: required` or `skip`.
 4. After the assigned goal is complete, planner may request one final integrated review from its own integration branch.
 5. Planner sends one `plan_report_delivered` summary back to supervisor.
-6. After receiving that report, supervisor normally surfaces status and stops; supervisor-side integration happens only when the user explicitly asks to continue with it.
+6. After receiving a completed report with no open items, supervisor merges the planner integration branch, then cleans up that planner group.
 
 ## Flow Diagram
 
@@ -127,7 +127,7 @@ Current recommended operating mode:
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
-7. When supervisor actually finishes integrating a planner result, clean up that planner group and its sessions together.
+7. When supervisor finishes integrating a planner result, clean up that planner group and its sessions together.
 8. Supervisor-side integration uses `git merge`; do not switch to `cherry-pick`, `rebase`, or manual history surgery unless the user explicitly asks.
 
 Use skills:

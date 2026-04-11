@@ -1,6 +1,6 @@
 ---
 name: plan-report
-description: Handle a final `plan_report_delivered` message from a planner and surface the result to the supervisor session.
+description: Handle a final `plan_report_delivered` message from a planner, integrate completed results, and clean up planner sessions.
 ---
 
 # Plan Report
@@ -17,14 +17,14 @@ Provide the mailbox body from `plan_report_delivered`.
 
 - treat this report as the final summary for that planner-run plan unless the body says it is blocked
 - surface completion status, integration branch, planner group, completed tasks, review summary, and open items
-- default action after receiving this report is: surface status, acknowledge the mail, keep the planner group intact, and stop
-- do not start supervisor-side integration unless the user explicitly asked to do that in this turn
-- when the user explicitly asks to continue supervisor-side integration, use `git merge` for that integration; do not substitute `cherry-pick`, `rebase`, or another git history strategy
-- if the report is completed, planner group is present, and supervisor has already integrated that planner result, use `~/.config/ai-agent/skills/agent-deck-workflow/scripts/archive-and-remove-planner-group-sessions.sh --planner-group <planner_group> --apply` to clean up planner-owned sessions
+- default completed-plan action is: merge the planner integration branch into the current supervisor branch, then clean up the planner group
+- skip supervisor-side integration only when the report is blocked, the report has unresolved open items, the user explicitly requested report-only handling, or a concrete git precondition blocks the merge
+- use `git merge` for supervisor-side integration; do not substitute `cherry-pick`, `rebase`, or another git history strategy
+- treat the current supervisor worktree branch as the integration target unless explicit user/workflow context says otherwise; if the target branch is unclear or the worktree is dirty, stop and report the blocker
+- after supervisor-side integration succeeds, use `~/.config/ai-agent/skills/agent-deck-workflow/scripts/archive-and-remove-planner-group-sessions.sh --planner-group <planner_group> --apply` to clean up planner-owned sessions
 - do not clean up the planner group before supervisor-side integration has actually completed
 - if the cleanup script fails, report that failure and stop; do not continue with manual `agent-deck remove` or `group delete` commands unless the user explicitly asks
-- do not ask for another workflow step unless the report explicitly says the plan is blocked or follow-up is required
-- do not describe the lack of supervisor-side integration as a pending user decision unless the user was explicitly asked whether to integrate now
+- do not ask for another workflow step unless the report explicitly says the plan is blocked, follow-up is required, or a concrete merge/cleanup blocker needs user action
 - keep mailbox JSON internal unless the user explicitly asks
 
 ## User-Facing Output
@@ -33,4 +33,6 @@ Provide the mailbox body from `plan_report_delivered`.
 - include the planner session id
 - include the integration branch
 - include the planner group when present
+- include whether supervisor-side merge ran
+- include whether planner group cleanup ran
 - include any open items that still need user attention
