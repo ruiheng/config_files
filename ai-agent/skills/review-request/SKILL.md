@@ -60,7 +60,7 @@ Use read-only git commands only.
 - Commit:
   - `git show --name-status --format=fuller <short-commit-ref>`
 - Branch:
-  - choose base: `base_branch` -> `main` -> `master`
+  - choose base: `base_branch` -> recorded `integration_branch` -> ask
   - `git log --oneline <base>..<branch>`
   - `git diff --name-status <base>...<branch>`
 
@@ -71,7 +71,7 @@ Classify changes into:
 - noise/out-of-scope: unrelated local files, temporary artifacts, env files
 
 Rules:
-1. `Files Modified/Created` includes in-scope files only
+1. `Changed Paths Summary` includes in-scope files only
 2. summarize unrelated noise with count + up to 3 examples
 3. for committed scope, omit unrelated noise unless it materially affects review framing
 4. ask one short clarification question if relevance is uncertain
@@ -169,17 +169,12 @@ Round: <round>
 - [Primary risk/review angle 1]
 - [Primary risk/review angle 2]
 
-## Response to Previous Review (Optional)
-- Adopted findings: [brief summary or `N/A`]
-- Rejected findings and rationale: [brief summary or `N/A`]
-- Items needing user decision: [brief summary or `N/A`]
-
 ## Implementation Summary
-[Concise summary of what changed and why]
+[Brief intent-level summary; do not restate the whole diff]
 
-## Files Modified/Created (In-Scope Only)
-- `path/to/file1` - [brief description of changes]
-- `path/to/file2` - [brief description of changes]
+## Changed Paths Summary
+- In-scope changed paths: [count + key paths, or `See scope target` when the git target is enough]
+- Out-of-scope noise: [count + up to 3 examples, or `None`]
 
 ## Checks Already Run
 - Lint: [command/result or `Not run`]
@@ -187,11 +182,7 @@ Round: <round>
 - Compile/Type-check: [command/result or `Not run`]
 - Tests: [command/result or `Not run`]
 - Other verification: [manual/browser/scripted checks or `None`]
-
-## Verification Evidence
-- Commands/Checks: [tests, type-check, lint, manual checks; if unknown write: Not provided]
-- Result Summary: [pass/fail/high-level outcomes; if unknown write: Not provided]
-- Coverage Gaps: [known missing tests or validation gaps; if none write: None identified]
+- Coverage gaps: [known missing tests or validation gaps; if none write: None identified]
 
 ## Workflow Policy
 [resolved workflow policy]
@@ -239,11 +230,10 @@ Round: <round>
 - Lane: [task | integration_final]
 
 ## Updated Implementation Summary
-[Only what changed since the last review request]
+[Only what changed since the last review request; do not restate the whole diff]
 
-## Files Changed Since Last Review
-- `path/to/file1` - [delta description]
-- `path/to/file2` - [delta description]
+## Changed Paths Since Last Review
+- [count + key paths, or `See scope target` when the git target is enough]
 
 ## Checks Already Run Since Last Review
 - Lint: [new or rerun command/result or `No change`]
@@ -251,11 +241,7 @@ Round: <round>
 - Compile/Type-check: [new or rerun command/result or `No change`]
 - Tests: [new or rerun command/result or `No change`]
 - Other verification: [new manual/browser/scripted checks or `No change`]
-
-## Updated Verification Evidence
-- Commands/Checks: [only new or rerun checks relevant to this round]
-- Result Summary: [delta results]
-- Coverage Gaps: [remaining gaps after this round]
+- Coverage gaps: [remaining gaps after this round]
 
 ## Known Issues or Limitations
 [Current remaining limitations; if none, write: None identified]
@@ -293,6 +279,7 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
+- do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
 - keep reviewer sessions in the recorded planner group through `agent_deck_ensure_session`; do not depend on parent-child session depth
 - `mailbox_send` handles the normal non-local reviewer nudge
@@ -301,9 +288,9 @@ Rules:
 
 1. Keep concise and copy/paste friendly
 2. Keep wording concise and direct
-3. File list is complete for in-scope target, not full local noise
+3. Changed paths summary is enough for routing; reviewer should use the git target for exact file details
 4. Prefer facts over speculation
 5. Keep raw mailbox JSON internal unless user asks
-6. Always include `Review Focus` and `Verification Evidence` fields
+6. Always include `Review Focus` and `Checks Already Run` fields
 7. Preserve `workflow_policy` unchanged when present
 8. Preserve `special_requirements` unchanged when present
