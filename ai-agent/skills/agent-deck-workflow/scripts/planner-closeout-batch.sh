@@ -43,7 +43,7 @@ Options:
   -h, --help                       Show help
 
 State/outputs:
-  - Must run from the planner worktree that is already on --integration-branch.
+  - Switches this worktree to --integration-branch before merging when needed.
   - Appends one json line to progress file when required actions complete.
   - Writes per-task idempotency state:
       <artifact-root>/workflow-progress/closeout-state-<task_id>.json
@@ -246,7 +246,19 @@ fi
 started_branch="${current_branch:-detached}"
 switched_integration_branch=0
 if [[ "$current_branch" != "$integration_branch" ]]; then
-  die "wrong worktree for planner closeout: current branch is '${started_branch}', expected integration branch '${integration_branch}'. Run this script from the planner workspace that owns '${integration_branch}', not from the coder/task workspace. Do not checkout '${integration_branch}' here just to recover."
+  echo "auto_switch_integration_branch from=${started_branch} to=${integration_branch}"
+  set +e
+  switch_output="$(git switch "$integration_branch" 2>&1)"
+  switch_rc=$?
+  set -e
+  if (( switch_rc != 0 )); then
+    echo "$switch_output" >&2
+    die "failed to switch from '${started_branch}' to integration branch '${integration_branch}'. If git says the branch is already checked out in another worktree, rerun closeout from that worktree or release that worktree first; do not create a temporary closeout worktree."
+  fi
+  echo "$switch_output"
+  switched_integration_branch=1
+  current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+  [[ "$current_branch" == "$integration_branch" ]] || die "branch switch reported success but current branch is '${current_branch:-detached}', expected '${integration_branch}'"
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
