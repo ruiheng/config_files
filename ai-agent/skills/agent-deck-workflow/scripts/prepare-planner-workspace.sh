@@ -14,6 +14,7 @@ Options:
   --supervisor-session-id <id|title> Optional supervisor session id/ref for this planner workspace
   --artifact-root <path>          Artifact root (default: .agent-artifacts)
   --allow-dirty                   Allow dirty worktree when switching branches
+  --override-planner-workspace    Replace existing planner-workspace.json; use only after user confirmation
   -h, --help                      Show help
 
 Outputs:
@@ -37,6 +38,7 @@ planner_session_ref=""
 supervisor_session_ref=""
 artifact_root=".agent-artifacts"
 allow_dirty=0
+override_planner_workspace=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --supervisor-session-id) supervisor_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
+    --override-planner-workspace) override_planner_workspace=1; shift 1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
   esac
@@ -69,6 +72,9 @@ if [[ -n "$planner_session_ref" ]]; then
 fi
 if [[ -n "$supervisor_session_ref" ]]; then
   ensure_cmd+=(--supervisor-session-id "$supervisor_session_ref")
+fi
+if (( override_planner_workspace == 1 )); then
+  ensure_cmd+=(--override-planner-workspace)
 fi
 
 "${ensure_cmd[@]}" >/dev/null

@@ -61,6 +61,7 @@ Required closeout command shape:
 Optional command additions:
 - add `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` when this turn owns a claimed `closeout_delivered` delivery
 - add `--next-dispatch-cmd <command>` only when planner already has a concrete next-dispatch command to run
+- add `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
 
 ## Rules
 

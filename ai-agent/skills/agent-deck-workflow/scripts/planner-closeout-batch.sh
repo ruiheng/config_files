@@ -33,6 +33,7 @@ Options:
   --max-worker-sessions <n>        Max allowed lingering active task-scoped worker sessions in this workspace for health gate (default: 2)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
+  --override-planner-workspace      Replace planner-workspace.json before validation; use only after user confirmation
   --run-prune                      Run prune-task-branches.sh after required actions
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions
@@ -185,6 +186,7 @@ profile=""
 max_worker_sessions=2
 merge_mode="ff-only"
 allow_dirty=0
+override_planner_workspace=0
 integration_branch_source="inferred_current_branch"
 run_prune=0
 prune_apply=0
@@ -208,6 +210,7 @@ while [[ $# -gt 0 ]]; do
     --max-worker-sessions) max_worker_sessions="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
+    --override-planner-workspace) override_planner_workspace=1; shift 1 ;;
     --run-prune) run_prune=1; shift 1 ;;
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
@@ -253,6 +256,8 @@ if [[ -z "$architect_session_ref" ]]; then
   architect_session_ref="architect-${task_id}"
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 command -v git >/dev/null 2>&1 || die "git is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
 if [[ -n "$ack_delivery_id" ]]; then
@@ -282,6 +287,14 @@ fi
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
 git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"
+
+if (( override_planner_workspace == 1 )); then
+  "${script_dir}/ensure-planner-workspace.sh" \
+    --integration-branch "$integration_branch" \
+    --planner-session-id "$planner_session_ref" \
+    --artifact-root "$artifact_root" \
+    --override-planner-workspace >/dev/null
+fi
 
 planner_workspace_file="${artifact_root%/}/planner-workspace.json"
 [[ -f "$planner_workspace_file" ]] || die "planner workspace record missing: ${planner_workspace_file}"
@@ -333,7 +346,6 @@ if [[ "$current_branch" != "$integration_branch" ]]; then
   [[ "$current_branch" == "$integration_branch" ]] || die "branch switch reported success but current branch is '${current_branch:-detached}', expected '${integration_branch}'"
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 notify_script="${script_dir}/notify-workflow-event.sh"
 prune_script="${script_dir}/prune-task-branches.sh"
 health_gate_script="${script_dir}/closeout-health-gate.sh"

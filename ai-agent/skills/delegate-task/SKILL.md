@@ -197,6 +197,7 @@ Rules:
 - if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths in `Context to Acquire`
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
+- pass `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
 - create worker sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`
 - report target readiness only after the resolve/create/send/nudge path that applies has completed

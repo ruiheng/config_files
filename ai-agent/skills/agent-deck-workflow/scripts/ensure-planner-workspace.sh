@@ -13,6 +13,7 @@ Options:
   --planner-session-id <id|title> Planner session ref (default: current agent-deck session id)
   --supervisor-session-id <id|title> Optional supervisor session id/ref for this planner workspace
   --artifact-root <path>          Artifact root (default: .agent-artifacts)
+  --override-planner-workspace    Replace existing planner-workspace.json; use only after user confirmation
   -h, --help                      Show help
 
 Outputs:
@@ -114,6 +115,7 @@ planner_session_ref=""
 integration_branch=""
 supervisor_session_ref=""
 artifact_root=".agent-artifacts"
+override_planner_workspace=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -121,6 +123,7 @@ while [[ $# -gt 0 ]]; do
     --integration-branch) integration_branch="${2:-}"; shift 2 ;;
     --supervisor-session-id) supervisor_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
+    --override-planner-workspace) override_planner_workspace=1; shift 1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
   esac
@@ -152,6 +155,12 @@ mkdir -p "$(dirname "$record_file")"
 if [[ ! -f "$record_file" ]]; then
   write_record "$record_file" "$planner_session_ref" "$planner_group" "$integration_branch" "$supervisor_session_ref" "created"
   echo "planner_workspace_record status=created file=${record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch}"
+  exit 0
+fi
+
+if (( override_planner_workspace == 1 )); then
+  write_record "$record_file" "$planner_session_ref" "$planner_group" "$integration_branch" "$supervisor_session_ref" "overridden"
+  echo "planner_workspace_record status=overridden file=${record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch}"
   exit 0
 fi
 

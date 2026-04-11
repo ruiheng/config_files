@@ -92,4 +92,5 @@ Round: final
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
 - before doing planner work, prepare the workspace and make sure it is checked out to the explicit `integration_branch`
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
+- pass `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
 - do not naturally end after the last task if the final report to supervisor is still pending
