@@ -18,7 +18,6 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `integration_branch` (required, explicit; do not infer)
 - `goal`
 - optional `planner_tool`
-- optional `planner_group_name`
 - optional `per_task_review`
 - optional `final_review`
 - optional `summary`
@@ -81,9 +80,8 @@ Round: 1
      - `ensure_title = <planner_session_ref>`
      - `ensure_cmd = <planner_tool>`
      - `workdir = <planner_workspace>`
-     - `group_parent_session_id = <supervisor_session_id>`
-     - `child_group_name = <planner_group_name>` when present; otherwise let the tool derive a safe child-group name from the planner ref
-     - `no_parent_link = true`
+     - `parent_session_id = <supervisor_session_id>`
+     - `no_parent_link = false`
 3. use the returned `session_id` as the authoritative `planner_session_id`
 4. fill `{{TO_SESSION_ID}}`
 5. send with:
@@ -94,5 +92,4 @@ Round: 1
 
 Rules:
 - use `agent_deck_ensure_session`; do not create planner sessions through direct `agent-deck` CLI in the normal path
-- planner subgroup placement belongs to MCP session ensure, not mailbox transport
 - treat MCP session ensure as a synchronous step; wait for it to return before composing or sending mailbox content

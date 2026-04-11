@@ -105,7 +105,7 @@ flowchart TD
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
 - derived planner sessions live in their own child agent-deck group under the supervisor group, created through `agent_deck_ensure_session`
-- planner-owned coder/reviewer/architect/refactor-reviewer sessions live in that planner group through `agent_deck_ensure_session`; do not rely on one-level parent-child session depth
+- planner-owned coder/reviewer/architect/refactor-reviewer sessions are created through `agent_deck_ensure_session` with parent links
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler

@@ -171,18 +171,17 @@ Preferred path: use the `agent_mailbox` MCP tools.
 Workflow send sequence:
 1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
 2. use `agent_mailbox`
-3. read `planner_group` from `.agent-artifacts/planner-workspace.json`
-4. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-5. call `agent_deck_ensure_session`
+3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
+4. call `agent_deck_ensure_session`
    - identify target with `session_id` or `session_ref = <coder_session_ref>`
    - when creation may be needed, also pass:
      - `ensure_title = <coder_session_ref>`
      - `ensure_cmd = <coder_tool>`
      - `workdir = <current workspace>`
-     - `group_path = <planner_group>`
-     - `no_parent_link = true`
-6. use the returned `session_id` as the authoritative `coder_session_id`
-7. fill the final body and call `mailbox_send` with:
+     - `parent_session_id = <planner_session_id>`
+     - `no_parent_link = false`
+5. use the returned `session_id` as the authoritative `coder_session_id`
+6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<planner_session_id>`
    - `to_address = agent-deck/<coder_session_id>`
    - `subject = "delegate: <task_id> -> coder"`
@@ -199,7 +198,7 @@ Rules:
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
-- create planner-owned worker sessions in the recorded planner group through `agent_deck_ensure_session`; do not rely on direct parent-child session wiring
+- create worker sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
 - if `mailbox_send` reports an existing active task, surface that result instead of retrying through another send path

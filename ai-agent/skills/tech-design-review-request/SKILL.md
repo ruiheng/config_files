@@ -159,18 +159,17 @@ Recommended subject:
 
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
-2. when this review belongs to an active planner workspace, read `planner_group` from `.agent-artifacts/planner-workspace.json`
-3. compose the body with `{{TO_SESSION_ID}}` where the real architect session id must appear
-4. call `agent_deck_ensure_session`
+2. compose the body with `{{TO_SESSION_ID}}` where the real architect session id must appear
+3. call `agent_deck_ensure_session`
    - identify target with `session_id` or `session_ref = <architect_session_ref>`
    - when creation may be needed, also pass:
      - `ensure_title = <architect_session_ref>`
      - `ensure_cmd = <architect_tool>`
      - `workdir = <current workspace>`
-     - `group_path = <planner_group>` when this review belongs to an active planner workspace
-     - `no_parent_link = true`
-5. use the returned `session_id` as the authoritative `architect_session_id`
-6. fill the final body and call `mailbox_send` with:
+     - `parent_session_id = <requester_session_id>`
+     - `no_parent_link = false`
+4. use the returned `session_id` as the authoritative `architect_session_id`
+5. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<architect_session_id>`
    - `subject = "tech-design review: <task_id> r<round>"`
@@ -204,4 +203,4 @@ When the requester/planner receives `tech_design_review_report`:
 - after sending, do not sleep, poll, or proactively check mail just to await the architect report
 - when disagreeing, state only the disagreement and rationale in `Requester Notes`; do not summarize document changes manually
 - either requester or architect may ask the user to decide when the disagreement becomes subjective or stuck
-- keep architect sessions in the recorded planner group through `agent_deck_ensure_session` when this review belongs to an active planner workspace
+- create architect sessions through `agent_deck_ensure_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
