@@ -28,6 +28,7 @@ Skill-specific context resolution:
 - `start_branch`: explicit -> mailbox body -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
 - `task_branch`: explicit -> mailbox body -> ask
+- `task_dir`: explicit -> mailbox body `Task dir` / `Worker dir` -> omit
 - `workflow_policy` (optional): explicit -> mailbox body -> default unattended policy
 - `delivery_id` (optional): explicit leased delivery context -> omit when unavailable
 - `lease_token` (optional): explicit leased delivery context -> omit when unavailable
@@ -60,6 +61,7 @@ Required closeout command shape:
 
 Optional command additions:
 - add `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` when this turn owns a claimed `closeout_delivered` delivery
+- add `--task-dir <task_dir>` when the closeout body records a different worker/task worktree that may hold an active-task lock
 - add `--next-dispatch-cmd <command>` only when planner already has a concrete next-dispatch command to run
 - add `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
 

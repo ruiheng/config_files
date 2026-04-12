@@ -25,6 +25,8 @@ Options:
   --integration-branch <ref>       Integration branch (default: current branch; must be a non-task landing branch)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
+  --task-dir <path>                 Optional worker/task worktree whose active-task lock should also be released
+  --worker-dir <path>               Alias for --task-dir
   --planner-session-id <id|title>  Planner session ref (default: current agent-deck session id)
   --coder-session-id <id|title>    Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
@@ -160,6 +162,62 @@ active_task_lock_is_stale() {
   return 0
 }
 
+same_artifact_root() {
+  local left="${1%/}"
+  local right="${2%/}"
+  local left_real right_real
+
+  if [[ "$left" == "$right" ]]; then
+    return 0
+  fi
+
+  left_real="$(cd "$left" 2>/dev/null && pwd -P || true)"
+  right_real="$(cd "$right" 2>/dev/null && pwd -P || true)"
+  [[ -n "$left_real" && "$left_real" == "$right_real" ]]
+}
+
+release_active_task_lock() {
+  local lock_artifact_root="$1"
+  local status_var="$2"
+  local label="$3"
+  local target_lock_dir="${lock_artifact_root%/}/active-task.lock"
+  local target_lock_file="${target_lock_dir}/lock.json"
+  local lock_task_id
+
+  if [[ -d "$target_lock_dir" ]]; then
+    if active_task_lock_is_stale "$target_lock_file"; then
+      if rm -rf "$target_lock_dir"; then
+        printf -v "$status_var" "stale_released"
+      else
+        printf -v "$status_var" "stale_release_failed"
+        optional_fail_count=$((optional_fail_count + 1))
+        warn "failed to remove stale ${label} active-task lock: ${target_lock_dir}; remove it manually after verification"
+      fi
+    else
+      lock_task_id="$(jq -r '.task_id // empty' "$target_lock_file" 2>/dev/null || true)"
+      if [[ -z "$lock_task_id" ]]; then
+        printf -v "$status_var" "metadata_missing"
+        optional_fail_count=$((optional_fail_count + 1))
+        warn "${label} active-task lock metadata missing: ${target_lock_file}; remove ${target_lock_dir} manually if the task is already finished"
+      elif [[ "$lock_task_id" != "$task_id" ]]; then
+        printf -v "$status_var" "task_mismatch"
+        optional_fail_count=$((optional_fail_count + 1))
+        warn "${label} active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${target_lock_dir}; remove it manually after verification"
+      else
+        if rm -rf "$target_lock_dir"; then
+          printf -v "$status_var" "released"
+        else
+          printf -v "$status_var" "release_failed"
+          optional_fail_count=$((optional_fail_count + 1))
+          warn "failed to remove ${label} active-task lock: ${target_lock_dir}; remove it manually after verification"
+        fi
+      fi
+    fi
+  else
+    printf -v "$status_var" "not_present"
+  fi
+}
+
 debug() {
   if [[ "${ADWF_DEBUG:-0}" == "1" ]]; then
     echo "DEBUG: $*" >&2
@@ -178,6 +236,7 @@ task_branch=""
 integration_branch=""
 artifact_root=".agent-artifacts"
 progress_file=""
+task_dir=""
 planner_session_ref=""
 coder_session_ref=""
 reviewer_session_ref=""
@@ -202,6 +261,7 @@ while [[ $# -gt 0 ]]; do
     --integration-branch) integration_branch="${2:-}"; integration_branch_source="explicit"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --progress-file) progress_file="${2:-}"; shift 2 ;;
+    --task-dir|--worker-dir) task_dir="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
     --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
@@ -383,6 +443,7 @@ write_state_file() {
     --arg health_gate_status "$health_gate_status" \
     --arg next_dispatch_status "$next_dispatch_status" \
     --arg workspace_lock_status "$workspace_lock_status" \
+    --arg task_workspace_lock_status "$task_workspace_lock_status" \
     --arg ack_delivery_id "$ack_delivery_id" \
     --arg ack_status "$mailbox_ack_status" \
     --argjson switched_integration_branch "$switched_integration_branch" \
@@ -422,6 +483,7 @@ write_state_file() {
       },
       optional_actions: {
         workspace_lock: $workspace_lock_status,
+        task_workspace_lock: $task_workspace_lock_status,
         prune: $prune_status,
         health_gate: $health_gate_status,
         next_dispatch: $next_dispatch_status
@@ -497,6 +559,7 @@ prune_status="skipped"
 health_gate_status="skipped"
 next_dispatch_status="skipped"
 workspace_lock_status="not_checked"
+task_workspace_lock_status="not_requested"
 optional_fail_count=0
 mailbox_ack_requested=0
 mailbox_ack_completed=0
@@ -533,37 +596,19 @@ if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
   echo "$ack_output"
 fi
 
-if [[ -d "$lock_dir" ]]; then
-  if active_task_lock_is_stale "$lock_file"; then
-    if rm -rf "$lock_dir"; then
-      workspace_lock_status="stale_released"
-    else
-      workspace_lock_status="stale_release_failed"
-      optional_fail_count=$((optional_fail_count + 1))
-      warn "failed to remove stale workspace active-task lock: ${lock_dir}; remove it manually after verification"
-    fi
+release_active_task_lock "$artifact_root" workspace_lock_status "workspace"
+
+if [[ -n "$task_dir" ]]; then
+  task_artifact_root="${task_dir%/}/.agent-artifacts"
+  if [[ ! -d "$task_dir" ]]; then
+    task_workspace_lock_status="task_dir_missing"
+    optional_fail_count=$((optional_fail_count + 1))
+    warn "task-dir does not exist: ${task_dir}; task workspace active-task lock was not checked"
+  elif same_artifact_root "$artifact_root" "$task_artifact_root"; then
+    task_workspace_lock_status="same_as_workspace"
   else
-    lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
-    if [[ -z "$lock_task_id" ]]; then
-      workspace_lock_status="metadata_missing"
-      optional_fail_count=$((optional_fail_count + 1))
-      warn "workspace active-task lock metadata missing: ${lock_file}; remove ${lock_dir} manually if the task is already finished"
-    elif [[ "$lock_task_id" != "$task_id" ]]; then
-      workspace_lock_status="task_mismatch"
-      optional_fail_count=$((optional_fail_count + 1))
-      warn "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}; remove it manually after verification"
-    else
-      if rm -rf "$lock_dir"; then
-        workspace_lock_status="released"
-      else
-        workspace_lock_status="release_failed"
-        optional_fail_count=$((optional_fail_count + 1))
-        warn "failed to remove workspace active-task lock: ${lock_dir}; remove it manually after verification"
-      fi
-    fi
+    release_active_task_lock "$task_artifact_root" task_workspace_lock_status "task workspace"
   fi
-else
-  workspace_lock_status="not_present"
 fi
 
 if (( run_prune )); then

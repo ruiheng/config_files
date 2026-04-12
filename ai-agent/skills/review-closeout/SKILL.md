@@ -153,6 +153,7 @@ Then append only non-empty sections.
 - Start branch: [start_branch]
 - Integration branch: [integration_branch]
 - Task branch: [task_branch]
+- Task dir: [absolute task workspace path when known; omit otherwise]
 - Rule: use this recorded branch plan as the authoritative merge target; do not substitute `main`/`master`/current branch unless the user explicitly changed the plan
 
 #### UI Manual Confirmation Package
