@@ -28,7 +28,7 @@ Skill-specific context resolution:
 - `start_branch`: explicit -> mailbox body -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
 - `task_branch`: explicit -> mailbox body -> ask
-- `task_dir`: explicit -> mailbox body `Task dir` / `Worker dir` -> omit
+- `task_dir`: explicit -> mailbox body `Task dir` / `Worker dir` -> ask
 - `delivery_id` (optional): explicit leased delivery context -> omit when unavailable
 - `lease_token` (optional): explicit leased delivery context -> omit when unavailable
 
@@ -37,7 +37,7 @@ Branch-plan rule:
 - use the recorded branch plan from `closeout_delivered` unchanged
 - do not infer, rename, or repair branch plan during planner closeout
 - if recorded `integration_branch` looks like `task/*`, stop and ask for the real integration branch before running closeout
-- if any required branch-plan field is missing, ask one short clarification question instead of guessing
+- if any required branch-plan field, including `task_dir`, is missing, ask one short clarification question instead of guessing
 
 ## Execution Flow
 
@@ -54,12 +54,12 @@ Required closeout command shape:
   --task-id <task_id> \
   --task-branch <task_branch> \
   --integration-branch <integration_branch> \
+  --task-dir <task_dir> \
   --planner-session-id <planner_session_id>
 ```
 
 Optional command additions:
 - add `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` when this turn owns a claimed `closeout_delivered` delivery
-- add `--task-dir <task_dir>` when the closeout body records a different worker/task worktree that may hold an active-task lock
 - add `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
 
 ## Rules

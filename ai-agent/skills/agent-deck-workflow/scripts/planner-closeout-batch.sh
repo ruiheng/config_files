@@ -24,8 +24,8 @@ Options:
   --integration-branch <ref>       Integration branch (default: current branch; must be a non-task landing branch)
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
-  --task-dir <path>                 Optional worker/task worktree whose active-task lock should also be released
-  --worker-dir <path>               Alias for --task-dir
+  --task-dir <path>                Required worker/task worktree used for task-scoped lock cleanup
+  --worker-dir <path>              Alias for --task-dir
   --planner-session-id <id|title>  Planner session ref (default: current agent-deck session id)
   --coder-session-id <id|title>    Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title> Reviewer session ref (default: reviewer-<task_id>)
@@ -280,7 +280,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$task_id" ]] || die "--task-id is required"
+[[ -n "$task_dir" ]] || die "--task-dir is required"
 [[ "$max_worker_sessions" =~ ^[0-9]+$ ]] || die "--max-worker-sessions must be a non-negative integer"
+[[ -d "$task_dir" ]] || die "task-dir does not exist: ${task_dir}"
 
 case "$merge_mode" in
   ff-only|ff|no-ff) ;;
@@ -552,7 +554,7 @@ fi
 prune_status="skipped"
 health_gate_status="skipped"
 workspace_lock_status="not_checked"
-task_workspace_lock_status="not_requested"
+task_workspace_lock_status="not_checked"
 optional_fail_count=0
 mailbox_ack_requested=0
 mailbox_ack_completed=0
@@ -591,17 +593,11 @@ fi
 
 release_active_task_lock "$artifact_root" workspace_lock_status "workspace"
 
-if [[ -n "$task_dir" ]]; then
-  task_artifact_root="${task_dir%/}/.agent-artifacts"
-  if [[ ! -d "$task_dir" ]]; then
-    task_workspace_lock_status="task_dir_missing"
-    optional_fail_count=$((optional_fail_count + 1))
-    warn "task-dir does not exist: ${task_dir}; task workspace active-task lock was not checked"
-  elif same_artifact_root "$artifact_root" "$task_artifact_root"; then
-    task_workspace_lock_status="same_as_workspace"
-  else
-    release_active_task_lock "$task_artifact_root" task_workspace_lock_status "task workspace"
-  fi
+task_artifact_root="${task_dir%/}/.agent-artifacts"
+if same_artifact_root "$artifact_root" "$task_artifact_root"; then
+  task_workspace_lock_status="same_as_workspace"
+else
+  release_active_task_lock "$task_artifact_root" task_workspace_lock_status "task workspace"
 fi
 
 if (( run_prune )); then

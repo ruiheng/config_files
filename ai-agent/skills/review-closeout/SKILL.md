@@ -50,6 +50,7 @@ Skill-specific context resolution:
 - `start_branch`: explicit -> review report text -> ask
 - `task_branch`: explicit -> review report text -> ask
 - `integration_branch`: explicit -> review report text -> ask
+- `task_dir`: explicit -> review report text -> ask
 
 Branch-plan rule:
 - do not infer, rename, or repair branch plan during closeout
@@ -153,7 +154,7 @@ Then append only non-empty sections.
 - Start branch: [start_branch]
 - Integration branch: [integration_branch]
 - Task branch: [task_branch]
-- Task dir: [absolute task workspace path when known; omit otherwise]
+- Task dir: [absolute task workspace path]
 - Rule: use this recorded branch plan as the authoritative merge target; do not substitute `main`/`master`/current branch unless the user explicitly changed the plan
 
 #### UI Manual Confirmation Package
