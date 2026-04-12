@@ -248,7 +248,7 @@ if (( strict )); then
     "unattended_halt" \
     "error" \
     "Unattended halted: ${task_id}" \
-    "Auto-dispatch halted due to health gate failure."
+    "Unattended flow halted due to health gate failure."
   exit 3
 fi
 echo "health_non_strict_continue task_id=${task_id} strict=0"

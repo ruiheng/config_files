@@ -227,7 +227,6 @@ Important identity clarification:
 Default policy when missing:
 - `mode = "unattended"`
 - `auto_accept_if_no_must_fix = true`
-- `auto_dispatch_next_task = false`
 - `ui_manual_confirmation = "skip"`
 - `review_round_convergence_check_threshold = 3`
 - `review_round_hard_stop_threshold = 5`

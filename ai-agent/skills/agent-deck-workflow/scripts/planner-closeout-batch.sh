@@ -12,7 +12,6 @@ Required actions (hard-fail):
 Optional actions (soft-fail):
 - release workspace active-task lock
 - prune stale task branches
-- dispatch next task command
 - desktop notifications
 - post-closeout health gate and disposable worker cleanup
 
@@ -40,7 +39,6 @@ Options:
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions
   --skip-health-gate               Skip closeout-health-gate.sh
-  --next-dispatch-cmd <command>    Optional command executed after required actions
   --ack-delivery-id <id>           Optional mailbox delivery id to ack after required closeout state write
   --ack-lease-token <token>        Optional mailbox lease token paired with --ack-delivery-id
   -h, --help                       Show help
@@ -250,7 +248,6 @@ integration_branch_source="inferred_current_branch"
 run_prune=0
 prune_apply=0
 run_health_gate=1
-next_dispatch_cmd=""
 ack_delivery_id=""
 ack_lease_token=""
 
@@ -275,7 +272,6 @@ while [[ $# -gt 0 ]]; do
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
     --skip-health-gate) run_health_gate=0; shift 1 ;;
-    --next-dispatch-cmd) next_dispatch_cmd="${2:-}"; shift 2 ;;
     --ack-delivery-id) ack_delivery_id="${2:-}"; shift 2 ;;
     --ack-lease-token) ack_lease_token="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -441,7 +437,6 @@ write_state_file() {
     --arg merge_mode "$merge_mode" \
     --arg prune_status "$prune_status" \
     --arg health_gate_status "$health_gate_status" \
-    --arg next_dispatch_status "$next_dispatch_status" \
     --arg workspace_lock_status "$workspace_lock_status" \
     --arg task_workspace_lock_status "$task_workspace_lock_status" \
     --arg ack_delivery_id "$ack_delivery_id" \
@@ -485,8 +480,7 @@ write_state_file() {
         workspace_lock: $workspace_lock_status,
         task_workspace_lock: $task_workspace_lock_status,
         prune: $prune_status,
-        health_gate: $health_gate_status,
-        next_dispatch: $next_dispatch_status
+        health_gate: $health_gate_status
       },
       optional_fail_count: $optional_fail_count
     }' >"$tmp_state"
@@ -557,7 +551,6 @@ fi
 
 prune_status="skipped"
 health_gate_status="skipped"
-next_dispatch_status="skipped"
 workspace_lock_status="not_checked"
 task_workspace_lock_status="not_requested"
 optional_fail_count=0
@@ -667,21 +660,6 @@ if (( run_health_gate )); then
     health_gate_status="missing_script"
     optional_fail_count=$((optional_fail_count + 1))
     warn "optional health gate script missing: ${health_gate_script}"
-  fi
-fi
-
-if [[ -n "$next_dispatch_cmd" ]]; then
-  set +e
-  next_output="$(bash -lc "$next_dispatch_cmd" 2>&1)"
-  next_rc=$?
-  set -e
-  echo "$next_output"
-  if (( next_rc == 0 )); then
-    next_dispatch_status="ok"
-  else
-    next_dispatch_status="failed"
-    optional_fail_count=$((optional_fail_count + 1))
-    warn "optional next-dispatch command failed rc=${next_rc}"
   fi
 fi
 

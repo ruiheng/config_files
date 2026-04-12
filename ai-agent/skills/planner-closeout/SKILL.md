@@ -29,7 +29,6 @@ Skill-specific context resolution:
 - `integration_branch`: explicit -> mailbox body -> ask
 - `task_branch`: explicit -> mailbox body -> ask
 - `task_dir`: explicit -> mailbox body `Task dir` / `Worker dir` -> omit
-- `workflow_policy` (optional): explicit -> mailbox body -> default unattended policy
 - `delivery_id` (optional): explicit leased delivery context -> omit when unavailable
 - `lease_token` (optional): explicit leased delivery context -> omit when unavailable
 
@@ -43,11 +42,10 @@ Branch-plan rule:
 ## Execution Flow
 
 1. resolve `task_id`, planner identity, and the recorded branch plan from the closeout message
-2. inspect `Residual Follow-up For Planner`, `UI Manual Confirmation Package`, and `workflow_policy` before running planner closeout
+2. inspect `Residual Follow-up For Planner` and `UI Manual Confirmation Package` before running planner closeout
 3. run the planner closeout batch script with the recorded branch plan
 4. if this turn started from a claimed `closeout_delivered` delivery, pass `--ack-delivery-id` and `--ack-lease-token` so the script can ack after required closeout state is written
-5. if planner context includes a real next-dispatch command and `workflow_policy.auto_dispatch_next_task=true`, pass it with `--next-dispatch-cmd`
-6. report the result after planner closeout finishes
+5. report the result after planner closeout finishes
 
 Required closeout command shape:
 
@@ -62,7 +60,6 @@ Required closeout command shape:
 Optional command additions:
 - add `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` when this turn owns a claimed `closeout_delivered` delivery
 - add `--task-dir <task_dir>` when the closeout body records a different worker/task worktree that may hold an active-task lock
-- add `--next-dispatch-cmd <command>` only when planner already has a concrete next-dispatch command to run
 - add `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
 
 ## Rules
@@ -71,8 +68,7 @@ Optional command additions:
 - use the closeout body as the primary planner handoff; do not reread the full review unless the closeout body is insufficient
 - coder/reviewer execution is asynchronous and may take unbounded time; this skill starts only after the closeout message actually arrives
 - do not start planner closeout speculatively while coder or reviewer work is still in progress
-- the planner closeout script owns required closeout actions, progress recording, optional next dispatch, and planner-side cleanup
-- preserve `workflow_policy` semantics when deciding whether to dispatch the next queued task
+- the planner closeout script owns required closeout actions, progress recording, and planner-side cleanup
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
 - keep mailbox JSON internal unless the user explicitly asks
@@ -84,5 +80,4 @@ After planner closeout:
 - report whether required closeout actions succeeded
 - include the recorded branch pair and task id
 - include whether mailbox ack ran
-- include whether next dispatch ran
 - include any manual unblock step when closeout or cleanup failed

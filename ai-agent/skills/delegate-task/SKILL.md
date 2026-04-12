@@ -72,7 +72,6 @@ Resolve by priority:
 Workflow policy inference:
 - default to unattended => `mode = "unattended"` and `auto_accept_if_no_must_fix = true`
 - human-gated only when the user explicitly asks for a human acceptance gate
-- automatic next-task dispatch => `auto_dispatch_next_task = true`
 - unless user says otherwise, unattended keeps `ui_manual_confirmation = "skip"`
 - write inferred automation choices into `## Workflow Policy`
 
