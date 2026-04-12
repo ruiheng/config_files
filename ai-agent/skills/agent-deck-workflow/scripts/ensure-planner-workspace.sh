@@ -9,19 +9,20 @@ Usage:
   ensure-planner-workspace.sh [options]
 
 Options:
-  --integration-branch <ref>      Required non-task landing branch for this workspace
+  --integration-branch <ref>      Required non-task landing branch for ensure/refresh mode
   --planner-session-id <id|title> Planner session ref (default: current agent-deck session id)
   --supervisor-session-id <id|title> Optional supervisor session id/ref for this planner workspace
   --artifact-root <path>          Artifact root (default: .agent-artifacts)
+  --release-planner-workspace     Delete existing planner-workspace.json owned by this planner
   --override-planner-workspace    Replace existing planner-workspace.json; use only after user confirmation
   -h, --help                      Show help
 
 Outputs:
-  - Writes or validates <artifact-root>/planner-workspace.json
+  - Writes, validates, or deletes <artifact-root>/planner-workspace.json
   - Prints one summary line with the resulting status
 
 Exit codes:
-  0: record created, refreshed, or matched
+  0: record created, refreshed, matched, or released
   2: usage/argument/runtime validation error
 EOF
 }
@@ -115,7 +116,9 @@ planner_session_ref=""
 integration_branch=""
 supervisor_session_ref=""
 artifact_root=".agent-artifacts"
+release_planner_workspace=0
 override_planner_workspace=0
+planner_session_ref_inferred=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -123,13 +126,23 @@ while [[ $# -gt 0 ]]; do
     --integration-branch) integration_branch="${2:-}"; shift 2 ;;
     --supervisor-session-id) supervisor_session_ref="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
+    --release-planner-workspace) release_planner_workspace=1; shift 1 ;;
     --override-planner-workspace) override_planner_workspace=1; shift 1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
   esac
 done
 
-[[ -n "$integration_branch" ]] || die "--integration-branch is required"
+if (( release_planner_workspace == 1 && override_planner_workspace == 1 )); then
+  die "--release-planner-workspace cannot be combined with --override-planner-workspace"
+fi
+
+if (( release_planner_workspace == 0 )); then
+  [[ -n "$integration_branch" ]] || die "--integration-branch is required"
+else
+  [[ -z "$integration_branch" ]] || die "--integration-branch is not allowed with --release-planner-workspace"
+  [[ -z "$supervisor_session_ref" ]] || die "--supervisor-session-id is not allowed with --release-planner-workspace"
+fi
 
 command -v git >/dev/null 2>&1 || die "git is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
@@ -139,8 +152,30 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   die "must run inside a git repository"
 fi
 
+record_file="${artifact_root%/}/planner-workspace.json"
+mkdir -p "$(dirname "$record_file")"
+
 if [[ -z "$planner_session_ref" ]]; then
   planner_session_ref="$(resolve_current_session_id)"
+  planner_session_ref_inferred=1
+fi
+
+if (( release_planner_workspace == 1 )); then
+  if [[ ! -f "$record_file" ]]; then
+    echo "planner_workspace_record status=already_absent file=${record_file} planner=${planner_session_ref}"
+    exit 0
+  fi
+
+  record_planner_session_id="$(jq -r '.planner_session_id // empty' "$record_file" 2>/dev/null || true)"
+  [[ -n "$record_planner_session_id" ]] || die "planner workspace record missing planner_session_id: ${record_file}"
+  [[ "$record_planner_session_id" == "$planner_session_ref" ]] || die "planner workspace planner mismatch: record='${record_planner_session_id}' expected='${planner_session_ref}' file='${record_file}'"
+
+  rm -f "$record_file" || die "failed to remove planner workspace record: ${record_file}"
+  echo "planner_workspace_record status=released file=${record_file} planner=${planner_session_ref}"
+  exit 0
+fi
+
+if (( planner_session_ref_inferred == 1 )); then
   planner_group="$(resolve_current_session_group)"
 else
   planner_group="$(resolve_session_group "$planner_session_ref")"
@@ -148,9 +183,6 @@ fi
 
 is_task_branch_ref "$integration_branch" && die "--integration-branch must be a non-task landing branch, got: ${integration_branch}"
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
-
-record_file="${artifact_root%/}/planner-workspace.json"
-mkdir -p "$(dirname "$record_file")"
 
 if [[ ! -f "$record_file" ]]; then
   write_record "$record_file" "$planner_session_ref" "$planner_group" "$integration_branch" "$supervisor_session_ref" "created"

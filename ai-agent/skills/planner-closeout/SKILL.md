@@ -45,7 +45,8 @@ Branch-plan rule:
 2. inspect `Residual Follow-up For Planner` and `UI Manual Confirmation Package` before running planner closeout
 3. run the planner closeout batch script with the recorded branch plan
 4. if this turn started from a claimed `closeout_delivered` delivery, pass `--ack-delivery-id` and `--ack-lease-token` so the script can ack after required closeout state is written
-5. report the result after planner closeout finishes
+5. if no more tasks remain in this workspace after closeout, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --planner-session-id <planner_session_id> --release-planner-workspace`
+6. report the result after planner closeout finishes
 
 Required closeout command shape:
 
@@ -69,6 +70,8 @@ Optional command additions:
 - coder/reviewer execution is asynchronous and may take unbounded time; this skill starts only after the closeout message actually arrives
 - do not start planner closeout speculatively while coder or reviewer work is still in progress
 - the planner closeout script owns required closeout actions, progress recording, and planner-side cleanup
+- when all current tasks in this workspace are complete, release `.agent-artifacts/planner-workspace.json`
+- use `ensure-planner-workspace.sh --release-planner-workspace` for that release; do not delete the file ad hoc
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
 - keep mailbox JSON internal unless the user explicitly asks

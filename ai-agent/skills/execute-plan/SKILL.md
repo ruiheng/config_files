@@ -47,6 +47,7 @@ Skill-specific context resolution:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
 8. read `planner_group` from `.agent-artifacts/planner-workspace.json` and send one final `plan_report_delivered` message to supervisor
+9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --planner-session-id <planner_session_id> --release-planner-workspace`
 
 ## Decision Rules
 
@@ -54,6 +55,8 @@ Skill-specific context resolution:
 - prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
+- when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
+- use `ensure-planner-workspace.sh --release-planner-workspace` for that release; do not delete the file ad hoc
 
 ## Final Report Template
 
@@ -93,4 +96,5 @@ Round: final
 - before doing planner work, prepare the workspace and make sure it is checked out to the explicit `integration_branch`
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - pass `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
+- after the planner has no remaining work in this workspace, release the planner workspace record with `ensure-planner-workspace.sh --release-planner-workspace`
 - do not naturally end after the last task if the final report to supervisor is still pending
