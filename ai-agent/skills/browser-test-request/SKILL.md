@@ -14,8 +14,10 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `task_id`
 - `planner_session_id` (optional)
 - `requester_session_id`
+- `requester_workspace`
 - `requester_role`
 - `browser_tester_session_ref` or `browser_tester_session_id`
+- `browser_tester_workspace`
 - `goal`
 - `target_url` or route
 - `steps`
@@ -36,9 +38,11 @@ Skill-specific context resolution:
 - `task_id`: explicit -> mailbox/review context -> ask
 - `planner_session_id`: explicit -> mailbox/review context -> omit when not available
 - `requester_session_id`: explicit -> current session id -> mailbox/review context -> ask
+- `requester_workspace`: explicit -> current workspace -> ask
 - `requester_role`: explicit -> mailbox/review context -> infer from current workflow stage -> default `requester`
 - `browser_tester_session_ref`: explicit -> mailbox/review context -> default `browser-tester`
 - `browser_tester_session_id`: explicit actual id -> resolved/created from `browser_tester_session_ref` before send
+- `browser_tester_workspace`: explicit -> mailbox/review context -> ask
 - `browser_tester_tool`: explicit -> mailbox/review context -> default `codex -m gpt-5.4 -c model_reasoning_effort="medium"`
 - `round`: explicit -> context -> default `1`
 
@@ -70,6 +74,10 @@ Round: <round>
 - Accounts / env / flags: [value or `None`]
 - Login / auth: [credentials source, auth profile, or `Ask requester/user`]
 - Test data / setup: [seed data, fixtures, prerequisites, or `None`]
+
+## Workspace Routing
+- Requester workspace: [absolute path]
+- Browser tester workspace: [absolute path]
 
 ## Steps
 1. [step]
@@ -106,6 +114,7 @@ Use the `agent_mailbox` MCP tools:
   - `ensure_cmd = <browser_tester_tool>`
   - `parent_session_id = <requester_session_id>`
   - `no_parent_link = false`
+  - `workdir = <browser_tester_workspace>`
   - normal workflow: do not pass `listener_message`
 - use the returned `session_id` as the authoritative `browser_tester_session_id`
 - fill `{{TO_SESSION_ID}}` in the mailbox body before sending
@@ -129,6 +138,7 @@ codex -m gpt-5.4 -c model_reasoning_effort="medium"
 - specify assertions, not just exploration goals
 - keep the body self-contained; browser-tester should not need workflow files
 - use a stable long-lived browser-tester session ref such as `browser-tester`
+- carry both requester and browser-tester workspaces in the mailbox body so later ensure-session calls can verify the correct worktree
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code

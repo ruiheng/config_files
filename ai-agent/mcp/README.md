@@ -21,6 +21,7 @@ The server is stdio-based and exposes three groups of tools.
 - `mailbox_bind`
 - `mailbox_status`
 - `mailbox_send`
+- `mailbox_forward`
 - `mailbox_wait`
 - `mailbox_recv`
 - `mailbox_list`
@@ -49,6 +50,8 @@ For an agent-deck-managed session `<id>`, bind:
 - set `disable_notify_message = true` to disable notify for that send
 - when mailbox body has `Action: execute_delegate_task`, this tool also enforces a single active-task lock for the bound workspace at `.agent-artifacts/active-task.lock/`
 - if that lock directory already exists, delegate dispatch is refused until it is manually removed or released by planner closeout
+- delegate dispatch must include `- Integration branch:` in the mailbox body before send
+- when the target is an `agent-deck/...` session, lock enforcement prefers the target session workdir and fails closed if that workspace cannot be resolved
 
 `mailbox_wait`
 - checks whether mail is available for the bound addresses or explicit override addresses
@@ -73,6 +76,11 @@ For an agent-deck-managed session `<id>`, bind:
 - use `latest: true` with `state: "acked"` to recover the most recent acknowledged mail after context loss
 - if `addresses` is omitted in `latest` mode, the tool reads from the currently bound inbox addresses
 
+`mailbox_forward`
+- forwards exactly one stored personal message selected by `message_id` or `delivery_id`
+- reuses the original body, `content_type`, and `schema_version`
+- prefixes the original subject with `Fwd: ` unless an explicit override subject is provided
+
 `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
 - wrap the corresponding `agent-mailbox` lifecycle commands
 - acknowledged deliveries remain readable later through `mailbox_read`
@@ -89,9 +97,12 @@ For an agent-deck-managed session `<id>`, bind:
 `agent_deck_ensure_session`
 - resolves an existing session or creates it when missing
 - starts an inactive target when needed
+- requires explicit `workdir` for every call
+- verifies existing sessions already match the requested `workdir`
 - can place the ensured session into an explicit `group_path`
 - can derive and ensure a child group under `group_parent_session_id` by using `child_group_name`
 - can create sessions with `no_parent_link = true` so workflow grouping does not depend on one-level parent-child session depth
+- when creating under a non-root `parent_session_id`, can derive a nested child group from that parent's existing group automatically
 - a newly created or newly started target should follow the same wake path as any other target and run `check-agent-mail` when notified
 - if `listener_message` is customized and omits that receiver hint, the MCP server appends a `check-agent-mail` hint automatically
 

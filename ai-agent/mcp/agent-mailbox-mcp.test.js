@@ -9,13 +9,18 @@ const {
   activeTaskLockPaths,
   buildChildGroupPath,
   buildEnsureSessionLaunchArgs,
+  forwardSubject,
+  inferTargetGroupPathFromParent,
   isActiveTaskLockStale,
   parseDelegateLockMetadata,
   parseSendTokens,
   parseWorkflowEnvelope,
   readActiveTaskLock,
+  requireExplicitWorkdir,
   resolveWakeNotifyMessage,
+  resolveDelegateLockWorkdir,
   sanitizeGroupSegment,
+  validateDelegateLockMetadata,
   validateSendReceipt,
 } = require("./agent-mailbox-mcp");
 
@@ -82,6 +87,51 @@ test("parseDelegateLockMetadata strips markdown inline code from branch fields",
   assert.equal(metadata.coder_session_ref, "coder-20260407-1200-demo");
 });
 
+test("validateDelegateLockMetadata requires an integration branch", () => {
+  assert.throws(
+    () => validateDelegateLockMetadata({ task_id: "20260407-1200-demo" }),
+    /Integration branch/
+  );
+});
+
+test("forwardSubject prefixes original subjects once and preserves explicit overrides", () => {
+  assert.equal(forwardSubject("Original subject", ""), "Fwd: Original subject");
+  assert.equal(forwardSubject("Fwd: Existing subject", ""), "Fwd: Existing subject");
+  assert.equal(forwardSubject("", ""), "Fwd");
+  assert.equal(forwardSubject("Original subject", "Custom subject"), "Custom subject");
+});
+
+test("inferTargetGroupPathFromParent derives a nested group only for child sessions", () => {
+  assert.equal(
+    inferTargetGroupPathFromParent(
+      {
+        id: "child-planner",
+        title: "Planner Child",
+        group: "planning/active",
+        parent_session_id: "root-planner",
+      },
+      "child-planner"
+    ),
+    "planning/active/planner-child"
+  );
+  assert.equal(
+    inferTargetGroupPathFromParent(
+      {
+        id: "root-planner",
+        title: "Planner Root",
+        group: "planning",
+        parent_session_id: "",
+      },
+      "root-planner"
+    ),
+    null
+  );
+});
+
+test("requireExplicitWorkdir rejects empty workdir", () => {
+  assert.throws(() => requireExplicitWorkdir(""), /workdir is required/);
+});
+
 test("acquireActiveTaskLock creates the fixed active-task lock directory and metadata", () => {
   const workdir = mkdtempSync(path.join(os.tmpdir(), "agent-mailbox-lock-"));
   const lock = acquireActiveTaskLock(workdir, {
@@ -146,6 +196,48 @@ test("isActiveTaskLockStale keeps a lock when any recorded worker session exists
   assert.equal(
     isActiveTaskLockStale(lock, (ref) => (ref === "live-coder" ? { id: ref } : null)),
     false
+  );
+});
+
+test("resolveDelegateLockWorkdir prefers the target session workdir for agent-deck delegates", () => {
+  assert.equal(
+    resolveDelegateLockWorkdir({
+      toAddress: "agent-deck/coder-session",
+      defaultWorkdir: "/fallback/worktree",
+      sessionProbe: () => ({
+        status: "found",
+        data: { path: "/target/worktree" },
+      }),
+      canonicalizePath: (inputPath) => `/canonical${inputPath}`,
+    }),
+    "/canonical/target/worktree"
+  );
+});
+
+test("resolveDelegateLockWorkdir fails closed when a non-local target workspace is not resolvable", () => {
+  assert.throws(
+    () =>
+      resolveDelegateLockWorkdir({
+        toAddress: "agent-deck/coder-session",
+        defaultWorkdir: "/fallback/worktree",
+        sessionProbe: () => ({ status: "unknown", data: null }),
+        localAddressResolver: () => false,
+        canonicalizePath: (inputPath) => inputPath,
+      }),
+    /resolvable target workspace/
+  );
+});
+
+test("resolveDelegateLockWorkdir falls back to the bound workspace for local delegates", () => {
+  assert.equal(
+    resolveDelegateLockWorkdir({
+      toAddress: "agent-deck/local-session",
+      defaultWorkdir: "/fallback/worktree",
+      sessionProbe: () => ({ status: "unknown", data: null }),
+      localAddressResolver: () => true,
+      canonicalizePath: (inputPath) => `/canonical${inputPath}`,
+    }),
+    "/canonical/fallback/worktree"
   );
 });
 

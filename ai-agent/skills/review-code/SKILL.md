@@ -258,7 +258,9 @@ Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
 - use `agent_mailbox`
-- first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
+- first call `agent_deck_ensure_session` with:
+  - `session_id = <requester_session_id>`
+  - `workdir = <current workspace>`
 - send it with `mailbox_send`
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<requester_session_id>`
@@ -274,7 +276,9 @@ Mailbox body rules (`user_requested_iteration`):
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
 - use `agent_mailbox`
-- first call `agent_deck_ensure_session` with `session_id = <requester_session_id>`
+- first call `agent_deck_ensure_session` with:
+  - `session_id = <requester_session_id>`
+  - `workdir = <current workspace>`
 - send it with `mailbox_send`
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<requester_session_id>`
