@@ -5,6 +5,8 @@
 [submodule "nvim/lua/buffer-nexus"]
 	path = nvim/lua/buffer-nexus
 	url = git@github.com:ruiheng/buffer-nexus.git
+	branch = master
 [submodule "nvim/jinja-mixed"]
 	path = nvim/jinja-mixed
 	url = git@github.com:ruiheng/jinja-mixed.git
+	branch = master
