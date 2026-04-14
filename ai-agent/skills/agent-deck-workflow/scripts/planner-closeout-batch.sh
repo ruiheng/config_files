@@ -21,7 +21,7 @@ Usage:
 Options:
   --task-id <id>                   Required task id (YYYYMMDD-HHMM-<slug>)
   --task-branch <ref>              Task branch (default: task/<task_id>; pass explicitly when reusing an existing topic branch)
-  --integration-branch <ref>       Integration branch (default: current branch; must be a non-task landing branch)
+  --integration-branch <ref>       Required integration branch; must be a non-task landing branch
   --artifact-root <path>           Artifact root (default: .agent-artifacts)
   --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
   --task-dir <path>                Required worker/task worktree used for task-scoped lock cleanup
@@ -244,7 +244,7 @@ max_worker_sessions=2
 merge_mode="ff-only"
 allow_dirty=0
 override_planner_workspace=0
-integration_branch_source="inferred_current_branch"
+integration_branch_source="explicit"
 run_prune=0
 prune_apply=0
 run_health_gate=1
@@ -281,6 +281,7 @@ done
 
 [[ -n "$task_id" ]] || die "--task-id is required"
 [[ -n "$task_dir" ]] || die "--task-dir is required"
+[[ -n "$integration_branch" ]] || die "--integration-branch is required"
 [[ "$max_worker_sessions" =~ ^[0-9]+$ ]] || die "--max-worker-sessions must be a non-negative integer"
 [[ -d "$task_dir" ]] || die "task-dir does not exist: ${task_dir}"
 
@@ -330,12 +331,8 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   die "must run inside a git repository"
 fi
 
-if [[ -z "$integration_branch" ]]; then
-  integration_branch="$(git symbolic-ref --quiet --short HEAD || true)"
-fi
-[[ -n "$integration_branch" ]] || die "failed to resolve current branch; pass --integration-branch"
-
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+original_branch="$current_branch"
 task_scoped_integration_branch=0
 if is_task_branch_ref "$integration_branch"; then
   task_scoped_integration_branch=1
@@ -345,24 +342,6 @@ fi
 
 git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
 git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"
-
-if (( override_planner_workspace == 1 )); then
-  "${script_dir}/ensure-planner-workspace.sh" \
-    --integration-branch "$integration_branch" \
-    --planner-session-id "$planner_session_ref" \
-    --artifact-root "$artifact_root" \
-    --override-planner-workspace >/dev/null
-fi
-
-planner_workspace_file="${artifact_root%/}/planner-workspace.json"
-[[ -f "$planner_workspace_file" ]] || die "planner workspace record missing: ${planner_workspace_file}"
-planner_workspace_planner_session_id="$(jq -r '.planner_session_id // empty' "$planner_workspace_file" 2>/dev/null || true)"
-planner_workspace_integration_branch="$(jq -r '.integration_branch // empty' "$planner_workspace_file" 2>/dev/null || true)"
-[[ -n "$planner_workspace_planner_session_id" ]] || die "planner workspace record missing planner_session_id: ${planner_workspace_file}"
-[[ -n "$planner_workspace_integration_branch" ]] || die "planner workspace record missing integration_branch: ${planner_workspace_file}"
-resolved_planner_session_id="$(resolve_session_id "$planner_session_ref")"
-[[ "$planner_workspace_planner_session_id" == "$resolved_planner_session_id" ]] || die "planner workspace planner mismatch: record='${planner_workspace_planner_session_id}' closeout='${resolved_planner_session_id}'"
-[[ "$planner_workspace_integration_branch" == "$integration_branch" ]] || die "planner workspace integration branch mismatch: record='${planner_workspace_integration_branch}' closeout='${integration_branch}'"
 
 lock_dir="${artifact_root%/}/active-task.lock"
 lock_file="${lock_dir}/lock.json"
@@ -386,7 +365,36 @@ if (( allow_dirty == 0 )); then
   fi
 fi
 
-started_branch="${current_branch:-detached}"
+# Delay prepare/override until after non-record preconditions pass so a failed
+# closeout does not detach or otherwise mutate the planner worktree first.
+if (( override_planner_workspace == 1 )); then
+  prepare_cmd=(
+    "${script_dir}/prepare-planner-workspace.sh"
+    --integration-branch "$integration_branch"
+    --planner-session-id "$planner_session_ref"
+    --artifact-root "$artifact_root"
+    --override-planner-workspace
+  )
+  if (( allow_dirty == 1 )); then
+    prepare_cmd+=(--allow-dirty)
+  fi
+  "${prepare_cmd[@]}" \
+    >/dev/null
+fi
+
+current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+
+planner_workspace_file="${artifact_root%/}/planner-workspace.json"
+[[ -f "$planner_workspace_file" ]] || die "planner workspace record missing: ${planner_workspace_file}"
+planner_workspace_planner_session_id="$(jq -r '.planner_session_id // empty' "$planner_workspace_file" 2>/dev/null || true)"
+planner_workspace_integration_branch="$(jq -r '.integration_branch // empty' "$planner_workspace_file" 2>/dev/null || true)"
+[[ -n "$planner_workspace_planner_session_id" ]] || die "planner workspace record missing planner_session_id: ${planner_workspace_file}"
+[[ -n "$planner_workspace_integration_branch" ]] || die "planner workspace record missing integration_branch: ${planner_workspace_file}"
+resolved_planner_session_id="$(resolve_session_id "$planner_session_ref")"
+[[ "$planner_workspace_planner_session_id" == "$resolved_planner_session_id" ]] || die "planner workspace planner mismatch: record='${planner_workspace_planner_session_id}' closeout='${resolved_planner_session_id}'"
+[[ "$planner_workspace_integration_branch" == "$integration_branch" ]] || die "planner workspace integration branch mismatch: record='${planner_workspace_integration_branch}' closeout='${integration_branch}'"
+
+started_branch="${original_branch:-detached}"
 switched_integration_branch=0
 if [[ "$current_branch" != "$integration_branch" ]]; then
   echo "auto_switch_integration_branch from=${started_branch} to=${integration_branch}"
@@ -403,6 +411,9 @@ if [[ "$current_branch" != "$integration_branch" ]]; then
   current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
   [[ "$current_branch" == "$integration_branch" ]] || die "branch switch reported success but current branch is '${current_branch:-detached}', expected '${integration_branch}'"
 fi
+
+current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+[[ "$current_branch" == "$integration_branch" ]] || die "required merge must run on attached integration branch '${integration_branch}', got '${current_branch:-detached}'"
 
 notify_script="${script_dir}/notify-workflow-event.sh"
 prune_script="${script_dir}/prune-task-branches.sh"

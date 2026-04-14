@@ -41,8 +41,8 @@ Branch-plan terms:
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
 - `planner_session_id`: explicit -> context -> bound mailbox sender context -> ask
-- `start_branch`: detected current git branch when delegation begins -> explicit -> context -> ask
-- `integration_branch`: explicit -> context -> if `start_branch` is the intended non-task landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or a high-confidence tracked/base branch for `start_branch`; if confidence is low, ask rather than guessing
+- `start_branch`: explicit -> context -> ask
+- `integration_branch`: explicit -> context -> if `start_branch` is the intended non-task landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or recorded workflow context for `start_branch`; if confidence is low, ask rather than guessing
   - integration branch must be the non-task landing branch; never use `task/*` as `integration_branch`
   - if `start_branch` is `task/*`, treat it as the task branch and ask for the real integration branch unless context already records it
   - never assume `main`/`master`; branch names are evidence, not truth
@@ -168,7 +168,7 @@ Tool-routing rule:
 Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
-1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
+1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
 2. use `agent_mailbox`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
 4. call `agent_deck_ensure_session`

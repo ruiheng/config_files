@@ -47,16 +47,16 @@ Skill-specific context resolution:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
 8. read `planner_group` from `.agent-artifacts/planner-workspace.json` and send one final `plan_report_delivered` message to supervisor
-9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/ensure-planner-workspace.sh --planner-session-id <planner_session_id> --release-planner-workspace`
+9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-planner-workspace.sh --planner-session-id <planner_session_id> --release-planner-workspace`
 
 ## Decision Rules
 
-- prefer local planner fixes only for small, isolated integration issues on the current integration branch
+- prefer local planner fixes only for small, isolated integration issues, and only after taking an explicit branch step; after workspace prep, the planner workspace is announced as detached HEAD, so current workspace git state is not a valid inferred start point for commits or task branches
 - prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
 - when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
-- use `ensure-planner-workspace.sh --release-planner-workspace` for that release; do not delete the file ad hoc
+- use `prepare-planner-workspace.sh --release-planner-workspace` for that release; do not delete the file ad hoc
 
 ## Final Report Template
 
@@ -93,8 +93,10 @@ Round: final
 - keep plan execution serial inside this workspace
 - own the internal breakdown needed to complete the goal; do not ask supervisor to pre-split ordinary implementation tasks
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
-- before doing planner work, prepare the workspace and make sure it is checked out to the explicit `integration_branch`
+- before doing planner work, prepare the workspace and make sure it is detached at the explicit `integration_branch` tip commit
+- treat the prepare-script detached-head notice as authoritative: do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
+- treat workspace prep as an early closeout viability gate too: if another worktree already holds `integration_branch` and planner closeout later needs to attach it here, stop immediately instead of letting the plan fail only at final closeout
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - pass `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
-- after the planner has no remaining work in this workspace, release the planner workspace record with `ensure-planner-workspace.sh --release-planner-workspace`
+- after the planner has no remaining work in this workspace, release the planner workspace record with `prepare-planner-workspace.sh --release-planner-workspace`
 - do not naturally end after the last task if the final report to supervisor is still pending
