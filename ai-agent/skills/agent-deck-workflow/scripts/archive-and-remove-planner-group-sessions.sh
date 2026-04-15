@@ -10,6 +10,7 @@ Usage:
 
 Options:
   --planner-group <path>         Required planner group path
+  --planner-session-id <id>      Optional planner session id to delete even if it is outside planner_group
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Optional agent-deck profile
   --apply                        Remove sessions and delete the group after archiving
@@ -32,6 +33,7 @@ die() {
 }
 
 planner_group=""
+planner_session_id=""
 artifact_root=".agent-artifacts"
 profile=""
 apply=0
@@ -39,6 +41,7 @@ apply=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --planner-group) planner_group="${2:-}"; shift 2 ;;
+    --planner-session-id) planner_session_id="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --apply) apply=1; shift 1 ;;
@@ -80,7 +83,9 @@ mkdir -p "$archive_dir"
 entries_file="$(mktemp)"
 session_cache_dir="$(mktemp -d)"
 delete_failed=0
-declare -A remaining parent_session_id_of
+# Under `set -u`, `declare -A name` is still treated as unbound until the first
+# assignment, so explicitly initialize the maps before checking their size.
+declare -A remaining=() parent_session_id_of=() queued_session_ids=()
 ordered_ids=()
 
 cleanup_tmp() {
@@ -89,8 +94,14 @@ cleanup_tmp() {
 }
 trap cleanup_tmp EXIT
 
-while IFS= read -r session_id; do
-  [[ -n "$session_id" ]] || continue
+queue_session_for_cleanup() {
+  local session_id="${1:-}"
+  local shown=""
+
+  [[ -n "$session_id" ]] || return 0
+  [[ -z "${queued_session_ids[$session_id]:-}" ]] || return 0
+  queued_session_ids["$session_id"]=1
+
   shown="$(ad session show "$session_id" --json 2>/dev/null || true)"
   if [[ -z "$shown" ]]; then
     jq -nc \
@@ -102,13 +113,21 @@ while IFS= read -r session_id; do
         deleted: false,
         delete_status: "not_found"
       }' >>"$entries_file"
-    continue
+    return 0
   fi
 
   printf '%s\n' "$shown" >"${session_cache_dir}/${session_id}.json"
   remaining["$session_id"]=1
   parent_session_id_of["$session_id"]="$(jq -r '.parent_session_id // empty' <<<"$shown" 2>/dev/null || true)"
+}
+
+while IFS= read -r session_id; do
+  queue_session_for_cleanup "$session_id"
 done <<<"$session_ids"
+
+# The planner session is part of planner-run cleanup even when it was created in
+# a different group, so accept it as an explicit extra delete target.
+queue_session_for_cleanup "$planner_session_id"
 
 while ((${#remaining[@]} > 0)); do
   progressed=0
@@ -183,6 +202,9 @@ jq -n \
 echo "planner_group_archive_ok file=${archive_file} mode=$([[ "$apply" -eq 1 ]] && echo apply || echo preview)"
 
 group_delete_status="skipped_no_apply"
+group_delete_error=""
+group_delete_exit_code=""
+group_exists_after_delete=""
 remaining_sessions_json="[]"
 if (( apply )); then
   remaining_sessions_json="$(ad list --json 2>/dev/null | jq -c --arg planner_group "$planner_group" '
@@ -203,10 +225,27 @@ if (( apply )); then
   remaining_after_delete="$(jq -r 'length' <<<"$remaining_sessions_json" 2>/dev/null || echo -1)"
 
   if (( remaining_after_delete == 0 )); then
-    if ad group delete "$planner_group" >/dev/null 2>&1; then
+    group_list_json="$(ad group list --json 2>/dev/null || true)"
+    if [[ -n "$group_list_json" ]]; then
+      if jq -e --arg planner_group "$planner_group" '
+        any(.groups[]?; (.path // "") == $planner_group)
+      ' <<<"$group_list_json" >/dev/null 2>&1; then
+        group_exists_after_delete=1
+      else
+        group_exists_after_delete=0
+      fi
+    fi
+
+    # Session removal may already prune the empty planner group, so an absent
+    # group here means cleanup is complete rather than a failure.
+    if [[ "$group_exists_after_delete" == "0" ]]; then
+      group_delete_status="already_absent"
+    elif group_delete_output="$(ad group delete "$planner_group" 2>&1)"; then
       group_delete_status="deleted"
     else
+      group_delete_exit_code="$?"
       group_delete_status="delete_failed"
+      group_delete_error="$group_delete_output"
       delete_failed=1
     fi
   else
@@ -227,6 +266,9 @@ if (( apply )) && (( delete_failed != 0 )); then
       .[]
       | "planner_group_remaining session_id=\(.id) title=\(.title // "unknown") group=\(.group // "") parent_session_id=\(.parent_session_id // "")"
     ' <<<"$remaining_sessions_json"
+  fi
+  if [[ -n "$group_delete_error" ]]; then
+    echo "planner_group_group_delete_failed planner_group=${planner_group} exit_code=${group_delete_exit_code:-unknown} error=${group_delete_error}"
   fi
 fi
 
