@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Ensure a planner session exists in a child group of the current supervisor group.
+Ensure a planner session exists in a fresh child group of the current supervisor group.
 
 Usage:
   ensure-supervised-planner-session.sh [options]
@@ -18,7 +18,7 @@ Options:
   -h, --help                      Show help
 
 Outputs:
-  - Ensures the planner session exists, is started, and belongs to the target planner group
+  - Creates the planner session in a fresh planner group under the supervisor group
   - Prints one summary line with `session_id=` and `planner_group=`
 
 Exit codes:
@@ -105,9 +105,12 @@ fi
 
 planner_group_path="${supervisor_group}/${planner_group_name}"
 
-if ! group_exists "$planner_group_path"; then
-  ad group create "$planner_group_name" --parent "$supervisor_group" >/dev/null
+# Planner dispatch must claim a brand-new subgroup so a stale planner run cannot
+# be silently reused just because the title/group name matches.
+if group_exists "$planner_group_path"; then
+  die "planner subgroup already exists: ${planner_group_path}; choose a fresh planner subgroup for this dispatch"
 fi
+ad group create "$planner_group_name" --parent "$supervisor_group" >/dev/null
 
 existing_planner_json="$(session_json "$planner_session_ref")"
 if [[ -n "$existing_planner_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existing_planner_json"; then
