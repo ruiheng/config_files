@@ -15,7 +15,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `supervisor_session_id`
 - `planner_session_ref` or `planner_session_id`
 - `planner_workspace`
-- `integration_branch` (required, explicit; do not infer)
+- `integration_branch` (planner-owned branch for this dispatched plan; must exist before send)
 - `goal`
 - optional `planner_tool`
 - optional `per_task_review`
@@ -27,7 +27,11 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 - this dispatch targets one planner in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
-- `integration_branch` must be provided explicitly; do not infer it from the worktree path, current branch, or repo metadata
+- `integration_branch` is the planner-owned branch for this dispatched plan, not the supervisor landing branch
+- for a new plan dispatch, create a fresh `integration_branch` from the current supervisor branch before sending the mailbox body
+- do not silently reuse an existing planner integration branch from an earlier run; reuse is allowed only when the user explicitly says this dispatch is resuming that same unfinished plan
+- if the requested or derived `integration_branch` already exists and resume was not explicit, choose a new branch name or ask; do not dispatch onto an old branch tip
+- create the planner integration branch without switching the supervisor worktree; use the current supervisor branch as the start-point
 - if `planner_tool` is omitted, reuse the current session tool/command from agent-deck session metadata; do not infer it from environment variables
 - default `per_task_review = required`
 - default `final_review = skip`
@@ -55,6 +59,7 @@ Round: 1
 ## Workspace Contract
 - Workspace path: [planner_workspace]
 - Integration branch: [integration_branch]
+  Created by supervisor for this dispatched plan from the current supervisor branch; planner owns this branch for the full plan.
 - Execution model: planner-owned decomposition; serial tasks in one workspace
 - Completion rule: finish the assigned goal, then report back to supervisor
 
@@ -73,8 +78,15 @@ Round: 1
 
 ## Mailbox Send
 
-1. use `agent_mailbox`
-2. call `agent_deck_ensure_session` for the planner target
+1. resolve the current supervisor branch; if the worktree is detached or the landing branch is unclear, stop and ask instead of guessing
+2. resolve `integration_branch`
+   - explicit branch name wins
+   - otherwise derive a fresh planner-owned branch name from `plan_id`; prefer `plan/<plan_id>`
+3. create the planner integration branch from the current supervisor branch before dispatch
+   - do not switch the supervisor worktree onto that branch
+   - if the preferred branch name already exists and resume was not explicit, choose a new unique suffix instead of reusing that ref
+4. use `agent_mailbox`
+5. call `agent_deck_ensure_session` for the planner target
    - identify target with `session_id` or `session_ref = <planner_session_ref>`
    - when creation may be needed, also pass:
      - `ensure_title = <planner_session_ref>`
@@ -82,9 +94,9 @@ Round: 1
      - `workdir = <planner_workspace>`
      - `parent_session_id = <supervisor_session_id>`
      - `no_parent_link = false`
-3. use the returned `session_id` as the authoritative `planner_session_id`
-4. fill `{{TO_SESSION_ID}}`
-5. send with:
+6. use the returned `session_id` as the authoritative `planner_session_id`
+7. fill `{{TO_SESSION_ID}}`
+8. send with:
    - `from_address = agent-deck/<supervisor_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "plan dispatch: <plan_id>"`

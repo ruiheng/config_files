@@ -32,6 +32,7 @@ Skill-specific context resolution:
 - `supervisor_session_id`: explicit -> mailbox body `From` header -> ask
 - `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
+  - this is the already-created planner-owned branch for this dispatched plan, not the supervisor landing branch
 - `per_task_review`: explicit -> mailbox body -> default `required`
 - `final_review`: explicit -> mailbox body -> default `skip`
 
@@ -93,6 +94,7 @@ Round: final
 - keep plan execution serial inside this workspace
 - own the internal breakdown needed to complete the goal; do not ask supervisor to pre-split ordinary implementation tasks
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
+- treat `integration_branch` as the planner-owned branch prepared for this dispatched plan; do not reinterpret it as the supervisor landing branch and do not silently jump onto some older leftover branch
 - before doing planner work, prepare the workspace and make sure it is detached at the explicit `integration_branch` tip commit
 - treat the prepare-script detached-head notice as authoritative: do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
 - treat workspace prep as an early closeout viability gate too: if another worktree already holds `integration_branch` and planner closeout later needs to attach it here, stop immediately instead of letting the plan fail only at final closeout
