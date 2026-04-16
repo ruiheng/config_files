@@ -37,7 +37,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox/review context -> ask
 - `planner_session_id`: explicit -> mailbox/review context -> omit when not available
-- `requester_session_id`: explicit -> current session id -> mailbox/review context -> ask
+- `requester_session_id`: explicit -> mailbox/review context -> current session id -> ask
 - `requester_workspace`: explicit -> current workspace -> ask
 - `requester_role`: explicit -> mailbox/review context -> infer from current workflow stage -> default `requester`
 - `browser_tester_session_ref`: explicit -> mailbox/review context -> default `browser-tester`
@@ -47,8 +47,8 @@ Skill-specific context resolution:
 - `round`: explicit -> context -> default `1`
 
 Identity rules:
-- `browser_check_requested` sender must be active requester session id
-- resolve current session id once and reuse it for sender validation in the whole turn
+- `browser_check_requested` sender must use the resolved `requester_session_id`
+- current session id is only a final fallback and diagnostic source; review workflows must preserve the original requester from mailbox/review context
 
 ## Mailbox Body
 
