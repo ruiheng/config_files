@@ -38,7 +38,7 @@ If a note is for maintainers, put it in `README.md` or another maintenance doc.
 Good:
 
 ```text
-recv -> execute action -> send/closeout if required -> ack
+recv -> execute action -> send/closeout if required -> ack claimed inbound delivery
 ```
 
 Bad:
@@ -94,6 +94,8 @@ Do not leave room for the agent to improvise between several "possible" options.
 ### 8. Be precise about completion and `ack`
 
 - default rule: `mailbox_ack` only after the message's required workflow action is complete
+- when you mean mailbox lifecycle, say `ack claimed inbound delivery`, not just `ack`
+- never imply a sender-side `ack` after `mailbox_send`; sender-side completion is `mailbox_send` success
 - do not use vague wording such as:
   - "incorporated into working state"
   - "picked up"

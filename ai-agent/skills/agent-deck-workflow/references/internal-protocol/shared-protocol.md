@@ -63,6 +63,8 @@ Transport rules:
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
+- `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail` apply only to the currently claimed inbound delivery in this session
+- `mailbox_send` has no sender-side `ack`; sender-side completion is the successful `mailbox_send` result
 - use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
 - for agent-deck-managed targets, use `agent_deck_ensure_session` to resolve, create, or start the target session
@@ -128,7 +130,8 @@ When a workflow session is woken:
 6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
 7. keep mailbox lifecycle steps serialized
 
-Complete the message's required workflow action before `ack`.
+Complete the message's required workflow action before `ack`ing the claimed inbound delivery.
+Do not `ack` outbound mail that this session just sent.
 
 Idle behavior:
 - long-running wait loops are not recommended for workflow continuity
