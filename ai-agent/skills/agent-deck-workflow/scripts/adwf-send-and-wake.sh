@@ -43,6 +43,16 @@ die() {
   exit 1
 }
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/notify-workflow-lib.sh"
+
+dispatch_blocker() {
+  local event="$1"
+  local message="$2"
+  adwf_notify_event "$event" "error" "Workflow dispatch blocked" "$message"
+  die "$message"
+}
+
 run_capture() {
   local step="$1"
   shift
@@ -162,10 +172,10 @@ if [[ -z "$to_session_id" ]]; then
   fi
 
   if [[ -z "$to_session_id" ]]; then
-    [[ -n "$ensure_target_title" ]] || die "target session missing: provide --to-session-id, --to-session-ref, or --ensure-target-title"
-    [[ -n "$ensure_target_cmd" ]] || die "--ensure-target-cmd is required when creating target session"
-    [[ -n "$parent_session_id" ]] || die "--parent-session-id is required when creating target session"
-    [[ -d "$workdir" ]] || die "workdir does not exist: $workdir"
+    [[ -n "$ensure_target_title" ]] || dispatch_blocker "workflow_dispatch_target_missing" "target session missing: provide --to-session-id, --to-session-ref, or --ensure-target-title"
+    [[ -n "$ensure_target_cmd" ]] || dispatch_blocker "workflow_dispatch_target_cmd_missing" "--ensure-target-cmd is required when creating target session"
+    [[ -n "$parent_session_id" ]] || dispatch_blocker "workflow_dispatch_parent_missing" "--parent-session-id is required when creating target session"
+    [[ -d "$workdir" ]] || dispatch_blocker "workflow_dispatch_workdir_missing" "workdir does not exist: $workdir"
 
     launch_cmd=(
       agent-deck launch
@@ -284,9 +294,9 @@ send_status=$?
 set -e
 if (( send_status != 0 )); then
   if [[ -n "$send_output" ]]; then
-    die "agent-mailbox send failed: $send_output"
+    dispatch_blocker "workflow_dispatch_send_failed" "agent-mailbox send failed: $send_output"
   fi
-  die "agent-mailbox send failed with exit code $send_status"
+  dispatch_blocker "workflow_dispatch_send_failed" "agent-mailbox send failed with exit code $send_status"
 fi
 
 message_id=""

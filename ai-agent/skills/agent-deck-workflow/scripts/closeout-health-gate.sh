@@ -50,6 +50,9 @@ debug() {
   fi
 }
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/notify-workflow-lib.sh"
+
 resolve_current_session_id() {
   local current_json current_id
   current_json="$(agent-deck session current --json 2>/dev/null || true)"
@@ -135,26 +138,8 @@ count_worker_sessions() {
   ' <<<"$list_json" 2>/dev/null || echo "-1"
 }
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cleanup_script="${script_dir}/archive-and-remove-task-sessions.sh"
 [[ -x "$cleanup_script" ]] || die "cleanup script not found or not executable: $cleanup_script"
-notify_script="${script_dir}/notify-workflow-event.sh"
-
-notify_event() {
-  local event="$1"
-  local severity="$2"
-  local title="$3"
-  local message="$4"
-  if [[ -x "$notify_script" ]]; then
-    "$notify_script" \
-      --event "$event" \
-      --task-id "$task_id" \
-      --title "$title" \
-      --message "$message" \
-      --severity "$severity" \
-      --artifact-root "$artifact_root" >/dev/null 2>&1 || true
-  fi
-}
 
 cleanup_cmd=(
   "$cleanup_script"
@@ -236,7 +221,7 @@ if [[ "$health_ok" == "true" ]]; then
   exit 0
 fi
 
-notify_event \
+adwf_notify_event \
   "health_gate_fail" \
   "error" \
   "Health gate failed: ${task_id}" \
@@ -244,7 +229,7 @@ notify_event \
 
 echo "health_fail task_id=${task_id} checked_at=${checked_at} reasons=${reasons_csv:-unknown} archive_file=${archive_file} worker_sessions=${worker_session_count}/${max_worker_sessions}"
 if (( strict )); then
-  notify_event \
+  adwf_notify_event \
     "unattended_halt" \
     "error" \
     "Unattended halted: ${task_id}" \

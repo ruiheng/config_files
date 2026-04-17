@@ -34,10 +34,20 @@ die() {
   exit 2
 }
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/notify-workflow-lib.sh"
+
+prepare_blocker() {
+  local event="$1"
+  local message="$2"
+  adwf_notify_event "$event" "warn" "Planner workspace blocked" "$message"
+  die "$message"
+}
+
 require_clean_worktree() {
   local integration_branch="$1"
   if ! git diff --quiet || ! git diff --cached --quiet; then
-    die "dirty worktree/index; commit or stash first before detaching to integration commit '${integration_branch}'"
+    prepare_blocker "planner_workspace_dirty_worktree" "dirty worktree/index; commit or stash first before detaching to integration commit '${integration_branch}'"
   fi
 }
 
@@ -60,7 +70,7 @@ require_closeout_attachable_integration_branch() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ -z "$line" ]]; then
       if [[ -n "$record_worktree" && "$record_worktree" != "$current_worktree" && "$record_branch" == "$branch_ref" ]]; then
-        die "integration branch '${integration_branch}' is already checked out in worktree '${record_worktree}'; planner closeout later needs to attach that branch here, so stop before prepare mutates this workspace"
+        prepare_blocker "planner_workspace_branch_in_use" "integration branch '${integration_branch}' is already checked out in worktree '${record_worktree}'; planner closeout later needs to attach that branch here, so stop before prepare mutates this workspace"
       fi
       record_worktree=""
       record_branch=""
@@ -73,7 +83,7 @@ require_closeout_attachable_integration_branch() {
   done < <(git worktree list --porcelain)
 
   if [[ -n "$record_worktree" && "$record_worktree" != "$current_worktree" && "$record_branch" == "$branch_ref" ]]; then
-    die "integration branch '${integration_branch}' is already checked out in worktree '${record_worktree}'; planner closeout later needs to attach that branch here, so stop before prepare mutates this workspace"
+    prepare_blocker "planner_workspace_branch_in_use" "integration branch '${integration_branch}' is already checked out in worktree '${record_worktree}'; planner closeout later needs to attach that branch here, so stop before prepare mutates this workspace"
   fi
 }
 

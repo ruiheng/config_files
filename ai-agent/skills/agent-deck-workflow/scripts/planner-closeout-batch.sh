@@ -77,6 +77,18 @@ warn() {
   echo "WARN: $*" >&2
 }
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Shared notification wrapper keeps event delivery best-effort and avoids
+# repeating notify-script plumbing in each workflow script.
+source "${script_dir}/notify-workflow-lib.sh"
+
+closeout_blocker() {
+  local event="$1"
+  local message="$2"
+  adwf_notify_event "$event" "error" "Planner closeout blocked: ${task_id}" "$message"
+  die "$message"
+}
+
 resolve_current_session_id() {
   local current_json current_id
   current_json="$(agent-deck session current --json 2>/dev/null || true)"
@@ -315,8 +327,6 @@ if [[ -z "$architect_session_ref" ]]; then
   architect_session_ref="architect-${task_id}"
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 command -v git >/dev/null 2>&1 || die "git is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
 if [[ -n "$ack_delivery_id" ]]; then
@@ -351,17 +361,17 @@ if [[ -d "$lock_dir" ]]; then
     rm -rf "$lock_dir" || die "failed to remove stale workspace active-task lock: ${lock_dir}"
   else
     lock_task_id="$(jq -r '.task_id // empty' "$lock_file" 2>/dev/null || true)"
-    [[ -n "$lock_task_id" ]] || die "workspace active-task lock metadata missing: ${lock_file}"
-    [[ "$lock_task_id" == "$task_id" ]] || die "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}"
+    [[ -n "$lock_task_id" ]] || closeout_blocker "planner_closeout_lock_metadata_missing" "workspace active-task lock metadata missing: ${lock_file}"
+    [[ "$lock_task_id" == "$task_id" ]] || closeout_blocker "planner_closeout_lock_task_mismatch" "workspace active-task lock belongs to task_id=${lock_task_id}, not ${task_id}: ${lock_dir}"
     lock_integration_branch="$(jq -r '.integration_branch // empty' "$lock_file" 2>/dev/null || true)"
-    [[ -n "$lock_integration_branch" ]] || die "workspace active-task lock missing integration_branch: ${lock_file}"
-    [[ "$lock_integration_branch" == "$integration_branch" ]] || die "workspace active-task lock integration branch mismatch: lock='${lock_integration_branch}' closeout='${integration_branch}'"
+    [[ -n "$lock_integration_branch" ]] || closeout_blocker "planner_closeout_lock_branch_missing" "workspace active-task lock missing integration_branch: ${lock_file}"
+    [[ "$lock_integration_branch" == "$integration_branch" ]] || closeout_blocker "planner_closeout_lock_branch_mismatch" "workspace active-task lock integration branch mismatch: lock='${lock_integration_branch}' closeout='${integration_branch}'"
   fi
 fi
 
 if (( allow_dirty == 0 )); then
   if ! git diff --quiet || ! git diff --cached --quiet; then
-    die "dirty worktree/index; commit or stash first (or pass --allow-dirty)"
+    closeout_blocker "planner_closeout_dirty_worktree" "dirty worktree/index; commit or stash first (or pass --allow-dirty)"
   fi
 fi
 
@@ -385,14 +395,14 @@ fi
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
 
 planner_workspace_file="${artifact_root%/}/planner-workspace.json"
-[[ -f "$planner_workspace_file" ]] || die "planner workspace record missing: ${planner_workspace_file}"
+[[ -f "$planner_workspace_file" ]] || closeout_blocker "planner_closeout_workspace_record_missing" "planner workspace record missing: ${planner_workspace_file}"
 planner_workspace_planner_session_id="$(jq -r '.planner_session_id // empty' "$planner_workspace_file" 2>/dev/null || true)"
 planner_workspace_integration_branch="$(jq -r '.integration_branch // empty' "$planner_workspace_file" 2>/dev/null || true)"
-[[ -n "$planner_workspace_planner_session_id" ]] || die "planner workspace record missing planner_session_id: ${planner_workspace_file}"
-[[ -n "$planner_workspace_integration_branch" ]] || die "planner workspace record missing integration_branch: ${planner_workspace_file}"
+[[ -n "$planner_workspace_planner_session_id" ]] || closeout_blocker "planner_closeout_workspace_planner_missing" "planner workspace record missing planner_session_id: ${planner_workspace_file}"
+[[ -n "$planner_workspace_integration_branch" ]] || closeout_blocker "planner_closeout_workspace_branch_missing" "planner workspace record missing integration_branch: ${planner_workspace_file}"
 resolved_planner_session_id="$(resolve_session_id "$planner_session_ref")"
-[[ "$planner_workspace_planner_session_id" == "$resolved_planner_session_id" ]] || die "planner workspace planner mismatch: record='${planner_workspace_planner_session_id}' closeout='${resolved_planner_session_id}'"
-[[ "$planner_workspace_integration_branch" == "$integration_branch" ]] || die "planner workspace integration branch mismatch: record='${planner_workspace_integration_branch}' closeout='${integration_branch}'"
+[[ "$planner_workspace_planner_session_id" == "$resolved_planner_session_id" ]] || closeout_blocker "planner_closeout_workspace_planner_mismatch" "planner workspace planner mismatch: record='${planner_workspace_planner_session_id}' closeout='${resolved_planner_session_id}'"
+[[ "$planner_workspace_integration_branch" == "$integration_branch" ]] || closeout_blocker "planner_closeout_workspace_branch_mismatch" "planner workspace integration branch mismatch: record='${planner_workspace_integration_branch}' closeout='${integration_branch}'"
 
 started_branch="${original_branch:-detached}"
 switched_integration_branch=0
@@ -403,6 +413,11 @@ if [[ "$current_branch" != "$integration_branch" ]]; then
   switch_rc=$?
   set -e
   if (( switch_rc != 0 )); then
+    adwf_notify_event \
+      "planner_closeout_switch_failed" \
+      "error" \
+      "Planner closeout blocked: ${task_id}" \
+      "Failed to attach integration branch '${integration_branch}' from '${started_branch}'."
     echo "$switch_output" >&2
     die "failed to switch from '${started_branch}' to integration branch '${integration_branch}'. If git says the branch is already checked out in another worktree, rerun closeout from that worktree or release that worktree first; do not create a temporary closeout worktree."
   fi

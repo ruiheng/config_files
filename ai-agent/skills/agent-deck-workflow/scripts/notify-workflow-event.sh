@@ -10,7 +10,7 @@ Usage:
 
 Options:
   --event <name>             Required event name
-  --task-id <id>             Required task id
+  --task-id <id>             Optional task id
   --title <text>             Required notification title
   --message <text>           Required notification message
   --severity <level>         info|warn|error (default: info)
@@ -72,7 +72,7 @@ esc_osascript() {
 mode="${ADWF_NOTIFY:-auto}"
 min_severity="${ADWF_NOTIFY_MIN_SEVERITY:-info}"
 
-if [[ -z "$event" || -z "$task_id" || -z "$title" || -z "$message" ]]; then
+if [[ -z "$event" || -z "$title" || -z "$message" ]]; then
   exit 0
 fi
 
