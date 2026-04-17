@@ -36,6 +36,7 @@ Branch plan continuity rule:
   - `original_task`
   - `requester_role`
   - `requester_session_id`
+  - `reviewer_session_id`
   - `review_lane`
   - `start_branch`
   - `integration_branch`
@@ -86,7 +87,7 @@ Skill-specific context resolution:
 - `requester_role`: explicit -> delegated context -> current workflow role -> default `coder`
 - `requester_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
-- `reviewer_session_id`: explicit actual id -> delegated context actual id -> resolved/created from `reviewer_session_ref` before send
+- `reviewer_session_id`: explicit actual id -> delegated context actual id -> required existing reviewer allocated by planner before send
 - `review_lane`: explicit -> delegated context -> default `task`
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
@@ -121,9 +122,9 @@ Review-request continuity rule:
 Identity rules:
 - `review_requested` sender must be the active requester session id for this review lane
 - use the bound mailbox sender context for sender validation
-- If existing reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
+- If the allocated reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
   1. keep existing reviewer session/tool
-  2. create/use new reviewer session with requested tool
+  2. ask planner to replace reviewer assignment with a different reviewer session/tool
 
 Commit reference rule:
 - in mailbox content, use a short commit ref, not a full 40-char hash
@@ -256,17 +257,14 @@ Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
 1. use `agent_mailbox`
-2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. call `agent_deck_ensure_session`
-   - identify target with `session_id` or `session_ref = <reviewer_session_ref>`
-   - when creation may be needed, also pass:
-     - `ensure_title = <reviewer_session_ref>`
-     - `ensure_cmd = <reviewer_tool>`
-     - `workdir = <current workspace>`
-     - `parent_session_id = <requester_session_id>`
-     - `no_parent_link = false`
-4. use the returned `session_id` as the authoritative `reviewer_session_id`
-5. fill the final body and call `mailbox_send` with:
+2. require an existing `reviewer_session_id` from delegated task context or explicit input; if missing, ask planner instead of creating reviewer locally
+3. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
+4. call `agent_deck_ensure_session`
+   - identify target with `session_id = <reviewer_session_id>`
+   - pass `workdir = <current workspace>`
+   - do not pass `ensure_title`, `ensure_cmd`, or `parent_session_id`; this step only resolves/starts the planner-assigned reviewer session
+5. use the returned `session_id` as the authoritative `reviewer_session_id`
+6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
@@ -279,8 +277,8 @@ Rules:
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
-- use `reviewer-<task_id>` as a session ref until `agent_deck_ensure_session` resolves the real `reviewer_session_id`
-- create reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
+- treat `reviewer-<task_id>` as the planner-side allocation label; sender should prefer the delegated `reviewer_session_id` over creating a new reviewer session
+- do not create reviewer sessions from coder/requester flow; planner owns reviewer allocation
 - `mailbox_send` handles the normal non-local reviewer nudge
 
 ## Quality Bar

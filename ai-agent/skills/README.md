@@ -50,7 +50,7 @@ Use `SKILL.md` for:
 2. Planner runs `delegate-task` and sends one delegate workflow message.
 3. Planner or Coder may request architect review for the latest committed tech-design docs on `tech-design/<task_id>`.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
-5. Task-level review is planner-controlled: coder either runs `review-request` from that committed state or returns control to planner without reviewer involvement.
+5. Task-level review is planner-controlled: planner allocates reviewer up front when per-task review is required; coder then runs `review-request` against that assigned reviewer or returns control to planner without reviewer involvement.
 6. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
@@ -80,7 +80,8 @@ flowchart TD
     C -->|mailbox: tech_design_review_requested| A
     A -->|mailbox: tech_design_review_report| P
     A -->|mailbox: tech_design_review_report| C
-    C -->|mailbox: review_requested| R[Reviewer]
+    P -. allocates reviewer .-> R[Reviewer]
+    C -->|mailbox: review_requested| R
     R -->|mailbox: browser_check_requested| B[Browser Tester]
     X[Requester] -->|mailbox: browser_check_requested| B
     B -->|mailbox: browser_check_report| X
@@ -107,6 +108,7 @@ flowchart TD
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
 - derived planner sessions live in their own child agent-deck group under the supervisor group, created through `agent_deck_ensure_session`
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created through `agent_deck_ensure_session` with parent links
+- delegated coder flow must reuse the planner-assigned reviewer session; coder should not create reviewer as its own child session
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler

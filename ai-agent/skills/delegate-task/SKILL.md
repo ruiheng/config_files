@@ -49,7 +49,7 @@ Resolve by priority:
 - `coder_session_ref`: explicit -> context -> default `coder-<task_id>`
 - `coder_session_id`: explicit actual id -> context actual id -> helper output after target resolution -> omit until known
 - `reviewer_session_ref`: explicit -> context -> default `reviewer-<task_id>`
-- `reviewer_session_id`: explicit actual id -> context actual id -> omit until known
+- `reviewer_session_id`: explicit actual id -> context actual id -> resolved by planner before delegate send when `per_task_review = required`; omit only when `per_task_review = skip`
 - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
   - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
 - `coder_tool`: explicit -> context -> default current AI tool
@@ -149,6 +149,7 @@ Round: 1
 - Coder session ref: [coder_session_ref]
 - Coder session id: {{TO_SESSION_ID}}
 - Reviewer session ref: [reviewer_session_ref]
+- Reviewer session id: [reviewer_session_id or `N/A` when `Per-task review: skip`]
 - Coder tool: [coder_tool]
 - Reviewer tool: [reviewer_tool]
 
@@ -180,7 +181,16 @@ Workflow send sequence:
      - `parent_session_id = <planner_session_id>`
      - `no_parent_link = false`
 5. use the returned `session_id` as the authoritative `coder_session_id`
-6. fill the final body and call `mailbox_send` with:
+6. if `Per-task review: required`, call `agent_deck_ensure_session` for reviewer before sending coder mail
+   - identify target with `session_id` or `session_ref = <reviewer_session_ref>`
+   - when creation may be needed, also pass:
+     - `ensure_title = <reviewer_session_ref>`
+     - `ensure_cmd = <reviewer_tool>`
+     - `workdir = <current workspace>`
+     - `parent_session_id = <planner_session_id>`
+     - `no_parent_link = false`
+7. use the returned `session_id` as the authoritative `reviewer_session_id`
+8. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<planner_session_id>`
    - `to_address = agent-deck/<coder_session_id>`
    - `subject = "delegate: <task_id> -> coder"`
@@ -197,8 +207,9 @@ Rules:
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
-- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until `agent_deck_ensure_session` resolves real session ids
-- create worker sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`
+- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until planner resolves the real session ids
+- create coder and reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`
+- when `Per-task review: required`, planner must allocate reviewer before coder starts work; coder should receive an existing `reviewer_session_id`, not create reviewer later
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
 - if `mailbox_send` reports an existing active task, surface that result instead of retrying through another send path
@@ -215,7 +226,7 @@ After sending:
   - mailbox subject
   - one-line objective summary
   - `task_branch` / `integration_branch`
-  - `coder_session_id` / `reviewer_session_ref`
+  - `coder_session_id` / `reviewer_session_id`
   - `coder_tool` / `reviewer_tool`
   - recipient inbox address
   - listener/send/nudge summary
