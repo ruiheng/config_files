@@ -22,7 +22,7 @@ Options:
 Outputs:
   - Writes task archive file:
       <artifact-root>/<task_id>/session-archive-<task_id>.json
-  - Prints summary lines for archive/remove results.
+  - Prints summary lines for archive/remove results and descendant empty-group cleanup.
 
 Notes:
   - Default mode is archive-only (no deletion).
@@ -95,6 +95,154 @@ ad() {
   else
     agent-deck "$@"
   fi
+}
+
+group_exists() {
+  local group_path="$1"
+  local groups_json
+  groups_json="$(ad group list --json 2>/dev/null || true)"
+  [[ -n "$groups_json" ]] || return 1
+  jq -e --arg group_path "$group_path" '
+    any(.groups[]?; (.path // "") == $group_path)
+  ' >/dev/null 2>&1 <<<"$groups_json"
+}
+
+count_sessions_in_group_tree() {
+  local group_path="$1"
+  local list_json
+  list_json="$(ad list --json 2>/dev/null || true)"
+  if [[ -z "$list_json" ]]; then
+    echo "-1"
+    return 0
+  fi
+  jq -r --arg group_path "$group_path" '
+    if type != "array" then
+      -1
+    else
+      [
+        .[]
+        | select(
+            (.group // "") == $group_path
+            or ((.group // "") | startswith($group_path + "/"))
+          )
+      ] | length
+    end
+  ' <<<"$list_json" 2>/dev/null || echo "-1"
+}
+
+count_descendant_groups() {
+  local group_path="$1"
+  local groups_json
+  groups_json="$(ad group list --json 2>/dev/null || true)"
+  if [[ -z "$groups_json" ]]; then
+    echo "-1"
+    return 0
+  fi
+  jq -r --arg group_path "$group_path" '
+    if (.groups | type) != "array" then
+      -1
+    else
+      [
+        .groups[]
+        | select(
+            (.path // "") != $group_path
+            and ((.path // "") | startswith($group_path + "/"))
+          )
+      ] | length
+    end
+  ' <<<"$groups_json" 2>/dev/null || echo "-1"
+}
+
+mark_group_cleanup_candidates() {
+  local session_group="$1"
+  local current_group
+
+  [[ -n "$planner_group" ]] || return 0
+  [[ -n "$session_group" ]] || return 0
+  [[ "$session_group" != "$planner_group" ]] || return 0
+  case "$session_group" in
+    "$planner_group"/*) ;;
+    *) return 0 ;;
+  esac
+
+  current_group="$session_group"
+  while [[ "$current_group" == "$planner_group"/* && "$current_group" != "$planner_group" ]]; do
+    printf '%s\n' "$current_group" >>"$group_candidates_file"
+    current_group="${current_group%/*}"
+  done
+}
+
+record_group_cleanup_entry() {
+  local group_path="$1"
+  local delete_status="$2"
+  local session_count="$3"
+  local descendant_group_count="$4"
+  local delete_error="$5"
+
+  jq -nc \
+    --arg group_path "$group_path" \
+    --arg delete_status "$delete_status" \
+    --arg delete_error "$delete_error" \
+    --argjson session_count "$session_count" \
+    --argjson descendant_group_count "$descendant_group_count" \
+    '{
+      group: $group_path,
+      delete_status: $delete_status,
+      session_count: $session_count,
+      descendant_group_count: $descendant_group_count,
+      delete_error: (if $delete_error == "" then null else $delete_error end)
+    }' >>"$group_cleanup_entries_file"
+}
+
+cleanup_empty_task_subgroups() {
+  local group_path
+  local session_count descendant_group_count delete_output
+  local -a ordered_groups=()
+
+  [[ -n "$planner_group" ]] || return 0
+  [[ -s "$group_candidates_file" ]] || return 0
+
+  while IFS= read -r group_path; do
+    [[ -n "$group_path" ]] || continue
+    ordered_groups+=("$group_path")
+  done < <(sort -u "$group_candidates_file" | awk '{ print length($0) "\t" $0 }' | sort -rn | cut -f2-)
+
+  for group_path in "${ordered_groups[@]}"; do
+    if ! group_exists "$group_path"; then
+      record_group_cleanup_entry "$group_path" "already_absent" 0 0 ""
+      echo "group_cleanup group=${group_path} delete_status=already_absent"
+      continue
+    fi
+
+    session_count="$(count_sessions_in_group_tree "$group_path")"
+    descendant_group_count="$(count_descendant_groups "$group_path")"
+
+    if [[ "$session_count" == "-1" || "$descendant_group_count" == "-1" ]]; then
+      record_group_cleanup_entry "$group_path" "check_failed" 0 0 "failed to inspect group occupancy"
+      echo "group_cleanup group=${group_path} delete_status=check_failed"
+      continue
+    fi
+
+    if (( session_count > 0 )); then
+      record_group_cleanup_entry "$group_path" "blocked_nonempty" "$session_count" "$descendant_group_count" ""
+      echo "group_cleanup group=${group_path} delete_status=blocked_nonempty session_count=${session_count}"
+      continue
+    fi
+
+    if (( descendant_group_count > 0 )); then
+      record_group_cleanup_entry "$group_path" "blocked_descendant_groups" "$session_count" "$descendant_group_count" ""
+      echo "group_cleanup group=${group_path} delete_status=blocked_descendant_groups descendant_group_count=${descendant_group_count}"
+      continue
+    fi
+
+    if delete_output="$(ad group delete "$group_path" 2>&1)"; then
+      record_group_cleanup_entry "$group_path" "deleted" "$session_count" "$descendant_group_count" ""
+      echo "group_cleanup group=${group_path} delete_status=deleted"
+    else
+      record_group_cleanup_entry "$group_path" "delete_failed" "$session_count" "$descendant_group_count" "$delete_output"
+      echo "group_cleanup group=${group_path} delete_status=delete_failed"
+    fi
+  done
 }
 
 resolve_current_session_id() {
@@ -415,12 +563,21 @@ fi
 
 planner_shown="$(ad session show "$planner_session_ref" --json 2>/dev/null || true)"
 planner_session_id=""
+planner_group=""
 if [[ -n "$planner_shown" ]]; then
   planner_session_id="$(jq -r '.id // empty' <<<"$planner_shown")"
+  planner_group="$(jq -r '.group // empty' <<<"$planner_shown")"
 fi
 
 entries_file="$(mktemp)"
+group_candidates_file="$(mktemp)"
+group_cleanup_entries_file="$(mktemp)"
 blocked_delete_count=0
+
+cleanup_tmp() {
+  rm -f "$entries_file" "$group_candidates_file" "$group_cleanup_entries_file"
+}
+trap cleanup_tmp EXIT
 
 process_session() {
   local role="$1"
@@ -444,12 +601,14 @@ process_session() {
   local delete_block_reason=""
   local session_title=""
   local delete_eligible=false
+  local session_group=""
 
   shown="$(ad session show "$ref" --json 2>/dev/null || true)"
   session_id="$(jq -r 'if type == "object" then .id // empty else empty end' <<<"$shown" 2>/dev/null || true)"
   session_title="$(jq -r 'if type == "object" then .title // empty else empty end' <<<"$shown" 2>/dev/null || true)"
   tool_name="$(jq -r 'if type == "object" then .tool // "" else "" end' <<<"$shown" 2>/dev/null || true)"
   tmux_session_name="$(jq -r 'if type == "object" then .tmux_session // "" else "" end' <<<"$shown" 2>/dev/null || true)"
+  session_group="$(jq -r 'if type == "object" then .group // "" else "" end' <<<"$shown" 2>/dev/null || true)"
   expected_provider_key="$(expected_provider_key_for_tool "$tool_name")"
   debug "session_probe role=${role} ref=${ref} tool=${tool_name:-unknown} expected_provider_key=${expected_provider_key:-none}"
 
@@ -564,6 +723,7 @@ process_session() {
     elif [[ -n "$session_id" ]] && ad remove "$session_id" >/dev/null 2>&1; then
         delete_status="deleted"
         deleted=true
+        mark_group_cleanup_candidates "$session_group"
     else
       delete_status="delete_failed"
     fi
@@ -620,6 +780,10 @@ process_session "reviewer" "$reviewer_session_ref"
 process_session "architect" "$architect_session_ref"
 
 sessions_json="$(jq -s '.' "$entries_file")"
+if (( apply )); then
+  cleanup_empty_task_subgroups
+fi
+group_cleanup_json="$(jq -s '.' "$group_cleanup_entries_file")"
 archived_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 mode="$([[ "$apply" -eq 1 ]] && echo "archive_and_remove" || echo "archive_only")"
 
@@ -628,19 +792,23 @@ jq -n \
   --arg archived_at "$archived_at" \
   --arg planner_session_ref "$planner_session_ref" \
   --arg planner_session_id "$planner_session_id" \
+  --arg planner_group "$planner_group" \
   --arg profile_name "$profile_name" \
   --arg state_db_path "$state_db_path" \
   --arg mode "$mode" \
   --argjson sessions "$sessions_json" \
+  --argjson group_cleanup "$group_cleanup_json" \
   '{
     task_id: $task_id,
     archived_at: $archived_at,
     mode: $mode,
     planner_session_ref: $planner_session_ref,
     planner_session_id: (if $planner_session_id == "" then null else $planner_session_id end),
+    planner_group: (if $planner_group == "" then null else $planner_group end),
     profile_name: $profile_name,
     state_db_path: (if $state_db_path == "" then null else $state_db_path end),
-    sessions: $sessions
+    sessions: $sessions,
+    group_cleanup: $group_cleanup
   }' >"$archive_file"
 
 rm -f "$entries_file"
