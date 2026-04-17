@@ -31,6 +31,8 @@ Skill-specific context resolution:
 - `plan_id`: explicit -> mailbox body -> ask
 - `supervisor_session_id`: explicit -> mailbox body `From` header -> ask
 - `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
+- `worker_workspace`: explicit -> mailbox body -> `planner_workspace` when worker/planner share one worktree -> ask
+- `planner_workspace`: explicit -> mailbox body `Workspace path` -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
   - this is the already-created planner-owned branch for this dispatched plan, not the supervisor landing branch
 - `per_task_review`: explicit -> mailbox body -> default `required`
@@ -39,7 +41,7 @@ Skill-specific context resolution:
 ## Execution Flow
 
 1. read the goal, workspace contract, and review policy from the mailbox body
-2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-planner-workspace.sh --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
+2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
 5. for each implementation task, use `delegate-task` and pass the chosen `Per-task review` policy into the delegate brief
@@ -48,7 +50,7 @@ Skill-specific context resolution:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
 8. read `planner_group` from `.agent-artifacts/planner-workspace.json` and send one final `plan_report_delivered` message to supervisor
-9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-planner-workspace.sh --planner-session-id <planner_session_id> --release-planner-workspace`
+9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
 
 ## Decision Rules
 
@@ -57,7 +59,7 @@ Skill-specific context resolution:
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
 - when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
-- use `prepare-planner-workspace.sh --release-planner-workspace` for that release; do not delete the file ad hoc
+- use `prepare-workspaces.sh --release-workspaces` for that release; do not delete the record files ad hoc
 
 ## Final Report Template
 
@@ -99,6 +101,6 @@ Round: final
 - treat the prepare-script detached-head notice as authoritative: do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
 - treat workspace prep as an early closeout viability gate too: if another worktree already holds `integration_branch` and planner closeout later needs to attach it here, stop immediately instead of letting the plan fail only at final closeout
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
-- pass `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
-- after the planner has no remaining work in this workspace, release the planner workspace record with `prepare-planner-workspace.sh --release-planner-workspace`
+- pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
+- after the planner has no remaining work in this workspace, release the workspace records with `prepare-workspaces.sh --release-workspaces`
 - do not naturally end after the last task if the final report to supervisor is still pending

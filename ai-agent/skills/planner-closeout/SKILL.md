@@ -24,6 +24,8 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
+- `worker_workspace`: explicit -> mailbox body `Worker workspace` / `Task dir` -> ask
+- `planner_workspace`: explicit -> current session workspace / mailbox body -> ask
 - `reviewer_session_id`: explicit -> mailbox body `Accepted Review By` header -> ask
 - `start_branch`: explicit -> mailbox body -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
@@ -45,7 +47,7 @@ Branch-plan rule:
 2. inspect `Residual Follow-up For Planner` and `UI Manual Confirmation Package` before running planner closeout
 3. run the planner closeout batch script with the recorded branch plan
 4. if this turn started from a claimed `closeout_delivered` delivery, pass `--ack-delivery-id` and `--ack-lease-token` so the script can ack after required closeout state is written
-5. if no more tasks remain in this workspace after closeout, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-planner-workspace.sh --planner-session-id <planner_session_id> --release-planner-workspace`
+5. if no more tasks remain in this workflow after closeout, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
 6. report the result after planner closeout finishes
 
 Required closeout command shape:
@@ -55,13 +57,15 @@ Required closeout command shape:
   --task-id <task_id> \
   --task-branch <task_branch> \
   --integration-branch <integration_branch> \
+  --worker-workspace <worker_workspace> \
+  --planner-workspace <planner_workspace> \
   --task-dir <task_dir> \
   --planner-session-id <planner_session_id>
 ```
 
 Optional command additions:
 - add `--ack-delivery-id <delivery_id> --ack-lease-token <lease_token>` when this turn owns a claimed `closeout_delivered` delivery
-- add `--override-planner-workspace` only after explicit user confirmation to replace `.agent-artifacts/planner-workspace.json`
+- add `--override-planner-workspace` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 
 ## Rules
 
@@ -70,8 +74,8 @@ Optional command additions:
 - coder/reviewer execution is asynchronous and may take unbounded time; this skill starts only after the closeout message actually arrives
 - do not start planner closeout speculatively while coder or reviewer work is still in progress
 - the planner closeout script owns required closeout actions, progress recording, and planner-side cleanup
-- when all current tasks in this workspace are complete, release `.agent-artifacts/planner-workspace.json`
-- use `prepare-planner-workspace.sh --release-planner-workspace` for that release; do not delete the file ad hoc
+- when all current tasks in this workflow are complete, release the mirrored `planner-workspace.json` records
+- use `prepare-workspaces.sh --release-workspaces` for that release; do not delete the files ad hoc
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
 - keep mailbox JSON internal unless the user explicitly asks

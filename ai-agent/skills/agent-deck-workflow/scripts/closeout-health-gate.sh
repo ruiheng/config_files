@@ -15,6 +15,7 @@ Usage:
 
 Options:
   --task-id <id>                 Required task id (YYYYMMDD-HHMM-<slug>)
+  --worker-workspace <path>      Required worker/shared workspace path
   --planner-session-id <id|title>   Planner session ref (default: current agent-deck session id)
   --coder-session-id <id|title>     Coder session ref (default: coder-<task_id>)
   --reviewer-session-id <id|title>  Reviewer session ref (default: reviewer-<task_id>)
@@ -62,6 +63,7 @@ resolve_current_session_id() {
 }
 
 task_id=""
+worker_workspace=""
 planner_session_ref=""
 coder_session_ref=""
 reviewer_session_ref=""
@@ -74,6 +76,7 @@ strict=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --task-id) task_id="${2:-}"; shift 2 ;;
+    --worker-workspace) worker_workspace="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
     --coder-session-id) coder_session_ref="${2:-}"; shift 2 ;;
     --reviewer-session-id) reviewer_session_ref="${2:-}"; shift 2 ;;
@@ -88,7 +91,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$task_id" ]] || die "--task-id is required"
+[[ -n "$worker_workspace" ]] || die "--worker-workspace is required"
 [[ "$max_worker_sessions" =~ ^[0-9]+$ ]] || die "--max-worker-sessions must be a non-negative integer"
+[[ -d "$worker_workspace" ]] || die "worker-workspace does not exist: ${worker_workspace}"
+
+worker_workspace="$(
+  cd "$worker_workspace"
+  pwd -P
+)"
 
 if [[ -z "$coder_session_ref" ]]; then
   coder_session_ref="coder-${task_id}"
@@ -175,8 +185,7 @@ if [[ -f "$archive_file" ]]; then
   residual_count="$(jq -r '[.sessions[]? | select(.found == true and (.delete_status != "deleted" and .delete_status != "not_found" and .delete_status != "skipped_non_disposable_session"))] | length' "$archive_file" 2>/dev/null || echo 0)"
 fi
 
-workspace_path="$(pwd -P)"
-worker_session_count="$(count_worker_sessions "$workspace_path")"
+worker_session_count="$(count_worker_sessions "$worker_workspace")"
 
 health_ok=true
 failure_reasons=()

@@ -14,6 +14,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `plan_id`
 - `supervisor_session_id`
 - `planner_session_ref` or `planner_session_id`
+- `worker_workspace`
 - `planner_workspace`
 - `integration_branch` (planner-owned branch for this dispatched plan; must exist before send)
 - `goal`
@@ -57,6 +58,7 @@ Round: 1
 [What this planner must finish in this workspace]
 
 ## Workspace Contract
+- Worker workspace: [worker_workspace]
 - Workspace path: [planner_workspace]
 - Integration branch: [integration_branch]
   Created by supervisor for this dispatched plan from the current supervisor branch; planner owns this branch for the full plan.

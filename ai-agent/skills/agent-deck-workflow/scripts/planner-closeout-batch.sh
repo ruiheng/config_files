@@ -22,8 +22,12 @@ Options:
   --task-id <id>                   Required task id (YYYYMMDD-HHMM-<slug>)
   --task-branch <ref>              Task branch (default: task/<task_id>; pass explicitly when reusing an existing topic branch)
   --integration-branch <ref>       Required integration branch; must be a non-task landing branch
-  --artifact-root <path>           Artifact root (default: .agent-artifacts)
-  --progress-file <path>           Progress jsonl path (default: <artifact-root>/workflow-progress/progress.jsonl)
+  --worker-workspace <path>        Required worker/shared workspace path
+  --planner-workspace <path>       Required planner closeout workspace path
+  --worker-artifact-root <path>    Worker artifact root (default: <worker-workspace>/.agent-artifacts)
+  --planner-artifact-root <path>   Planner artifact root (default: <planner-workspace>/.agent-artifacts)
+  --artifact-root <path>           Alias for --planner-artifact-root
+  --progress-file <path>           Progress jsonl path (default: <planner-artifact-root>/workflow-progress/progress.jsonl)
   --task-dir <path>                Required worker/task worktree used for task-scoped lock cleanup
   --worker-dir <path>              Alias for --task-dir
   --planner-session-id <id|title>  Planner session ref (default: current agent-deck session id)
@@ -34,7 +38,8 @@ Options:
   --max-worker-sessions <n>        Max allowed lingering active task-scoped worker sessions in this workspace for health gate (default: 2)
   --merge-mode <mode>              ff-only|ff|no-ff (default: ff-only)
   --allow-dirty                    Allow dirty git worktree (default: false)
-  --override-planner-workspace      Replace planner-workspace.json before validation; use only after user confirmation
+  --override-planner-workspace      Alias for --override-workspaces
+  --override-workspaces             Replace mirrored planner-workspace.json records before validation; use only after user confirmation
   --run-prune                      Run prune-task-branches.sh after required actions
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions
@@ -44,10 +49,10 @@ Options:
   -h, --help                       Show help
 
 State/outputs:
-  - Switches this worktree to --integration-branch before merging when needed.
+  - Switches --planner-workspace to --integration-branch before merging when needed.
   - Appends one json line to progress file when required actions complete.
   - Writes per-task idempotency state:
-      <artifact-root>/workflow-progress/closeout-state-<task_id>.json
+      <planner-artifact-root>/workflow-progress/closeout-state-<task_id>.json
   - When ack args are provided, records mailbox ack state in the per-task state file.
 
 Exit codes:
@@ -95,6 +100,19 @@ resolve_current_session_id() {
   current_id="$(jq -r '.id // empty' <<<"$current_json" 2>/dev/null || true)"
   [[ -n "$current_id" ]] || die "failed to resolve current agent-deck session id; pass --planner-session-id"
   echo "$current_id"
+}
+
+abs_path() {
+  (
+    cd "$1"
+    pwd -P
+  )
+}
+
+require_git_workspace() {
+  local workspace="$1"
+  [[ -d "$workspace" ]] || die "workspace does not exist: ${workspace}"
+  git -C "$workspace" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "workspace is not inside a git repository: ${workspace}"
 }
 
 resolve_session_id() {
@@ -244,7 +262,10 @@ is_task_branch_ref() {
 task_id=""
 task_branch=""
 integration_branch=""
-artifact_root=".agent-artifacts"
+worker_workspace=""
+planner_workspace=""
+worker_artifact_root=""
+planner_artifact_root=""
 progress_file=""
 task_dir=""
 planner_session_ref=""
@@ -268,7 +289,10 @@ while [[ $# -gt 0 ]]; do
     --task-id) task_id="${2:-}"; shift 2 ;;
     --task-branch) task_branch="${2:-}"; shift 2 ;;
     --integration-branch) integration_branch="${2:-}"; integration_branch_source="explicit"; shift 2 ;;
-    --artifact-root) artifact_root="${2:-}"; shift 2 ;;
+    --worker-workspace) worker_workspace="${2:-}"; shift 2 ;;
+    --planner-workspace) planner_workspace="${2:-}"; shift 2 ;;
+    --worker-artifact-root) worker_artifact_root="${2:-}"; shift 2 ;;
+    --planner-artifact-root|--artifact-root) planner_artifact_root="${2:-}"; shift 2 ;;
     --progress-file) progress_file="${2:-}"; shift 2 ;;
     --task-dir|--worker-dir) task_dir="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_ref="${2:-}"; shift 2 ;;
@@ -279,7 +303,7 @@ while [[ $# -gt 0 ]]; do
     --max-worker-sessions) max_worker_sessions="${2:-}"; shift 2 ;;
     --merge-mode) merge_mode="${2:-}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift 1 ;;
-    --override-planner-workspace) override_planner_workspace=1; shift 1 ;;
+    --override-planner-workspace|--override-workspaces) override_planner_workspace=1; shift 1 ;;
     --run-prune) run_prune=1; shift 1 ;;
     --prune-apply) prune_apply=1; shift 1 ;;
     --run-health-gate) run_health_gate=1; shift 1 ;;
@@ -294,8 +318,22 @@ done
 [[ -n "$task_id" ]] || die "--task-id is required"
 [[ -n "$task_dir" ]] || die "--task-dir is required"
 [[ -n "$integration_branch" ]] || die "--integration-branch is required"
+[[ -n "$worker_workspace" ]] || die "--worker-workspace is required"
+[[ -n "$planner_workspace" ]] || die "--planner-workspace is required"
 [[ "$max_worker_sessions" =~ ^[0-9]+$ ]] || die "--max-worker-sessions must be a non-negative integer"
 [[ -d "$task_dir" ]] || die "task-dir does not exist: ${task_dir}"
+
+require_git_workspace "$worker_workspace"
+require_git_workspace "$planner_workspace"
+worker_workspace="$(abs_path "$worker_workspace")"
+planner_workspace="$(abs_path "$planner_workspace")"
+task_dir="$(abs_path "$task_dir")"
+if [[ -z "$worker_artifact_root" ]]; then
+  worker_artifact_root="${worker_workspace}/.agent-artifacts"
+fi
+if [[ -z "$planner_artifact_root" ]]; then
+  planner_artifact_root="${planner_workspace}/.agent-artifacts"
+fi
 
 case "$merge_mode" in
   ff-only|ff|no-ff) ;;
@@ -315,7 +353,7 @@ if [[ -z "$task_branch" ]]; then
   task_branch="task/${task_id}"
 fi
 if [[ -z "$progress_file" ]]; then
-  progress_file="${artifact_root%/}/workflow-progress/progress.jsonl"
+  progress_file="${planner_artifact_root%/}/workflow-progress/progress.jsonl"
 fi
 if [[ -z "$coder_session_ref" ]]; then
   coder_session_ref="coder-${task_id}"
@@ -337,11 +375,7 @@ if [[ -z "$planner_session_ref" ]]; then
   planner_session_ref="$(resolve_current_session_id)"
 fi
 
-if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  die "must run inside a git repository"
-fi
-
-current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+current_branch="$(git -C "$planner_workspace" symbolic-ref --quiet --short HEAD || true)"
 original_branch="$current_branch"
 task_scoped_integration_branch=0
 if is_task_branch_ref "$integration_branch"; then
@@ -350,10 +384,10 @@ if is_task_branch_ref "$integration_branch"; then
 fi
 [[ "$task_branch" != "$integration_branch" ]] || die "--task-branch must differ from integration branch"
 
-git rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist: $integration_branch"
-git rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist: $task_branch"
+git -C "$planner_workspace" rev-parse --verify "$integration_branch" >/dev/null 2>&1 || die "integration branch does not exist in planner workspace: $integration_branch"
+git -C "$planner_workspace" rev-parse --verify "$task_branch" >/dev/null 2>&1 || die "task branch does not exist in planner workspace: $task_branch"
 
-lock_dir="${artifact_root%/}/active-task.lock"
+lock_dir="${worker_artifact_root%/}/active-task.lock"
 lock_file="${lock_dir}/lock.json"
 if [[ -d "$lock_dir" ]]; then
   if active_task_lock_is_stale "$lock_file"; then
@@ -370,8 +404,8 @@ if [[ -d "$lock_dir" ]]; then
 fi
 
 if (( allow_dirty == 0 )); then
-  if ! git diff --quiet || ! git diff --cached --quiet; then
-    closeout_blocker "planner_closeout_dirty_worktree" "dirty worktree/index; commit or stash first (or pass --allow-dirty)"
+  if ! git -C "$planner_workspace" diff --quiet || ! git -C "$planner_workspace" diff --cached --quiet; then
+    closeout_blocker "planner_closeout_dirty_worktree" "dirty planner worktree/index at '${planner_workspace}'; commit or stash first (or pass --allow-dirty)"
   fi
 fi
 
@@ -379,11 +413,14 @@ fi
 # closeout does not detach or otherwise mutate the planner worktree first.
 if (( override_planner_workspace == 1 )); then
   prepare_cmd=(
-    "${script_dir}/prepare-planner-workspace.sh"
+    "${script_dir}/prepare-workspaces.sh"
+    --worker-workspace "$worker_workspace"
+    --planner-workspace "$planner_workspace"
     --integration-branch "$integration_branch"
     --planner-session-id "$planner_session_ref"
-    --artifact-root "$artifact_root"
-    --override-planner-workspace
+    --worker-artifact-root "$worker_artifact_root"
+    --planner-artifact-root "$planner_artifact_root"
+    --override-workspaces
   )
   if (( allow_dirty == 1 )); then
     prepare_cmd+=(--allow-dirty)
@@ -392,9 +429,9 @@ if (( override_planner_workspace == 1 )); then
     >/dev/null
 fi
 
-current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+current_branch="$(git -C "$planner_workspace" symbolic-ref --quiet --short HEAD || true)"
 
-planner_workspace_file="${artifact_root%/}/planner-workspace.json"
+planner_workspace_file="${planner_artifact_root%/}/planner-workspace.json"
 [[ -f "$planner_workspace_file" ]] || closeout_blocker "planner_closeout_workspace_record_missing" "planner workspace record missing: ${planner_workspace_file}"
 planner_workspace_planner_session_id="$(jq -r '.planner_session_id // empty' "$planner_workspace_file" 2>/dev/null || true)"
 planner_workspace_integration_branch="$(jq -r '.integration_branch // empty' "$planner_workspace_file" 2>/dev/null || true)"
@@ -409,7 +446,7 @@ switched_integration_branch=0
 if [[ "$current_branch" != "$integration_branch" ]]; then
   echo "auto_switch_integration_branch from=${started_branch} to=${integration_branch}"
   set +e
-  switch_output="$(git switch "$integration_branch" 2>&1)"
+  switch_output="$(git -C "$planner_workspace" switch "$integration_branch" 2>&1)"
   switch_rc=$?
   set -e
   if (( switch_rc != 0 )); then
@@ -423,11 +460,11 @@ if [[ "$current_branch" != "$integration_branch" ]]; then
   fi
   echo "$switch_output"
   switched_integration_branch=1
-  current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+  current_branch="$(git -C "$planner_workspace" symbolic-ref --quiet --short HEAD || true)"
   [[ "$current_branch" == "$integration_branch" ]] || die "branch switch reported success but current branch is '${current_branch:-detached}', expected '${integration_branch}'"
 fi
 
-current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+current_branch="$(git -C "$planner_workspace" symbolic-ref --quiet --short HEAD || true)"
 [[ "$current_branch" == "$integration_branch" ]] || die "required merge must run on attached integration branch '${integration_branch}', got '${current_branch:-detached}'"
 
 notify_script="${script_dir}/notify-workflow-event.sh"
@@ -446,7 +483,7 @@ notify_event() {
       --title "$title" \
       --message "$message" \
       --severity "$severity" \
-      --artifact-root "$artifact_root" >/dev/null 2>&1 || true
+      --artifact-root "$planner_artifact_root" >/dev/null 2>&1 || true
   fi
 }
 
@@ -516,12 +553,12 @@ write_state_file() {
 }
 
 mkdir -p "$(dirname "$progress_file")"
-state_file="${artifact_root%/}/workflow-progress/closeout-state-${task_id}.json"
+state_file="${planner_artifact_root%/}/workflow-progress/closeout-state-${task_id}.json"
 mkdir -p "$(dirname "$state_file")"
 
 debug "required.start task_id=${task_id} integration=${integration_branch} task_branch=${task_branch} merge_mode=${merge_mode}"
 
-merge_cmd=(git merge)
+merge_cmd=(git -C "$planner_workspace" merge)
 case "$merge_mode" in
   ff-only) merge_cmd+=(--ff-only "$task_branch") ;;
   ff) merge_cmd+=(--ff "$task_branch") ;;
@@ -542,7 +579,7 @@ if (( merge_rc != 0 )); then
   required_fail "merge failed integration='${integration_branch}' task_branch='${task_branch}'"
 fi
 
-merged_sha="$(git rev-parse HEAD)"
+merged_sha="$(git -C "$planner_workspace" rev-parse HEAD)"
 echo "$merge_output"
 
 progress_record="$(jq -nc \
@@ -617,10 +654,10 @@ if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
   echo "$ack_output"
 fi
 
-release_active_task_lock "$artifact_root" workspace_lock_status "workspace"
+release_active_task_lock "$worker_artifact_root" workspace_lock_status "workspace"
 
 task_artifact_root="${task_dir%/}/.agent-artifacts"
-if same_artifact_root "$artifact_root" "$task_artifact_root"; then
+if same_artifact_root "$worker_artifact_root" "$task_artifact_root"; then
   task_workspace_lock_status="same_as_workspace"
 else
   release_active_task_lock "$task_artifact_root" task_workspace_lock_status "task workspace"
@@ -656,11 +693,12 @@ if (( run_health_gate )); then
     health_cmd=(
       "$health_gate_script"
       --task-id "$task_id"
+      --worker-workspace "$worker_workspace"
       --planner-session-id "$planner_session_ref"
       --coder-session-id "$coder_session_ref"
       --reviewer-session-id "$reviewer_session_ref"
       --architect-session-id "$architect_session_ref"
-      --artifact-root "$artifact_root"
+      --artifact-root "$planner_artifact_root"
       --max-worker-sessions "$max_worker_sessions"
     )
     if [[ -n "$profile" ]]; then
