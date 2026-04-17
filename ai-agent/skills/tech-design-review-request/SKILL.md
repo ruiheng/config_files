@@ -6,6 +6,7 @@ description: Generates tech-design review requests from committed docs and defin
 # Tech-Design Review Request
 
 Generate a concise mailbox message that asks an architect to review the latest committed tech-design docs on a branch.
+Drive the architect-review loop until it reaches a deliverable conclusion or a clear user-decision blocker.
 After an accepted report, preserve the docs by merging the design branch into its recorded base branch.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
@@ -178,11 +179,22 @@ Use the `agent_mailbox` MCP tools:
 ## After Report Handling
 
 When the requester/planner receives `tech_design_review_report`:
+- treat this as a convergence loop, not a one-off advisory exchange
+- the loop ends only when one of these is true:
+  - `Decision` is `SOUND`
+  - `Decision` is `SOUND_WITH_CAVEATS` and requester/planner explicitly accepts the caveats as non-blocking or records the required follow-up plan
+  - requester/planner or architect escalates a subjective, strategic, or stuck disagreement to the user
 - if `Decision` is `NEEDS_REVISION`, update and commit docs on `tech_design_branch`; request the next round; do not merge yet
-- if `Decision` is `SOUND`, merge `tech_design_branch` into `tech_design_base_branch`
-- if `Decision` is `SOUND_WITH_CAVEATS`, merge only after requester/planner accepts the caveats or records the follow-up plan
+- if `Decision` is `SOUND`, treat the design as deliverable and merge `tech_design_branch` into `tech_design_base_branch`
+- if `Decision` is `SOUND_WITH_CAVEATS`:
+  - if caveats are blocking, update and commit docs on `tech_design_branch`; request the next round; do not merge yet
+  - if caveats are accepted as non-blocking or captured in a follow-up plan, treat the design as deliverable and merge `tech_design_branch` into `tech_design_base_branch`
 - use normal `git merge`; do not squash, rebase, cherry-pick, or copy files manually
 - preserve the design-doc commits as product history on the base branch
+- do not merge merely because the report arrived; merge only after the loop reaches a deliverable conclusion
+- merge target is always the recorded `tech_design_base_branch`, not "current branch" unless current branch is explicitly that recorded base branch
+- do not merge an implementation task branch here; this lane merges the reviewed `tech_design_branch` only
+- if repeated rounds stop converging, or the disagreement becomes subjective/strategic, stop the auto-loop and ask the user to decide
 - if later generating implementation work with `delegate-task` from this review, cite the reviewed design docs in the delegate brief
 - if merge conflicts, uncommitted changes, or base-branch uncertainty appear, stop and report the blocker instead of guessing
 
@@ -191,6 +203,8 @@ When the requester/planner receives `tech_design_review_report`:
 - send tech-design review from committed docs only
 - branch name is the authoritative review target; do not require a full commit hash
 - base branch is the authoritative post-review merge target; do not substitute `main`/`master`/current branch
+- requester/planner owns convergence in this lane: keep iterating with committed doc updates until the design is deliverable or explicitly escalated to the user
+- "deliverable" means `SOUND`, or `SOUND_WITH_CAVEATS` with explicitly accepted non-blocking caveats / follow-up plan
 - keep workflow context self-contained; architect should not need workflow files
 - do not embed full design docs in the body; use branch + in-scope doc paths as the source of truth
 - do not embed hand-written doc diffs in later-round bodies; git is the source of truth for changes
@@ -202,5 +216,5 @@ When the requester/planner receives `tech_design_review_report`:
 - after sending, do independent requester work only when it does not depend on architect feedback; otherwise report current state and stop instead of waiting
 - after sending, do not sleep, poll, or proactively check mail just to await the architect report
 - when disagreeing, state only the disagreement and rationale in `Requester Notes`; do not summarize document changes manually
-- either requester or architect may ask the user to decide when the disagreement becomes subjective or stuck
+- either requester or architect may ask the user to decide when the disagreement becomes subjective, strategic, stuck, or non-converging
 - create architect sessions through `agent_deck_ensure_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`

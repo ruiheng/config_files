@@ -134,7 +134,7 @@ Direct-use mode skips the mailbox header block and starts at `## Summary`.
 
 Decision guidance:
 - `SOUND`: the design is coherent and implementation-ready with no material blockers
-- `SOUND_WITH_CAVEATS`: the core direction is sound, but specific gaps or caveats should be resolved before or during implementation
+- `SOUND_WITH_CAVEATS`: the core direction is sound and deliverable, but non-blocking caveats or tracked follow-up work should be recorded before or during implementation
 - `NEEDS_REVISION`: the current design is missing critical framing, contains a material flaw, or is too incomplete to trust as the implementation basis
 
 ## Direct-Use Mode
@@ -182,6 +182,7 @@ Execution flow:
 - report back to the original requester session, not to planner by default
 - include the tech-design base branch and reviewed commit in the report so requester/planner can preserve the docs in git history
 - if the design is accepted, requester/planner should merge the tech-design branch into its recorded base branch with `git merge`; never tell them to squash, rebase, cherry-pick, or copy files manually
+- do not use `SOUND_WITH_CAVEATS` for unresolved blocking issues; use `NEEDS_REVISION` when the next doc revision is required before the design is deliverable
 - if the requester sends a later round to the same architect session, treat it as a continuation and focus on the git-derived delta
 - never rely on a request body's hand-written doc diff as the source of truth
 - do not treat your own feedback as final authority; the requester may disagree and argue the design tradeoff
