@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { spawn, spawnSync } = require("node:child_process");
-const { mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } = require("node:fs");
+const { realpathSync, statSync } = require("node:fs");
 const path = require("node:path");
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
@@ -28,7 +28,6 @@ const SERVER_INSTRUCTIONS =
   "Bootstrap this MCP process once per agent-managed session. " +
   "If it is not bound yet, run `agent-deck session current --json`, take the current session id, and call `mailbox_bind`. " +
   "Use `agent-deck/<id>` as the default sender. " +
-  "Pass `default_workdir` when you want delegate dispatch to enforce the active-task lock in the current project. " +
   "`mailbox_wait` is not recommended for normal workflow; prefer `mailbox_recv`. " +
   "Later reuse the bound addresses until MCP state is lost.";
 
@@ -649,188 +648,6 @@ function hasItems(values) {
   return Array.isArray(values) && values.length > 0;
 }
 
-function matchTrimmed(text, regex) {
-  const match = regex.exec(text || "");
-  return match ? match[1].trim() : null;
-}
-
-function cleanMarkdownScalar(value) {
-  if (typeof value !== "string") {
-    return value;
-  }
-  const trimmed = value.trim();
-  const inlineCode = /^`([^`]+)`$/.exec(trimmed);
-  return inlineCode ? inlineCode[1].trim() : trimmed;
-}
-
-function matchMarkdownScalar(text, regex) {
-  return cleanMarkdownScalar(matchTrimmed(text, regex));
-}
-
-function parseWorkflowEnvelope(body) {
-  const headerBlock = typeof body === "string" ? body.split(/\r?\n\r?\n/, 1)[0] : "";
-  return {
-    task_id: matchTrimmed(headerBlock, /^Task:\s*(.+)$/m),
-    action: matchTrimmed(headerBlock, /^Action:\s*(.+)$/m),
-  };
-}
-
-function parseDelegateLockMetadata(body, defaults = {}) {
-  return {
-    task_id: defaults.task_id || null,
-    action: defaults.action || null,
-    planner_session_id: defaults.planner_session_id || null,
-    from_address: defaults.from_address || null,
-    to_address: defaults.to_address || null,
-    subject: defaults.subject || null,
-    task_branch: matchMarkdownScalar(body, /^- Task branch:\s*(.+)$/m),
-    integration_branch: matchMarkdownScalar(body, /^- Integration branch:\s*(.+)$/m),
-    coder_session_ref: matchMarkdownScalar(body, /^- Coder session ref:\s*(.+)$/m),
-    created_at: new Date().toISOString(),
-  };
-}
-
-function validateDelegateLockMetadata(metadata) {
-  if (!String(metadata?.integration_branch || "").trim()) {
-    fail("delegate dispatch requires '- Integration branch:' before mailbox_send");
-  }
-}
-
-function activeTaskLockPaths(workdir) {
-  const artifactRoot = path.join(workdir, ".agent-artifacts");
-  const lockDir = path.join(artifactRoot, "active-task.lock");
-  const lockFile = path.join(lockDir, "lock.json");
-  return { artifactRoot, lockDir, lockFile };
-}
-
-function readActiveTaskLock(lockFile) {
-  try {
-    const raw = readFileSync(lockFile, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function agentDeckAddressSessionRef(address) {
-  if (typeof address !== "string" || !address.trim()) {
-    return null;
-  }
-  const parsed = parseAddress(address);
-  return parsed.scheme === "agent-deck" ? parsed.id : null;
-}
-
-function activeTaskLockSessionRefs(lock) {
-  const workerRefs = [];
-  const fallbackRefs = [];
-  const add = (refs, value) => {
-    if (typeof value !== "string") {
-      return;
-    }
-    const trimmed = value.trim();
-    if (trimmed && !refs.includes(trimmed)) {
-      refs.push(trimmed);
-    }
-  };
-
-  add(workerRefs, agentDeckAddressSessionRef(lock?.to_address));
-  add(workerRefs, lock?.coder_session_ref);
-  add(fallbackRefs, lock?.planner_session_id);
-  add(fallbackRefs, agentDeckAddressSessionRef(lock?.from_address));
-  return workerRefs.length > 0 ? workerRefs : fallbackRefs;
-}
-
-function isActiveTaskLockStale(lock, sessionResolver = resolveSessionShowBestEffort) {
-  const refs = activeTaskLockSessionRefs(lock);
-  if (refs.length === 0) {
-    return false;
-  }
-  return refs.every((ref) => !sessionResolver(ref));
-}
-
-function acquireActiveTaskLock(workdir, metadata, options = {}) {
-  const { artifactRoot, lockDir, lockFile } = activeTaskLockPaths(workdir);
-  mkdirSync(artifactRoot, { recursive: true });
-  let staleLockReplaced = false;
-  try {
-    mkdirSync(lockDir);
-  } catch (error) {
-    if (error && error.code === "EEXIST") {
-      const existing = readActiveTaskLock(lockFile);
-      if (isActiveTaskLockStale(existing, options.sessionResolver)) {
-        rmSync(lockDir, { recursive: true, force: true });
-        mkdirSync(lockDir);
-        staleLockReplaced = true;
-      } else {
-        const existingTaskId =
-          existing && typeof existing.task_id === "string" && existing.task_id
-            ? existing.task_id
-            : "<unknown>";
-        fail(
-          `active task lock exists: ${lockDir} :: task_id=${existingTaskId} :: delete this directory manually after verifying the prior task is finished`,
-          {
-            lock_dir: lockDir,
-            lock_file: lockFile,
-            existing_lock: existing,
-          }
-        );
-      }
-    } else {
-      throw error;
-    }
-  }
-  writeFileSync(lockFile, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
-  return {
-    lock_dir: lockDir,
-    lock_file: lockFile,
-    stale_lock_replaced: staleLockReplaced,
-  };
-}
-
-function resolveDelegateLockWorkdir({
-  toAddress,
-  defaultWorkdir,
-  sessionProbe = probeSessionShowBestEffort,
-  localAddressResolver = isLocalAddress,
-  canonicalizePath = canonicalizeExistingPath,
-}) {
-  let lockWorkdir = "";
-  const toParsed = parseAddress(toAddress);
-  if (toParsed.scheme === "agent-deck") {
-    const probe = sessionProbe(toParsed.id);
-    switch (probe.status) {
-      case "not_found":
-        fail(`delegate dispatch target agent-deck session not found: ${toParsed.id}`);
-        break;
-      case "found": {
-        const targetPath = typeof probe.data?.path === "string" ? probe.data.path.trim() : "";
-        if (!targetPath) {
-          fail(`delegate dispatch target session path unavailable: ${toParsed.id}`);
-        }
-        lockWorkdir = canonicalizePath(targetPath);
-        break;
-      }
-      case "unknown":
-        if (!localAddressResolver(toAddress)) {
-          fail(
-            `delegate dispatch requires a resolvable target workspace so active-task.lock can be enforced: ${toParsed.id}`
-          );
-        }
-        break;
-      default:
-        break;
-    }
-  }
-  if (!lockWorkdir) {
-    const fallbackWorkdir = String(defaultWorkdir || "").trim();
-    if (!fallbackWorkdir) {
-      fail("delegate dispatch requires a resolvable workspace so active-task.lock can be enforced");
-    }
-    lockWorkdir = canonicalizePath(fallbackWorkdir);
-  }
-  return lockWorkdir;
-}
-
 function forwardSubject(original, override) {
   const explicit = String(override || "").trim();
   if (explicit) {
@@ -875,33 +692,6 @@ function sendMailboxMessage(args) {
   const fromAddress = senderAddress(args);
   if (!fromAddress) {
     fail("mailbox_send requires from_address or a bound default_sender");
-  }
-  const bound = getBoundState();
-  const envelope = parseWorkflowEnvelope(args.body);
-  let workspaceLockStatus = "not_applicable";
-  let workspaceLockDir = null;
-
-  if (envelope.action === "execute_delegate_task") {
-    if (!envelope.task_id) {
-      fail("delegate dispatch requires a Task header before mailbox_send");
-    }
-    const workdir = resolveDelegateLockWorkdir({
-      toAddress: args.to_address,
-      defaultWorkdir: bound.default_workdir,
-    });
-    const fromParsed = parseAddress(fromAddress);
-    const lockMetadata = parseDelegateLockMetadata(args.body, {
-      task_id: envelope.task_id,
-      action: envelope.action,
-      planner_session_id: fromParsed.scheme === "agent-deck" ? fromParsed.id : null,
-      from_address: fromAddress,
-      to_address: args.to_address,
-      subject: args.subject,
-    });
-    validateDelegateLockMetadata(lockMetadata);
-    const lock = acquireActiveTaskLock(workdir, lockMetadata);
-    workspaceLockStatus = lock.stale_lock_replaced ? "stale_replaced" : "acquired";
-    workspaceLockDir = lock.lock_dir;
   }
 
   const contentType = args.content_type || "text/markdown";
@@ -968,8 +758,6 @@ function sendMailboxMessage(args) {
     delivery_id: sendIds.delivery_id,
     notify_status: notifyStatus,
     notify_scheme: notifyScheme,
-    workspace_lock_status: workspaceLockStatus,
-    workspace_lock_dir: workspaceLockDir,
   };
 }
 
@@ -1066,7 +854,7 @@ function buildServer() {
   server.registerTool(
     "mailbox_send",
     {
-      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Set disable_notify_message=true to skip notify for that send. Delegate dispatch (`Action: execute_delegate_task`) also enforces a single active task lock for the current workspace.",
+      description: "Send one mailbox message and automatically push-notify a non-local target when the address scheme supports it. Set disable_notify_message=true to skip notify for that send.",
       inputSchema: {
         to_address: z.string(),
         from_address: z.string().optional(),
@@ -1577,15 +1365,6 @@ module.exports = {
   inferTargetGroupPathFromParent,
   requireExplicitWorkdir,
   resolveWakeNotifyMessage,
-  resolveDelegateLockWorkdir,
-  parseWorkflowEnvelope,
-  parseDelegateLockMetadata,
-  validateDelegateLockMetadata,
-  activeTaskLockPaths,
-  activeTaskLockSessionRefs,
-  acquireActiveTaskLock,
-  isActiveTaskLockStale,
-  readActiveTaskLock,
   sanitizeGroupSegment,
   parseSendTokens,
   validateSendReceipt,

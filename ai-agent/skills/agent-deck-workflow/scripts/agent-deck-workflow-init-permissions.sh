@@ -19,6 +19,8 @@ INSTALLED_WORKFLOW_SCRIPTS_TILDE="$INSTALLED_SKILLS_DIR_TILDE/agent-deck-workflo
 INSTALLED_LOCAL_BIN="$HOME/.local/bin"
 INSTALLED_LOCAL_BIN_TILDE="~/.local/bin"
 WORKFLOW_HELPER_SCRIPTS=(
+    "acquire-active-task-lock.sh"
+    "send-delegate-with-active-task-lock.sh"
     "planner-closeout-batch.sh"
     "prepare-workspaces.sh"
     "prepare-planner-workspace.sh"

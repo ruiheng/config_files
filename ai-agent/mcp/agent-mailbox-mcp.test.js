@@ -1,26 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { mkdtempSync } = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
 
 const {
-  acquireActiveTaskLock,
-  activeTaskLockPaths,
   buildChildGroupPath,
   buildEnsureSessionLaunchArgs,
   forwardSubject,
   inferTargetGroupPathFromParent,
-  isActiveTaskLockStale,
-  parseDelegateLockMetadata,
   parseSendTokens,
-  parseWorkflowEnvelope,
-  readActiveTaskLock,
   requireExplicitWorkdir,
   resolveWakeNotifyMessage,
-  resolveDelegateLockWorkdir,
   sanitizeGroupSegment,
-  validateDelegateLockMetadata,
   validateSendReceipt,
 } = require("./agent-mailbox-mcp");
 
@@ -56,41 +45,6 @@ test("resolveWakeNotifyMessage keeps wakeup enabled when flag is false", () => {
   assert.equal(
     notify,
     "Use the check-agent-mail skill now. Receive the pending message and execute its requested action."
-  );
-});
-
-test("parseWorkflowEnvelope reads task and action headers from mailbox body", () => {
-  const envelope = parseWorkflowEnvelope(`Task: 20260407-1200-demo
-Action: execute_delegate_task
-From: planner abc
-
-## Summary
-demo`);
-  assert.deepEqual(envelope, {
-    task_id: "20260407-1200-demo",
-    action: "execute_delegate_task",
-  });
-});
-
-test("parseDelegateLockMetadata strips markdown inline code from branch fields", () => {
-  const metadata = parseDelegateLockMetadata(`## Branch Plan
-- Start branch: worktree/demo
-- Integration branch: \`worktree/agent-deck-z1\`
-- Task branch: \`task/20260407-1200-demo\`
-
-## Agent Deck Context
-- Coder session ref: \`coder-20260407-1200-demo\`
-`);
-
-  assert.equal(metadata.integration_branch, "worktree/agent-deck-z1");
-  assert.equal(metadata.task_branch, "task/20260407-1200-demo");
-  assert.equal(metadata.coder_session_ref, "coder-20260407-1200-demo");
-});
-
-test("validateDelegateLockMetadata requires an integration branch", () => {
-  assert.throws(
-    () => validateDelegateLockMetadata({ task_id: "20260407-1200-demo" }),
-    /Integration branch/
   );
 });
 
@@ -130,115 +84,6 @@ test("inferTargetGroupPathFromParent derives a nested group only for child sessi
 
 test("requireExplicitWorkdir rejects empty workdir", () => {
   assert.throws(() => requireExplicitWorkdir(""), /workdir is required/);
-});
-
-test("acquireActiveTaskLock creates the fixed active-task lock directory and metadata", () => {
-  const workdir = mkdtempSync(path.join(os.tmpdir(), "agent-mailbox-lock-"));
-  const lock = acquireActiveTaskLock(workdir, {
-    task_id: "20260407-1200-demo",
-    action: "execute_delegate_task",
-    planner_session_id: "planner-session",
-    from_address: "agent-deck/planner-session",
-    to_address: "agent-deck/coder-session",
-    subject: "delegate: 20260407-1200-demo -> coder",
-  });
-  const paths = activeTaskLockPaths(workdir);
-  assert.equal(lock.lock_dir, paths.lockDir);
-  const metadata = readActiveTaskLock(paths.lockFile);
-  assert.equal(metadata.task_id, "20260407-1200-demo");
-  assert.equal(metadata.action, "execute_delegate_task");
-});
-
-test("acquireActiveTaskLock rejects a second delegate lock in the same workspace", () => {
-  const workdir = mkdtempSync(path.join(os.tmpdir(), "agent-mailbox-lock-"));
-  acquireActiveTaskLock(workdir, {
-    task_id: "20260407-1200-first",
-    action: "execute_delegate_task",
-  });
-  assert.throws(
-    () =>
-      acquireActiveTaskLock(workdir, {
-        task_id: "20260407-1200-second",
-        action: "execute_delegate_task",
-      }),
-    /active task lock exists/
-  );
-});
-
-test("acquireActiveTaskLock replaces a lock whose worker session no longer exists", () => {
-  const workdir = mkdtempSync(path.join(os.tmpdir(), "agent-mailbox-lock-"));
-  acquireActiveTaskLock(workdir, {
-    task_id: "20260407-1200-first",
-    action: "execute_delegate_task",
-    to_address: "agent-deck/missing-coder",
-    coder_session_ref: "missing-coder",
-  });
-  const lock = acquireActiveTaskLock(
-    workdir,
-    {
-      task_id: "20260407-1200-second",
-      action: "execute_delegate_task",
-      to_address: "agent-deck/new-coder",
-    },
-    { sessionResolver: () => null }
-  );
-  const metadata = readActiveTaskLock(lock.lock_file);
-  assert.equal(lock.stale_lock_replaced, true);
-  assert.equal(metadata.task_id, "20260407-1200-second");
-});
-
-test("isActiveTaskLockStale keeps a lock when any recorded worker session exists", () => {
-  const lock = {
-    to_address: "agent-deck/live-coder",
-    coder_session_ref: "missing-coder",
-    planner_session_id: "missing-planner",
-  };
-  assert.equal(
-    isActiveTaskLockStale(lock, (ref) => (ref === "live-coder" ? { id: ref } : null)),
-    false
-  );
-});
-
-test("resolveDelegateLockWorkdir prefers the target session workdir for agent-deck delegates", () => {
-  assert.equal(
-    resolveDelegateLockWorkdir({
-      toAddress: "agent-deck/coder-session",
-      defaultWorkdir: "/fallback/worktree",
-      sessionProbe: () => ({
-        status: "found",
-        data: { path: "/target/worktree" },
-      }),
-      canonicalizePath: (inputPath) => `/canonical${inputPath}`,
-    }),
-    "/canonical/target/worktree"
-  );
-});
-
-test("resolveDelegateLockWorkdir fails closed when a non-local target workspace is not resolvable", () => {
-  assert.throws(
-    () =>
-      resolveDelegateLockWorkdir({
-        toAddress: "agent-deck/coder-session",
-        defaultWorkdir: "/fallback/worktree",
-        sessionProbe: () => ({ status: "unknown", data: null }),
-        localAddressResolver: () => false,
-        canonicalizePath: (inputPath) => inputPath,
-      }),
-    /resolvable target workspace/
-  );
-});
-
-test("resolveDelegateLockWorkdir falls back to the bound workspace for local delegates", () => {
-  assert.equal(
-    resolveDelegateLockWorkdir({
-      toAddress: "agent-deck/local-session",
-      defaultWorkdir: "/fallback/worktree",
-      sessionProbe: () => ({ status: "unknown", data: null }),
-      localAddressResolver: () => true,
-      canonicalizePath: (inputPath) => `/canonical${inputPath}`,
-    }),
-    "/canonical/fallback/worktree"
-  );
 });
 
 test("sanitizeGroupSegment keeps agent-deck-safe planner group names", () => {

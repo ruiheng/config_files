@@ -177,7 +177,7 @@ Workflow send sequence:
    - when creation may be needed, also pass:
      - `ensure_title = <coder_session_ref>`
      - `ensure_cmd = <coder_tool>`
-     - `workdir = <current workspace>`
+     - `workdir = <worker_workspace>`
      - `parent_session_id = <planner_session_id>`
      - `no_parent_link = false`
 5. use the returned `session_id` as the authoritative `coder_session_id`
@@ -186,16 +186,22 @@ Workflow send sequence:
    - when creation may be needed, also pass:
      - `ensure_title = <reviewer_session_ref>`
      - `ensure_cmd = <reviewer_tool>`
-     - `workdir = <current workspace>`
+     - `workdir = <worker_workspace>`
      - `parent_session_id = <planner_session_id>`
      - `no_parent_link = false`
 7. use the returned `session_id` as the authoritative `reviewer_session_id`
-8. fill the final body and call `mailbox_send` with:
-   - `from_address = agent-deck/<planner_session_id>`
-   - `to_address = agent-deck/<coder_session_id>`
-   - `subject = "delegate: <task_id> -> coder"`
-   - `body = <delegate mailbox body>`
-   - delegated dispatch is serially enforced by `mailbox_send`
+8. fill the final body
+9. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
+   - `--workdir <worker_workspace>`
+   - `--task-id <task_id>`
+   - `--integration-branch <integration_branch>`
+   - `--planner-session-id <planner_session_id>`
+   - `--coder-session-id <coder_session_id>`
+   - `--coder-session-ref <coder_session_ref>`
+   - `--task-branch <task_branch>`
+   - `--subject "delegate: <task_id> -> coder"`
+   - `--body-file <delegate mailbox body file or "-">`
+   - the wrapper owns active-task lock acquisition, delegate send, send failure rollback, and target wakeup
 
 Recommended subject:
 - `delegate: <task_id> -> coder`
@@ -209,10 +215,13 @@ Rules:
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until planner resolves the real session ids
 - create coder and reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`
+- ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`; do not use the current/planner workspace for target sessions
+- send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
+- do not split active-task lock acquisition and delegate send into separate workflow/tool steps
 - when `Per-task review: required`, planner must allocate reviewer before coder starts work; coder should receive an existing `reviewer_session_id`, not create reviewer later
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
-- if `mailbox_send` reports an existing active task, surface that result instead of retrying through another send path
+- if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path
 - treat coder/reviewer progress as asynchronous with unbounded duration; do not assume a closeout or reply will arrive within this turn
 - after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise report current state and stop instead of waiting
 - after sending, do not sleep, poll, or proactively check mail just to await coder/reviewer progress
