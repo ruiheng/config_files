@@ -10,6 +10,7 @@ Those belong in the concrete action skill that sends or handles that workflow me
 - `agent-deck` is used to resolve, create, or start target sessions and to nudge them to check mail
 - use the `agent_mailbox` MCP tools as the default transport interface
 - use `check-agent-mail` for receiver-side wake handling
+- Agent Deck sessions are external workflow peers, not host-internal subagents; do not apply host subagent tool restrictions to `agent_deck_ensure_session`, `agent-deck`, or mailbox dispatch.
 
 ## Core Terms
 
@@ -39,6 +40,7 @@ Session identity rules:
 - use `*_session_ref` for planned worker titles before a real session exists
 - only write `*_session_id` when the real session id is known
 - when `from_session_id == to_session_id`, treat it as an explicit same-session continuation already established by context, not something inferred from matching provider names
+- creating or starting an Agent Deck target session is workflow session lifecycle, not use of a host subagent API
 
 ## Mailbox Transport
 

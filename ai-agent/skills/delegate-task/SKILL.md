@@ -32,6 +32,7 @@ Keep it locally actionable, but include enough upstream context that coder can o
 Agent Deck mode:
 - Follow shared rules in `agent-deck-workflow/SKILL.md`
 - delegate creator is planner sender
+- This delegation is Agent Deck mailbox/session workflow, not a host built-in subagent call.
 
 Branch-plan terms:
 - `integration_branch` is the existing non-task branch that should receive the completed task at closeout
@@ -208,6 +209,7 @@ Recommended subject:
 
 Rules:
 - keep the full delegate brief in mailbox body
+- do not replace this path with host subagent tools; use `agent_deck_ensure_session` only for target session resolution/creation, and let `send-delegate-with-active-task-lock.sh` own delegate send and wakeup
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
 - if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths in `Context to Acquire`
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
