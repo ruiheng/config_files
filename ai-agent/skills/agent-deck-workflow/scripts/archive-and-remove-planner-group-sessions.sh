@@ -79,6 +79,112 @@ group_exists_in_tree() {
   ' <<<"$groups_json" >/dev/null 2>&1
 }
 
+group_is_empty_leaf() {
+  local group_path="$1"
+  local groups_json="$2"
+
+  [[ -n "$groups_json" ]] || return 1
+  jq -e --arg group_path "$group_path" '
+    def group_tree:
+      . as $group
+      | $group, (($group.children // [])[] | group_tree);
+
+    first(.groups[]? | group_tree | select((.path // "") == $group_path))
+    | ((.session_count // 0) == 0 and ((.children // []) | length) == 0)
+  ' <<<"$groups_json" >/dev/null 2>&1
+}
+
+collect_archived_non_root_groups() {
+  local sessions_json="$1"
+  local group_path current_group
+  local source_groups_json
+
+  source_groups_json="$(
+    {
+      jq -r '
+        .[]
+        | select(.found == true)
+        | (.session_show.group // empty)
+        | select(length > 0 and contains("/"))
+      ' <<<"$sessions_json" 2>/dev/null || true
+
+      find "$archive_dir" -maxdepth 1 -name 'session-archive-*.json' -type f -print0 2>/dev/null \
+        | while IFS= read -r -d '' archive_path; do
+            [[ -f "$archive_path" ]] || continue
+            jq -r '
+              .sessions[]?
+              | select(.found == true)
+              | (.session_show.group // empty)
+              | select(length > 0 and contains("/"))
+            ' "$archive_path" 2>/dev/null || true
+          done
+    } | jq -Rcs 'split("\n") | map(select(length > 0))'
+  )"
+
+  jq -r '.[]' <<<"$source_groups_json" 2>/dev/null \
+    | while IFS= read -r group_path; do
+        [[ -n "$group_path" ]] || continue
+        if [[ -n "$planner_group" ]]; then
+          if [[ "$group_path" != "$planner_group" && "$group_path" != "$planner_group"/* ]]; then
+            continue
+          fi
+          current_group="$group_path"
+          while :; do
+            printf '%s\n' "$current_group"
+            [[ "$current_group" == "$planner_group" ]] && break
+            current_group="${current_group%/*}"
+            [[ -n "$current_group" ]] || break
+          done
+        else
+          printf '%s\n' "$group_path"
+        fi
+      done \
+    | jq -Rrs -r 'split("\n") | map(select(length > 0)) | unique | sort_by(length) | reverse[]'
+}
+
+delete_empty_archived_groups() {
+  local sessions_json="$1"
+  local group_path delete_output current_group_list_json
+  local strict_group_scope=0
+
+  [[ -n "$planner_group" ]] && strict_group_scope=1
+
+  while IFS= read -r group_path; do
+    [[ -n "$group_path" ]] || continue
+    current_group_list_json="$(ad group list --json 2>/dev/null || true)"
+    if [[ -z "$current_group_list_json" ]]; then
+      if (( strict_group_scope )); then
+        group_delete_exit_code="group_list_failed"
+        group_delete_error="failed to inspect group tree before derived cleanup for group=${group_path}"
+        group_delete_status="derived_group_inspection_failed"
+        delete_failed=1
+        return 1
+      fi
+      derived_group_warning="failed to inspect group tree before inferred cleanup for group=${group_path}"
+      return 0
+    fi
+    if ! group_exists_in_tree "$group_path" "$current_group_list_json"; then
+      continue
+    fi
+    if ! group_is_empty_leaf "$group_path" "$current_group_list_json"; then
+      continue
+    fi
+    if delete_output="$(ad group delete "$group_path" 2>&1)"; then
+      derived_group_delete_count=$((derived_group_delete_count + 1))
+    else
+      if (( strict_group_scope )); then
+        group_delete_exit_code="$?"
+        group_delete_error="group=${group_path} error=${delete_output}"
+        group_delete_status="derived_group_delete_failed"
+        delete_failed=1
+        return 1
+      fi
+      derived_group_warning="group=${group_path} error=${delete_output}"
+      return 0
+    fi
+  done < <(collect_archived_non_root_groups "$sessions_json")
+}
+
 build_session_inventory_json() {
   local raw_list tmp_dir ids_file inventory_file session_id shown
 
@@ -309,6 +415,8 @@ for session_id in "${ordered_ids[@]}"; do
     if remove_output="$(ad remove "$session_id" 2>&1)"; then
       delete_status="deleted"
       deleted=true
+    elif [[ "$remove_output" == *"not found"* ]]; then
+      delete_status="already_absent"
     else
       delete_status="delete_failed"
       delete_error="${remove_output}"
@@ -355,6 +463,8 @@ group_delete_error=""
 group_delete_exit_code=""
 group_exists_after_delete=""
 remaining_sessions_json="[]"
+derived_group_delete_count=0
+derived_group_warning=""
 if (( apply )); then
   if ! current_session_inventory_json="$(build_session_inventory_json)"; then
     group_delete_status="blocked_inventory_failed"
@@ -367,6 +477,17 @@ if (( apply )); then
   if (( delete_failed != 0 )); then
     [[ "$group_delete_status" != "blocked_inventory_failed" ]] && group_delete_status="blocked_session_delete_failed"
   elif (( remaining_after_delete == 0 )); then
+    if ! delete_empty_archived_groups "$sessions_json"; then
+      :
+    fi
+    if (( delete_failed != 0 )); then
+      :
+    elif (( derived_group_delete_count > 0 )) && [[ -z "$planner_group" ]]; then
+      group_delete_status="deleted_derived_groups"
+    elif [[ -n "$derived_group_warning" ]] && [[ -z "$planner_group" ]]; then
+      group_delete_status="best_effort_derived_groups_skipped"
+    fi
+
     group_list_json="$(ad group list --json 2>/dev/null || true)"
     if [[ -n "$planner_group" && -n "$group_list_json" ]]; then
       if group_exists_in_tree "$planner_group" "$group_list_json"; then
@@ -378,8 +499,10 @@ if (( apply )); then
 
     # Session removal may already prune the empty planner group, so an absent
     # group here means cleanup is complete rather than a failure.
-    if [[ -z "$planner_group" ]]; then
-      group_delete_status="not_applicable"
+    if (( delete_failed != 0 )); then
+      :
+    elif [[ -z "$planner_group" ]]; then
+      [[ "$group_delete_status" == "skipped_no_apply" ]] && group_delete_status="not_applicable"
     elif [[ "$group_exists_after_delete" == "0" ]]; then
       group_delete_status="already_absent"
     elif group_delete_output="$(ad group delete "$planner_group" 2>&1)"; then
@@ -401,7 +524,7 @@ if (( apply )) && (( delete_failed != 0 )); then
   jq -r '
     .[]
     | select(.delete_status == "delete_failed")
-    | "planner_group_delete_failed session_id=\(.session_show.id // "unknown") title=\(.session_show.title // "unknown") parent_session_id=\(.session_show.parent_session_id // "") error=\(.delete_error // "unknown")"
+    | "planner_group_delete_failed session_id=\(.session_show.id // .session_id // "unknown") title=\(.session_show.title // "unknown") parent_session_id=\(.session_show.parent_session_id // "") error=\(.delete_error // "unknown")"
   ' <<<"$sessions_json"
   if [[ "$remaining_sessions_json" != "[]" ]]; then
     jq -r '
@@ -412,6 +535,10 @@ if (( apply )) && (( delete_failed != 0 )); then
   if [[ -n "$group_delete_error" ]]; then
     echo "planner_group_group_delete_failed planner_group=${planner_group} exit_code=${group_delete_exit_code:-unknown} error=${group_delete_error}"
   fi
+fi
+
+if [[ -n "$derived_group_warning" ]]; then
+  echo "planner_group_group_delete_warning planner_group=${planner_group} warning=${derived_group_warning}"
 fi
 
 if (( delete_failed != 0 )); then
