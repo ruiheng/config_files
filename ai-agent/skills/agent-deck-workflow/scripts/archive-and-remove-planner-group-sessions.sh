@@ -63,6 +63,20 @@ ad() {
   fi
 }
 
+group_exists_in_tree() {
+  local group_path="$1"
+  local groups_json="$2"
+
+  [[ -n "$groups_json" ]] || return 1
+  jq -e --arg group_path "$group_path" '
+    def group_tree:
+      . as $group
+      | $group, (($group.children // [])[] | group_tree);
+
+    any(.groups[]? | group_tree; (.path // "") == $group_path)
+  ' <<<"$groups_json" >/dev/null 2>&1
+}
+
 list_json="$(ad list --json 2>/dev/null || true)"
 [[ -n "$list_json" ]] || die "failed to list agent-deck sessions"
 
@@ -227,9 +241,7 @@ if (( apply )); then
   if (( remaining_after_delete == 0 )); then
     group_list_json="$(ad group list --json 2>/dev/null || true)"
     if [[ -n "$group_list_json" ]]; then
-      if jq -e --arg planner_group "$planner_group" '
-        any(.groups[]?; (.path // "") == $planner_group)
-      ' <<<"$group_list_json" >/dev/null 2>&1; then
+      if group_exists_in_tree "$planner_group" "$group_list_json"; then
         group_exists_after_delete=1
       else
         group_exists_after_delete=0
