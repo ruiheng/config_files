@@ -64,6 +64,8 @@ Use `SKILL.md` for:
 
 ## Supervisor-To-Planner Plan Execution
 
+One supervisor-dispatched planner run is a **planner lane**: one planner session, planner group, workspace contract, integration branch, and cleanup lifecycle.
+
 1. Supervisor runs `dispatch-plan` and sends one `execute_plan` message to a planner.
 2. That planner owns one workspace and the internal task decomposition needed to complete the assigned goal.
 3. For each task, planner may choose `Per-task review: required` or `skip`.
@@ -106,7 +108,7 @@ flowchart TD
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
-- derived planner sessions live in their own child agent-deck group under the supervisor group, created through `agent_deck_ensure_session`
+- derived planner lanes live in their own child agent-deck group under the supervisor group, created through `agent_deck_ensure_session`
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created through `agent_deck_ensure_session` with parent links
 - delegated coder flow must reuse the planner-assigned reviewer session; coder should not create reviewer as its own child session
 - The receiver should always read mailbox `body` first
@@ -130,7 +132,7 @@ Current recommended operating mode:
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
-7. When supervisor finishes integrating a planner result, clean up that planner group and its sessions together.
+7. When supervisor finishes integrating a planner lane result, clean up that planner group and its sessions together.
 8. Supervisor-side integration uses `git merge`; do not switch to `cherry-pick`, `rebase`, or manual history surgery unless the user explicitly asks.
 
 Use skills:

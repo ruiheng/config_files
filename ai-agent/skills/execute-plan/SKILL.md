@@ -6,6 +6,7 @@ description: Execute one supervisor-assigned goal inside one workspace, decompos
 # Execute Plan
 
 Execute one supervisor-provided goal inside one workspace.
+This session owns one planner lane.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
@@ -15,6 +16,7 @@ Provide the mailbox body from `execute_plan`.
 
 ## Core Model
 
+- this planner lane is one supervisor-dispatched planner run with its own planner session, planner group, workspace contract, integration branch, and cleanup lifecycle
 - this planner owns one workspace
 - this planner owns task decomposition inside that workspace
 - tasks inside that workspace execute serially

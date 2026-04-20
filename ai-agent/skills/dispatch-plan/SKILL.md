@@ -6,6 +6,7 @@ description: Send an `execute_plan` workflow message to a planner that should co
 # Dispatch Plan
 
 Send one supervisor-assigned goal to a planner session.
+This creates or resumes one planner lane.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
@@ -26,7 +27,8 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 ## Rules
 
-- this dispatch targets one planner in one workspace
+- a planner lane is one supervisor-dispatched planner run with its own planner session, planner group, workspace contract, integration branch, and cleanup lifecycle
+- this dispatch targets one planner lane in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
 - when creating a new planner session and no planner title/ref is provided, use `planner-YYYYMMDD-HHMM-<slug>`; do not use bare `planner`
 - `integration_branch` is the planner-owned branch for this dispatched plan, not the supervisor landing branch

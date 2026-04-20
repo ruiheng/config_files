@@ -15,7 +15,7 @@ Provide the mailbox body from `plan_report_delivered`.
 
 ## Rules
 
-- treat this report as the final summary for that planner-run plan unless the body says it is blocked
+- treat this report as the final summary for that planner lane unless the body says it is blocked
 - surface completion status, integration branch, planner group, completed tasks, review summary, and open items
 - default completed-plan action is: merge the planner integration branch into the current supervisor branch, then clean up the planner group
 - skip supervisor-side integration only when the report is blocked, the report has unresolved open items, the user explicitly requested report-only handling, or a concrete git precondition blocks the merge

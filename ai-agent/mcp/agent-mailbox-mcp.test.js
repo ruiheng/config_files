@@ -93,20 +93,20 @@ test("sanitizeGroupSegment keeps agent-deck-safe planner group names", () => {
   );
 });
 
-test("buildChildGroupPath derives a nested planner group from the supervisor group", () => {
+test("buildChildGroupPath derives a nested planner lane group from the supervisor group", () => {
   assert.equal(
-    buildChildGroupPath("agent-deck-z", "Planner Line 1"),
-    "agent-deck-z/planner-line-1"
+    buildChildGroupPath("agent-deck-z", "Planner Lane 1"),
+    "agent-deck-z/planner-lane-1"
   );
 });
 
 test("buildEnsureSessionLaunchArgs supports group placement without parent wiring", () => {
   assert.deepEqual(
     buildEnsureSessionLaunchArgs({
-      ensureTitle: "planner-line1",
+      ensureTitle: "planner-lane1",
       ensureCmd: "codex --model gpt-5.4",
       workdir: "/tmp/worktree",
-      groupPath: "agent-deck-z/planner-line1",
+      groupPath: "agent-deck-z/planner-lane1",
       noParentLink: true,
     }),
     [
@@ -114,11 +114,11 @@ test("buildEnsureSessionLaunchArgs supports group placement without parent wirin
       "launch",
       "--json",
       "--title",
-      "planner-line1",
+      "planner-lane1",
       "--cmd",
       "codex --model gpt-5.4",
       "--group",
-      "agent-deck-z/planner-line1",
+      "agent-deck-z/planner-lane1",
       "--no-parent",
       "/tmp/worktree",
     ]
