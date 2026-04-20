@@ -16,7 +16,7 @@ Provide the mailbox body from `execute_plan`.
 
 ## Core Model
 
-- this planner lane is one supervisor-dispatched planner run with its own planner session, planner group, workspace contract, integration branch, and cleanup lifecycle
+- this planner lane is one supervisor-dispatched planner run with its own planner session, workspace contract, integration branch, and cleanup lifecycle
 - this planner owns one workspace
 - this planner owns task decomposition inside that workspace
 - tasks inside that workspace execute serially
@@ -51,7 +51,7 @@ Skill-specific context resolution:
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
-8. read `planner_group` from `.agent-artifacts/planner-workspace.json` and send one final `plan_report_delivered` message to supervisor
+8. send one final `plan_report_delivered` message to supervisor
 9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
 
 ## Decision Rules
@@ -79,7 +79,6 @@ Round: final
 ## Goal Status
 - Outcome: [completed | blocked]
 - Integration branch: [integration_branch]
-- Planner group: [planner_group]
 
 ## Tasks Completed
 - <task_id or planner-defined step>: [result]

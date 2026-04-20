@@ -68,27 +68,22 @@ resolve_current_session_id() {
   echo "$current_id"
 }
 
-resolve_current_session_group() {
-  local current_json current_group
-  current_json="$(resolve_current_session_json)"
-  current_group="$(jq -r '.group // empty' <<<"$current_json" 2>/dev/null || true)"
-  [[ -n "$current_group" ]] || die "failed to resolve current agent-deck session group; planner session must belong to a non-root group"
-  echo "$current_group"
+resolve_session_id() {
+  local session_ref="$1"
+  local shown session_id
+
+  shown="$(agent-deck session show "$session_ref" --json 2>/dev/null || true)"
+  session_id="$(jq -r '.id // empty' <<<"$shown" 2>/dev/null || true)"
+  [[ -n "$session_id" ]] || die "failed to resolve agent-deck session id for '${session_ref}'"
+  echo "$session_id"
 }
 
-resolve_session_group() {
-  local shown session_group
-  shown="$(agent-deck session show "$1" --json 2>/dev/null || true)"
-  session_group="$(jq -r '.group // empty' <<<"$shown" 2>/dev/null || true)"
-  [[ -n "$session_group" ]] || die "failed to resolve agent-deck session group for '${1}'; planner session must belong to a non-root group"
-  echo "$session_group"
-}
-
-session_exists() {
+try_resolve_session_id() {
   local session_ref="$1"
   local shown
+
   shown="$(agent-deck session show "$session_ref" --json 2>/dev/null || true)"
-  [[ -n "$shown" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$shown"
+  jq -r '.id // empty' <<<"$shown" 2>/dev/null || true
 }
 
 is_task_branch_ref() {
@@ -207,17 +202,16 @@ record_field() {
 
 record_summary() {
   local file="$1"
-  local planner_session_id planner_group integration_branch supervisor_session_id worker_workspace planner_workspace
+  local planner_session_id integration_branch supervisor_session_id worker_workspace planner_workspace
 
   planner_session_id="$(record_field "$file" "planner_session_id")"
-  planner_group="$(record_field "$file" "planner_group")"
   integration_branch="$(record_field "$file" "integration_branch")"
   supervisor_session_id="$(record_field "$file" "supervisor_session_id")"
   worker_workspace="$(record_field "$file" "worker_workspace")"
   planner_workspace="$(record_field "$file" "planner_workspace")"
 
-  printf "file='%s' planner_session_id='%s' planner_group='%s' integration_branch='%s' supervisor_session_id='%s' worker_workspace='%s' planner_workspace='%s'" \
-    "$file" "$planner_session_id" "$planner_group" "$integration_branch" "$supervisor_session_id" "$worker_workspace" "$planner_workspace"
+  printf "file='%s' planner_session_id='%s' integration_branch='%s' supervisor_session_id='%s' worker_workspace='%s' planner_workspace='%s'" \
+    "$file" "$planner_session_id" "$integration_branch" "$supervisor_session_id" "$worker_workspace" "$planner_workspace"
 }
 
 mismatch_detail() {
@@ -235,12 +229,11 @@ mismatch_detail() {
 validate_record_set() {
   local canonical_file="$1"
   shift
-  local canonical_planner_session_id canonical_planner_group canonical_integration_branch canonical_supervisor_session_id canonical_worker_workspace canonical_planner_workspace
+  local canonical_planner_session_id canonical_integration_branch canonical_supervisor_session_id canonical_worker_workspace canonical_planner_workspace
   local file
-  local file_planner_session_id file_planner_group file_integration_branch file_supervisor_session_id file_worker_workspace file_planner_workspace
+  local file_planner_session_id file_integration_branch file_supervisor_session_id file_worker_workspace file_planner_workspace
 
   canonical_planner_session_id="$(record_field "$canonical_file" "planner_session_id")"
-  canonical_planner_group="$(record_field "$canonical_file" "planner_group")"
   canonical_integration_branch="$(record_field "$canonical_file" "integration_branch")"
   canonical_supervisor_session_id="$(record_field "$canonical_file" "supervisor_session_id")"
   canonical_worker_workspace="$(record_field "$canonical_file" "worker_workspace")"
@@ -250,13 +243,11 @@ validate_record_set() {
     [[ "$file" == "$canonical_file" ]] && continue
     [[ -f "$file" ]] || continue
     file_planner_session_id="$(record_field "$file" "planner_session_id")"
-    file_planner_group="$(record_field "$file" "planner_group")"
     file_integration_branch="$(record_field "$file" "integration_branch")"
     file_supervisor_session_id="$(record_field "$file" "supervisor_session_id")"
     file_worker_workspace="$(record_field "$file" "worker_workspace")"
     file_planner_workspace="$(record_field "$file" "planner_workspace")"
     [[ "$file_planner_session_id" == "$canonical_planner_session_id" ]] || mismatch_detail "planner_session_id" "$canonical_file" "$canonical_planner_session_id" "$file" "$file_planner_session_id"
-    [[ "$file_planner_group" == "$canonical_planner_group" ]] || mismatch_detail "planner_group" "$canonical_file" "$canonical_planner_group" "$file" "$file_planner_group"
     [[ "$file_integration_branch" == "$canonical_integration_branch" ]] || mismatch_detail "integration_branch" "$canonical_file" "$canonical_integration_branch" "$file" "$file_integration_branch"
     [[ "$file_supervisor_session_id" == "$canonical_supervisor_session_id" ]] || mismatch_detail "supervisor_session_id" "$canonical_file" "$canonical_supervisor_session_id" "$file" "$file_supervisor_session_id"
     if [[ -n "$canonical_worker_workspace" || -n "$file_worker_workspace" ]]; then
@@ -271,19 +262,17 @@ validate_record_set() {
 write_record() {
   local output_file="$1"
   local planner_session_id="$2"
-  local planner_group="$3"
-  local integration_branch="$4"
-  local supervisor_session_id="$5"
-  local worker_workspace="$6"
-  local planner_workspace="$7"
-  local status="$8"
+  local integration_branch="$3"
+  local supervisor_session_id="$4"
+  local worker_workspace="$5"
+  local planner_workspace="$6"
+  local status="$7"
   local tmp_record
 
   mkdir -p "$(dirname "$output_file")"
   tmp_record="$(mktemp)"
   jq -nc \
     --arg planner_session_id "$planner_session_id" \
-    --arg planner_group "$planner_group" \
     --arg integration_branch "$integration_branch" \
     --arg supervisor_session_id "$supervisor_session_id" \
     --arg worker_workspace "$worker_workspace" \
@@ -292,7 +281,6 @@ write_record() {
     --arg status "$status" \
     '{
       planner_session_id: $planner_session_id,
-      planner_group: $planner_group,
       integration_branch: $integration_branch,
       worker_workspace: $worker_workspace,
       planner_workspace: $planner_workspace,
@@ -318,7 +306,7 @@ write_record_set() {
   local file
 
   for file in "${record_files[@]}"; do
-    write_record "$file" "$planner_session_ref" "$planner_group" "$integration_branch" "$supervisor_session_ref" "$worker_workspace" "$planner_workspace" "$status"
+    write_record "$file" "$planner_session_ref" "$integration_branch" "$supervisor_session_ref" "$worker_workspace" "$planner_workspace" "$status"
   done
 }
 
@@ -332,7 +320,6 @@ planner_artifact_root=""
 allow_dirty=0
 release_workspaces=0
 override_workspaces=0
-planner_session_ref_inferred=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -391,8 +378,9 @@ fi
 
 if [[ -z "$planner_session_ref" ]]; then
   planner_session_ref="$(resolve_current_session_id)"
-  planner_session_ref_inferred=1
 fi
+planner_session_input="$planner_session_ref"
+planner_session_ref="$(resolve_session_id "$planner_session_ref")"
 
 if (( release_workspaces == 1 )); then
   removed_any=0
@@ -402,7 +390,10 @@ if (( release_workspaces == 1 )); then
     fi
     record_planner_session_id="$(record_field "$record_file" "planner_session_id")"
     [[ -n "$record_planner_session_id" ]] || die "workspace record missing planner_session_id: ${record_file}"
-    [[ "$record_planner_session_id" == "$planner_session_ref" ]] || die "workspace record planner mismatch: record='${record_planner_session_id}' expected='${planner_session_ref}' file='${record_file}'"
+    record_planner_session_resolved="$(try_resolve_session_id "$record_planner_session_id")"
+    if [[ "$record_planner_session_id" != "$planner_session_ref" && "$record_planner_session_id" != "$planner_session_input" && "$record_planner_session_resolved" != "$planner_session_ref" ]]; then
+      die "workspace record planner mismatch: record='${record_planner_session_id}' expected='${planner_session_ref}' file='${record_file}'"
+    fi
     rm -f "$record_file" || die "failed to remove workspace record: ${record_file}"
     removed_any=1
   done
@@ -412,12 +403,6 @@ if (( release_workspaces == 1 )); then
     echo "workspaces_prepared status=released worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref}"
   fi
   exit 0
-fi
-
-if (( planner_session_ref_inferred == 1 )); then
-  planner_group="$(resolve_current_session_group)"
-else
-  planner_group="$(resolve_session_group "$planner_session_ref")"
 fi
 
 is_task_branch_ref "$integration_branch" && die "--integration-branch must be a non-task landing branch, got: ${integration_branch}"
@@ -441,7 +426,7 @@ if (( override_workspaces == 1 )); then
   checkout_status="$(ensure_detached_worker_head "$worker_workspace" "$integration_branch" "$integration_commit" "$allow_dirty")"
   write_record_set "overridden"
   emit_detached_head_notice
-  echo "workspaces_prepared status=overridden checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
+  echo "workspaces_prepared status=overridden checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
   exit 0
 fi
 
@@ -449,14 +434,13 @@ if [[ -z "$existing_record_file" ]]; then
   checkout_status="$(ensure_detached_worker_head "$worker_workspace" "$integration_branch" "$integration_commit" "$allow_dirty")"
   write_record_set "created"
   emit_detached_head_notice
-  echo "workspaces_prepared status=created checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
+  echo "workspaces_prepared status=created checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
   exit 0
 fi
 
 validate_record_set "$existing_record_file" "${record_files[@]}"
 
 record_planner_session_id="$(record_field "$existing_record_file" "planner_session_id")"
-record_planner_group="$(record_field "$existing_record_file" "planner_group")"
 record_integration_branch="$(record_field "$existing_record_file" "integration_branch")"
 record_supervisor_session_id="$(record_field "$existing_record_file" "supervisor_session_id")"
 record_worker_workspace="$(record_field "$existing_record_file" "worker_workspace")"
@@ -465,11 +449,14 @@ record_planner_workspace="$(record_field "$existing_record_file" "planner_worksp
 [[ -n "$record_planner_session_id" ]] || die "workspace record missing planner_session_id: ${existing_record_file}"
 [[ -n "$record_integration_branch" ]] || die "workspace record missing integration_branch: ${existing_record_file}"
 
-if ! session_exists "$record_planner_session_id"; then
+record_planner_session_ref="$record_planner_session_id"
+record_planner_session_id="$(try_resolve_session_id "$record_planner_session_ref")"
+
+if [[ -z "$record_planner_session_id" ]]; then
   checkout_status="$(ensure_detached_worker_head "$worker_workspace" "$integration_branch" "$integration_commit" "$allow_dirty")"
   write_record_set "stale_replaced"
   emit_detached_head_notice
-  echo "workspaces_prepared status=stale_replaced checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
+  echo "workspaces_prepared status=stale_replaced checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
   exit 0
 fi
 
@@ -485,14 +472,14 @@ if [[ -n "$record_planner_workspace" ]]; then
   [[ "$record_planner_workspace" == "$planner_workspace" ]] || die "workspace record planner path mismatch: record='${record_planner_workspace}' expected='${planner_workspace}' file='${existing_record_file}'"
 fi
 
-if [[ -z "$record_planner_group" || "$record_planner_group" != "$planner_group" || ( -n "$supervisor_session_ref" && "$record_supervisor_session_id" != "$supervisor_session_ref" ) || -z "$record_worker_workspace" || -z "$record_planner_workspace" || $missing_record_file -eq 1 ]]; then
+if [[ "$record_planner_session_ref" != "$record_planner_session_id" || ( -n "$supervisor_session_ref" && "$record_supervisor_session_id" != "$supervisor_session_ref" ) || -z "$record_worker_workspace" || -z "$record_planner_workspace" || $missing_record_file -eq 1 ]]; then
   checkout_status="$(ensure_detached_worker_head "$worker_workspace" "$integration_branch" "$integration_commit" "$allow_dirty")"
   write_record_set "matched_refreshed"
   emit_detached_head_notice
-  echo "workspaces_prepared status=matched_refreshed checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
+  echo "workspaces_prepared status=matched_refreshed checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
   exit 0
 fi
 
 checkout_status="$(ensure_detached_worker_head "$worker_workspace" "$integration_branch" "$integration_commit" "$allow_dirty")"
 emit_detached_head_notice
-echo "workspaces_prepared status=matched checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} planner_group=${planner_group} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"
+echo "workspaces_prepared status=matched checkout_status=${checkout_status} worker_record=${worker_record_file} planner_record=${planner_record_file} planner=${planner_session_ref} integration_branch=${integration_branch} integration_commit=${integration_commit} worker_workspace=${worker_workspace} planner_workspace=${planner_workspace}"

@@ -216,7 +216,7 @@ Rules:
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until planner resolves the real session ids
-- create coder and reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`
+- create coder and reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
 - ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`; do not use the current/planner workspace for target sessions
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps

@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Ensure a planner-scoped workflow session exists in the planner group recorded for this workspace.
+Ensure a planner-scoped workflow session exists as a child of the recorded planner session.
 
 Usage:
   ensure-planner-scoped-session.sh [options]
@@ -17,8 +17,8 @@ Options:
   -h, --help                     Show help
 
 Outputs:
-  - Ensures the session exists, is started, and belongs to the recorded planner group
-  - Prints one summary line with `session_id=` and `planner_group=`
+  - Ensures the session exists, is started, and is parented by the recorded planner session
+  - Prints one summary line with `session_id=` and `planner_session_id=`
 
 Exit codes:
   0: session ensured
@@ -73,13 +73,13 @@ session_json() {
 record_file="${artifact_root%/}/planner-workspace.json"
 [[ -f "$record_file" ]] || die "planner workspace record missing: ${record_file}"
 
-planner_session_id="$(jq -r '.planner_session_id // empty' "$record_file" 2>/dev/null || true)"
-planner_group="$(jq -r '.planner_group // empty' "$record_file" 2>/dev/null || true)"
-[[ -n "$planner_session_id" ]] || die "planner workspace record missing planner_session_id: ${record_file}"
-[[ -n "$planner_group" ]] || die "planner workspace record missing planner_group: ${record_file}"
+planner_session_ref="$(jq -r '.planner_session_id // empty' "$record_file" 2>/dev/null || true)"
+[[ -n "$planner_session_ref" ]] || die "planner workspace record missing planner_session_id: ${record_file}"
 
-planner_json="$(session_json "$planner_session_id")"
-[[ -n "$planner_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$planner_json" || die "planner session recorded in workspace no longer exists: ${planner_session_id}"
+planner_json="$(session_json "$planner_session_ref")"
+[[ -n "$planner_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$planner_json" || die "planner session recorded in workspace no longer exists: ${planner_session_ref}"
+planner_session_id="$(jq -r '.id // empty' <<<"$planner_json" 2>/dev/null || true)"
+[[ -n "$planner_session_id" ]] || die "planner session recorded in workspace has no canonical id: ${planner_session_ref}"
 
 existing_json="$(session_json "$session_ref")"
 if [[ -n "$existing_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existing_json"; then
@@ -87,14 +87,11 @@ if [[ -n "$existing_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existi
   existing_group="$(jq -r '.group // empty' <<<"$existing_json")"
   existing_path="$(jq -r '.path // empty' <<<"$existing_json")"
   existing_status="$(jq -r '.status // empty' <<<"$existing_json")"
+  existing_parent_session_id="$(jq -r '.parent_session_id // empty' <<<"$existing_json")"
   ensure_status="matched"
 
   [[ "$existing_path" == "$session_workspace" ]] || die "session path mismatch: ref='${session_ref}' existing='${existing_path}' expected='${session_workspace}'"
-
-  if [[ "$existing_group" != "$planner_group" ]]; then
-    ad group move "$existing_session_id" "$planner_group" >/dev/null
-    ensure_status="moved"
-  fi
+  [[ "$existing_parent_session_id" == "$planner_session_id" ]] || die "existing session '${session_ref}' is not a child of planner session '${planner_session_id}'"
 
   case "$existing_status" in
     running|waiting|idle) ;;
@@ -104,12 +101,12 @@ if [[ -n "$existing_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existi
       ;;
   esac
 
-  echo "planner_scoped_session status=${ensure_status} session_id=${existing_session_id} session_ref=${session_ref} planner_group=${planner_group} planner_session_id=${planner_session_id}"
+  echo "planner_scoped_session status=${ensure_status} session_id=${existing_session_id} session_ref=${session_ref} planner_session_id=${planner_session_id} session_group=${existing_group}"
   exit 0
 fi
 
-launch_json="$(ad launch "$session_workspace" -t "$session_ref" -g "$planner_group" --no-parent -c "$session_cmd" --no-wait --json 2>/dev/null || true)"
+launch_json="$(ad launch "$session_workspace" -t "$session_ref" --parent "$planner_session_id" -c "$session_cmd" --no-wait --json 2>/dev/null || true)"
 session_id="$(jq -r '.id // empty' <<<"$launch_json" 2>/dev/null || true)"
-[[ -n "$session_id" ]] || die "failed to create session '${session_ref}' in planner group '${planner_group}'"
+[[ -n "$session_id" ]] || die "failed to create child session '${session_ref}' under planner session '${planner_session_id}'"
 
-echo "planner_scoped_session status=created session_id=${session_id} session_ref=${session_ref} planner_group=${planner_group} planner_session_id=${planner_session_id}"
+echo "planner_scoped_session status=created session_id=${session_id} session_ref=${session_ref} planner_session_id=${planner_session_id}"

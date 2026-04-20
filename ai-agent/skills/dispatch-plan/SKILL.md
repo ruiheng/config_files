@@ -27,9 +27,11 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 ## Rules
 
-- a planner lane is one supervisor-dispatched planner run with its own planner session, planner group, workspace contract, integration branch, and cleanup lifecycle
+- a planner lane is one supervisor-dispatched planner run with its own planner session, workspace contract, integration branch, and cleanup lifecycle
 - this dispatch targets one planner lane in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
+- prefer a child session for the dispatched planner when agent-deck can represent the workflow directly that way
+- when deeper nesting needs subgroup fallback, keep that inside the session manager; do not expose it in the workflow contract
 - when creating a new planner session and no planner title/ref is provided, use `planner-YYYYMMDD-HHMM-<slug>`; do not use bare `planner`
 - `integration_branch` is the planner-owned branch for this dispatched plan, not the supervisor landing branch
 - for a new plan dispatch, create a fresh `integration_branch` from the current supervisor branch before sending the mailbox body

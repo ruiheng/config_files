@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Ensure a planner session exists in a fresh child group of the current supervisor group.
+Ensure a planner session exists as a child of the current supervisor session.
 
 Usage:
   ensure-supervised-planner-session.sh [options]
@@ -13,13 +13,12 @@ Options:
   --planner-cmd <command>         Required planner command
   --planner-workspace <path>      Required planner workspace path
   --supervisor-session-id <id>    Optional supervisor session id/ref (default: current session)
-  --planner-group-name <name>     Optional child-group name (default: sanitized planner-session-ref)
   --profile <name>                Optional agent-deck profile
   -h, --help                      Show help
 
 Outputs:
-  - Creates the planner session in a fresh planner group under the supervisor group
-  - Prints one summary line with `session_id=` and `planner_group=`
+  - Creates the planner session as a child of the supervisor session
+  - Prints one summary line with `session_id=` and `supervisor_session_id=`
 
 Exit codes:
   0: session ensured
@@ -36,7 +35,6 @@ planner_session_ref=""
 planner_cmd=""
 planner_workspace=""
 supervisor_session_ref=""
-planner_group_name=""
 profile=""
 
 while [[ $# -gt 0 ]]; do
@@ -45,7 +43,6 @@ while [[ $# -gt 0 ]]; do
     --planner-cmd) planner_cmd="${2:-}"; shift 2 ;;
     --planner-workspace) planner_workspace="${2:-}"; shift 2 ;;
     --supervisor-session-id) supervisor_session_ref="${2:-}"; shift 2 ;;
-    --planner-group-name) planner_group_name="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
@@ -67,17 +64,6 @@ ad() {
   fi
 }
 
-sanitize_group_name() {
-  LC_ALL=C tr '[:upper:]' '[:lower:]' <<<"$1" | LC_ALL=C tr -cs '[:alnum:].@_-' '-'
-}
-
-group_exists() {
-  local group_path="$1"
-  local groups_json
-  groups_json="$(ad group list --json 2>/dev/null || true)"
-  jq -e --arg group_path "$group_path" '.groups[]? | select(.path == $group_path)' >/dev/null 2>&1 <<<"$groups_json"
-}
-
 session_json() {
   ad session show "$1" --json 2>/dev/null || true
 }
@@ -94,38 +80,18 @@ supervisor_json="$(resolve_supervisor_json)"
 [[ -n "$supervisor_json" ]] || die "failed to resolve supervisor session; pass --supervisor-session-id"
 
 supervisor_session_id="$(jq -r '.id // empty' <<<"$supervisor_json" 2>/dev/null || true)"
-supervisor_group="$(jq -r '.group // empty' <<<"$supervisor_json" 2>/dev/null || true)"
 [[ -n "$supervisor_session_id" ]] || die "supervisor session id is missing"
-[[ -n "$supervisor_group" ]] || die "supervisor group is missing; supervisor session must belong to a non-root group"
-
-if [[ -z "$planner_group_name" ]]; then
-  planner_group_name="$(sanitize_group_name "$planner_session_ref")"
-fi
-[[ -n "$planner_group_name" ]] || die "failed to derive planner group name"
-
-planner_group_path="${supervisor_group}/${planner_group_name}"
-
-# Planner dispatch must claim a brand-new subgroup so a stale planner run cannot
-# be silently reused just because the title/group name matches.
-if group_exists "$planner_group_path"; then
-  die "planner subgroup already exists: ${planner_group_path}; choose a fresh planner subgroup for this dispatch"
-fi
-ad group create "$planner_group_name" --parent "$supervisor_group" >/dev/null
 
 existing_planner_json="$(session_json "$planner_session_ref")"
 if [[ -n "$existing_planner_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existing_planner_json"; then
   planner_session_id="$(jq -r '.id // empty' <<<"$existing_planner_json")"
-  existing_group="$(jq -r '.group // empty' <<<"$existing_planner_json")"
   existing_path="$(jq -r '.path // empty' <<<"$existing_planner_json")"
   existing_status="$(jq -r '.status // empty' <<<"$existing_planner_json")"
+  existing_parent_session_id="$(jq -r '.parent_session_id // empty' <<<"$existing_planner_json")"
   ensure_status="matched"
 
   [[ "$existing_path" == "$planner_workspace" ]] || die "planner session path mismatch: ref='${planner_session_ref}' existing='${existing_path}' expected='${planner_workspace}'"
-
-  if [[ "$existing_group" != "$planner_group_path" ]]; then
-    ad group move "$planner_session_id" "$planner_group_path" >/dev/null
-    ensure_status="moved"
-  fi
+  [[ "$existing_parent_session_id" == "$supervisor_session_id" ]] || die "planner session '${planner_session_ref}' is not a child of supervisor '${supervisor_session_id}'"
 
   case "$existing_status" in
     running|waiting|idle) ;;
@@ -135,12 +101,12 @@ if [[ -n "$existing_planner_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<
       ;;
   esac
 
-  echo "planner_session status=${ensure_status} session_id=${planner_session_id} session_ref=${planner_session_ref} planner_group=${planner_group_path} supervisor_session_id=${supervisor_session_id}"
+  echo "planner_session status=${ensure_status} session_id=${planner_session_id} session_ref=${planner_session_ref} supervisor_session_id=${supervisor_session_id}"
   exit 0
 fi
 
-launch_json="$(ad launch "$planner_workspace" -t "$planner_session_ref" -g "$planner_group_path" --no-parent -c "$planner_cmd" --no-wait --json 2>/dev/null || true)"
+launch_json="$(ad launch "$planner_workspace" -t "$planner_session_ref" --parent "$supervisor_session_id" -c "$planner_cmd" --no-wait --json 2>/dev/null || true)"
 planner_session_id="$(jq -r '.id // empty' <<<"$launch_json" 2>/dev/null || true)"
-[[ -n "$planner_session_id" ]] || die "failed to create planner session '${planner_session_ref}' in group '${planner_group_path}'"
+[[ -n "$planner_session_id" ]] || die "failed to create planner child session '${planner_session_ref}' under supervisor '${supervisor_session_id}'"
 
-echo "planner_session status=created session_id=${planner_session_id} session_ref=${planner_session_ref} planner_group=${planner_group_path} supervisor_session_id=${supervisor_session_id}"
+echo "planner_session status=created session_id=${planner_session_id} session_ref=${planner_session_ref} supervisor_session_id=${supervisor_session_id}"

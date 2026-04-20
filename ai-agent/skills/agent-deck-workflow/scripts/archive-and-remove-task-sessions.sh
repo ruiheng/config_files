@@ -155,19 +155,24 @@ count_descendant_groups() {
 
 mark_group_cleanup_candidates() {
   local session_group="$1"
-  local current_group
+  local relative_group root_group current_group
 
-  [[ -n "$planner_group" ]] || return 0
+  [[ -n "$planner_session_group" ]] || return 0
   [[ -n "$session_group" ]] || return 0
-  [[ "$session_group" != "$planner_group" ]] || return 0
+  [[ "$session_group" != "$planner_session_group" ]] || return 0
   case "$session_group" in
-    "$planner_group"/*) ;;
+    "$planner_session_group"/*) ;;
     *) return 0 ;;
   esac
 
+  relative_group="${session_group#${planner_session_group}/}"
+  [[ -n "$relative_group" ]] || return 0
+  root_group="${planner_session_group}/${relative_group%%/*}"
+
   current_group="$session_group"
-  while [[ "$current_group" == "$planner_group"/* && "$current_group" != "$planner_group" ]]; do
+  while [[ "$current_group" == "$root_group" || "$current_group" == "$root_group"/* ]]; do
     printf '%s\n' "$current_group" >>"$group_candidates_file"
+    [[ "$current_group" == "$root_group" ]] && break
     current_group="${current_group%/*}"
   done
 }
@@ -199,13 +204,12 @@ cleanup_empty_task_subgroups() {
   local session_count descendant_group_count delete_output
   local -a ordered_groups=()
 
-  [[ -n "$planner_group" ]] || return 0
   [[ -s "$group_candidates_file" ]] || return 0
 
   while IFS= read -r group_path; do
     [[ -n "$group_path" ]] || continue
     ordered_groups+=("$group_path")
-  done < <(sort -u "$group_candidates_file" | awk '{ print length($0) "\t" $0 }' | sort -rn | cut -f2-)
+  done < <(jq -Rrs -r 'split("\n") | map(select(length > 0)) | unique | sort_by(length) | reverse[]' "$group_candidates_file")
 
   for group_path in "${ordered_groups[@]}"; do
     if ! group_exists "$group_path"; then
@@ -563,10 +567,10 @@ fi
 
 planner_shown="$(ad session show "$planner_session_ref" --json 2>/dev/null || true)"
 planner_session_id=""
-planner_group=""
+planner_session_group=""
 if [[ -n "$planner_shown" ]]; then
   planner_session_id="$(jq -r '.id // empty' <<<"$planner_shown")"
-  planner_group="$(jq -r '.group // empty' <<<"$planner_shown")"
+  planner_session_group="$(jq -r '.group // empty' <<<"$planner_shown")"
 fi
 
 entries_file="$(mktemp)"
@@ -792,7 +796,7 @@ jq -n \
   --arg archived_at "$archived_at" \
   --arg planner_session_ref "$planner_session_ref" \
   --arg planner_session_id "$planner_session_id" \
-  --arg planner_group "$planner_group" \
+  --arg planner_session_group "$planner_session_group" \
   --arg profile_name "$profile_name" \
   --arg state_db_path "$state_db_path" \
   --arg mode "$mode" \
@@ -804,7 +808,7 @@ jq -n \
     mode: $mode,
     planner_session_ref: $planner_session_ref,
     planner_session_id: (if $planner_session_id == "" then null else $planner_session_id end),
-    planner_group: (if $planner_group == "" then null else $planner_group end),
+    planner_session_group: (if $planner_session_group == "" then null else $planner_session_group end),
     profile_name: $profile_name,
     state_db_path: (if $state_db_path == "" then null else $state_db_path end),
     sessions: $sessions,
