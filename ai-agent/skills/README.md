@@ -66,10 +66,11 @@ Use `SKILL.md` for:
 
 1. Supervisor runs `dispatch-plan` and sends one `execute_plan` message to a planner.
 2. That planner owns one workspace and the internal task decomposition needed to complete the assigned goal.
-3. For each task, planner may choose `Per-task review: required` or `skip`.
-4. After the assigned goal is complete, planner may request one final integrated review from its own integration branch.
-5. Planner sends one `plan_report_delivered` summary back to supervisor.
-6. After receiving a completed report with no open items, supervisor merges the planner integration branch, then cleans up the planner-owned structure for that run.
+3. Planner delegates non-trivial implementation tasks; for trivial code tasks it may self-implement, but then acts as coder for commit, review, and closeout.
+4. For each task, planner may choose `Per-task review: required` or `skip`.
+5. After the assigned goal is complete, planner may request one final integrated review from its own integration branch.
+6. Planner sends one `plan_report_delivered` summary back to supervisor.
+7. After receiving a completed report with no open items, supervisor merges the planner integration branch, then cleans up the planner-owned structure for that run.
 
 ## Flow Diagram
 
@@ -117,6 +118,7 @@ flowchart TD
 - coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not treat cross-session dispatch as a synchronous substep that will finish soon
 - after cross-session dispatch, planner either does independent non-interfering work or stops; do not sleep, poll, or proactively wait for another agent's progress
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
+- when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
 - planner may skip per-task review when its current plan policy allows it; final integrated review can be requested later from the planner-owned integration branch
 - Use `mailbox_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
 - External files are supplemental references only, not the default transport

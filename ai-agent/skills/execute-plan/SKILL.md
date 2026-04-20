@@ -23,6 +23,8 @@ Provide the mailbox body from `execute_plan`.
 - the planner should auto-advance whenever the next step is clear
 - if a blocker cannot be resolved locally, stop and ask the user directly
 - do not send routine blocker mail to supervisor
+- when the planner self-implements code, it is acting as coder for that task
+- code-changing tasks are complete only after commit, any required review, closeout merge, and progress recording
 - after the full plan completes, send one `plan_report_delivered` message to supervisor
 
 ## Agent Deck Mode
@@ -46,7 +48,9 @@ Skill-specific context resolution:
 2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
-5. for each implementation task, use `delegate-task` and pass the chosen `Per-task review` policy into the delegate brief
+5. for each implementation task:
+   - use `delegate-task` for non-trivial code work and pass the chosen `Per-task review` policy into the delegate brief
+   - for a trivial code task, follow `Direct Planner Implementation`
 6. do not proactively wait for coder/reviewer/architect progress; if no immediate local step remains, stop and resume on the next mailbox wake
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
@@ -54,14 +58,39 @@ Skill-specific context resolution:
 8. send one final `plan_report_delivered` message to supervisor
 9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
 
+## Direct Planner Implementation
+
+Use this only for small, isolated code changes where delegation adds overhead.
+Once code is edited, planner is also coder for that task.
+
+Required sequence:
+1. use the already-prepared workspace from `Execution Flow`; never commit on detached `HEAD`
+2. create an explicit `task_branch` from `integration_branch`
+   - default: `task/<plan_id>-<short-slug>` or `task/<task_id>`
+   - `task_branch` must differ from `integration_branch`
+   - reuse an existing `task_branch` only when it is clearly the same unfinished direct task
+3. make the change in `worker_workspace`
+4. verify the change with the narrowest meaningful checks
+5. stage and commit the task change without asking the user for routine commit confirmation
+6. if `Per-task review: required`:
+   - allocate a reviewer session with `agent_deck_ensure_session` before sending review mail
+   - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
+   - after reviewer acceptance, handle the resulting `closeout_delivered` with `planner-closeout` before marking the task done
+7. if `Per-task review: skip`, run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
+8. record the result under `Tasks Completed`
+
+Direct-task git writes, commits, review requests, and closeout are workflow-authorized.
+Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty-worktree conflicts, or branch ownership blockers.
+
 ## Decision Rules
 
-- prefer local planner fixes only for small, isolated integration issues, and only after taking an explicit branch step; after workspace prep, the planner workspace is announced as detached HEAD, so current workspace git state is not a valid inferred start point for commits or task branches
+- prefer local planner fixes only for small, isolated tasks, and only after taking an explicit branch step; after workspace prep, the worker workspace is announced as detached HEAD, so current workspace git state is not a valid inferred start point for commits or task branches
 - prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
 - when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
 - use `prepare-workspaces.sh --release-workspaces` for that release; do not delete the record files ad hoc
+- do not ask for routine confirmation before planner-owned branch, commit, review-request, closeout, or final-report actions
 
 ## Final Report Template
 
@@ -98,10 +127,12 @@ Round: final
 - own the internal breakdown needed to complete the goal; do not ask supervisor to pre-split ordinary implementation tasks
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
 - treat `integration_branch` as the planner-owned branch prepared for this dispatched plan; do not reinterpret it as the supervisor landing branch and do not silently jump onto some older leftover branch
-- before doing planner work, prepare the workspace and make sure it is detached at the explicit `integration_branch` tip commit
-- treat the prepare-script detached-head notice as authoritative: do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
+- run workspace prepare once at the start of plan execution; treat the resulting detached-HEAD state in `worker_workspace` as authoritative until an explicit task branch is attached
+- do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
+- when self-implementing, attach a real task branch from `integration_branch` before committing
 - treat workspace prep as an early closeout viability gate too: if another worktree already holds `integration_branch` and planner closeout later needs to attach it here, stop immediately instead of letting the plan fail only at final closeout
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - after the planner has no remaining work in this workspace, release the workspace records with `prepare-workspaces.sh --release-workspaces`
 - do not naturally end after the last task if the final report to supervisor is still pending
+- if this turn owns a claimed `execute_plan` delivery, complete the final report and the delivery lifecycle step before ending
