@@ -3,14 +3,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Archive and optionally remove one planner session tree, with optional legacy group cleanup.
+Archive and optionally remove one planner cleanup scope.
 
 Usage:
   archive-and-remove-planner-group-sessions.sh [options]
 
 Options:
-  --planner-session-id <id>      Planner session id; required unless --planner-group is provided for legacy cleanup
-  --planner-group <path>         Optional planner-owned group path for legacy/manual cleanup scope
+  --planner-session-id <id>      Planner session id; required cleanup scope source
   --artifact-root <path>         Artifact root (default: .agent-artifacts)
   --profile <name>               Optional agent-deck profile
   --apply                        Remove sessions and delete the group after archiving
@@ -32,7 +31,6 @@ die() {
   exit 2
 }
 
-planner_group=""
 planner_session_id=""
 artifact_root=".agent-artifacts"
 profile=""
@@ -40,7 +38,6 @@ apply=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --planner-group) planner_group="${2:-}"; shift 2 ;;
     --planner-session-id) planner_session_id="${2:-}"; shift 2 ;;
     --artifact-root) artifact_root="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
@@ -50,8 +47,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$planner_group" && -z "$planner_session_id" ]]; then
-  die "pass --planner-group, --planner-session-id, or both"
+if [[ -z "$planner_session_id" ]]; then
+  die "pass --planner-session-id"
 fi
 
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck is required"
@@ -62,6 +59,50 @@ ad() {
     agent-deck -p "$profile" "$@"
   else
     agent-deck "$@"
+  fi
+}
+
+derive_lane_group_from_session_json() {
+  local session_json="${1:-}"
+  local group_path=""
+
+  [[ -n "$session_json" ]] || return 0
+  group_path="$(jq -r '.group // ""' <<<"$session_json" 2>/dev/null || true)"
+  if [[ -n "$group_path" ]]; then
+    printf '%s\n' "$group_path"
+  fi
+  return 0
+}
+
+list_archive_files() {
+  local archive_root=""
+
+  archive_root="${artifact_root%/}/planner-groups"
+  {
+    find "$archive_dir" -maxdepth 1 -name 'session-archive-*.json' -type f 2>/dev/null || true
+    if [[ -d "$archive_root" ]]; then
+      find "$archive_root" -mindepth 2 -maxdepth 2 -name 'session-archive-*.json' -type f 2>/dev/null || true
+    fi
+  } | sort -u
+}
+
+resolve_cleanup_group_scope() {
+  cleanup_group_scope=""
+  cleanup_group_scope_source=""
+  scope_warning=""
+
+  if [[ -n "$planner_live_json" ]]; then
+    cleanup_group_scope="$(derive_lane_group_from_session_json "$planner_live_json")"
+    if [[ -n "$cleanup_group_scope" ]]; then
+      cleanup_group_scope_source="live_planner"
+      return 0
+    fi
+  fi
+
+  if [[ -n "$planner_live_json" ]]; then
+    scope_warning="live planner session has no group; planner lane cleanup scope unavailable"
+  else
+    scope_warning="planner session not found; planner lane cleanup scope unavailable"
   fi
 }
 
@@ -94,28 +135,31 @@ group_is_empty_leaf() {
   ' <<<"$groups_json" >/dev/null 2>&1
 }
 
-collect_archived_non_root_groups() {
+collect_archived_scope_groups() {
   local sessions_json="$1"
   local group_path current_group
   local source_groups_json
 
+  [[ -n "$cleanup_group_scope" ]] || return 0
+
   source_groups_json="$(
     {
+      printf '%s\n' "$cleanup_group_scope"
       jq -r '
         .[]
         | select(.found == true)
         | (.session_show.group // empty)
-        | select(length > 0 and contains("/"))
+        | select(length > 0)
       ' <<<"$sessions_json" 2>/dev/null || true
 
-      find "$archive_dir" -maxdepth 1 -name 'session-archive-*.json' -type f -print0 2>/dev/null \
-        | while IFS= read -r -d '' archive_path; do
+      list_archive_files \
+        | while IFS= read -r archive_path; do
             [[ -f "$archive_path" ]] || continue
             jq -r '
               .sessions[]?
               | select(.found == true)
               | (.session_show.group // empty)
-              | select(length > 0 and contains("/"))
+              | select(length > 0)
             ' "$archive_path" 2>/dev/null || true
           done
     } | jq -Rcs 'split("\n") | map(select(length > 0))'
@@ -124,42 +168,30 @@ collect_archived_non_root_groups() {
   jq -r '.[]' <<<"$source_groups_json" 2>/dev/null \
     | while IFS= read -r group_path; do
         [[ -n "$group_path" ]] || continue
-        if [[ -n "$planner_group" ]]; then
-          if [[ "$group_path" != "$planner_group" && "$group_path" != "$planner_group"/* ]]; then
-            continue
-          fi
-          current_group="$group_path"
-          while :; do
-            printf '%s\n' "$current_group"
-            [[ "$current_group" == "$planner_group" ]] && break
-            current_group="${current_group%/*}"
-            [[ -n "$current_group" ]] || break
-          done
-        else
-          printf '%s\n' "$group_path"
+        if [[ "$group_path" != "$cleanup_group_scope" && "$group_path" != "$cleanup_group_scope"/* ]]; then
+          continue
         fi
+        current_group="$group_path"
+        while :; do
+          printf '%s\n' "$current_group"
+          [[ "$current_group" == "$cleanup_group_scope" ]] && break
+          current_group="${current_group%/*}"
+          [[ -n "$current_group" ]] || break
+        done
       done \
     | jq -Rrs -r 'split("\n") | map(select(length > 0)) | unique | sort_by(length) | reverse[]'
 }
 
-delete_empty_archived_groups() {
+delete_empty_scope_groups() {
   local sessions_json="$1"
   local group_path delete_output current_group_list_json
-  local strict_group_scope=0
 
-  [[ -n "$planner_group" ]] && strict_group_scope=1
+  [[ -n "$cleanup_group_scope" ]] || return 0
 
   while IFS= read -r group_path; do
     [[ -n "$group_path" ]] || continue
     current_group_list_json="$(ad group list --json 2>/dev/null || true)"
     if [[ -z "$current_group_list_json" ]]; then
-      if (( strict_group_scope )); then
-        group_delete_exit_code="group_list_failed"
-        group_delete_error="failed to inspect group tree before derived cleanup for group=${group_path}"
-        group_delete_status="derived_group_inspection_failed"
-        delete_failed=1
-        return 1
-      fi
       derived_group_warning="failed to inspect group tree before inferred cleanup for group=${group_path}"
       return 0
     fi
@@ -172,17 +204,10 @@ delete_empty_archived_groups() {
     if delete_output="$(ad group delete "$group_path" 2>&1)"; then
       derived_group_delete_count=$((derived_group_delete_count + 1))
     else
-      if (( strict_group_scope )); then
-        group_delete_exit_code="$?"
-        group_delete_error="group=${group_path} error=${delete_output}"
-        group_delete_status="derived_group_delete_failed"
-        delete_failed=1
-        return 1
-      fi
       derived_group_warning="group=${group_path} error=${delete_output}"
       return 0
     fi
-  done < <(collect_archived_non_root_groups "$sessions_json")
+  done < <(collect_archived_scope_groups "$sessions_json")
 }
 
 build_session_inventory_json() {
@@ -229,16 +254,26 @@ build_session_inventory_json() {
   rm -rf "$tmp_dir"
 }
 
-session_inventory_json="$(build_session_inventory_json)" || die "failed to build agent-deck session inventory"
-
-if [[ -n "$planner_group" ]]; then
-  safe_archive_key="$(tr '/ ' '__' <<<"$planner_group")"
-else
-  safe_archive_key="session_$(tr '/ ' '__' <<<"$planner_session_id")"
-fi
+safe_archive_key="session_$(tr '/ ' '__' <<<"$planner_session_id")"
 archive_dir="${artifact_root%/}/planner-groups/${safe_archive_key}"
 archive_file="${archive_dir}/session-archive-$(date -u +%Y%m%dT%H%M%SZ).json"
 mkdir -p "$archive_dir"
+
+planner_live_json=""
+cleanup_group_scope=""
+cleanup_group_scope_source=""
+scope_warning=""
+
+if [[ -n "$planner_session_id" ]]; then
+  planner_live_json="$(ad session show "$planner_session_id" --json 2>/dev/null || true)"
+  if ! jq -e '.id // empty' <<<"$planner_live_json" >/dev/null 2>&1; then
+    planner_live_json=""
+  fi
+fi
+
+resolve_cleanup_group_scope
+
+session_inventory_json="$(build_session_inventory_json)" || die "failed to build agent-deck session inventory"
 
 entries_file="$(mktemp)"
 session_cache_dir="$(mktemp -d)"
@@ -281,25 +316,6 @@ queue_session_for_cleanup() {
   parent_session_id_of["$session_id"]="$(jq -r '.parent_session_id // empty' <<<"$shown" 2>/dev/null || true)"
 }
 
-queue_group_sessions_for_cleanup() {
-  local session_id
-  [[ -n "$planner_group" ]] || return 0
-
-  while IFS= read -r session_id; do
-    [[ -n "$session_id" ]] || continue
-    queue_session_for_cleanup "$session_id"
-  done < <(
-    jq -r --arg planner_group "$planner_group" '
-      .[]
-      | select(
-          (.group // "") == $planner_group
-          or ((.group // "") | startswith($planner_group + "/"))
-        )
-      | .id
-    ' <<<"$session_inventory_json" 2>/dev/null || true
-  )
-}
-
 queue_descendants_for_cleanup() {
   local root_session_id="${1:-}"
   local current child_id
@@ -334,7 +350,6 @@ remaining_sessions_json_for_scope() {
 
   remaining_json="$(
     jq -c \
-      --arg planner_group "$planner_group" \
       --arg planner_session_id "$planner_session_id" \
       '
         def direct_child_ids($sessions; $root):
@@ -352,11 +367,7 @@ remaining_sessions_json_for_scope() {
               .[]
               | (.id // "") as $session_id
               | select(
-                  (($planner_group != "") and (
-                    (.group // "") == $planner_group
-                    or ((.group // "") | startswith($planner_group + "/"))
-                  ))
-                  or (($planner_session_id != "") and (
+                  (($planner_session_id != "") and (
                     $session_id == $planner_session_id
                     or ($descendants | index($session_id)) != null
                   ))
@@ -374,8 +385,6 @@ remaining_sessions_json_for_scope() {
 
   echo "$remaining_json"
 }
-
-queue_group_sessions_for_cleanup
 
 # The planner session is part of planner-run cleanup even when it was created in
 # a different group, so accept it as an explicit extra delete target.
@@ -443,13 +452,15 @@ done
 sessions_json="$(jq -s '.' "$entries_file")"
 
 jq -n \
-  --arg planner_group "$planner_group" \
+  --arg planner_group "$cleanup_group_scope" \
+  --arg planner_group_source "$cleanup_group_scope_source" \
   --arg planner_session_id "$planner_session_id" \
   --arg archived_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg mode "$([[ "$apply" -eq 1 ]] && echo archive_and_remove || echo archive_only)" \
   --argjson sessions "$sessions_json" \
   '{
     planner_group: (if $planner_group == "" then null else $planner_group end),
+    planner_group_source: (if $planner_group_source == "" then null else $planner_group_source end),
     planner_session_id: (if $planner_session_id == "" then null else $planner_session_id end),
     archived_at: $archived_at,
     mode: $mode,
@@ -465,6 +476,7 @@ group_exists_after_delete=""
 remaining_sessions_json="[]"
 derived_group_delete_count=0
 derived_group_warning=""
+best_effort_group_warning=""
 if (( apply )); then
   if ! current_session_inventory_json="$(build_session_inventory_json)"; then
     group_delete_status="blocked_inventory_failed"
@@ -477,41 +489,35 @@ if (( apply )); then
   if (( delete_failed != 0 )); then
     [[ "$group_delete_status" != "blocked_inventory_failed" ]] && group_delete_status="blocked_session_delete_failed"
   elif (( remaining_after_delete == 0 )); then
-    if ! delete_empty_archived_groups "$sessions_json"; then
-      :
-    fi
+    delete_empty_scope_groups "$sessions_json"
     if (( delete_failed != 0 )); then
       :
-    elif (( derived_group_delete_count > 0 )) && [[ -z "$planner_group" ]]; then
+    elif (( derived_group_delete_count > 0 )); then
       group_delete_status="deleted_derived_groups"
-    elif [[ -n "$derived_group_warning" ]] && [[ -z "$planner_group" ]]; then
+    elif [[ -n "$derived_group_warning" ]]; then
       group_delete_status="best_effort_derived_groups_skipped"
     fi
-
     group_list_json="$(ad group list --json 2>/dev/null || true)"
-    if [[ -n "$planner_group" && -n "$group_list_json" ]]; then
-      if group_exists_in_tree "$planner_group" "$group_list_json"; then
+    if [[ -n "$cleanup_group_scope" && -n "$group_list_json" ]]; then
+      if group_exists_in_tree "$cleanup_group_scope" "$group_list_json"; then
         group_exists_after_delete=1
       else
         group_exists_after_delete=0
       fi
     fi
 
-    # Session removal may already prune the empty planner group, so an absent
-    # group here means cleanup is complete rather than a failure.
     if (( delete_failed != 0 )); then
       :
-    elif [[ -z "$planner_group" ]]; then
-      [[ "$group_delete_status" == "skipped_no_apply" ]] && group_delete_status="not_applicable"
-    elif [[ "$group_exists_after_delete" == "0" ]]; then
-      group_delete_status="already_absent"
-    elif group_delete_output="$(ad group delete "$planner_group" 2>&1)"; then
-      group_delete_status="deleted"
+    elif [[ -z "$cleanup_group_scope" ]]; then
+      group_delete_status="not_applicable"
+    elif [[ -z "$group_list_json" ]]; then
+      [[ "$group_delete_status" == "skipped_no_apply" ]] && group_delete_status="best_effort_group_inspection_failed"
+      best_effort_group_warning="failed to inspect group tree after cleanup for group=${cleanup_group_scope}"
+    elif [[ "$group_exists_after_delete" == "1" ]]; then
+      [[ "$group_delete_status" == "skipped_no_apply" ]] && group_delete_status="best_effort_group_remaining"
+      best_effort_group_warning="group=${cleanup_group_scope} remained after best-effort cleanup"
     else
-      group_delete_exit_code="$?"
-      group_delete_status="delete_failed"
-      group_delete_error="$group_delete_output"
-      delete_failed=1
+      [[ "$group_delete_status" == "skipped_no_apply" ]] && group_delete_status="not_applicable"
     fi
   else
     group_delete_status="blocked_nonempty"
@@ -519,7 +525,7 @@ if (( apply )); then
   fi
 fi
 
-echo "planner_group_cleanup planner_group=${planner_group} planner_session_id=${planner_session_id} group_delete_status=${group_delete_status}"
+echo "planner_group_cleanup planner_group=${cleanup_group_scope} planner_session_id=${planner_session_id} group_delete_status=${group_delete_status}"
 if (( apply )) && (( delete_failed != 0 )); then
   jq -r '
     .[]
@@ -533,12 +539,20 @@ if (( apply )) && (( delete_failed != 0 )); then
     ' <<<"$remaining_sessions_json"
   fi
   if [[ -n "$group_delete_error" ]]; then
-    echo "planner_group_group_delete_failed planner_group=${planner_group} exit_code=${group_delete_exit_code:-unknown} error=${group_delete_error}"
+    echo "planner_group_group_delete_failed planner_group=${cleanup_group_scope} exit_code=${group_delete_exit_code:-unknown} error=${group_delete_error}"
   fi
 fi
 
+if [[ -n "$scope_warning" ]]; then
+  echo "planner_group_cleanup_warning planner_group=${cleanup_group_scope} planner_session_id=${planner_session_id} warning=${scope_warning}"
+fi
+
 if [[ -n "$derived_group_warning" ]]; then
-  echo "planner_group_group_delete_warning planner_group=${planner_group} warning=${derived_group_warning}"
+  echo "planner_group_group_delete_warning planner_group=${cleanup_group_scope} warning=${derived_group_warning}"
+fi
+
+if [[ -n "$best_effort_group_warning" ]]; then
+  echo "planner_group_group_delete_warning planner_group=${cleanup_group_scope} warning=${best_effort_group_warning}"
 fi
 
 if (( delete_failed != 0 )); then

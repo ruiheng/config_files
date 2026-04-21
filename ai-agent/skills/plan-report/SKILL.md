@@ -22,9 +22,9 @@ Provide the mailbox body from `plan_report_delivered`.
 - use `git merge` for supervisor-side integration; do not substitute `cherry-pick`, `rebase`, or another git history strategy
 - treat the current supervisor worktree branch as the integration target unless explicit user/workflow context says otherwise; if the target branch is unclear or the worktree is dirty, stop and report the blocker
 - after supervisor-side integration succeeds, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/archive-and-remove-planner-group-sessions.sh --planner-session-id <planner_session_id> --apply`
-- if the report body or legacy `.agent-artifacts/planner-workspace.json` includes `planner_group`, also pass `--planner-group <planner_group>` as a legacy/fallback cleanup scope
+- planner cleanup relies on live `agent-deck` state for `<planner_session_id>`; if that live scope is unavailable, keep the result as best-effort/no-op instead of trying to recover scope from old records
 - do not clean up the planner-owned structure before supervisor-side integration has actually completed
-- if the cleanup script fails, report that failure and stop; do not continue with manual `agent-deck remove` or `group delete` commands unless the user explicitly asks
+- if the cleanup script exits non-zero, report that failure and stop; best-effort subgroup cleanup warnings are non-fatal and should be surfaced as warnings; do not continue with manual `agent-deck remove` or `group delete` commands unless the user explicitly asks
 - do not ask for another workflow step unless the report explicitly says the plan is blocked, follow-up is required, or a concrete merge/cleanup blocker needs user action
 - keep mailbox JSON internal unless the user explicitly asks
 
