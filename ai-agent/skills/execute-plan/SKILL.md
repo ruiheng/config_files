@@ -23,7 +23,7 @@ Provide the mailbox body from `execute_plan`.
 - the planner should auto-advance whenever the next step is clear
 - if a blocker cannot be resolved locally, stop and ask the user directly
 - do not send routine blocker mail to supervisor
-- when the planner self-implements code, it is acting as coder for that task
+- planner should default code-changing work to `delegate-task`; direct planner implementation is the fallback only when that skill's own decision gate says delegation is not justified
 - code-changing tasks are complete only after commit, any required review, closeout merge, and progress recording
 - after the full plan completes, send one `plan_report_delivered` message to supervisor
 
@@ -49,8 +49,9 @@ Skill-specific context resolution:
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
 5. for each implementation task:
-   - use `delegate-task` for non-trivial code work and pass the chosen `Per-task review` policy into the delegate brief
-   - for a trivial code task, follow `Direct Planner Implementation`
+   - start with `delegate-task` and apply its own decision gate for whether delegation is justified
+   - if `delegate-task` says delegation is justified, send the task and pass the chosen `Per-task review` policy into the delegate brief
+   - if `delegate-task` says the work should be done directly, planner may use `Direct Planner Implementation`
 6. do not proactively wait for coder/reviewer/architect progress; if no immediate local step remains, stop and resume on the next mailbox wake
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
@@ -60,7 +61,7 @@ Skill-specific context resolution:
 
 ## Direct Planner Implementation
 
-Use this only for small, isolated code changes where delegation adds overhead.
+Use this only after checking `delegate-task` and concluding, per that skill's own rules, that delegation is not justified and the work should be done directly.
 Once code is edited, planner is also coder for that task.
 
 Required sequence:
@@ -79,12 +80,13 @@ Required sequence:
 7. if `Per-task review: skip`, run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
 8. record the result under `Tasks Completed`
 
-Direct-task git writes, commits, review requests, and closeout are workflow-authorized.
+Direct-task git writes, commits, review requests, and closeout are workflow-authorized on this direct-work path.
 Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty-worktree conflicts, or branch ownership blockers.
 
 ## Decision Rules
 
-- prefer local planner fixes only for small, isolated tasks, and only after taking an explicit branch step; after workspace prep, the worker workspace is announced as detached HEAD, so current workspace git state is not a valid inferred start point for commits or task branches
+- `delegate-task` owns the delegate-vs-direct decision rule for code-changing tasks; do not invent a second local classifier here
+- use direct planner implementation only after `delegate-task` indicates the work should be done directly; after workspace prep, the worker workspace is announced as detached HEAD, so current workspace git state is not a valid inferred start point for commits or task branches
 - prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
@@ -129,7 +131,7 @@ Round: final
 - treat `integration_branch` as the planner-owned branch prepared for this dispatched plan; do not reinterpret it as the supervisor landing branch and do not silently jump onto some older leftover branch
 - run workspace prepare once at the start of plan execution; treat the resulting detached-HEAD state in `worker_workspace` as authoritative until an explicit task branch is attached
 - do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
-- when self-implementing, attach a real task branch from `integration_branch` before committing
+- when self-implementing on the direct-work path, attach a real task branch from `integration_branch` before committing
 - treat workspace prep as an early closeout viability gate too: if another worktree already holds `integration_branch` and planner closeout later needs to attach it here, stop immediately instead of letting the plan fail only at final closeout
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records

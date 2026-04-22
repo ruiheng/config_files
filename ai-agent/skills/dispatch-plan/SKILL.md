@@ -77,8 +77,10 @@ Round: 1
 ## Planning Contract
 - Planner owns task decomposition and sequencing inside this workspace
 - Keep task execution serial in this workspace
-- Delegate non-trivial implementation tasks; if a task is trivial and planner self-implements, planner is acting as coder for that task
-- Self-implemented code changes still require workspace prep, explicit task branch from `integration_branch`, commit, any required review, closeout merge, and final supervisor report
+- Default to `delegate-task` for code-changing implementation tasks
+- Let `delegate-task` own the delegate-vs-direct decision; do not restate a separate trivial/non-trivial test here
+- Planner may self-implement only when `delegate-task`'s own instructions say delegation is not justified and the work should be done directly
+- Any self-implemented code change still requires workspace prep, explicit task branch from `integration_branch`, commit, any required review, closeout merge, and final supervisor report
 - Routine branch, commit, review-request, closeout, and final-report actions are workflow-authorized; ask the user only for real scope/tradeoff decisions or explicit human gates
 - Ask the user directly if the goal cannot be completed without a real scope or tradeoff decision
 
