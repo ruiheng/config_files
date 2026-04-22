@@ -18,6 +18,7 @@ Provide the mailbox body from `execute_plan`.
 
 - this planner lane is one supervisor-dispatched planner run with its own planner session, workspace contract, integration branch, and cleanup lifecycle
 - this planner owns one workspace
+- this planner lane uses one workspace only
 - this planner owns task decomposition inside that workspace
 - tasks inside that workspace execute serially
 - the planner should auto-advance whenever the next step is clear
@@ -25,7 +26,7 @@ Provide the mailbox body from `execute_plan`.
 - do not send routine blocker mail to supervisor
 - planner should default code-changing work to `delegate-task`; direct planner implementation is the fallback only when that skill's own decision gate says delegation is not justified
 - code-changing tasks are complete only after commit, any required review, closeout merge, and progress recording
-- after the full plan completes, send one `plan_report_delivered` message to supervisor
+- planner is not done when implementation is done; planner is done only after one final `plan_report_delivered` message is successfully sent to supervisor
 
 ## Agent Deck Mode
 
@@ -35,8 +36,9 @@ Skill-specific context resolution:
 - `plan_id`: explicit -> mailbox body -> ask
 - `supervisor_session_id`: explicit -> mailbox body `From` header -> ask
 - `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
-- `worker_workspace`: explicit -> mailbox body -> `planner_workspace` when worker/planner share one worktree -> ask
-- `planner_workspace`: explicit -> mailbox body `Workspace path` -> ask
+- `workspace`: explicit -> mailbox body `Workspace path` -> ask
+- `planner_workspace`: derive internally from `workspace`
+- `worker_workspace`: derive internally from `workspace`
 - `integration_branch`: explicit -> mailbox body -> ask
   - this is the already-created planner-owned branch for this dispatched plan, not the supervisor landing branch
 - `per_task_review`: explicit -> mailbox body -> default `required`
@@ -45,6 +47,7 @@ Skill-specific context resolution:
 ## Execution Flow
 
 1. read the goal, workspace contract, and review policy from the mailbox body
+   - set internal `planner_workspace = workspace` and `worker_workspace = workspace`
 2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
@@ -56,7 +59,7 @@ Skill-specific context resolution:
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
-8. send one final `plan_report_delivered` message to supervisor
+8. send one final `plan_report_delivered` message to supervisor; do not treat the plan as complete before this mailbox send succeeds
 9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
 
 ## Direct Planner Implementation
@@ -86,9 +89,10 @@ Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty
 ## Decision Rules
 
 - `delegate-task` owns the delegate-vs-direct decision rule for code-changing tasks; do not invent a second local classifier here
-- use direct planner implementation only after `delegate-task` indicates the work should be done directly; after workspace prep, the worker workspace is announced as detached HEAD, so current workspace git state is not a valid inferred start point for commits or task branches
+- use direct planner implementation only after `delegate-task` indicates the work should be done directly; for this path, planner still implements in the prepared `worker_workspace`
 - prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
+- do not treat completed implementation, review, or closeout as plan completion; the plan completes only after `plan_report_delivered` is successfully sent to supervisor
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
 - when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
 - use `prepare-workspaces.sh --release-workspaces` for that release; do not delete the record files ad hoc
@@ -127,6 +131,7 @@ Round: final
 
 - keep plan execution serial inside this workspace
 - own the internal breakdown needed to complete the goal; do not ask supervisor to pre-split ordinary implementation tasks
+- keep `worker_workspace` and `planner_workspace` equal for the full dispatched plan; do not introduce a second workspace
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
 - treat `integration_branch` as the planner-owned branch prepared for this dispatched plan; do not reinterpret it as the supervisor landing branch and do not silently jump onto some older leftover branch
 - run workspace prepare once at the start of plan execution; treat the resulting detached-HEAD state in `worker_workspace` as authoritative until an explicit task branch is attached

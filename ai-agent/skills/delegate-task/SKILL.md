@@ -38,6 +38,7 @@ Branch-plan terms:
 - `integration_branch` is the existing non-task branch that should receive the completed task at closeout
 - `task_branch` is the branch where the delegated implementation is done
 - normal closeout merges `task_branch` into `integration_branch`
+- `worker_workspace` and `planner_workspace` are workflow roles, not a requirement that the paths differ
 
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
@@ -217,7 +218,8 @@ Rules:
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until planner resolves the real session ids
 - create coder and reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
-- ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`; do not use the current/planner workspace for target sessions
+- ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`
+- `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
 - when `Per-task review: required`, planner must allocate reviewer before coder starts work; coder should receive an existing `reviewer_session_id`, not create reviewer later
@@ -227,7 +229,8 @@ Rules:
 - treat coder/reviewer progress as asynchronous with unbounded duration; do not assume a closeout or reply will arrive within this turn
 - after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise report current state and stop instead of waiting
 - after sending, do not sleep, poll, or proactively check mail just to await coder/reviewer progress
-- in the shared workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
+- in the delegated task workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
+- if `worker_workspace == planner_workspace`, planner must still avoid touching that delegated task worktree state outside the delegate/closeout workflow
 - if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion
 
 ## 5) User-Facing Output Contract

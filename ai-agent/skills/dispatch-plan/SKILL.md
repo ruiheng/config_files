@@ -15,8 +15,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `plan_id`
 - `supervisor_session_id`
 - `planner_session_ref` or `planner_session_id`
-- `worker_workspace`
-- `planner_workspace`
+- `workspace`
 - `integration_branch` (planner-owned branch for this dispatched plan; must exist before send)
 - `goal`
 - optional `planner_tool`
@@ -30,6 +29,9 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - a planner lane is one supervisor-dispatched planner run with its own planner session, workspace contract, integration branch, and cleanup lifecycle
 - this dispatch targets one planner lane in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
+- dispatched plans use one workspace path only
+- internally set `planner_workspace = workspace` and `worker_workspace = workspace` for the full planner lane
+- do not introduce, infer, or later switch to a second workspace for this dispatched plan
 - prefer a child session for the dispatched planner when agent-deck can represent the workflow directly that way
 - when deeper nesting needs subgroup fallback, keep that inside the session manager; do not expose it in the workflow contract
 - when creating a new planner session and no planner title/ref is provided, use `planner-YYYYMMDD-HHMM-<slug>`; do not use bare `planner`
@@ -42,7 +44,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - default `per_task_review = required`
 - default `final_review = skip`
 - blockers stop with a user question; do not add blocker mail to supervisor
-- planner reports back only after the assigned goal is complete or blocked
+- planner is not done when implementation is done; planner is done only after the assigned goal is complete or blocked and the required final report has been sent to supervisor
 - normal path is direct execution: resolve required inputs, ensure the planner session through MCP, then send the mailbox body
 - do not inspect `--help`, environment variables, or repo docs first unless the MCP ensure or send step actually fails
 
@@ -63,12 +65,11 @@ Round: 1
 [What this planner must finish in this workspace]
 
 ## Workspace Contract
-- Worker workspace: [worker_workspace]
-- Workspace path: [planner_workspace]
+- Workspace path: [workspace]
 - Integration branch: [integration_branch]
   Created by supervisor for this dispatched plan from the current supervisor branch; planner owns this branch for the full plan.
 - Execution model: planner-owned decomposition; serial tasks in one workspace
-- Completion rule: finish the assigned goal, then report back to supervisor
+- Completion rule: planner is complete only after finishing the assigned goal and successfully sending `plan_report_delivered` to supervisor
 
 ## Review Policy
 - Per-task review: [required | skip]
@@ -80,6 +81,7 @@ Round: 1
 - Default to `delegate-task` for code-changing implementation tasks
 - Let `delegate-task` own the delegate-vs-direct decision; do not restate a separate trivial/non-trivial test here
 - Planner may self-implement only when `delegate-task`'s own instructions say delegation is not justified and the work should be done directly
+- Planner-local execution and any later delegated work both stay in the one workspace recorded above
 - Any self-implemented code change still requires workspace prep, explicit task branch from `integration_branch`, commit, any required review, closeout merge, and final supervisor report
 - Routine branch, commit, review-request, closeout, and final-report actions are workflow-authorized; ask the user only for real scope/tradeoff decisions or explicit human gates
 - Ask the user directly if the goal cannot be completed without a real scope or tradeoff decision
@@ -91,15 +93,17 @@ Round: 1
 ## Mailbox Send
 
 1. resolve the current supervisor branch; if the worktree is detached or the landing branch is unclear, stop and ask instead of guessing
-2. resolve `planner_session_ref`; when creating a new planner and no existing ref/id is provided, generate `planner-YYYYMMDD-HHMM-<slug>` from the workspace or goal
-3. resolve `integration_branch`
+2. resolve `workspace`
+3. set internal `planner_workspace = workspace` and `worker_workspace = workspace`
+4. resolve `planner_session_ref`; when creating a new planner and no existing ref/id is provided, generate `planner-YYYYMMDD-HHMM-<slug>` from the workspace or goal
+5. resolve `integration_branch`
    - explicit branch name wins
    - otherwise derive a fresh planner-owned branch name from `plan_id`; prefer `plan/<plan_id>`
-4. create the planner integration branch from the current supervisor branch before dispatch
+6. create the planner integration branch from the current supervisor branch before dispatch
    - do not switch the supervisor worktree onto that branch
    - if the preferred branch name already exists and resume was not explicit, choose a new unique suffix instead of reusing that ref
-5. use `agent_mailbox`
-6. call `agent_deck_ensure_session` for the planner target
+7. use `agent_mailbox`
+8. call `agent_deck_ensure_session` for the planner target
    - identify target with `session_id` or `session_ref = <planner_session_ref>`
    - when creation may be needed, also pass:
      - `ensure_title = <planner_session_ref>`
@@ -107,9 +111,9 @@ Round: 1
      - `workdir = <planner_workspace>`
      - `parent_session_id = <supervisor_session_id>`
      - `no_parent_link = false`
-7. use the returned `session_id` as the authoritative `planner_session_id`
-8. fill `{{TO_SESSION_ID}}`
-9. send with:
+9. use the returned `session_id` as the authoritative `planner_session_id`
+10. fill `{{TO_SESSION_ID}}`
+11. send with:
    - `from_address = agent-deck/<supervisor_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "plan dispatch: <plan_id>"`
