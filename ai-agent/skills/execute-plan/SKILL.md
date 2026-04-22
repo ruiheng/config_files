@@ -19,6 +19,7 @@ Provide the mailbox body from `execute_plan`.
 - this planner lane is one supervisor-dispatched planner run with its own planner session, workspace contract, integration branch, and cleanup lifecycle
 - this planner owns one workspace
 - this planner lane uses one workspace only
+- planner default role is coordinator, not coder
 - this planner owns task decomposition inside that workspace
 - tasks inside that workspace execute serially
 - the planner should auto-advance whenever the next step is clear
@@ -26,6 +27,7 @@ Provide the mailbox body from `execute_plan`.
 - do not send routine blocker mail to supervisor
 - planner should default code-changing work to `delegate-task`; direct planner implementation is the fallback only when that skill's own decision gate says delegation is not justified
 - code-changing tasks are complete only after commit, any required review, closeout merge, and progress recording
+- claiming `execute_plan` does not require planner to implement code personally; dispatch, review, closeout, and final report still count as completing the workflow
 - planner is not done when implementation is done; planner is done only after one final `plan_report_delivered` message is successfully sent to supervisor
 
 ## Agent Deck Mode
@@ -65,6 +67,16 @@ Skill-specific context resolution:
 ## Direct Planner Implementation
 
 Use this only after checking `delegate-task` and concluding, per that skill's own rules, that delegation is not justified and the work should be done directly.
+Direct planner implementation is allowed only when all of the following hold:
+- single local change
+- no new cross-module behavior
+- no schema, registry, or runtime contract change
+- no new first-class model or state field
+- no meaningful design choice remains
+- narrow verification is sufficient
+- delegation would be pure coordination overhead
+
+If any item is uncertain, delegate instead.
 Once code is edited, planner is also coder for that task.
 
 Required sequence:
@@ -89,6 +101,7 @@ Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty
 ## Decision Rules
 
 - `delegate-task` owns the delegate-vs-direct decision rule for code-changing tasks; do not invent a second local classifier here
+- understanding the implementation does not by itself authorize direct implementation
 - use direct planner implementation only after `delegate-task` indicates the work should be done directly; for this path, planner still implements in the prepared `worker_workspace`
 - prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
