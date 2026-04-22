@@ -9,15 +9,15 @@ Create one concise, execution-ready mailbox message for another AI agent.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
-Use this skill only when delegation is justified.
+Use this skill for non-trivial implementation work.
 
 ## 1) Quick Check (Required)
 
 Before drafting the delegate message:
 - Do not delegate pure docs, wording, summarization, inspection, or other non-code work.
 - Do not delegate a small obvious code change that one agent can finish directly.
-- Delegate only when a separate coder gives clearer ownership or lower delivery risk.
-- If delegation is not clearly worthwhile, do the work directly.
+- Delegate non-trivial implementation work by default.
+- If the task is small, local, and obvious enough to finish directly with less coordination, do the work directly.
 - If splitting into multiple delegated tasks looks better than one task, ask the user before sending.
 
 Execution mode gates:
