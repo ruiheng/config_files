@@ -74,6 +74,20 @@ derive_lane_group_from_session_json() {
   return 0
 }
 
+derive_fallback_worker_group_from_session_json() {
+  local session_json="${1:-}"
+  local group_path="" parent_session_id="" title=""
+
+  [[ -n "$session_json" ]] || return 0
+  group_path="$(jq -r '.group // ""' <<<"$session_json" 2>/dev/null || true)"
+  parent_session_id="$(jq -r '.parent_session_id // ""' <<<"$session_json" 2>/dev/null || true)"
+  title="$(jq -r '.title // ""' <<<"$session_json" 2>/dev/null || true)"
+  if [[ -n "$group_path" && -n "$parent_session_id" && -n "$title" ]]; then
+    printf '%s/%s\n' "${group_path%/}" "$title"
+  fi
+  return 0
+}
+
 list_archive_files() {
   local archive_root=""
 
@@ -88,11 +102,13 @@ list_archive_files() {
 
 resolve_cleanup_group_scope() {
   cleanup_group_scope=""
+  cleanup_fallback_worker_scope=""
   cleanup_group_scope_source=""
   scope_warning=""
 
   if [[ -n "$planner_live_json" ]]; then
     cleanup_group_scope="$(derive_lane_group_from_session_json "$planner_live_json")"
+    cleanup_fallback_worker_scope="$(derive_fallback_worker_group_from_session_json "$planner_live_json")"
     if [[ -n "$cleanup_group_scope" ]]; then
       cleanup_group_scope_source="live_planner"
       return 0
@@ -145,6 +161,9 @@ collect_archived_scope_groups() {
   source_groups_json="$(
     {
       printf '%s\n' "$cleanup_group_scope"
+      if [[ -n "$cleanup_fallback_worker_scope" ]]; then
+        printf '%s\n' "$cleanup_fallback_worker_scope"
+      fi
       jq -r '
         .[]
         | select(.found == true)
@@ -180,6 +199,26 @@ collect_archived_scope_groups() {
         done
       done \
     | jq -Rrs -r 'split("\n") | map(select(length > 0)) | unique | sort_by(length) | reverse[]'
+}
+
+queue_group_scope_sessions_for_cleanup() {
+  local group_scope="${1:-}"
+  local session_id
+
+  [[ -n "$group_scope" ]] || return 0
+  while IFS= read -r session_id; do
+    [[ -n "$session_id" ]] || continue
+    queue_session_for_cleanup "$session_id"
+  done < <(
+    jq -r --arg group_scope "$group_scope" '
+      .[]
+      | select(
+          (.group // "") == $group_scope
+          or ((.group // "") | startswith($group_scope + "/"))
+        )
+      | .id
+    ' <<<"$session_inventory_json" 2>/dev/null || true
+  )
 }
 
 delete_empty_scope_groups() {
@@ -351,6 +390,7 @@ remaining_sessions_json_for_scope() {
   remaining_json="$(
     jq -c \
       --arg planner_session_id "$planner_session_id" \
+      --arg fallback_group_scope "$cleanup_fallback_worker_scope" \
       '
         def direct_child_ids($sessions; $root):
           [ $sessions[] | select((.parent_session_id // "") == $root) | .id ];
@@ -370,6 +410,13 @@ remaining_sessions_json_for_scope() {
                   (($planner_session_id != "") and (
                     $session_id == $planner_session_id
                     or ($descendants | index($session_id)) != null
+                    or (
+                      $fallback_group_scope != ""
+                      and (
+                        (.group // "") == $fallback_group_scope
+                        or ((.group // "") | startswith($fallback_group_scope + "/"))
+                      )
+                    )
                   ))
                 )
               | {
@@ -390,6 +437,7 @@ remaining_sessions_json_for_scope() {
 # a different group, so accept it as an explicit extra delete target.
 queue_session_for_cleanup "$planner_session_id"
 queue_descendants_for_cleanup "$planner_session_id"
+queue_group_scope_sessions_for_cleanup "$cleanup_fallback_worker_scope"
 
 while ((${#remaining[@]} > 0)); do
   progressed=0

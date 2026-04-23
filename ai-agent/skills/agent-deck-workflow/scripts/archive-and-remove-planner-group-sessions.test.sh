@@ -467,6 +467,36 @@ EOF
   rm -rf "$tmpdir"
 }
 
+run_case_empty_fallback_worker_subgroup_is_deleted() {
+  local tmpdir work state groups stub output
+  tmpdir="$(mktemp -d)"
+  work="${tmpdir}/work"
+  mkdir -p "$work"
+  state="${tmpdir}/state.json"
+  groups="${tmpdir}/groups.json"
+  stub="${tmpdir}/agent-deck"
+
+  printf '%s\n' '{"sessions":[{"id":"super-1","title":"supervisor","group":"real/scope","parent_session_id":"","path":"/tmp/s","status":"waiting"},{"id":"planner-1","title":"planner-x","group":"real/scope","parent_session_id":"super-1","path":"/tmp/p","status":"waiting"}]}' >"$state"
+  printf '%s\n' '{"groups":[{"name":"real","path":"real","session_count":0,"children":[{"name":"scope","path":"real/scope","session_count":1,"children":[{"name":"planner-x","path":"real/scope/planner-x","session_count":0,"children":[]}]}]}]}' >"$groups"
+  make_stub_agent_deck "$stub" "$state" "$groups"
+
+  output="$(
+    cd "$work"
+    PATH="${tmpdir}:$PATH" "$TARGET_SCRIPT" --planner-session-id planner-1 --apply
+  )"
+
+  assert_contains "$output" "planner_group_cleanup planner_group=real/scope"
+  if jq -e '
+    def group_tree:
+      . as $group
+      | $group, (($group.children // [])[] | group_tree);
+    any(.groups[]? | group_tree; (.path // "") == "real/scope/planner-x")
+  ' "$groups" >/dev/null; then
+    fail "expected empty fallback worker subgroup to be deleted"
+  fi
+  rm -rf "$tmpdir"
+}
+
 run_case_live_planner_subgroup_is_not_used_for_session_cleanup_scope
 run_case_missing_live_scope_is_best_effort_noop
 run_case_removed_group_hint_arg_is_rejected
@@ -480,5 +510,6 @@ run_case_archive_scope_is_ignored_for_unrelated_live_sessions
 run_case_missing_planner_session_id_is_rejected
 run_case_inferred_scope_remaining_group_warns_without_failing
 run_case_inferred_scope_group_list_failure_warns_without_failing
+run_case_empty_fallback_worker_subgroup_is_deleted
 
 echo "PASS: archive-and-remove-planner-group-sessions"
