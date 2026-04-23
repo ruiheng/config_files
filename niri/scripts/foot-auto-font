@@ -1,0 +1,122 @@
+#!/bin/sh
+
+set -eu
+
+FOOT_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/foot/foot.ini"
+DEFAULT_SIZE="14"
+
+# This script only reads font= from the main foot.ini file. If your active
+# font is defined via include=, keep that font definition in foot.ini instead.
+
+has_foot_server_socket() {
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "$XDG_RUNTIME_DIR/foot-$WAYLAND_DISPLAY.sock" ]; then
+        return 0
+    fi
+
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "$XDG_RUNTIME_DIR/foot.sock" ]; then
+        return 0
+    fi
+
+    [ -S /tmp/foot.sock ]
+}
+
+get_target_size() {
+    output_json="$(niri msg -j focused-output 2>/dev/null || true)"
+
+    if [ -z "$output_json" ]; then
+        printf '%s\n' "$DEFAULT_SIZE"
+        return
+    fi
+
+    width="$(printf '%s' "$output_json" | jq -r '.logical.width // .modes[.current_mode].width // empty' 2>/dev/null || true)"
+    height="$(printf '%s' "$output_json" | jq -r '.logical.height // .modes[.current_mode].height // empty' 2>/dev/null || true)"
+
+    case "$width:$height" in
+        ''|:*|*:)
+            printf '%s\n' "$DEFAULT_SIZE"
+            return
+            ;;
+    esac
+
+    if [ "$width" -ge 3840 ] || [ "$height" -ge 2160 ]; then
+        printf '15\n'
+    elif [ "$width" -ge 2560 ] || [ "$height" -ge 1440 ]; then
+        printf '14\n'
+    else
+        printf '%s\n' "$DEFAULT_SIZE"
+    fi
+}
+
+read_base_font() {
+    if [ ! -r "$FOOT_CONFIG" ]; then
+        return
+    fi
+
+    font="$(
+        awk '
+            BEGIN {
+                in_main = 1
+                font = ""
+            }
+
+            /^[[:space:]]*#/ {
+                next
+            }
+
+            /^[[:space:]]*\[/ {
+                in_main = ($0 ~ /^[[:space:]]*\[main\][[:space:]]*$/)
+                next
+            }
+
+            !in_main {
+                next
+            }
+
+            /^[[:space:]]*font[[:space:]]*=/ {
+                value = $0
+                sub(/^[[:space:]]*font[[:space:]]*=[[:space:]]*/, "", value)
+                sub(/[[:space:]]+$/, "", value)
+                font = value
+            }
+
+            END {
+                print font
+            }
+        ' "$FOOT_CONFIG"
+    )"
+
+    printf '%s\n' "$font"
+}
+
+apply_size() {
+    font="$1"
+    size="$2"
+
+    if printf '%s\n' "$font" | grep -Eq '(^|:)size='; then
+        printf '%s\n' "$font" | sed -E "s/(^|:)size=[^:,]*/\\1size=$size/"
+    elif printf '%s\n' "$font" | grep -Eq '(^|:)pixelsize='; then
+        # Keep pixelsize-based configs unchanged until we define pixel-specific
+        # thresholds. Point-size thresholds are not interchangeable here.
+        printf '%s\n' "$font"
+    else
+        printf '%s:size=%s\n' "$font" "$size"
+    fi
+}
+
+target_size="$(get_target_size)"
+base_font="$(read_base_font)"
+
+launch_cmd() {
+    if has_foot_server_socket && footclient -N -E -a foot "$@" >/dev/null 2>&1; then
+        exit 0
+    fi
+
+    exec foot -a foot "$@"
+}
+
+if [ -n "$base_font" ]; then
+    resolved_font="$(apply_size "$base_font" "$target_size")"
+    launch_cmd -o "main.font=$resolved_font" "$@"
+fi
+
+launch_cmd "$@"

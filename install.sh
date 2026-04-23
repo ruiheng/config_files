@@ -1075,6 +1075,23 @@ install_xdg_configs() {
     link_file "grc" "$config_dir/grc"
 }
 
+install_local_bin_helpers() {
+    log_info "Installing local bin helper scripts..."
+
+    local bin_dir="$HOME/.local/bin"
+
+    if [[ ! -d "$bin_dir" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create directory: $bin_dir"
+        else
+            mkdir -p "$bin_dir"
+            log_info "Created directory: $bin_dir"
+        fi
+    fi
+
+    link_file "niri/scripts/foot-auto-font" "$bin_dir/foot-auto-font"
+}
+
 prepare_skills_target_dir() {
     local tool_name="$1"
     local skills_dir="$2"
@@ -1296,14 +1313,6 @@ install_claude_config() {
 
     # Install workflow permission init script to ~/.local/bin
     local bin_dir="$HOME/.local/bin"
-    if [[ ! -d "$bin_dir" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would create directory: $bin_dir"
-        else
-            mkdir -p "$bin_dir"
-            log_info "Created directory: $bin_dir"
-        fi
-    fi
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
     remove_obsolete_agent_mailbox_launchers
@@ -1831,6 +1840,7 @@ main() {
     # Install configs
     install_home_configs
     install_xdg_configs
+    install_local_bin_helpers
     install_claude_config
     install_gemini_config
     install_codex_config
