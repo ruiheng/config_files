@@ -3,7 +3,10 @@
 set -eu
 
 FOOT_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/foot/foot.ini"
-DEFAULT_SIZE="14"
+DEFAULT_POINT_SIZE_BASE="14"
+LOW_DENSITY_MULTIPLIER="1.00"
+MEDIUM_DENSITY_MULTIPLIER="1.08"
+HIGH_DENSITY_MULTIPLIER="1.15"
 
 # This script only reads font= from the main foot.ini file. If your active
 # font is defined via include=, keep that font definition in foot.ini instead.
@@ -20,11 +23,11 @@ has_foot_server_socket() {
     [ -S /tmp/foot.sock ]
 }
 
-get_target_size() {
+get_size_multiplier() {
     output_json="$(niri msg -j focused-output 2>/dev/null || true)"
 
     if [ -z "$output_json" ]; then
-        printf '%s\n' "$DEFAULT_SIZE"
+        printf '%s\n' "$LOW_DENSITY_MULTIPLIER"
         return
     fi
 
@@ -33,17 +36,17 @@ get_target_size() {
 
     case "$width:$height" in
         ''|:*|*:)
-            printf '%s\n' "$DEFAULT_SIZE"
+            printf '%s\n' "$LOW_DENSITY_MULTIPLIER"
             return
             ;;
     esac
 
     if [ "$width" -ge 3840 ] || [ "$height" -ge 2160 ]; then
-        printf '15\n'
+        printf '%s\n' "$HIGH_DENSITY_MULTIPLIER"
     elif [ "$width" -ge 2560 ] || [ "$height" -ge 1440 ]; then
-        printf '14\n'
+        printf '%s\n' "$MEDIUM_DENSITY_MULTIPLIER"
     else
-        printf '%s\n' "$DEFAULT_SIZE"
+        printf '%s\n' "$LOW_DENSITY_MULTIPLIER"
     fi
 }
 
@@ -88,22 +91,48 @@ read_base_font() {
     printf '%s\n' "$font"
 }
 
-apply_size() {
-    font="$1"
-    size="$2"
+scale_numeric_value() {
+    value="$1"
+    multiplier="$2"
 
-    if printf '%s\n' "$font" | grep -Eq '(^|:)size='; then
-        printf '%s\n' "$font" | sed -E "s/(^|:)size=[^:,]*/\\1size=$size/"
-    elif printf '%s\n' "$font" | grep -Eq '(^|:)pixelsize='; then
-        # Keep pixelsize-based configs unchanged until we define pixel-specific
-        # thresholds. Point-size thresholds are not interchangeable here.
-        printf '%s\n' "$font"
-    else
-        printf '%s:size=%s\n' "$font" "$size"
-    fi
+    awk -v value="$value" -v multiplier="$multiplier" '
+        BEGIN {
+            scaled = value * multiplier
+            formatted = sprintf("%.2f", scaled)
+            sub(/0+$/, "", formatted)
+            sub(/\.$/, "", formatted)
+            print formatted
+        }
+    '
 }
 
-target_size="$(get_target_size)"
+apply_multiplier() {
+    font="$1"
+    multiplier="$2"
+
+    if printf '%s\n' "$font" | grep -Eq '(^|:)size=[0-9]+([.][0-9]+)?'; then
+        key="size"
+    elif printf '%s\n' "$font" | grep -Eq '(^|:)pixelsize=[0-9]+([.][0-9]+)?'; then
+        printf '%s\n' "$font"
+        return
+    else
+        scaled_value="$(scale_numeric_value "$DEFAULT_POINT_SIZE_BASE" "$multiplier")"
+        printf '%s:size=%s\n' "$font" "$scaled_value"
+        return
+    fi
+
+    current_value="$(
+        printf '%s\n' "$font" \
+            | grep -Eo "(^|:)$key=[0-9]+([.][0-9]+)?" \
+            | head -n 1 \
+            | sed -E "s/^:?$key=//"
+    )"
+    scaled_value="$(scale_numeric_value "$current_value" "$multiplier")"
+
+    printf '%s\n' "$font" | sed -E "s/(^|:)$key=[0-9]+([.][0-9]+)?/\\1$key=$scaled_value/"
+}
+
+size_multiplier="$(get_size_multiplier)"
 base_font="$(read_base_font)"
 
 launch_cmd() {
@@ -115,7 +144,7 @@ launch_cmd() {
 }
 
 if [ -n "$base_font" ]; then
-    resolved_font="$(apply_size "$base_font" "$target_size")"
+    resolved_font="$(apply_multiplier "$base_font" "$size_multiplier")"
     launch_cmd -o "main.font=$resolved_font" "$@"
 fi
 
