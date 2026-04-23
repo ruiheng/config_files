@@ -59,7 +59,7 @@ Resolve by priority:
   - normalize provider-only names:
     - `claude` -> `claude --model sonnet --permission-mode acceptEdits`
     - `codex` -> `codex --model gpt-5.4 --ask-for-approval on-request`
-    - `gemini` -> `gemini --model gemini-3.1-pro`
+    - `gemini` -> `gemini --model gemini-3.1-pro-preview`
 - `reviewer_tool`: explicit -> context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
   - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit

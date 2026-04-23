@@ -95,7 +95,7 @@ Skill-specific context resolution:
   - if user/context provides a full command with arguments, preserve it unchanged
   - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
   - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
-  - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-2.5-pro`
+  - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-3.1-pro-preview`
 - `reviewer_tool`: explicit -> delegated context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
   - if user/context provides a full reviewer command with arguments, preserve it unchanged
 - `round`: explicit -> infer from context -> default `1`
