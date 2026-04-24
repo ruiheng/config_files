@@ -225,6 +225,21 @@ Keep shared defaults in the repository and put machine-specific values in local 
 
 - Git loads `~/.gitconfig.local` after [`gitconfig.unix`](./gitconfig.unix). A sample is provided at [`gitconfig.local.example`](./gitconfig.local.example).
 - Coc can merge [`nvim/coc-settings.json`](./nvim/coc-settings.json) with an ignored local file at [`nvim/coc-settings.local.json`](./nvim/coc-settings.local.example.json). This is useful for per-machine proxies or other local-only settings.
+- AI workflow tool defaults live in [`ai-agent/config/tool-profiles.toml`](./ai-agent/config/tool-profiles.toml). Override roles or candidate commands locally with `~/.config/ai-agent/config/tool-profiles.local.toml`; this file is ignored by global gitignore.
+
+Example:
+
+```toml
+[roles]
+reviewer = 'reviewer_local'
+
+[profiles.reviewer_local]
+strategy = 'ordered'
+candidates = [
+  'codex --model gpt-5.5 -c model_reasoning_effort=medium --ask-for-approval on-request',
+  'claude --model sonnet --permission-mode acceptEdits',
+]
+```
 
 2. **Interactive Mode**: Use `--interactive` (or `-i`) to be prompted when a target exists:
    - `[s]kip` - Skip this file (default)
