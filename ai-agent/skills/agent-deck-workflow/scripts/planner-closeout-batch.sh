@@ -10,6 +10,7 @@ Required actions (hard-fail):
 2) update planner progress record
 
 Optional actions (soft-fail):
+- mailbox ack
 - release workspace active-task lock
 - prune stale task branches
 - desktop notifications
@@ -59,7 +60,6 @@ Exit codes:
   0: required actions completed (optional actions may fail but are reported)
   2: usage/dependency/runtime precondition error
   3: required merge/progress action failed
-  4: required closeout actions completed but requested mailbox ack failed
 EOF
 }
 
@@ -75,7 +75,6 @@ required_fail() {
 
 ack_fail() {
   echo "MAILBOX_ACK_FAILED: $*" >&2
-  exit 4
 }
 
 warn() {
@@ -646,12 +645,16 @@ if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
       "Planner closeout ack failed: ${task_id}" \
       "Required closeout actions succeeded, but mailbox ack failed for delivery ${ack_delivery_id}."
     echo "$ack_output" >&2
+    mailbox_ack_status="failed"
+    optional_fail_count=$((optional_fail_count + 1))
+    write_state_file
     ack_fail "ack failed delivery='${ack_delivery_id}'"
+  else
+    mailbox_ack_completed=1
+    mailbox_ack_status="ok"
+    write_state_file
+    echo "$ack_output"
   fi
-  mailbox_ack_completed=1
-  mailbox_ack_status="ok"
-  write_state_file
-  echo "$ack_output"
 fi
 
 release_active_task_lock "$worker_artifact_root" workspace_lock_status "workspace"
