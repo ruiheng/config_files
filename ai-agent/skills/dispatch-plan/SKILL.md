@@ -6,7 +6,7 @@ description: Send an `execute_plan` workflow message to a planner that should co
 # Dispatch Plan
 
 Send one supervisor-assigned goal to a planner session.
-This creates or resumes one planner lane.
+This creates one planner lane or resumes one existing lane by real `planner_session_id`.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
@@ -14,7 +14,6 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 - `plan_id`
 - `supervisor_session_id`
-- `planner_session_ref` or `planner_session_id`
 - `workspace`
 - `integration_branch` (planner-owned branch for this dispatched plan; must exist before send)
 - `goal`
@@ -23,6 +22,12 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - optional `final_review`
 - optional `summary`
 - optional `special_requirements`
+
+When resuming an existing planner lane:
+- `planner_session_id`
+
+When allocating a new planner lane:
+- optional `planner_session_ref`
 
 ## Rules
 
@@ -45,8 +50,8 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - default `final_review = skip`
 - blockers stop with a user question; do not add blocker mail to supervisor
 - planner is not done when implementation is done; planner is done only after the assigned goal is complete or blocked and the required final report has been sent to supervisor
-- normal path is direct execution: resolve required inputs, ensure the planner session through MCP, then send the mailbox body
-- do not inspect `--help`, environment variables, or repo docs first unless the MCP ensure or send step actually fails
+- normal path is direct execution: resolve required inputs, create or require the planner session through MCP, then send the mailbox body
+- do not inspect `--help`, environment variables, or repo docs first unless the MCP create/require or send step actually fails
 
 ## Mailbox Body Template
 
@@ -103,22 +108,26 @@ Round: 1
    - do not switch the supervisor worktree onto that branch
    - if the preferred branch name already exists and resume was not explicit, choose a new unique suffix instead of reusing that ref
 7. use `agent_mailbox`
-8. call `agent_deck_ensure_session` for the planner target
-   - identify target with `session_id` or `session_ref = <planner_session_ref>`
-   - when creation may be needed, also pass:
-     - `ensure_title = <planner_session_ref>`
-     - `ensure_cmd = <planner_tool>`
-     - `workdir = <planner_workspace>`
-     - `parent_session_id = <supervisor_session_id>`
-     - `no_parent_link = false`
-9. use the returned `session_id` as the authoritative `planner_session_id`
-10. fill `{{TO_SESSION_ID}}`
-11. send with:
+8. if this dispatch is allocating a new planner lane, call `agent_deck_create_session` for the planner target
+   - `ensure_title = <planner_session_ref>`
+   - `ensure_cmd = <planner_tool>`
+   - `workdir = <planner_workspace>`
+   - `parent_session_id = <supervisor_session_id>`
+   - `no_parent_link = false`
+   - record the returned `planner_session_id` and carry it in all later workflow turns for that lane
+9. otherwise call `agent_deck_require_session`
+   - `session_id = <planner_session_id>`
+   - `workdir = <planner_workspace>`
+10. use the returned `session_id` as the authoritative `planner_session_id`
+11. fill `{{TO_SESSION_ID}}`
+12. send with:
    - `from_address = agent-deck/<supervisor_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "plan dispatch: <plan_id>"`
    - `body = <execute-plan mailbox body>`
 
 Rules:
-- use `agent_deck_ensure_session`; do not create planner sessions through direct `agent-deck` CLI in the normal path
-- treat MCP session ensure as a synchronous step; wait for it to return before composing or sending mailbox content
+- use `agent_deck_create_session` only when allocating a new planner lane; use `agent_deck_require_session` when resuming an existing planner session
+- after a planner lane is created, later workflow turns must reuse the real `planner_session_id`; do not resume a normal workflow turn by `planner_session_ref`
+- do not create planner sessions through direct `agent-deck` CLI in the normal path
+- treat MCP session create/require as a synchronous step; wait for it to return before composing or sending mailbox content

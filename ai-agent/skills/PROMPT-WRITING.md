@@ -68,7 +68,7 @@ That wording is shorter than a full rule, but too vague to execute safely.
 - write what to do first, then mention fallback exploration only on failure
 
 Good:
-- ensure session through MCP
+- require target session through MCP
 - send mailbox
 - stop
 

@@ -14,7 +14,6 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `task_id`
 - `requester_session_id`
 - `requester_role`
-- `refactor_reviewer_session_ref` or `refactor_reviewer_session_id`
 - `scope`
 - `refactor_goal`
 - optional `constraints`
@@ -23,6 +22,12 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - optional `reviewer_tool`
 - optional `planner_session_id`
 - optional `round`
+
+Later rounds / existing reviewer lane:
+- `refactor_reviewer_session_id`
+
+Round `1` or new reviewer allocation:
+- optional `refactor_reviewer_session_ref`
 
 ## Continuity Rule
 
@@ -39,8 +44,9 @@ Skill-specific context resolution:
 - `requester_session_id`: explicit -> current session id -> ask
 - `requester_role`: explicit -> infer from current workflow stage -> default `requester`
 - `planner_session_id`: explicit -> workflow context -> default `N/A`
+- `refactor_reviewer_session_id`: explicit actual id -> workflow context actual id -> ask
 - `refactor_reviewer_session_ref`: explicit -> workflow context -> default `refactor-reviewer-<task_id>`
-- `refactor_reviewer_session_id`: explicit actual id -> resolved/created from `refactor_reviewer_session_ref` before send
+  - use only when allocating a new reviewer session before the first send
 - `scope`: explicit -> workflow context -> ask
 - `refactor_goal`: explicit -> workflow context -> default `identify duplication and simplification opportunities`
 - `reviewer_tool`: explicit -> workflow context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
@@ -113,16 +119,18 @@ Recommended subject:
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. call `agent_deck_ensure_session`
-   - identify target with `session_id` or `session_ref = <refactor_reviewer_session_ref>`
-   - when creation may be needed, also pass:
-     - `ensure_title = <refactor_reviewer_session_ref>`
-     - `ensure_cmd = <reviewer_tool>`
-     - `workdir = <current workspace>`
-     - `parent_session_id = <requester_session_id>`
-     - `no_parent_link = false`
-4. use the returned `session_id` as the authoritative `refactor_reviewer_session_id`
-5. fill the final body and call `mailbox_send` with:
+3. if this is round `1` for a new reviewer session, call `agent_deck_create_session`
+   - `ensure_title = <refactor_reviewer_session_ref>`
+   - `ensure_cmd = <reviewer_tool>`
+   - `workdir = <current workspace>`
+   - `parent_session_id = <requester_session_id>`
+   - `no_parent_link = false`
+   - record the returned `refactor_reviewer_session_id` and carry it in all later workflow turns
+4. otherwise call `agent_deck_require_session`
+   - `session_id = <refactor_reviewer_session_id>`
+   - `workdir = <current workspace>`
+5. use the returned `session_id` as the authoritative `refactor_reviewer_session_id`
+6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<refactor_reviewer_session_id>`
    - `subject = "refactor review request: <task_id> r<round>"`
@@ -136,4 +144,5 @@ Use the `agent_mailbox` MCP tools:
 - focus on one coherent code area or one review goal per request
 - later rounds to the same reviewer should be delta-only
 - if reviewer continuity changes, resend full context
-- create refactor-reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
+- create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
+- after the first create step, later workflow turns must reuse the real `refactor_reviewer_session_id`; do not fall back to `refactor_reviewer_session_ref`

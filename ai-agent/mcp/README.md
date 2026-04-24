@@ -85,27 +85,39 @@ For an agent-deck-managed session `<id>`, bind:
 ## Agent-Deck Tools
 
 - `agent_deck_resolve_session`
-- `agent_deck_ensure_session`
+- `agent_deck_create_session`
+- `agent_deck_require_session`
 
 `agent_deck_resolve_session`
 - resolves an agent-deck session ref or id
 - returns canonical session id, status, and the agent-deck mailbox address
 
-`agent_deck_ensure_session`
-- resolves an existing session or creates it when missing
-- starts an inactive target when needed
+`agent_deck_create_session`
+- creates a new agent-deck session
+- if an exact same-title target already exists in the same workdir, returns that target so interrupted create-before-send retries can continue safely
+- when returning an exact same-title target, still reconciles the requested group placement before handing it back
 - requires explicit `workdir` for every call
-- verifies existing sessions already match the requested `workdir`
-- can place the ensured session into an explicit `group_path`
+- can place the new session into an explicit `group_path`
 - can derive and ensure a child group under `group_parent_session_id` by using `child_group_name`
 - can create sessions with `no_parent_link = true` so workflow grouping does not depend on one-level parent-child session depth
 - when creating under a non-root `parent_session_id`, can derive a nested child group from that parent's existing group automatically
-- a newly created or newly started target should follow the same wake path as any other target and run `check-agent-mail` when notified
+- a newly created target should follow the same wake path as any other target and run `check-agent-mail` when notified
 - if `listener_message` is customized and omits that receiver hint, the MCP server appends a `check-agent-mail` hint automatically
 
-Typical workflow delivery:
-1. `agent_deck_ensure_session`
-2. `mailbox_send`
+`agent_deck_require_session`
+- requires an existing agent-deck session
+- resolves `session_id` or `session_ref`
+- verifies the existing session already matches the requested `workdir`
+- starts an inactive target when needed
+- does not create sessions or accept create-only lifecycle parameters
+
+Typical workflow patterns:
+1. lifecycle allocation: `agent_deck_create_session`
+2. send-time guard for an existing target: `agent_deck_require_session`
+3. delivery: `mailbox_send`
+
+Retry note:
+- if a turn dies after `agent_deck_create_session` succeeds but before `mailbox_send`, retry the same create call with the same title and workdir; the MCP server will return the exact existing target instead of failing
 
 ## Config Snippets
 
@@ -131,7 +143,7 @@ claude mcp add -s user agent_mailbox -- agent-mailbox mcp
 
 ## Notes
 
-- This server does not rewrite mailbox body content, but `agent_deck_ensure_session` may append a receiver-side `check-agent-mail` hint to `listener_message`.
+- This server does not rewrite mailbox body content, but `agent_deck_create_session` and `agent_deck_require_session` may append a receiver-side `check-agent-mail` hint to `listener_message`.
 - Worker-target wake hints may also tell the agent to use `mailbox_read` for the latest `acked` delivery after `ack`.
 - Mailbox transport does not depend on `agent-deck`.
 - `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.

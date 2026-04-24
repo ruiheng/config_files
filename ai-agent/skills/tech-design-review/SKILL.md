@@ -163,7 +163,7 @@ Execution flow:
    - if the previous reviewed commit is unavailable, use git history for the in-scope docs and state the baseline uncertainty under `Residual Risk`
 2. produce one `tech_design_review_report`
 3. use `agent_mailbox`
-4. first call `agent_deck_ensure_session` with:
+4. first call `agent_deck_require_session` with:
    - `session_id = <requester_session_id>`
    - `workdir = <current workspace>`
 5. send the report back with `mailbox_send`

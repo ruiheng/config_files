@@ -259,10 +259,10 @@ Workflow send sequence:
 1. use `agent_mailbox`
 2. require an existing `reviewer_session_id` from delegated task context or explicit input; if missing, ask planner instead of creating reviewer locally
 3. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-4. call `agent_deck_ensure_session`
+4. call `agent_deck_require_session`
    - identify target with `session_id = <reviewer_session_id>`
    - pass `workdir = <current workspace>`
-   - do not pass `ensure_title`, `ensure_cmd`, or `parent_session_id`; this step only resolves/starts the planner-assigned reviewer session
+   - do not pass create-only lifecycle fields; this step only verifies/starts the planner-assigned reviewer session
 5. use the returned `session_id` as the authoritative `reviewer_session_id`
 6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`

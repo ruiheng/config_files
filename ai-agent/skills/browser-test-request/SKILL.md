@@ -16,8 +16,9 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `requester_session_id`
 - `requester_workspace`
 - `requester_role`
-- `browser_tester_session_ref` or `browser_tester_session_id`
-- `browser_tester_workspace`
+- optional `browser_tester_session_id`
+- optional `browser_tester_session_ref`
+- optional `browser_tester_workspace`
 - `goal`
 - `target_url` or route
 - `steps`
@@ -40,9 +41,9 @@ Skill-specific context resolution:
 - `requester_session_id`: explicit -> mailbox/review context -> current session id -> ask
 - `requester_workspace`: explicit -> current workspace -> ask
 - `requester_role`: explicit -> mailbox/review context -> infer from current workflow stage -> default `requester`
-- `browser_tester_session_ref`: explicit -> mailbox/review context -> default `browser-tester`
-- `browser_tester_session_id`: explicit actual id -> resolved/created from `browser_tester_session_ref` before send
-- `browser_tester_workspace`: explicit -> mailbox/review context -> ask
+- `browser_tester_session_id`: explicit actual id -> workflow context actual id -> omit
+- `browser_tester_session_ref`: explicit -> workflow context -> default `browser-tester`
+- `browser_tester_workspace`: explicit -> mailbox/review context -> current workspace
 - `browser_tester_tool`: explicit -> mailbox/review context -> default `codex -m gpt-5.4 -c model_reasoning_effort="medium"`
 - `round`: explicit -> context -> default `1`
 
@@ -108,14 +109,20 @@ Recommended subject:
 
 Use the `agent_mailbox` MCP tools:
 - use `agent_mailbox`
-- call `agent_deck_ensure_session` with:
-  - `session_ref = <browser_tester_session_ref>`
-  - `ensure_title = <browser_tester_session_ref>`
-  - `ensure_cmd = <browser_tester_tool>`
-  - `parent_session_id = <requester_session_id>`
-  - `no_parent_link = false`
-  - `workdir = <browser_tester_workspace>`
-  - normal workflow: do not pass `listener_message`
+- resolve the browser tester target before send:
+  - if `browser_tester_session_id` is already known, call `agent_deck_require_session`
+    - `session_id = <browser_tester_session_id>`
+    - `workdir = <browser_tester_workspace>`
+  - otherwise call `agent_deck_resolve_session`
+    - `session = <browser_tester_session_ref>`
+  - if that ref resolves and its returned `path` matches `<browser_tester_workspace>`, call `agent_deck_require_session`
+    - `session_id = <resolved browser_tester_session_id>`
+    - `workdir = <browser_tester_workspace>`
+  - if that ref does not resolve, or it resolves to a different workspace path, call `agent_deck_create_session`
+    - `ensure_title = <browser_tester_session_ref>`
+    - `ensure_cmd = <browser_tester_tool>`
+    - `workdir = <browser_tester_workspace>`
+    - `no_parent_link = true`
 - use the returned `session_id` as the authoritative `browser_tester_session_id`
 - fill `{{TO_SESSION_ID}}` in the mailbox body before sending
 - call `mailbox_send` with:
@@ -137,8 +144,11 @@ codex -m gpt-5.4 -c model_reasoning_effort="medium"
 - prefer a compact test matrix of related scenarios, states, and regressions over a module-style task breakdown
 - specify assertions, not just exploration goals
 - keep the body self-contained; browser-tester should not need workflow files
-- use a stable long-lived browser-tester session ref such as `browser-tester`
-- carry both requester and browser-tester workspaces in the mailbox body so later ensure-session calls can verify the correct worktree
+- prefer reusing the long-lived `browser-tester` session for this environment
+- if a resolved `browser-tester` ref points at a different workspace, ignore that hit and create a workspace-local browser tester instead
+- if no reusable `browser-tester` session exists in the requested workspace, create it from this request flow and continue
+- carry both requester and browser-tester workspaces in the mailbox body so later `agent_deck_require_session` calls can verify the correct worktree
+- once this request resolves or creates the target, use the returned real `browser_tester_session_id` for the actual mailbox send
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code

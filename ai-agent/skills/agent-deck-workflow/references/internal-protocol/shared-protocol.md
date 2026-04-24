@@ -7,16 +7,16 @@ Those belong in the concrete action skill that sends or handles that workflow me
 ## Core Transport Rule
 
 - `agent-mailbox` carries the real workflow message
-- `agent-deck` is used to resolve, create, or start target sessions and to nudge them to check mail
+- `agent-deck` is used to create new lifecycle-owned sessions, require existing target sessions before send, and nudge them to check mail
 - use the `agent_mailbox` MCP tools as the default transport interface
 - use `check-agent-mail` for receiver-side wake handling
-- Agent Deck sessions are external workflow peers, not host-internal subagents; do not apply host subagent tool restrictions to `agent_deck_ensure_session`, `agent-deck`, or mailbox dispatch.
+- Agent Deck sessions are external workflow peers, not host-internal subagents; do not apply host subagent tool restrictions to `agent_deck_create_session`, `agent_deck_require_session`, `agent-deck`, or mailbox dispatch.
 
 ## Core Terms
 
 - `task_id`: stable task identifier when the action skill uses task-scoped workflow context
 - `*_session_id`: Agent Deck session UUID used for mailbox addressing
-- `*_session_ref`: human-friendly session reference used before a real session id is known
+- `*_session_ref`: human-friendly session reference used only before a real session id is allocated
 - `inbox_address`: `agent-deck/<agent-deck-session-id>`
 
 ## Agent Deck Mode Detection
@@ -36,9 +36,10 @@ Use this priority chain for each field:
 `explicit input -> parsed mailbox body / workflow context -> deterministic default -> ask one short clarification question`
 
 Session identity rules:
-- resolve session refs or titles to UUIDs before mailbox addressing or identity comparison
-- use `*_session_ref` for planned worker titles before a real session exists
-- only write `*_session_id` when the real session id is known
+- use `*_session_ref` only for planned worker titles before a real session exists
+- after `agent_deck_create_session` returns, record and propagate the real `*_session_id`
+- in normal workflow turns after creation, address and compare sessions by `*_session_id` only
+- if a later workflow turn is missing the required `*_session_id`, treat that as workflow context loss/error rather than a normal `session_ref` recovery path
 - when `from_session_id == to_session_id`, treat it as an explicit same-session continuation already established by context, not something inferred from matching provider names
 - creating or starting an Agent Deck target session is workflow session lifecycle, not use of a host subagent API
 
@@ -56,7 +57,8 @@ Preferred transport interface:
 - `mailbox_defer`
 - `mailbox_fail`
 - `agent_deck_resolve_session`
-- `agent_deck_ensure_session`
+- `agent_deck_create_session`
+- `agent_deck_require_session`
 
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
@@ -69,7 +71,10 @@ Transport rules:
 - `mailbox_send` has no sender-side `ack`; sender-side completion is the successful `mailbox_send` result
 - use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
-- for agent-deck-managed targets, use `agent_deck_ensure_session` to resolve, create, or start the target session
+- use `agent_deck_create_session` only when the current role owns lifecycle allocation of a missing target session
+- use `agent_deck_require_session` before sending to an already assigned target session
+- in normal workflow delivery, identify an already assigned target by `session_id`, not `session_ref`
+- concrete action skills may define a narrow exception for a self-owned reusable helper session whose request body is already self-contained enough to bootstrap that helper; in that case the skill may look up a stable `session_ref` and create the helper only when it is absent
 - always pass explicit `workdir`
 - leave `listener_message` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
 
@@ -116,10 +121,14 @@ Envelope rules:
 Use `mailbox_send` for the normal mailbox delivery path.
 
 Expected behavior:
-1. use `agent_deck_ensure_session` when a target session must be resolved, created, or started
+1. if the current role is allocating a new workflow-owned target session, call `agent_deck_create_session`
+   - use create only in the role that owns target lifecycle allocation
    - always pass `workdir`
    - normal workflow: do not pass `listener_message`
-2. queue the mailbox body with `mailbox_send`
+2. otherwise call `agent_deck_require_session` for the existing target session before send
+   - always pass `workdir`
+   - normal workflow: do not pass `listener_message`
+3. queue the mailbox body with `mailbox_send`
 
 ## Receiver Contract
 

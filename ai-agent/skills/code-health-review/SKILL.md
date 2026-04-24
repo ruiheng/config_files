@@ -236,7 +236,7 @@ Execution flow in Agent Deck mode:
 1. review the requested scope
 2. produce one advisory `code_health_review_report`
 3. use `agent_mailbox`
-4. first call `agent_deck_ensure_session` with:
+4. first call `agent_deck_require_session` with:
    - `session_id = <requester_session_id>`
    - `workdir = <current workspace>`
 5. send the report back with `mailbox_send`

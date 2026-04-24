@@ -174,23 +174,19 @@ Workflow send sequence:
 1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
 2. use `agent_mailbox`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-4. call `agent_deck_ensure_session`
-   - identify target with `session_id` or `session_ref = <coder_session_ref>`
-   - when creation may be needed, also pass:
-     - `ensure_title = <coder_session_ref>`
-     - `ensure_cmd = <coder_tool>`
-     - `workdir = <worker_workspace>`
-     - `parent_session_id = <planner_session_id>`
-     - `no_parent_link = false`
+4. call `agent_deck_create_session`
+   - `ensure_title = <coder_session_ref>`
+   - `ensure_cmd = <coder_tool>`
+   - `workdir = <worker_workspace>`
+   - `parent_session_id = <planner_session_id>`
+   - `no_parent_link = false`
 5. use the returned `session_id` as the authoritative `coder_session_id`
-6. if `Per-task review: required`, call `agent_deck_ensure_session` for reviewer before sending coder mail
-   - identify target with `session_id` or `session_ref = <reviewer_session_ref>`
-   - when creation may be needed, also pass:
-     - `ensure_title = <reviewer_session_ref>`
-     - `ensure_cmd = <reviewer_tool>`
-     - `workdir = <worker_workspace>`
-     - `parent_session_id = <planner_session_id>`
-     - `no_parent_link = false`
+6. if `Per-task review: required`, call `agent_deck_create_session` for reviewer before sending coder mail
+   - `ensure_title = <reviewer_session_ref>`
+   - `ensure_cmd = <reviewer_tool>`
+   - `workdir = <worker_workspace>`
+   - `parent_session_id = <planner_session_id>`
+   - `no_parent_link = false`
 7. use the returned `session_id` as the authoritative `reviewer_session_id`
 8. fill the final body
 9. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
@@ -210,14 +206,14 @@ Recommended subject:
 
 Rules:
 - keep the full delegate brief in mailbox body
-- do not replace this path with host subagent tools; use `agent_deck_ensure_session` only for target session resolution/creation, and let `send-delegate-with-active-task-lock.sh` own delegate send and wakeup
+- do not replace this path with host subagent tools; use `agent_deck_create_session` only for lifecycle allocation, and let `send-delegate-with-active-task-lock.sh` own delegate send and wakeup
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
 - if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths in `Context to Acquire`
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
-- keep the workspace planner record aligned with the recorded `integration_branch`; if the ensure script reports a mismatch, stop instead of dispatching
+- keep the workspace planner record aligned with the recorded `integration_branch`; if the session create step reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until planner resolves the real session ids
-- create coder and reviewer sessions through `agent_deck_ensure_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
+- create coder and reviewer sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
 - ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic

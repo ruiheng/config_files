@@ -141,7 +141,7 @@ Execution flow:
 3. collect runtime evidence
 4. produce one `browser_check_report`
 5. use `agent_mailbox`
-6. first call `agent_deck_ensure_session` with:
+6. first call `agent_deck_require_session` with:
    - `session_id = <requester_session_id>`
    - `workdir = <requester_workspace>`
 7. send it back to the requester with `mailbox_send`

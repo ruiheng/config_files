@@ -21,7 +21,6 @@ Common:
 - `task_id`
 - `requester_session_id`
 - `requester_role`
-- `architect_session_ref` or `architect_session_id`
 - `tech_design_branch`
 - `tech_design_base_branch`
 - `design_docs_in_scope`
@@ -30,7 +29,11 @@ Common:
 - optional `architect_tool`
 - optional `round`
 
+Later rounds / existing architect lane:
+- `architect_session_id`
+
 Round `1` or new architect session:
+- optional `architect_session_ref`
 - `problem`
 - `goals`
 - `constraints`
@@ -58,8 +61,9 @@ Skill-specific context resolution:
 - `requester_session_id`: explicit -> current session id -> ask
 - `requester_role`: explicit -> infer from current workflow stage -> default `requester`
 - `planner_session_id`: explicit -> workflow context -> omit when unavailable
+- `architect_session_id`: explicit actual id -> workflow context actual id -> ask
 - `architect_session_ref`: explicit -> workflow context -> default `architect-<task_id>`
-- `architect_session_id`: explicit actual id -> workflow context actual id -> resolved/created from `architect_session_ref` before send
+  - use only when allocating a new architect session before the first send
 - `tech_design_branch`: explicit -> workflow context -> default `tech-design/<task_id>`
 - `tech_design_base_branch`: explicit -> branch creation record -> workflow context -> high-confidence merge target -> ask
   - this is the branch the tech-design branch started from and must merge back into after accepted review
@@ -161,16 +165,18 @@ Recommended subject:
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real architect session id must appear
-3. call `agent_deck_ensure_session`
-   - identify target with `session_id` or `session_ref = <architect_session_ref>`
-   - when creation may be needed, also pass:
-     - `ensure_title = <architect_session_ref>`
-     - `ensure_cmd = <architect_tool>`
-     - `workdir = <current workspace>`
-     - `parent_session_id = <requester_session_id>`
-     - `no_parent_link = false`
-4. use the returned `session_id` as the authoritative `architect_session_id`
-5. fill the final body and call `mailbox_send` with:
+3. if this is round `1` for a new architect session, call `agent_deck_create_session`
+   - `ensure_title = <architect_session_ref>`
+   - `ensure_cmd = <architect_tool>`
+   - `workdir = <current workspace>`
+   - `parent_session_id = <requester_session_id>`
+   - `no_parent_link = false`
+   - record the returned `architect_session_id` and carry it in all later workflow turns
+4. otherwise call `agent_deck_require_session`
+   - `session_id = <architect_session_id>`
+   - `workdir = <current workspace>`
+5. use the returned `session_id` as the authoritative `architect_session_id`
+6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<architect_session_id>`
    - `subject = "tech-design review: <task_id> r<round>"`
@@ -211,10 +217,11 @@ When the requester/planner receives `tech_design_review_report`:
 - architect is review-only in this lane
 - keep later rounds to the same architect session pointer-only
 - if architect continuity changes, resend full context
+- after the first create step, later workflow turns must reuse the real `architect_session_id`; do not fall back to `architect_session_ref`
 - treat architect feedback as advisory input, not as a user decision
 - treat architect progress as asynchronous with unbounded duration; do not assume a report will arrive within this turn
 - after sending, do independent requester work only when it does not depend on architect feedback; otherwise report current state and stop instead of waiting
 - after sending, do not sleep, poll, or proactively check mail just to await the architect report
 - when disagreeing, state only the disagreement and rationale in `Requester Notes`; do not summarize document changes manually
 - either requester or architect may ask the user to decide when the disagreement becomes subjective, strategic, stuck, or non-converging
-- create architect sessions through `agent_deck_ensure_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
+- create new architect sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`

@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildChildGroupPath,
   buildEnsureSessionLaunchArgs,
+  canonicalizeExistingPath,
   forwardSubject,
   inferTargetGroupPathFromParent,
   parseSendTokens,
@@ -11,6 +12,7 @@ const {
   resolveWakeNotifyMessage,
   sanitizeGroupSegment,
   validateSendReceipt,
+  validateExistingSessionWorkdir,
 } = require("./agent-mailbox-mcp");
 
 test("validateSendReceipt accepts the compact send receipt", () => {
@@ -84,6 +86,22 @@ test("inferTargetGroupPathFromParent derives a nested group only for child sessi
 
 test("requireExplicitWorkdir rejects empty workdir", () => {
   assert.throws(() => requireExplicitWorkdir(""), /workdir is required/);
+});
+
+test("validateExistingSessionWorkdir accepts an existing session in the same workdir", () => {
+  const workdir = canonicalizeExistingPath("/tmp");
+  assert.equal(
+    validateExistingSessionWorkdir({ path: "/tmp" }, workdir),
+    workdir
+  );
+});
+
+test("validateExistingSessionWorkdir rejects mismatched workdirs", () => {
+  const workdir = canonicalizeExistingPath("/tmp");
+  assert.throws(
+    () => validateExistingSessionWorkdir({ path: "/home" }, workdir),
+    /session path mismatch/
+  );
 });
 
 test("sanitizeGroupSegment keeps agent-deck-safe planner group names", () => {

@@ -31,7 +31,7 @@ Use `SKILL.md` for:
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
-- Agent 5, **Browser Tester** (`browser-test`): long-lived runtime validation agent, keeps browser state warm, checks behavior with `agent-browser`, and reports evidence back to the requester session
+- Agent 5, **Browser Tester** (`browser-test`): usually a reusable long-lived runtime validation agent, keeps browser state warm when available, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - Refactor Reviewer (`refactor-review`): advisory reviewer that inspects existing code for duplication and simplification opportunities without making changes
 - User: makes acceptance decisions only when the workflow explicitly requires human gating
 
@@ -107,7 +107,7 @@ flowchart TD
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
-- planner-owned coder/reviewer/architect/refactor-reviewer sessions are requested as child sessions through `agent_deck_ensure_session`; any subgroup fallback stays inside the session manager
+- planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session`; any subgroup fallback stays inside the session manager
 - delegated coder flow must reuse the planner-assigned reviewer session; coder should not create reviewer as its own child session
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.
@@ -128,7 +128,7 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; keep `browser-tester` as a reusable long-lived session.
+2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
 3. Queue mail first, then nudge the non-local target to run `check-agent-mail`.
    Newly created or restarted targets use the same notify path; they do not need a special pre-check phase.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.

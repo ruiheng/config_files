@@ -208,8 +208,9 @@ Skill-specific context resolution:
 - `requester_role`: explicit -> mailbox body `From` header label -> default `coder`
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask
 - `review_lane`: explicit -> mailbox body -> default `task`
+- `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit
 - `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester`
-- `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit until browser validation is requested
+- `browser_tester_workspace` (optional): explicit -> mailbox/review context -> current workspace
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 - `start_branch`: explicit -> mailbox body -> ask
 - `integration_branch`: explicit -> mailbox body -> ask
@@ -241,7 +242,7 @@ Execution flow in Agent Deck mode:
    - if `round >= review_round_hard_stop_threshold` and similar issues are still recurring or progress is clearly non-converging, do not send another routine `rework_required`; present the situation to the user and wait for a decision
 3. For `rework_required`, send the full review report back to the requester session from `review_requested`
    - requester may be `coder` or `planner`
-4. For `browser_check_requested`, run `browser-test-request`; the browser report will return to the requester session
+4. For `browser_check_requested`, run `browser-test-request`; it should reuse the long-lived browser tester when available and create it only if missing, then the browser report will return to the requester session
 5. For `stop_recommended`:
    - if `review_lane = integration_final`, return the final review result to requester and let planner decide whether to fix locally, spawn another task, or finish the plan
    - otherwise, if `auto_accept_if_no_must_fix=true`, the final no-must-fix review report should proceed to `review-closeout`
@@ -258,7 +259,7 @@ Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
 - use `agent_mailbox`
-- first call `agent_deck_ensure_session` with:
+- first call `agent_deck_require_session` with:
   - `session_id = <requester_session_id>`
   - `workdir = <current workspace>`
 - send it with `mailbox_send`
@@ -276,7 +277,7 @@ Mailbox body rules (`user_requested_iteration`):
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
 - use `agent_mailbox`
-- first call `agent_deck_ensure_session` with:
+- first call `agent_deck_require_session` with:
   - `session_id = <requester_session_id>`
   - `workdir = <current workspace>`
 - send it with `mailbox_send`

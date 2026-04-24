@@ -66,7 +66,7 @@ If required values are resolved:
    - if `closeout_sender_session_id == planner_session_id`, skip cross-session delivery and continue locally
    - otherwise send `closeout_delivered` to planner through `mailbox_send`
 3. use `agent_mailbox`
-4. first call `agent_deck_ensure_session` with:
+4. first call `agent_deck_require_session` with:
    - `session_id = <planner_session_id>`
    - `workdir = <current workspace>`
 5. use `mailbox_send` with:
