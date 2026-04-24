@@ -17,6 +17,8 @@ Those belong in the concrete action skill that sends or handles that workflow me
 - `task_id`: stable task identifier when the action skill uses task-scoped workflow context
 - `*_session_id`: Agent Deck session UUID used for mailbox addressing
 - `*_session_ref`: human-friendly session reference used only before a real session id is allocated
+- `*_tool_profile`: logical workflow policy selector for a session tool
+- `*_tool_cmd`: concrete resolved command used to create or continue a session
 - `inbox_address`: `agent-deck/<agent-deck-session-id>`
 
 ## Agent Deck Mode Detection
@@ -42,6 +44,12 @@ Session identity rules:
 - if a later workflow turn is missing the required `*_session_id`, treat that as workflow context loss/error rather than a normal `session_ref` recovery path
 - when `from_session_id == to_session_id`, treat it as an explicit same-session continuation already established by context, not something inferred from matching provider names
 - creating or starting an Agent Deck target session is workflow session lifecycle, not use of a host subagent API
+
+Tool resolution rules:
+- keep model/provider/version defaults out of concrete action skills when a shared tool profile can own them instead
+- resolve `*_tool_profile` to `*_tool_cmd` before `agent_deck_create_session`
+- preserve explicit full commands unchanged
+- existing sessions keep their original `*_tool_cmd`; do not silently swap a running lane onto a newly resolved command
 
 ## Mailbox Transport
 

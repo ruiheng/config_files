@@ -18,6 +18,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - `integration_branch` (planner-owned branch for this dispatched plan; must exist before send)
 - `goal`
 - optional `planner_tool`
+- optional `planner_tool_profile`
 - optional `per_task_review`
 - optional `final_review`
 - optional `summary`
@@ -45,7 +46,8 @@ When allocating a new planner lane:
 - do not silently reuse an existing planner integration branch from an earlier run; reuse is allowed only when the user explicitly says this dispatch is resuming that same unfinished plan
 - if the requested or derived `integration_branch` already exists and resume was not explicit, choose a new branch name or ask; do not dispatch onto an old branch tip
 - create the planner integration branch without switching the supervisor worktree; use the current supervisor branch as the start-point
-- if `planner_tool` is omitted, reuse the current session tool/command from agent-deck session metadata; do not infer it from environment variables
+- if `planner_tool` is omitted, honor an explicit `planner_tool_profile` first; otherwise prefer the current session tool/command from agent-deck session metadata for continuity; otherwise resolve the planner role default via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- when `planner_session_id` is already known, treat the planner session as existing and carry forward its recorded `planner_tool_profile` / `planner_tool_cmd`; do not resolve a fresh planner command
 - default `per_task_review = required`
 - default `final_review = skip`
 - blockers stop with a user question; do not add blocker mail to supervisor
@@ -80,6 +82,10 @@ Round: 1
 - Per-task review: [required | skip]
 - Final integration review: [required | skip]
 
+## Tool Policy
+- Planner tool profile: [planner_tool_profile or `inherited`]
+- Planner tool cmd: [planner_tool_cmd]
+
 ## Planning Contract
 - Planner owns task decomposition and sequencing inside this workspace
 - Keep task execution serial in this workspace
@@ -101,26 +107,34 @@ Round: 1
 2. resolve `workspace`
 3. set internal `planner_workspace = workspace` and `worker_workspace = workspace`
 4. resolve `planner_session_ref`; when creating a new planner and no existing ref/id is provided, generate `planner-YYYYMMDD-HHMM-<slug>` from the workspace or goal
-5. resolve `integration_branch`
+5. resolve planner tool policy only when allocating a new planner lane
+   - if `planner_session_id` is already known, skip this resolution step and carry forward the existing planner tool metadata
+   - if explicit `planner_tool` is provided, preserve it unchanged as `planner_tool_cmd`
+   - otherwise, if explicit `planner_tool_profile` is provided, run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role planner --profile <planner_tool_profile> --format json`
+   - otherwise, if current session metadata provides the supervisor's current full tool command, reuse it as `planner_tool_cmd` and record `planner_tool_profile = inherited`
+   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role planner --format json`
+   - record both `planner_tool_profile` and `planner_tool_cmd`
+   - if session creation later fails because this resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed planner_tool_cmd>` and retry once with the next candidate
+6. resolve `integration_branch`
    - explicit branch name wins
    - otherwise derive a fresh planner-owned branch name from `plan_id`; prefer `plan/<plan_id>`
-6. create the planner integration branch from the current supervisor branch before dispatch
+7. create the planner integration branch from the current supervisor branch before dispatch
    - do not switch the supervisor worktree onto that branch
    - if the preferred branch name already exists and resume was not explicit, choose a new unique suffix instead of reusing that ref
-7. use `agent_mailbox`
-8. if this dispatch is allocating a new planner lane, call `agent_deck_create_session` for the planner target
+8. use `agent_mailbox`
+9. if this dispatch is allocating a new planner lane, call `agent_deck_create_session` for the planner target
    - `ensure_title = <planner_session_ref>`
-   - `ensure_cmd = <planner_tool>`
+   - `ensure_cmd = <planner_tool_cmd>`
    - `workdir = <planner_workspace>`
    - `parent_session_id = <supervisor_session_id>`
    - `no_parent_link = false`
    - record the returned `planner_session_id` and carry it in all later workflow turns for that lane
-9. otherwise call `agent_deck_require_session`
+10. otherwise call `agent_deck_require_session`
    - `session_id = <planner_session_id>`
    - `workdir = <planner_workspace>`
-10. use the returned `session_id` as the authoritative `planner_session_id`
-11. fill `{{TO_SESSION_ID}}`
-12. send with:
+11. use the returned `session_id` as the authoritative `planner_session_id`
+12. fill `{{TO_SESSION_ID}}`
+13. send with:
    - `from_address = agent-deck/<supervisor_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "plan dispatch: <plan_id>"`
@@ -131,3 +145,4 @@ Rules:
 - after a planner lane is created, later workflow turns must reuse the real `planner_session_id`; do not resume a normal workflow turn by `planner_session_ref`
 - do not create planner sessions through direct `agent-deck` CLI in the normal path
 - treat MCP session create/require as a synchronous step; wait for it to return before composing or sending mailbox content
+- record both `planner_tool_profile` and `planner_tool_cmd` in workflow context; use the command for session creation and the profile as policy metadata

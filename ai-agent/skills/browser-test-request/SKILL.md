@@ -29,6 +29,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 - optional `login_or_auth`
 - optional `test_data_or_setup`
 - optional `browser_tester_tool`
+- optional `browser_tester_tool_profile`
 - optional `round`
 
 ## Agent Deck Mode
@@ -44,7 +45,8 @@ Skill-specific context resolution:
 - `browser_tester_session_id`: explicit actual id -> workflow context actual id -> omit
 - `browser_tester_session_ref`: explicit -> workflow context -> default `browser-tester`
 - `browser_tester_workspace`: explicit -> mailbox/review context -> current workspace
-- `browser_tester_tool`: explicit -> mailbox/review context -> default `codex -m gpt-5.4 -c model_reasoning_effort="medium"`
+- `browser_tester_tool_profile`: explicit -> mailbox/review context -> omit when `browser_tester_tool` is already a full command -> default resolver role default `browser_tester` only when creating a new browser-tester session
+- `browser_tester_tool_cmd`: explicit full command -> mailbox/review context resolved command -> existing session metadata on require paths -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js` only on create path
 - `round`: explicit -> context -> default `1`
 
 Identity rules:
@@ -100,6 +102,10 @@ Round: <round>
 
 ## Known Constraints
 [Any known setup limits or missing prerequisites]
+
+## Tool Context
+- Browser tester tool profile: [browser_tester_tool_profile or `explicit`]
+- Browser tester tool cmd: [browser_tester_tool_cmd]
 ```
 
 ## Mailbox Send
@@ -113,14 +119,20 @@ Use the `agent_mailbox` MCP tools:
   - if `browser_tester_session_id` is already known, call `agent_deck_require_session`
     - `session_id = <browser_tester_session_id>`
     - `workdir = <browser_tester_workspace>`
+    - keep the existing browser tester tool metadata; do not resolve a fresh `browser_tester_tool_cmd`
   - otherwise call `agent_deck_resolve_session`
     - `session = <browser_tester_session_ref>`
   - if that ref resolves and its returned `path` matches `<browser_tester_workspace>`, call `agent_deck_require_session`
     - `session_id = <resolved browser_tester_session_id>`
     - `workdir = <browser_tester_workspace>`
+    - keep the existing browser tester tool metadata; do not resolve a fresh `browser_tester_tool_cmd`
   - if that ref does not resolve, or it resolves to a different workspace path, call `agent_deck_create_session`
+    - first resolve `browser_tester_tool_profile` / `browser_tester_tool_cmd`
+      - preserve explicit full `browser_tester_tool` unchanged when provided
+      - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role browser_tester --profile <browser_tester_tool_profile when present> --format json`
+      - if browser-tester session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed browser_tester_tool_cmd>` and retry once with the next candidate
     - `ensure_title = <browser_tester_session_ref>`
-    - `ensure_cmd = <browser_tester_tool>`
+    - `ensure_cmd = <browser_tester_tool_cmd>`
     - `workdir = <browser_tester_workspace>`
     - `no_parent_link = true`
 - use the returned `session_id` as the authoritative `browser_tester_session_id`
@@ -130,12 +142,6 @@ Use the `agent_mailbox` MCP tools:
   - `to_address = agent-deck/<browser_tester_session_id>`
   - `subject = "browser check: <task_id> r<round>"`
   - `body = <browser-check mailbox body>`
-
-Default browser tester agent command:
-
-```bash
-codex -m gpt-5.4 -c model_reasoning_effort="medium"
-```
 
 ## Rules
 
@@ -148,6 +154,7 @@ codex -m gpt-5.4 -c model_reasoning_effort="medium"
 - if a resolved `browser-tester` ref points at a different workspace, ignore that hit and create a workspace-local browser tester instead
 - if no reusable `browser-tester` session exists in the requested workspace, create it from this request flow and continue
 - carry both requester and browser-tester workspaces in the mailbox body so later `agent_deck_require_session` calls can verify the correct worktree
+- keep `browser_tester_tool_profile` as policy metadata and `browser_tester_tool_cmd` as the concrete session-create input for newly created sessions; on require paths, preserve existing session tool metadata
 - once this request resolves or creates the target, use the returned real `browser_tester_session_id` for the actual mailbox send
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name

@@ -38,6 +38,10 @@ Branch plan continuity rule:
   - `requester_session_id`
   - `reviewer_session_id`
   - `review_lane`
+  - `coder_tool`
+  - `coder_tool_profile`
+  - `reviewer_tool`
+  - `reviewer_tool_profile`
   - `start_branch`
   - `integration_branch`
   - `task_branch`
@@ -90,13 +94,10 @@ Skill-specific context resolution:
 - `review_lane`: explicit -> delegated context -> default `task`
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
-- `coder_tool`: explicit -> delegated context -> default current AI tool
-  - if user/context provides a full command with arguments, preserve it unchanged
-  - if it resolves to provider-only `claude`, normalize to `claude --model sonnet --permission-mode acceptEdits`
-  - if it resolves to provider-only `codex`, normalize to `codex --model gpt-5.4 --ask-for-approval on-request`
-  - if it resolves to provider-only `gemini`, normalize to `gemini --model gemini-3.1-pro-preview`
-- `reviewer_tool`: explicit -> delegated context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
-  - if user/context provides a full reviewer command with arguments, preserve it unchanged
+- `coder_tool_profile`: explicit -> delegated context -> omit when `coder_tool` is already a full command -> default current-tool continuity or resolver role default `coder`
+- `coder_tool_cmd`: explicit full command -> delegated context resolved command -> current AI tool when continuity is intended -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `reviewer_tool_profile`: explicit -> delegated context -> omit when `reviewer_tool` is already a full command -> default resolver role default `reviewer`
+- `reviewer_tool_cmd`: explicit full command -> delegated context resolved command -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
 - `round`: explicit -> infer from context -> default `1`
 - `start_branch`: explicit -> delegated context -> ask
 - `integration_branch`: explicit -> delegated context -> ask
@@ -121,7 +122,7 @@ Review-request continuity rule:
 Identity rules:
 - `review_requested` sender must be the active requester session id for this review lane
 - use the bound mailbox sender context for sender validation
-- If the allocated reviewer session tool differs from requested `reviewer_tool`, ask user to choose:
+- If the allocated reviewer session tool differs from requested `reviewer_tool_cmd` or the requested `reviewer_tool_profile` policy, ask user to choose:
   1. keep existing reviewer session/tool
   2. ask planner to replace reviewer assignment with a different reviewer session/tool
 
@@ -164,6 +165,12 @@ Round: <round>
 
 ## Review Context
 - Lane: [task | integration_final]
+
+## Tool Context
+- Coder tool profile: [coder_tool_profile or `explicit`]
+- Coder tool cmd: [coder_tool_cmd]
+- Reviewer tool profile: [reviewer_tool_profile or `existing-session`]
+- Reviewer tool cmd: [reviewer_tool_cmd or `existing-session`]
 
 ## Review Focus
 - [Primary risk/review angle 1]
@@ -275,6 +282,7 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
+- keep `coder_tool_profile` / `reviewer_tool_profile` as policy metadata; do not hardcode model/version defaults in this skill
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - treat `reviewer-<task_id>` as the planner-side allocation label; sender should prefer the delegated `reviewer_session_id` over creating a new reviewer session
 - do not create reviewer sessions from coder/requester flow; planner owns reviewer allocation

@@ -27,6 +27,7 @@ Common:
 - optional `feedback_requested`
 - optional `planner_session_id`
 - optional `architect_tool`
+- optional `architect_tool_profile`
 - optional `round`
 
 Later rounds / existing architect lane:
@@ -68,7 +69,8 @@ Skill-specific context resolution:
 - `tech_design_base_branch`: explicit -> branch creation record -> workflow context -> high-confidence merge target -> ask
   - this is the branch the tech-design branch started from and must merge back into after accepted review
   - never assume `main`/`master`; branch names are evidence, not truth
-- `architect_tool`: explicit -> workflow context -> default `codex --model gpt-5.4 --ask-for-approval on-request`
+- `architect_tool_profile`: explicit -> workflow context -> omit when `architect_tool` is already a full command -> default resolver role default `architect`
+- `architect_tool_cmd`: explicit full command -> workflow context resolved command -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
 - `round`: explicit -> workflow context -> default `1`
 
 Continuity rule:
@@ -127,6 +129,10 @@ Round: <round>
 
 ## Known Risks or Gaps
 [Current known risks, tradeoffs, or `None identified`]
+
+## Tool Context
+- Architect tool profile: [architect_tool_profile or `explicit`]
+- Architect tool cmd: [architect_tool_cmd]
 ```
 
 Round `>1` to the same architect session: send only a minimal pointer.
@@ -155,6 +161,10 @@ Round: <round>
 
 ## Requester Notes
 - [Optional non-git context, feedback disagreement, or `None`]
+
+## Tool Context
+- Architect tool profile: [architect_tool_profile or `existing-session`]
+- Architect tool cmd: [architect_tool_cmd or `existing-session`]
 ```
 
 ## Mailbox Send
@@ -165,18 +175,22 @@ Recommended subject:
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real architect session id must appear
-3. if this is round `1` for a new architect session, call `agent_deck_create_session`
+3. if this is round `1` for a new architect session, resolve `architect_tool_profile` / `architect_tool_cmd`
+   - preserve explicit full `architect_tool` unchanged when provided
+   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role architect --profile <architect_tool_profile when present> --format json`
+   - if architect session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed architect_tool_cmd>` and retry once with the next candidate
+4. if this is round `1` for a new architect session, call `agent_deck_create_session`
    - `ensure_title = <architect_session_ref>`
-   - `ensure_cmd = <architect_tool>`
+   - `ensure_cmd = <architect_tool_cmd>`
    - `workdir = <current workspace>`
    - `parent_session_id = <requester_session_id>`
    - `no_parent_link = false`
    - record the returned `architect_session_id` and carry it in all later workflow turns
-4. otherwise call `agent_deck_require_session`
+5. otherwise call `agent_deck_require_session`
    - `session_id = <architect_session_id>`
    - `workdir = <current workspace>`
-5. use the returned `session_id` as the authoritative `architect_session_id`
-6. fill the final body and call `mailbox_send` with:
+6. use the returned `session_id` as the authoritative `architect_session_id`
+7. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<architect_session_id>`
    - `subject = "tech-design review: <task_id> r<round>"`
@@ -218,6 +232,7 @@ When the requester/planner receives `tech_design_review_report`:
 - keep later rounds to the same architect session pointer-only
 - if architect continuity changes, resend full context
 - after the first create step, later workflow turns must reuse the real `architect_session_id`; do not fall back to `architect_session_ref`
+- keep `architect_tool_profile` as policy metadata and `architect_tool_cmd` as the concrete session-create input
 - treat architect feedback as advisory input, not as a user decision
 - treat architect progress as asynchronous with unbounded duration; do not assume a report will arrive within this turn
 - after sending, do independent requester work only when it does not depend on architect feedback; otherwise report current state and stop instead of waiting
