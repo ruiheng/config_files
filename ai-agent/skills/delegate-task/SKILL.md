@@ -20,9 +20,7 @@ Before drafting the delegate message:
 - If the task is small, local, and obvious enough to finish directly with less coordination, do the work directly.
 - If splitting into multiple delegated tasks looks better than one task, ask the user before sending.
 
-Execution mode gates:
-- default to serial mode
-- in serial mode, do not send the next delegated task until closeout completes
+Execution mode: strict serial; do not send the next delegated task before closeout completes.
 
 ## 2) Output Mode
 
@@ -148,9 +146,7 @@ Round: 1
 
 ## Agent Deck Context
 - Planner session: [planner_session_id]
-- Coder session ref: [coder_session_ref]
 - Coder session id: {{TO_SESSION_ID}}
-- Reviewer session ref: [reviewer_session_ref]
 - Reviewer session id: [reviewer_session_id or `N/A` when `Per-task review: skip`]
 - Coder tool: [coder_tool]
 - Reviewer tool: [reviewer_tool]

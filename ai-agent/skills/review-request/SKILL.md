@@ -86,7 +86,6 @@ Skill-specific context resolution:
 - `planner_session_id`: explicit/context -> ask
 - `requester_role`: explicit -> delegated context -> current workflow role -> default `coder`
 - `requester_session_id`: explicit -> current session id -> delegated context -> ask
-- `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
 - `reviewer_session_id`: explicit actual id -> delegated context actual id -> required existing reviewer allocated by planner before send
 - `review_lane`: explicit -> delegated context -> default `task`
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
