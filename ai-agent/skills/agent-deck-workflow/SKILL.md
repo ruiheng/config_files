@@ -18,6 +18,8 @@ Interpret references like "follow shared protocol in `agent-deck-workflow/SKILL.
 - use this file as the entry point
 - then load `references/internal-protocol/shared-protocol.md`
 
+Use `agent-deck/<agent-deck-session-id>` as the default agent-mailbox sender. 
+
 ## Agent Deck Mode Detection
 
 Read the corresponding section in `references/internal-protocol/shared-protocol.md`.
