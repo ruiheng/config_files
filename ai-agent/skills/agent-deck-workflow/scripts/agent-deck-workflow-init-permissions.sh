@@ -14,20 +14,8 @@ set -euo pipefail
 
 INSTALLED_SKILLS_DIR="$HOME/.config/ai-agent/skills"
 INSTALLED_SKILLS_DIR_TILDE="~/.config/ai-agent/skills"
-INSTALLED_WORKFLOW_SCRIPTS="$INSTALLED_SKILLS_DIR/agent-deck-workflow/scripts"
-INSTALLED_WORKFLOW_SCRIPTS_TILDE="$INSTALLED_SKILLS_DIR_TILDE/agent-deck-workflow/scripts"
 INSTALLED_LOCAL_BIN="$HOME/.local/bin"
 INSTALLED_LOCAL_BIN_TILDE="~/.local/bin"
-WORKFLOW_HELPER_SCRIPTS=(
-    "acquire-active-task-lock.sh"
-    "send-delegate-with-active-task-lock.sh"
-    "planner-closeout-batch.sh"
-    "prepare-workspaces.sh"
-    "prepare-planner-workspace.sh"
-    "ensure-supervised-planner-session.sh"
-    "ensure-planner-scoped-session.sh"
-    "archive-and-remove-planner-group-sessions.sh"
-)
 
 # Colors
 RED='\033[0;31m'
@@ -175,7 +163,6 @@ configure_claude() {
     local installed_skills_read_permission_tilde="Read(${INSTALLED_SKILLS_DIR_TILDE}/**)"
     local installed_skills_read_permission_abs="Read(${INSTALLED_SKILLS_DIR}/**)"
     local git_readonly_permissions_json
-    local workflow_script_permissions_json=""
     local script_name
 
     git_readonly_permissions_json=$(cat <<'EOF'
@@ -191,11 +178,6 @@ configure_claude() {
   "Bash(git rev-parse *)",
 EOF
 )
-
-    for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
-        workflow_script_permissions_json+="  \"Bash(${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/${script_name} *)\","$'\n'
-        workflow_script_permissions_json+="  \"Bash(${INSTALLED_WORKFLOW_SCRIPTS}/${script_name} *)\","$'\n'
-    done
 
     log_info "Configuring Claude Code permissions..."
 
@@ -219,9 +201,9 @@ EOF
   "Bash(jq)",
   "Bash(jq *)",
 $git_readonly_permissions_json
-  "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
-  "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
-$workflow_script_permissions_json
+  "Bash(adwf *)",
+  "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf.cmd *)",
+  "Bash(${INSTALLED_LOCAL_BIN}/adwf.cmd *)",
   "$installed_skills_read_permission_tilde",
   "$installed_skills_read_permission_abs",
   "Write(/.agent-artifacts/**)"
@@ -248,9 +230,9 @@ EOF
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
-      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
-      "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
-$workflow_script_permissions_json
+      "Bash(adwf *)",
+      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf.cmd *)",
+      "Bash(${INSTALLED_LOCAL_BIN}/adwf.cmd *)",
       "$installed_skills_read_permission_tilde",
       "$installed_skills_read_permission_abs",
       "Write(/.agent-artifacts/**)"
@@ -273,9 +255,9 @@ EOF
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
-      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf-send-and-wake *)",
-      "Bash(${INSTALLED_LOCAL_BIN}/adwf-send-and-wake *)",
-$workflow_script_permissions_json
+      "Bash(adwf *)",
+      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf.cmd *)",
+      "Bash(${INSTALLED_LOCAL_BIN}/adwf.cmd *)",
       "$installed_skills_read_permission_tilde",
       "$installed_skills_read_permission_abs",
       "Write(/.agent-artifacts/**)"
@@ -295,28 +277,10 @@ configure_codex() {
     local codex_dir="$PROJECT_DIR/.codex"
     local rules_dir="$codex_dir/rules"
     local rules_file="$rules_dir/agent-deck-workflow.rules"
-    local workflow_script_prefix_rules=""
-    local script_name
 
     log_info "Configuring Codex escalation rules..."
 
     mkdir -p "$rules_dir"
-
-    for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
-        workflow_script_prefix_rules+="prefix_rule(
-    pattern = [\"$INSTALLED_WORKFLOW_SCRIPTS_TILDE/${script_name}\"],
-    decision = \"allow\",
-    justification = \"Workflow helper script (installed path, tilde)\",
-)
-
-prefix_rule(
-    pattern = [\"$INSTALLED_WORKFLOW_SCRIPTS/${script_name}\"],
-    decision = \"allow\",
-    justification = \"Workflow helper script (installed path, absolute)\",
-)
-
-"
-    done
 
     cat > "$rules_file" << EOF
 # Agent Deck Workflow - Auto-approve rules
@@ -357,18 +321,22 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = ["$INSTALLED_LOCAL_BIN_TILDE/adwf-send-and-wake"],
+    pattern = ["adwf"],
     decision = "allow",
-    justification = "Workflow send+wakeup helper (installed local bin, tilde)",
+    justification = "Agent Deck workflow dispatcher",
 )
 
 prefix_rule(
-    pattern = ["$INSTALLED_LOCAL_BIN/adwf-send-and-wake"],
+    pattern = ["$INSTALLED_LOCAL_BIN_TILDE/adwf.cmd"],
     decision = "allow",
-    justification = "Workflow send+wakeup helper (installed local bin, absolute)",
+    justification = "Agent Deck workflow dispatcher (installed local bin, tilde)",
 )
 
-$workflow_script_prefix_rules
+prefix_rule(
+    pattern = ["$INSTALLED_LOCAL_BIN/adwf.cmd"],
+    decision = "allow",
+    justification = "Agent Deck workflow dispatcher (installed local bin, absolute)",
+)
 EOF
 
     cat >> "$rules_file" << 'EOF'
@@ -391,35 +359,10 @@ configure_gemini() {
     local gemini_dir="$PROJECT_DIR/.gemini"
     local policies_dir="$gemini_dir/policies"
     local policy_file="$policies_dir/agent-deck-workflow.toml"
-    local workflow_script_rules=""
-    local script_name
 
     log_info "Configuring Gemini CLI shell policies..."
 
     mkdir -p "$policies_dir"
-
-    for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
-        workflow_script_rules+="[[rule]]
-name = \"allow_${script_name//[^A-Za-z0-9]/_}_tilde\"
-enabled = true
-decision = \"allow\"
-toolName = \"run_shell_command\"
-commandPrefix = [\"${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/${script_name}\"]
-priority = 950
-modes = [\"default\", \"autoEdit\", \"yolo\"]
-
-"
-        workflow_script_rules+="[[rule]]
-name = \"allow_${script_name//[^A-Za-z0-9]/_}_absolute\"
-enabled = true
-decision = \"allow\"
-toolName = \"run_shell_command\"
-commandPrefix = [\"${HOME}/.config/ai-agent/skills/agent-deck-workflow/scripts/${script_name}\"]
-priority = 950
-modes = [\"default\", \"autoEdit\", \"yolo\"]
-
-"
-    done
 
     cat > "$policy_file" << 'EOF'
 # Agent Deck Workflow - Gemini policy rules
@@ -456,13 +399,18 @@ name = "allow_agent_deck_workflow_dispatch"
 enabled = true
 decision = "allow"
 toolName = "run_shell_command"
-commandPrefix = ["~/.local/bin/adwf-send-and-wake"]
+commandPrefix = ["adwf"]
 priority = 950
 modes = ["default", "autoEdit", "yolo"]
-EOF
 
-    printf "%b" "$workflow_script_rules" >> "$policy_file"
-    cat >> "$policy_file" << 'EOF'
+[[rule]]
+name = "allow_agent_deck_workflow_dispatch_cmd"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["~/.local/bin/adwf.cmd"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
 
 # Note: Gemini file write permissions are controlled separately
 # and may still require approval for .agent-artifacts writes

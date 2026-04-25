@@ -51,7 +51,7 @@ Skill-specific context resolution:
 
 1. read the goal, workspace contract, and review policy from the mailbox body
    - set internal `planner_workspace = workspace` and `worker_workspace = workspace`
-2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
+2. run `adwf prepare-workspaces --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
 5. for each implementation task:
@@ -64,7 +64,7 @@ Skill-specific context resolution:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
 8. send one final `plan_report_delivered` message to supervisor; do not treat the plan as complete before this mailbox send succeeds
-9. after the final report is sent, report completion to supervisor
+9. after the final report is sent, if no more tasks remain in this workspace, run `adwf prepare-workspaces --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
 
 ## Direct Planner Implementation
 
@@ -93,10 +93,8 @@ Required sequence:
 6. if `Per-task review: required`:
    - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
    - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>`
-   - after `review-request` sends the request, optionally wait, do independent local work, or stop
-   - if waiting times out, wait again or stop; do not inspect or repair the reviewer session
-   - when a later inbound reviewer acceptance produces `closeout_delivered`, handle it with `planner-closeout` before marking the task done
-7. if `Per-task review: skip`, run workspace prepare for this task, then run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
+   - after reviewer acceptance, handle the resulting `closeout_delivered` with `planner-closeout` before marking the task done
+7. if `Per-task review: skip`, run `adwf planner-closeout-batch` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
 8. record the result under `Tasks Completed`
 
 Direct-task git writes, commits, review requests, and closeout are workflow-authorized on this direct-work path.
@@ -112,6 +110,8 @@ Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty
 - do not treat completed implementation, review, or closeout as plan completion; the plan completes only after `plan_report_delivered` is successfully sent to supervisor
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
 - do not rely on `.agent-artifacts/planner-workspace.json` as a cross-task lock; each task that can reach closeout must prepare its own reservation first
+- when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
+- use `adwf prepare-workspaces --release-workspaces` for that release; do not delete the record files ad hoc
 - do not ask for routine confirmation before planner-owned branch, commit, review-request, closeout, or final-report actions
 
 ## Final Report Template
@@ -157,5 +157,6 @@ Round: final
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - do not run ad hoc workspace record cleanup; closeout helpers own release and `prepare-workspaces.sh --release-workspaces` is only for explicit script-reported cleanup recovery
+- after the planner has no remaining work in this workspace, release the workspace records with `adwf prepare-workspaces --release-workspaces`
 - do not naturally end after the last task if the final report to supervisor is still pending
 - if this turn owns a claimed `execute_plan` delivery, complete the final report and the delivery lifecycle step before ending

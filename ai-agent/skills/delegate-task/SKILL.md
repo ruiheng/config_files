@@ -169,7 +169,7 @@ Tool-routing rule:
 Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
-1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
+1. run `adwf prepare-workspaces --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
 2. use `agent_mailbox`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
 4. resolve `coder_tool_profile` / `coder_tool_cmd` using the shared tool-resolution contract for role `coder`
@@ -188,7 +188,7 @@ Workflow send sequence:
    - otherwise resolve the role `reviewer` command
 8. do not create the reviewer during delegate dispatch; pass `reviewer_session_ref`, `reviewer_tool_profile`, and `reviewer_tool_cmd` so `review-request` can create it on demand
 9. fill the final body
-10. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
+10. run `adwf send-delegate-with-active-task-lock` with:
    - `--workdir <worker_workspace>`
    - `--task-id <task_id>`
    - `--integration-branch <integration_branch>`
@@ -205,7 +205,7 @@ Recommended subject:
 
 Rules:
 - keep the full delegate brief in mailbox body
-- do not replace this path with host subagent tools; use `agent_deck_create_session` only for lifecycle allocation, and let `send-delegate-with-active-task-lock.sh` own delegate send and wakeup
+- do not replace this path with host subagent tools; use `agent_deck_create_session` only for lifecycle allocation, and let `adwf send-delegate-with-active-task-lock` own delegate send and wakeup
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
 - if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths in `Context to Acquire`
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
@@ -214,9 +214,9 @@ Rules:
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the real session ids are allocated
 - create coder sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
 - do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>`
-- ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`
+- ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `adwf send-delegate-with-active-task-lock`
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
-- send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
+- send delegated work through `adwf send-delegate-with-active-task-lock`; mailbox transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
 - when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send/nudge path that applies has completed

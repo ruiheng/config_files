@@ -4,33 +4,20 @@ Personal configuration files collection with one-command installation for new ma
 
 ## Quick Start
 
-### Linux/macOS/WSL
-
-```bash
-# Clone the repository
-git clone <your-repo-url> ~/config_files
-cd ~/config_files
-
-# Preview changes without applying
-./install.sh --dry-run
-
-# Execute installation (creates symbolic links)
-./install.sh
-```
-
-### Windows
-
 ```cmd
 :: Clone the repository
 git clone <your-repo-url> %USERPROFILE%\config_files
 cd %USERPROFILE%\config_files
-
-:: Preview changes without applying
-install.bat --dry-run
-
-:: Execute installation (creates symbolic links)
-install.bat
 ```
+
+Use the PowerShell installer:
+
+```powershell
+.\install.ps1 -DryRun
+.\install.ps1
+```
+
+See [`WINDOWS.md`](./WINDOWS.md) for the Windows compatibility model and AI workflow prerequisites.
 
 **Note for Windows**: Creating symbolic links requires either:
 - Running as Administrator, OR
@@ -38,59 +25,38 @@ install.bat
 
 To enable Developer Mode: Settings → Update & Security → For developers → Developer Mode
 
-## Installation Scripts
+## Installation Script
 
-Two scripts are provided for different platforms:
+The supported installer is:
 
-- **`install.sh`** - For Linux, macOS, and WSL (Bash)
-- **`install.bat`** - For Windows (Command Prompt)
+- **`install.ps1`** - For Windows PowerShell, including AI-agent configs and skills
 
-Both scripts automatically create symbolic links to link configuration files from this repository to their proper system locations.
+It creates symbolic links from this repository to their proper system locations.
 
-### Linux/macOS/WSL (install.sh)
-
-```bash
-./install.sh [OPTIONS]
+```powershell
+.\install.ps1 [OPTIONS]
 
 Options:
-  --dry-run         Preview changes without applying
-  --force           Backup and replace existing files
-  --interactive, -i Prompt when target exists (asks: skip/backup/replace/all)
-  --no-color        Disable colored output
-  --help, -h        Show help message
-```
-
-`install.sh` will check required CLI tools before linking configs and install missing ones through the detected package manager when supported. The current required tools are `tmux` and `jq`. It also installs `agent-browser` with `npm install -g agent-browser` and then runs `agent-browser install` to download Chromium.
-
-### Windows (install.bat)
-
-```cmd
-install.bat [OPTIONS]
-
-Options:
-  --dry-run         Preview changes without applying
-  --force           Backup and replace existing files
-  --interactive, -i Prompt when target exists
-  --help, -h, /?    Show help message
+  -DryRun       Preview changes without applying
+  -Force        Backup and replace existing files
+  -Interactive  Prompt when target exists
+  -BinDir       Directory for command shims such as adwf.cmd (default: ~/.local/bin)
 ```
 
 ### Examples
 
-```bash
-# Standard installation (recommended)
-./install.sh
-
+```powershell
 # Preview changes
-./install.sh --dry-run
+.\install.ps1 -DryRun
 
 # Force replace existing configs (backs them up automatically)
-./install.sh --force
+.\install.ps1 -Force
 
 # Interactive mode - prompt for each conflict
-./install.sh --interactive
+.\install.ps1 -Interactive
 
-# No color output (for scripts or logging)
-./install.sh --no-color
+# Install command shims somewhere else
+.\install.ps1 -BinDir "$env:USERPROFILE\bin"
 ```
 
 ## Configuration Structure
@@ -108,27 +74,13 @@ Options:
 
 ### XDG Config Directory (`~/.config/` or `%LOCALAPPDATA%`)
 
-#### Linux/macOS/WSL
-
-| Source | Target | Description |
-|--------|--------|-------------|
-| `nvim/` | `~/.config/nvim` | Neovim configuration |
-| `i3/` | `~/.config/i3` | i3 window manager config |
-| `niri/` | `~/.config/niri` | Niri window manager config |
-| `sway/` | `~/.config/sway` | Sway window manager config |
-| `waybar/` | `~/.config/waybar` | Waybar status bar config |
-| `ranger/` | `~/.config/ranger` | Ranger file manager config |
-| `systemd/` | `~/.config/systemd` | Systemd user services |
-| `ai-agent/` | `~/.config/ai-agent` | AI Agent configuration |
-| `grc/` | `~/.config/grc` | GRC colorizer configuration |
-| `fourmolu.yaml` | `~/.config/fourmolu.yaml` | Haskell formatter config |
-
 #### Windows
 
 | Source | Target | Description |
 |--------|--------|-------------|
 | `nvim/` | `%LOCALAPPDATA%\nvim` | Neovim configuration |
 | `gitconfig.win` | `%USERPROFILE%\.gitconfig` | Git configuration |
+| `ai-agent/` | `%USERPROFILE%\.config\ai-agent` | AI Agent shared configuration |
 
 ### Claude Code Configuration
 
@@ -145,7 +97,7 @@ Options:
 |--------|--------|-------------|
 | `ai-agent/skills/<skill>/` | `~/.codex/skills/<skill>/` | **Each skill linked individually** |
 
-**Note**: Codex skills are linked individually for reliability. If `~/.codex/skills` is currently a symlink, run `./install.sh --interactive` or `./install.sh --force` once to migrate it to a real directory and then link each skill.
+**Note**: Codex skills are linked individually for reliability. If `~/.codex/skills` is currently a symlink, run `.\install.ps1 -Interactive` or `.\install.ps1 -Force` once to migrate it to a real directory and then link each skill.
 
 ### Gemini CLI Configuration
 
@@ -170,7 +122,7 @@ Neovim configuration uses [lazy.nvim](https://github.com/folke/lazy.nvim) as the
 ### First-time Setup
 
 1. Ensure Neovim 0.9+ is installed
-2. Run `./install.sh` to link the configuration
+2. Run `.\install.ps1` to link the configuration
 3. On first Neovim start, lazy.nvim will automatically install all plugins
 
 ```bash
@@ -190,28 +142,20 @@ ln -s /opt/nvim-linux-x86_64/bin/nvim ~/.local/bin/nvim
 - Use `:Lazy` to open the plugin manager
 - Use `:Mason` to manage LSP servers
 
-## OS Support
-
-The scripts automatically detect the OS and apply appropriate configurations:
-
-- **Linux**: Full support for all configurations (via `install.sh`)
-- **macOS**: Most configs supported, window manager configs (i3, sway, niri, waybar) not applicable (via `install.sh`)
-- **WSL**: Same as Linux, window manager configs won't work in WSL (via `install.sh`)
-- **Windows**: Limited support - mainly Neovim and Git configs (via `install.bat`)
-
 ## Windows Notes
 
 1. **Symbolic Links Require Elevation**: On Windows, creating symbolic links requires either:
    - Running Command Prompt/PowerShell as Administrator
    - Enabling Developer Mode in Windows Settings (Windows 10 version 1703+)
 
-2. **Limited Configurations**: The Windows batch script only installs:
-   - Neovim configuration
-   - Git configuration (Windows version)
+2. **AI Workflow Commands**:
+   - `jq` is installed automatically with `winget` when missing.
+   - Missing `agent-mailbox` or `agent-deck` is reported as a warning; install them before using full workflow automation.
+   - If `agent-mailbox` exists, the installer configures the `agent_mailbox` MCP server for installed Claude/Codex/Gemini CLIs.
 
-   Most other configurations (i3, sway, niri, tmux, etc.) are Unix-specific and not applicable to Windows.
+3. **Workflow Entry Point**: Skills call workflow helpers through `adwf <command>`. The installer places `adwf.cmd` in the selected command shim directory and adds that directory to the User PATH. Some `adwf` subcommands are still Bash-backed internally, so Git Bash, MSYS2, or WSL is needed until those internals are migrated.
 
-3. **Neovim on Windows**: Neovim config is linked to `%LOCALAPPDATA%\nvim` (usually `C:\Users\<username>\AppData\Local\nvim`)
+4. **Neovim on Windows**: Neovim config is linked to `%LOCALAPPDATA%\nvim` (usually `C:\Users\<username>\AppData\Local\nvim`)
 
 ## Notes
 
@@ -260,7 +204,7 @@ candidates = [
    - Running as Administrator, OR
    - Developer Mode enabled in Windows Settings
 
-2. **Limited Config Support**: The Windows script only installs Neovim and Git configs. Most other tools (i3, sway, tmux, etc.) are Unix-specific.
+2. **Windows Installer Scope**: Use `install.ps1` for AI-agent configs and skills. Most other tools (i3, sway, tmux, etc.) are Unix-specific.
 
 3. **Neovim Location**: On Windows, Neovim config goes to `%LOCALAPPDATA%\nvim` (e.g., `C:\Users\<username>\AppData\Local\nvim`)
 

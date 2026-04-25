@@ -47,12 +47,13 @@ Branch-plan rule:
 2. inspect `Residual Follow-up For Planner` and `UI Manual Confirmation Package` before running planner closeout
 3. run the planner closeout batch script with the recorded branch plan
 4. if this turn started from a claimed `closeout_delivered` delivery, pass `--ack-delivery-id` and `--ack-lease-token` so the script can ack after required closeout state is written
-5. report the result after planner closeout finishes
+5. if no more tasks remain in this workflow after closeout, run `adwf prepare-workspaces --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
+6. report the result after planner closeout finishes
 
 Required closeout command shape:
 
 ```bash
-~/.config/ai-agent/skills/agent-deck-workflow/scripts/planner-closeout-batch.sh \
+adwf planner-closeout-batch \
   --task-id <task_id> \
   --task-branch <task_branch> \
   --integration-branch <integration_branch> \
@@ -75,6 +76,8 @@ Optional command additions:
 - the planner closeout script owns required closeout actions, progress recording, and planner-side cleanup
 - after planner closeout, later tasks in the same workflow must run workspace prepare again before their own closeout path
 - do not treat a released workspace reservation record as permission to dispatch another planner lane into the same workspace; lane scheduling is owned by the supervisor/dispatcher contract
+- when all current tasks in this workflow are complete, release the mirrored `planner-workspace.json` records
+- use `adwf prepare-workspaces --release-workspaces` for that release; do not delete the files ad hoc
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
 - keep mailbox JSON internal unless the user explicitly asks

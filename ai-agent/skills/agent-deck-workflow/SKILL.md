@@ -28,6 +28,17 @@ Read the corresponding section in `references/internal-protocol/shared-protocol.
 
 Read the corresponding section in `references/internal-protocol/shared-protocol.md`.
 
+## Workflow Command Entry Point
+
+When a skill needs workflow helper behavior, call `adwf <command> [args...]`.
+
+Do not call platform-specific script paths from skills:
+- no `.sh`
+- no `.ps1`
+- no direct `~/.config/ai-agent/.../scripts/...` paths
+
+Platform-specific launch details belong inside the installed `adwf` shim and dispatcher.
+
 ## Error Handling and Diagnostics
 
 Read the corresponding section in `references/internal-protocol/shared-protocol.md`.

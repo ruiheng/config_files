@@ -162,4 +162,4 @@ Use the `agent_mailbox` MCP tools:
 - if a wait times out, either wait again or stop; do not inspect or repair the browser-tester session
 - resume report handling from a later nudge, explicit human mailbox-check request, or an actually received reply
 - requester should provide required login, auth, environment, and test-data context whenever possible
-- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
+- leave `startup_instruction` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction

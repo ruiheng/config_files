@@ -53,7 +53,7 @@ Tool resolution rules:
 - preserve explicit full commands unchanged
 - existing sessions keep their original `*_tool_cmd`; do not silently swap a running lane onto a newly resolved command
 - resolve `*_tool_profile` to `*_tool_cmd` only when creating a new session
-- default resolver: `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role <role> --profile <profile> --format json`; omit `--profile` when no profile is set
+- default resolver: `adwf resolve-tool-command --role <role> --profile <profile> --format json`; omit `--profile` when no profile is set
 - keep `*_tool_profile` as workflow policy metadata and `*_tool_cmd` as the concrete session-create input
 - if session creation fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver once with `--exclude-command <failed_tool_cmd>` and retry with the next candidate
 - concrete action skills own only role-specific differences: role name, parent session, workspace, reusable-session policy, and create/require choice
@@ -95,7 +95,7 @@ Transport rules:
 - in normal workflow delivery, identify an already assigned target by `session_id`, not `session_ref`
 - concrete action skills may define a narrow exception for a self-owned reusable helper session whose request body is already self-contained enough to bootstrap that helper; in that case the skill may look up a stable `session_ref` and create the helper only when it is absent
 - always pass explicit `workdir`
-- leave `listener_message` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
+- leave `startup_instruction` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
 
 Worker wake rule:
 - after `mailbox_send`, the normal non-local nudge should already be handled
@@ -152,10 +152,10 @@ Expected behavior:
 1. if the current role is allocating a new workflow-owned target session, call `agent_deck_create_session`
    - use create only in the role that owns target lifecycle allocation
    - always pass `workdir`
-   - normal workflow: do not pass `listener_message`
+   - normal workflow: do not pass `startup_instruction`
 2. otherwise call `agent_deck_require_session` for the existing target session before send
    - always pass `workdir`
-   - normal workflow: do not pass `listener_message`
+   - normal workflow: do not pass `startup_instruction`
 3. queue the mailbox body with `mailbox_send`
 
 After send:

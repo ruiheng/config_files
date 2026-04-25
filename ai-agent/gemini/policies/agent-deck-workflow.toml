@@ -30,6 +30,15 @@ name = "allow_agent_deck_workflow_dispatch"
 enabled = true
 decision = "allow"
 toolName = "run_shell_command"
-commandPrefix = ["~/.local/bin/adwf-send-and-wake"]
+commandPrefix = ["adwf"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
+
+[[rule]]
+name = "allow_agent_deck_workflow_dispatch_cmd"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["~/.local/bin/adwf.cmd"]
 priority = 950
 modes = ["default", "autoEdit", "yolo"]

@@ -4,6 +4,11 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern=["~/.local/bin/adwf-send-and-wake"],
+    pattern=["adwf"],
+    decision="allow",
+)
+
+prefix_rule(
+    pattern=["~/.local/bin/adwf.cmd"],
     decision="allow",
 )
