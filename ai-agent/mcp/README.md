@@ -110,7 +110,7 @@ For an agent-deck-managed session `<id>`, bind:
 - verifies the existing session already matches the requested `workdir`
 - starts an inactive target when needed
 - `startup_instruction` is an optional startup-only instruction passed to `agent-deck session start -m`; do not use it for task payloads or normal wakeups
-- does not create sessions or accept create-only lifecycle parameters
+- does not create sessions
 
 Typical workflow patterns:
 1. lifecycle allocation: `agent_deck_create_session`

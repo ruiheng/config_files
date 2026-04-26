@@ -1342,7 +1342,7 @@ function buildServer() {
   server.registerTool(
     "agent_deck_require_session",
     {
-      description: "Require an existing agent-deck session in an explicit workdir. Resolves session_id or session_ref, verifies the existing session already matches the requested workdir, and starts it if it is inactive. Optional startup_instruction is passed only when an inactive session must be started. Does not create sessions or accept create-only lifecycle parameters.",
+      description: "Require an existing agent-deck session in an explicit workdir. Resolves session_id or session_ref, verifies the existing session already matches the requested workdir, and starts it if it is inactive. Optional startup_instruction is passed only when an inactive session must be started. Does not create sessions.",
       inputSchema: {
         session_id: z.string().optional(),
         session_ref: z.string().optional(),
