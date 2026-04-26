@@ -150,7 +150,7 @@ test("buildEnsureSessionLaunchArgs keeps parent linking when explicitly requeste
       ensureCmd: "codex",
       workdir: "/tmp/worktree",
       parentSessionId: "sess_parent",
-      listenerMessage: "check-agent-mail",
+      startupInstruction: "check-agent-mail",
     }),
     [
       "agent-deck",

@@ -102,13 +102,14 @@ For an agent-deck-managed session `<id>`, bind:
 - can create sessions with `no_parent_link = true` so workflow grouping does not depend on one-level parent-child session depth
 - when creating under a non-root `parent_session_id`, can derive a nested child group from that parent's existing group automatically
 - a newly created target should follow the same wake path as any other target and run `check-agent-mail` when notified
-- if `listener_message` is customized and omits that receiver hint, the MCP server appends a `check-agent-mail` hint automatically
+- `startup_instruction` is an optional startup-only instruction passed to `agent-deck launch --message`; do not use it for task payloads or normal wakeups
 
 `agent_deck_require_session`
 - requires an existing agent-deck session
 - resolves `session_id` or `session_ref`
 - verifies the existing session already matches the requested `workdir`
 - starts an inactive target when needed
+- `startup_instruction` is an optional startup-only instruction passed to `agent-deck session start -m`; do not use it for task payloads or normal wakeups
 - does not create sessions or accept create-only lifecycle parameters
 
 Typical workflow patterns:
@@ -143,7 +144,7 @@ claude mcp add -s user agent_mailbox -- agent-mailbox mcp
 
 ## Notes
 
-- This server does not rewrite mailbox body content, but `agent_deck_create_session` and `agent_deck_require_session` may append a receiver-side `check-agent-mail` hint to `listener_message`.
+- This server does not rewrite mailbox body content. `startup_instruction` is only passed to session launch/start as direct startup input.
 - Worker-target wake hints may also tell the agent to use `mailbox_read` for the latest `acked` delivery after `ack`.
 - Mailbox transport does not depend on `agent-deck`.
 - `agent_deck_*` tools are the only place where session creation / start / ref resolution lives.

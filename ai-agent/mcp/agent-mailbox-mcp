@@ -565,7 +565,7 @@ function buildEnsureSessionLaunchArgs({
   workdir,
   parentSessionId = null,
   noParentLink = false,
-  listenerMessage = "",
+  startupInstruction = "",
   groupPath = null,
 }) {
   const launchArgs = [
@@ -585,8 +585,8 @@ function buildEnsureSessionLaunchArgs({
   } else if (parentSessionId) {
     launchArgs.push("--parent", parentSessionId);
   }
-  if (listenerMessage) {
-    launchArgs.push("--message", listenerMessage);
+  if (startupInstruction) {
+    launchArgs.push("--message", startupInstruction);
   }
   launchArgs.push(workdir);
   return launchArgs;
@@ -1216,7 +1216,7 @@ function buildServer() {
   server.registerTool(
     "agent_deck_create_session",
     {
-      description: "Create a new agent-deck session in an explicit workdir. Accepts create-only lifecycle parameters such as ensure_title, ensure_cmd, parent_session_id, group_path, group_parent_session_id, child_group_name, and no_parent_link. If an exact same-title target already exists in the same workdir, treat that as an interrupted create-step retry and return the existing target so the caller can continue with mailbox_send.",
+      description: "Create a new agent-deck session in an explicit workdir. Accepts create-only lifecycle parameters such as ensure_title, ensure_cmd, parent_session_id, group_path, group_parent_session_id, child_group_name, no_parent_link, and startup_instruction. If an exact same-title target already exists in the same workdir, treat that as an interrupted create-step retry and return the existing target so the caller can continue with mailbox_send.",
       inputSchema: {
         ensure_title: z.string(),
         ensure_cmd: z.string(),
@@ -1226,13 +1226,13 @@ function buildServer() {
         child_group_name: z.string().optional(),
         no_parent_link: z.boolean().optional(),
         workdir: z.string(),
-        listener_message: z.string().optional(),
+        startup_instruction: z.string().optional(),
       },
     },
     async (args, extra) => {
       const workdir = requireExplicitWorkdir(args.workdir);
       const noParentLink = args.no_parent_link === true;
-      const listenerMessage = (args.listener_message || "").trim();
+      const startupInstruction = (args.startup_instruction || "").trim();
       let targetGroupPath = (args.group_path || "").trim() || null;
 
       if (noParentLink && args.parent_session_id) {
@@ -1284,20 +1284,20 @@ function buildServer() {
         }
         let startedSession = false;
         let notifyNeeded = false;
-        let listenerStatus = "not_needed_existing_session";
+        let startupInstructionStatus = "not_needed_existing_session";
         if (ACTIVE_SESSION_STATUSES.has(data.status || null)) {
           notifyNeeded = true;
         } else {
           const startArgs = ["agent-deck", "session", "start", "--json", data.id];
-          if (listenerMessage) {
-            startArgs.splice(4, 0, "-m", listenerMessage);
+          if (startupInstruction) {
+            startArgs.splice(4, 0, "-m", startupInstruction);
           }
           await runCmdAsync(startArgs, {
             signal: extra?.signal,
           });
           data = resolveSessionShow(data.id, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) || data;
           startedSession = true;
-          listenerStatus = listenerMessage ? "started_waiting" : "started";
+          startupInstructionStatus = startupInstruction ? "started_waiting" : "started";
         }
 
         return makeToolResult({
@@ -1306,7 +1306,7 @@ function buildServer() {
           created_target: false,
           started_session: startedSession,
           notify_needed: notifyNeeded,
-          listener_status: listenerStatus,
+          startup_instruction_status: startupInstructionStatus,
           reused_existing: true,
         });
       }
@@ -1320,7 +1320,7 @@ function buildServer() {
         workdir,
         parentSessionId: args.parent_session_id || null,
         noParentLink,
-        listenerMessage,
+        startupInstruction,
         groupPath: targetGroupPath,
       });
       const proc = await runCmdAsync(launchArgs, {
@@ -1334,7 +1334,7 @@ function buildServer() {
         created_target: true,
         started_session: true,
         notify_needed: false,
-        listener_status: "started_waiting",
+        startup_instruction_status: startupInstruction ? "started_waiting" : "started",
       });
     }
   );
@@ -1342,12 +1342,12 @@ function buildServer() {
   server.registerTool(
     "agent_deck_require_session",
     {
-      description: "Require an existing agent-deck session in an explicit workdir. Resolves session_id or session_ref, verifies the existing session already matches the requested workdir, and starts it if it is inactive. Does not create sessions or accept create-only lifecycle parameters.",
+      description: "Require an existing agent-deck session in an explicit workdir. Resolves session_id or session_ref, verifies the existing session already matches the requested workdir, and starts it if it is inactive. Optional startup_instruction is passed only when an inactive session must be started. Does not create sessions or accept create-only lifecycle parameters.",
       inputSchema: {
         session_id: z.string().optional(),
         session_ref: z.string().optional(),
         workdir: z.string(),
-        listener_message: z.string().optional(),
+        startup_instruction: z.string().optional(),
       },
     },
     async (args, extra) => {
@@ -1361,26 +1361,26 @@ function buildServer() {
         fail(`target session not found: ${identifier}`);
       }
 
-      const listenerMessage = (args.listener_message || "").trim();
+      const startupInstruction = (args.startup_instruction || "").trim();
       validateExistingSessionWorkdir(data, workdir);
 
       let startedSession = false;
       let notifyNeeded = false;
-      let listenerStatus = "not_needed";
+      let startupInstructionStatus = "not_needed";
       if (ACTIVE_SESSION_STATUSES.has(data.status || null)) {
         notifyNeeded = true;
-        listenerStatus = "not_needed_existing_session";
+        startupInstructionStatus = "not_needed_existing_session";
       } else {
         const startArgs = ["agent-deck", "session", "start", "--json", data.id];
-        if (listenerMessage) {
-          startArgs.splice(4, 0, "-m", listenerMessage);
+        if (startupInstruction) {
+          startArgs.splice(4, 0, "-m", startupInstruction);
         }
         await runCmdAsync(startArgs, {
           signal: extra?.signal,
         });
         data = resolveSessionShow(data.id, { timeoutMs: ENSURE_SESSION_SHOW_TIMEOUT_MS }) || data;
         startedSession = true;
-        listenerStatus = listenerMessage ? "started_waiting" : "started";
+        startupInstructionStatus = startupInstruction ? "started_waiting" : "started";
       }
 
       return makeToolResult({
@@ -1389,7 +1389,7 @@ function buildServer() {
         created_target: false,
         started_session: startedSession,
         notify_needed: notifyNeeded,
-        listener_status: listenerStatus,
+        startup_instruction_status: startupInstructionStatus,
       });
     }
   );
