@@ -8,8 +8,40 @@ const {
   loadToolConfig,
   parseTomlValue,
   parseToolProfilesToml,
+  resolveAiAgentConfigDir,
+  resolveCwdLocalConfigPath,
+  resolveDefaultLocalConfigPaths,
   resolveToolCommand,
 } = require("./resolve-tool-command");
+
+test("resolveAiAgentConfigDir follows XDG config conventions", () => {
+  assert.equal(
+    resolveAiAgentConfigDir({ XDG_CONFIG_HOME: "/tmp/custom-config" }, "/home/tester"),
+    "/tmp/custom-config/ai-agent/config"
+  );
+  assert.equal(
+    resolveAiAgentConfigDir({}, "/home/tester"),
+    "/home/tester/.config/ai-agent/config"
+  );
+});
+
+test("resolveDefaultLocalConfigPaths layers user then current directory overrides", () => {
+  assert.deepEqual(
+    resolveDefaultLocalConfigPaths(
+      { XDG_CONFIG_HOME: "/tmp/custom-config" },
+      "/home/tester",
+      "/workspace/project"
+    ),
+    [
+      "/tmp/custom-config/ai-agent/config/tool-profiles.local.toml",
+      "/workspace/project/tool-profiles.local.toml",
+    ]
+  );
+  assert.equal(
+    resolveCwdLocalConfigPath("/workspace/project"),
+    "/workspace/project/tool-profiles.local.toml"
+  );
+});
 
 test("parseToolProfilesToml reads roles and profile candidate arrays", () => {
   const config = parseToolProfilesToml(`
@@ -81,6 +113,61 @@ candidates = ['claude --model sonnet --permission-mode acceptEdits']
   const config = loadToolConfig(configPath, localConfigPath);
   assert.equal(config.roles.reviewer, "reviewer_local");
   assert.deepEqual(config.profiles.reviewer_local.candidates, [
+    "claude --model sonnet --permission-mode acceptEdits",
+  ]);
+});
+
+test("loadToolConfig applies local overrides in order", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-profiles-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  const userLocalConfigPath = path.join(tmpDir, "user.local.toml");
+  const cwdLocalConfigPath = path.join(tmpDir, "cwd.local.toml");
+
+  fs.writeFileSync(
+    configPath,
+    `version = 1
+
+[roles]
+reviewer = "reviewer_default"
+
+[profiles.reviewer_default]
+strategy = "ordered"
+candidates = ["codex --model gpt-5.4"]
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    userLocalConfigPath,
+    `[roles]
+reviewer = 'reviewer_user'
+
+[profiles.reviewer_user]
+strategy = "ordered"
+candidates = ['codex --model gpt-5.5']
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    cwdLocalConfigPath,
+    `[roles]
+reviewer = 'reviewer_cwd'
+
+[profiles.reviewer_cwd]
+strategy = "ordered"
+candidates = ['claude --model sonnet --permission-mode acceptEdits']
+`,
+    "utf8"
+  );
+
+  const config = loadToolConfig(configPath, [
+    userLocalConfigPath,
+    cwdLocalConfigPath,
+  ]);
+  assert.equal(config.roles.reviewer, "reviewer_cwd");
+  assert.deepEqual(config.profiles.reviewer_user.candidates, [
+    "codex --model gpt-5.5",
+  ]);
+  assert.deepEqual(config.profiles.reviewer_cwd.candidates, [
     "claude --model sonnet --permission-mode acceptEdits",
   ]);
 });

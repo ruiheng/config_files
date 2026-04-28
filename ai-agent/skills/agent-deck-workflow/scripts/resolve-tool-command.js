@@ -1,16 +1,42 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
-const DEFAULT_CONFIG_PATH = path.resolve(
-  __dirname,
-  "../../../config/tool-profiles.toml"
+function resolveAiAgentConfigDir(env = process.env, homeDir = os.homedir()) {
+  const xdgConfigHome = env.XDG_CONFIG_HOME || path.join(homeDir, ".config");
+  return path.resolve(xdgConfigHome, "ai-agent", "config");
+}
+
+function uniquePaths(paths) {
+  return [...new Set(paths.filter(Boolean).map((configPath) => path.resolve(configPath)))];
+}
+
+function resolveCwdLocalConfigPath(cwd = process.cwd()) {
+  return path.resolve(cwd, "tool-profiles.local.toml");
+}
+
+function resolveDefaultLocalConfigPaths(
+  env = process.env,
+  homeDir = os.homedir(),
+  cwd = process.cwd()
+) {
+  return uniquePaths([
+    path.join(resolveAiAgentConfigDir(env, homeDir), "tool-profiles.local.toml"),
+    resolveCwdLocalConfigPath(cwd),
+  ]);
+}
+
+const DEFAULT_CONFIG_PATH = path.join(
+  resolveAiAgentConfigDir(),
+  "tool-profiles.toml"
 );
-const DEFAULT_LOCAL_CONFIG_PATH = path.resolve(
-  __dirname,
-  "../../../config/tool-profiles.local.toml"
+const DEFAULT_LOCAL_CONFIG_PATH = path.join(
+  resolveAiAgentConfigDir(),
+  "tool-profiles.local.toml"
 );
+const DEFAULT_LOCAL_CONFIG_PATHS = resolveDefaultLocalConfigPaths();
 
 function stripInlineComment(line) {
   let escaped = false;
@@ -279,16 +305,27 @@ function mergeToolConfigs(baseConfig, overrideConfig) {
   return merged;
 }
 
-function loadToolConfig(configPath = DEFAULT_CONFIG_PATH, localConfigPath = DEFAULT_LOCAL_CONFIG_PATH) {
+function loadToolConfig(
+  configPath = DEFAULT_CONFIG_PATH,
+  localConfigPaths = resolveDefaultLocalConfigPaths()
+) {
   if (!fs.existsSync(configPath)) {
     throw new Error(`tool profile config not found: ${configPath}`);
   }
   const baseConfig = parseToolProfilesToml(fs.readFileSync(configPath, "utf8"));
-  if (!fs.existsSync(localConfigPath)) {
-    return mergeToolConfigs(baseConfig, null);
+  let mergedConfig = mergeToolConfigs(baseConfig, null);
+
+  for (const localConfigPath of uniquePaths(
+    Array.isArray(localConfigPaths) ? localConfigPaths : [localConfigPaths]
+  )) {
+    if (!fs.existsSync(localConfigPath)) {
+      continue;
+    }
+    const localConfig = parseToolProfilesToml(fs.readFileSync(localConfigPath, "utf8"));
+    mergedConfig = mergeToolConfigs(mergedConfig, localConfig);
   }
-  const localConfig = parseToolProfilesToml(fs.readFileSync(localConfigPath, "utf8"));
-  return mergeToolConfigs(baseConfig, localConfig);
+
+  return mergedConfig;
 }
 
 function resolveProfileName(config, role, explicitProfile) {
@@ -388,7 +425,7 @@ function parseArgs(argv) {
     inheritCommand: "",
     excludedCommands: [],
     configPath: DEFAULT_CONFIG_PATH,
-    localConfigPath: DEFAULT_LOCAL_CONFIG_PATH,
+    localConfigPaths: resolveDefaultLocalConfigPaths(),
     format: "json",
   };
 
@@ -407,7 +444,7 @@ function parseArgs(argv) {
     } else if (arg === "--config") {
       options.configPath = argv[++i] || "";
     } else if (arg === "--local-config") {
-      options.localConfigPath = argv[++i] || "";
+      options.localConfigPaths = [argv[++i] || ""];
     } else if (arg === "--format") {
       options.format = argv[++i] || "json";
     } else if (arg === "--json") {
@@ -422,7 +459,7 @@ function parseArgs(argv) {
 
 function runCli(argv) {
   const options = parseArgs(argv);
-  const config = loadToolConfig(options.configPath, options.localConfigPath);
+  const config = loadToolConfig(options.configPath, options.localConfigPaths);
   const resolved = resolveToolCommand({
     role: options.role,
     profile: options.profile,
@@ -454,10 +491,14 @@ if (require.main === module) {
 module.exports = {
   DEFAULT_CONFIG_PATH,
   DEFAULT_LOCAL_CONFIG_PATH,
+  DEFAULT_LOCAL_CONFIG_PATHS,
   loadToolConfig,
   mergeToolConfigs,
   parseToolProfilesToml,
   parseTomlValue,
+  resolveAiAgentConfigDir,
+  resolveCwdLocalConfigPath,
+  resolveDefaultLocalConfigPaths,
   resolveToolCommand,
   resolveProfileCommand,
   runCli,

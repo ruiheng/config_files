@@ -68,3 +68,5 @@ nvim/lazy-lock.json
 
 # Local machine overrides
 /nvim/coc-settings.local.json
+/ai-agent/config/tool-profiles.local.toml
+/tool-profiles.local.toml
