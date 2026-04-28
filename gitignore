@@ -54,7 +54,7 @@ Thumbs.db
 delegate-task-*.md
 review-request-*.md
 .agent-artifacts/
-ai-agent/config/tool-profiles.local.toml
+tool-profiles.local.toml
 
 # nvim related
 
