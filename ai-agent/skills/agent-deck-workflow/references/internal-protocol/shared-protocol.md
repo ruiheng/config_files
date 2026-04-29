@@ -42,6 +42,7 @@ Session identity rules:
 - after `agent_deck_create_session` returns, record and propagate the real `*_session_id`
 - in normal workflow turns after creation, address and compare sessions by `*_session_id` only
 - if a later workflow turn is missing the required `*_session_id`, treat that as workflow context loss/error rather than a normal `session_ref` recovery path
+- concrete action skills may define a target as intentionally on-demand; in that case the missing `*_session_id` is normal until the action creates or reuses that target
 - when `from_session_id == to_session_id`, treat it as an explicit same-session continuation already established by context, not something inferred from matching provider names
 - creating or starting an Agent Deck target session is workflow session lifecycle, not use of a host subagent API
 

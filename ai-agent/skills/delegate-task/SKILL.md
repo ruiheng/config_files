@@ -49,7 +49,7 @@ Resolve by priority:
 - `coder_session_ref`: explicit -> context -> default `coder-<task_id>`
 - `coder_session_id`: explicit actual id -> context actual id -> helper output after target resolution -> omit until known
 - `reviewer_session_ref`: explicit -> context -> default `reviewer-<task_id>`
-- `reviewer_session_id`: explicit actual id -> context actual id -> resolved by planner before delegate send when `per_task_review = required`; omit only when `per_task_review = skip`
+- `reviewer_session_id`: explicit actual id -> context actual id -> omit when the reviewer is not yet created
 - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
   - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
 - `coder_tool_profile`: explicit -> context -> omit when `coder_tool` is already a full command -> default current-tool continuity or resolver role default `coder`
@@ -133,7 +133,7 @@ Round: 1
 - [testable completion item]
 
 ## Required Workflow Step
-- If `Per-task review: required`, coder must run the `review-request` skill and send the review-request mailbox message after the delivery commit
+- If `Per-task review: required`, coder must run the `review-request` skill after the delivery commit; that skill creates or reuses the reviewer on demand as a child of planner
 - If `Per-task review: skip`, do not start reviewer for this task unless planner explicitly requests review later
 
 ## Important Notes
@@ -143,7 +143,8 @@ Round: 1
 ## Agent Deck Context
 - Planner session: [planner_session_id]
 - Coder session id: {{TO_SESSION_ID}}
-- Reviewer session id: [reviewer_session_id or `N/A` when `Per-task review: skip`]
+- Reviewer session ref: [reviewer_session_ref or `N/A` when `Per-task review: skip`]
+- Reviewer session id: [reviewer_session_id or `N/A` when not yet created or `Per-task review: skip`]
 - Coder tool profile: [coder_tool_profile or `explicit`]
 - Coder tool cmd: [coder_tool_cmd]
 - Reviewer tool profile: [reviewer_tool_profile or `N/A` when `Per-task review: skip`]
@@ -183,16 +184,10 @@ Workflow send sequence:
 7. if `Per-task review: required`, resolve `reviewer_tool_profile` / `reviewer_tool_cmd`
    - preserve explicit full `reviewer_tool` unchanged when provided
    - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role reviewer --profile <reviewer_tool_profile when present> --format json`
-   - if reviewer session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed reviewer_tool_cmd>` and retry once with the next candidate
-8. if `Per-task review: required`, call `agent_deck_create_session` for reviewer before sending coder mail
-   - `ensure_title = <reviewer_session_ref>`
-   - `ensure_cmd = <reviewer_tool_cmd>`
-   - `workdir = <worker_workspace>`
-   - `parent_session_id = <planner_session_id>`
-   - `no_parent_link = false`
-9. use the returned `session_id` as the authoritative `reviewer_session_id`
-10. fill the final body
-11. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
+   - if reviewer session creation later fails in `review-request` because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed reviewer_tool_cmd>` and retry once with the next candidate
+8. do not create the reviewer during delegate dispatch; pass `reviewer_session_ref`, `reviewer_tool_profile`, and `reviewer_tool_cmd` so `review-request` can create it on demand
+9. fill the final body
+10. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
    - `--workdir <worker_workspace>`
    - `--task-id <task_id>`
    - `--integration-branch <integration_branch>`
@@ -215,13 +210,14 @@ Rules:
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the session create step reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
-- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until planner resolves the real session ids
-- create coder and reviewer sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
+- use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the real session ids are allocated
+- create coder sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
+- do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>`
 - ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
-- when `Per-task review: required`, planner must allocate reviewer before coder starts work; coder should receive an existing `reviewer_session_id`, not create reviewer later
+- when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - existing sessions keep their original tool command
 - keep `*_tool_profile` as workflow policy metadata and `*_tool_cmd` as the concrete session-create input
@@ -240,7 +236,7 @@ After sending:
   - mailbox subject
   - one-line objective summary
   - `task_branch` / `integration_branch`
-  - `coder_session_id` / `reviewer_session_id`
+  - `coder_session_id` / `reviewer_session_ref` and any known `reviewer_session_id`
   - `coder_tool_profile` / `reviewer_tool_profile`
   - `coder_tool_cmd` / `reviewer_tool_cmd`
   - recipient inbox address

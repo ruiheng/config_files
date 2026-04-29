@@ -50,7 +50,7 @@ Use `SKILL.md` for:
 2. Planner runs `delegate-task` and sends one delegate workflow message.
 3. Planner or Coder may request architect review for the latest committed tech-design docs on `tech-design/<task_id>`.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
-5. Task-level review is planner-controlled: planner allocates reviewer up front when per-task review is required; coder then runs `review-request` against that assigned reviewer or returns control to planner without reviewer involvement.
+5. Task-level review is planner-controlled: when per-task review is required, coder runs `review-request`; that skill creates or reuses the reviewer on demand as a child of planner, or returns control to planner without reviewer involvement when review is skipped.
 6. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
@@ -81,7 +81,7 @@ flowchart TD
     C -->|mailbox: tech_design_review_requested| A
     A -->|mailbox: tech_design_review_report| P
     A -->|mailbox: tech_design_review_report| C
-    P -. allocates reviewer .-> R[Reviewer]
+    C -. creates/reuses planner-scoped reviewer .-> R[Reviewer]
     C -->|mailbox: review_requested| R
     R -->|mailbox: browser_check_requested| B[Browser Tester]
     X[Requester] -->|mailbox: browser_check_requested| B
@@ -108,7 +108,7 @@ flowchart TD
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session`; any subgroup fallback stays inside the session manager
-- delegated coder flow must reuse the planner-assigned reviewer session; coder should not create reviewer as its own child session
+- delegated coder flow creates or reuses reviewer only through `review-request`; reviewer must be parented to planner, not coder
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.
 - Current agent-deck session hierarchy cannot always express deeper workflow ownership once a planner is already a child; keep any subgroup/group-path fallback inside the session manager rather than the workflow contract.
@@ -128,7 +128,7 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `coder-<task_id>`, `reviewer-<task_id>`, and `architect-<task_id>` per task; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
+2. Create `coder-<task_id>` and `architect-<task_id>` per task as needed; create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
 3. Queue mail first, then nudge the non-local target to run `check-agent-mail`.
    Newly created or restarted targets use the same notify path; they do not need a special pre-check phase.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
