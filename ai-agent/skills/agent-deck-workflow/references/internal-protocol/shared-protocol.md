@@ -76,7 +76,7 @@ Preferred transport interface:
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
-- `mailbox_wait` is not recommended for normal workflow; keep it for manual diagnostics or observation
+- never call `mailbox_wait` for receiver workflow pickup; keep it only for manual diagnostics or observation
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
@@ -159,8 +159,9 @@ Do not `ack` outbound mail that this session just sent.
 
 Idle behavior:
 - long-running wait loops are not recommended for workflow continuity
-- `mailbox_wait` is not the recommended receiver entrypoint
+- `mailbox_wait` is not a receiver workflow entrypoint
 - use `check-agent-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
+- do not poll with repeated `mailbox_recv`; one no-message result ends the mailbox-check turn
 
 ## Natural End Gate
 

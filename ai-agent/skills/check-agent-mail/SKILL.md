@@ -5,8 +5,8 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Steps
 
-1. Run `mailbox_recv`
-2. If no message is waiting, report that no agent mail is available and stop
+1. Run `mailbox_recv` exactly once
+2. If no message is returned, report that no agent mail is available and stop
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
@@ -16,7 +16,8 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Rules
 
-- `mailbox_wait` is not recommended for normal pickup; use `mailbox_recv`
+- Never call `mailbox_wait` in this skill; it is only for manual diagnostics outside this workflow
+- Do not poll with repeated `mailbox_recv`; a no-message result is final for this turn
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
