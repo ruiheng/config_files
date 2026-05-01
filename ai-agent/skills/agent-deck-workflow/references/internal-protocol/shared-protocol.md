@@ -48,9 +48,13 @@ Session identity rules:
 
 Tool resolution rules:
 - keep model/provider/version defaults out of concrete action skills when a shared tool profile can own them instead
-- resolve `*_tool_profile` to `*_tool_cmd` before `agent_deck_create_session`
 - preserve explicit full commands unchanged
 - existing sessions keep their original `*_tool_cmd`; do not silently swap a running lane onto a newly resolved command
+- resolve `*_tool_profile` to `*_tool_cmd` only when creating a new session
+- default resolver: `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role <role> --profile <profile> --format json`; omit `--profile` when no profile is set
+- keep `*_tool_profile` as workflow policy metadata and `*_tool_cmd` as the concrete session-create input
+- if session creation fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver once with `--exclude-command <failed_tool_cmd>` and retry with the next candidate
+- concrete action skills own only role-specific differences: role name, parent session, workspace, reusable-session policy, and create/require choice
 
 ## Mailbox Transport
 

@@ -53,9 +53,9 @@ Resolve by priority:
 - `task_branch`: explicit -> context -> if `start_branch` is already the intended topic branch for this delegated change, reuse `start_branch`; otherwise default `task/<task_id>` created from `integration_branch`
   - in the normal merge-based workflow, `task_branch` must differ from `integration_branch`
 - `coder_tool_profile`: explicit -> context -> omit when `coder_tool` is already a full command -> default current-tool continuity or resolver role default `coder`
-- `coder_tool_cmd`: explicit full command -> context resolved command -> current AI tool when continuity is intended -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `coder_tool_cmd`: explicit full command -> context resolved command -> current AI tool when continuity is intended -> shared tool-resolution contract for role `coder`
 - `reviewer_tool_profile`: explicit -> context -> omit when `reviewer_tool` is already a full command -> default resolver role default `reviewer`
-- `reviewer_tool_cmd`: explicit full command -> context resolved command -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `reviewer_tool_cmd`: explicit full command -> context resolved command -> shared tool-resolution contract for role `reviewer`
 - keep `reviewer_session_ref` distinct unless same-session reviewer assignment is explicit
 - `workflow_policy` (optional): explicit -> context -> default unattended policy
 - `per_task_review` (optional): explicit -> context -> default `required`
@@ -169,11 +169,10 @@ Workflow send sequence:
 1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
 2. use `agent_mailbox`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
-4. resolve `coder_tool_profile` / `coder_tool_cmd`
+4. resolve `coder_tool_profile` / `coder_tool_cmd` using the shared tool-resolution contract for role `coder`
    - preserve explicit full `coder_tool` unchanged when provided
    - otherwise, if continuity with the current session tool is intended, preserve the current full tool command as `coder_tool_cmd` and record `coder_tool_profile = inherited`
-   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role coder --profile <coder_tool_profile when present> --format json`
-   - if session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed coder_tool_cmd>` and retry once with the next candidate
+   - otherwise resolve the role `coder` command
 5. call `agent_deck_create_session`
    - `ensure_title = <coder_session_ref>`
    - `ensure_cmd = <coder_tool_cmd>`
@@ -181,10 +180,9 @@ Workflow send sequence:
    - `parent_session_id = <planner_session_id>`
    - `no_parent_link = false`
 6. use the returned `session_id` as the authoritative `coder_session_id`
-7. if `Per-task review: required`, resolve `reviewer_tool_profile` / `reviewer_tool_cmd`
+7. if `Per-task review: required`, resolve `reviewer_tool_profile` / `reviewer_tool_cmd` using the shared tool-resolution contract for role `reviewer`
    - preserve explicit full `reviewer_tool` unchanged when provided
-   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role reviewer --profile <reviewer_tool_profile when present> --format json`
-   - if reviewer session creation later fails in `review-request` because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed reviewer_tool_cmd>` and retry once with the next candidate
+   - otherwise resolve the role `reviewer` command
 8. do not create the reviewer during delegate dispatch; pass `reviewer_session_ref`, `reviewer_tool_profile`, and `reviewer_tool_cmd` so `review-request` can create it on demand
 9. fill the final body
 10. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
@@ -219,8 +217,6 @@ Rules:
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
 - when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
-- existing sessions keep their original tool command
-- keep `*_tool_profile` as workflow policy metadata and `*_tool_cmd` as the concrete session-create input
 - if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path
 - treat coder/reviewer progress as asynchronous with unbounded duration; do not assume a closeout or reply will arrive within this turn
 - after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise report current state and stop instead of waiting

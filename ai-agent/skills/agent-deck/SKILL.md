@@ -7,6 +7,10 @@ description: Local operating rules and references for using agent-deck sessions 
 
 Use this skill when the task is specifically about `agent-deck` session management, CLI usage, or local helper scripts in this directory.
 
+For normal mailbox workflow, follow `agent-deck-workflow` and the current action skill.
+Those paths use `agent_deck_create_session` / `agent_deck_require_session` through MCP for workflow session lifecycle.
+Use the CLI rules below for manual `agent-deck` operations, local troubleshooting, or explicit shell fallback.
+
 Primary references live under:
 - `references/cli-reference.md`
 - `references/config-reference.md`
@@ -15,7 +19,7 @@ Primary references live under:
 
 ## Local Rules
 
-When creating a new session and delivering its initial instruction, use:
+When creating a new session from the CLI and delivering its initial instruction, use:
 
 ```bash
 agent-deck launch <path> --title "<title>" --cmd "<tool>" --message "<prompt>"
@@ -28,7 +32,7 @@ agent-deck add ...
 agent-deck session send ...
 ```
 
-This `add + session send` pattern is forbidden for new-session startup in this repo.
+This `add + session send` pattern is forbidden for CLI new-session startup in this repo.
 
 Reasons:
 - `launch` is the intended one-shot primitive for create + start + optional initial message.

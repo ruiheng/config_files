@@ -97,9 +97,9 @@ Skill-specific context resolution:
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `coder_tool_profile`: explicit -> delegated context -> omit when `coder_tool` is already a full command -> default current-tool continuity or resolver role default `coder`
-- `coder_tool_cmd`: explicit full command -> delegated context resolved command -> current AI tool when continuity is intended -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `coder_tool_cmd`: explicit full command -> delegated context resolved command -> current AI tool when continuity is intended -> shared tool-resolution contract for role `coder`
 - `reviewer_tool_profile`: explicit -> delegated context -> omit when `reviewer_tool` is already a full command -> default resolver role default `reviewer`
-- `reviewer_tool_cmd`: explicit full command -> delegated context resolved command -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `reviewer_tool_cmd`: explicit full command -> delegated context resolved command -> shared tool-resolution contract for role `reviewer`
 - `round`: explicit -> infer from context -> default `1`
 - `start_branch`: explicit -> delegated context -> ask
 - `integration_branch`: explicit -> delegated context -> ask
@@ -270,13 +270,12 @@ Workflow send sequence:
    - identify target with `session_id = <reviewer_session_id>`
    - pass `workdir = <current workspace>`
    - do not pass create-only lifecycle fields
-4. if `reviewer_session_id` is missing, create or reuse the reviewer on demand with `agent_deck_create_session`
+4. if `reviewer_session_id` is missing, resolve reviewer tool metadata by the shared tool-resolution contract for role `reviewer`, then create or reuse the reviewer on demand with `agent_deck_create_session`
    - `ensure_title = <reviewer_session_ref>`
    - `ensure_cmd = <reviewer_tool_cmd>`
    - `workdir = <current workspace>`
    - `parent_session_id = <planner_session_id>`
    - `no_parent_link = false`
-   - if creation fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed reviewer_tool_cmd>` and retry once with the next candidate
 5. use the returned `session_id` as the authoritative `reviewer_session_id`
 6. fill the final body and call `mailbox_send` with:
    - `from_address = agent-deck/<requester_session_id>`
@@ -290,7 +289,7 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
-- keep `coder_tool_profile` / `reviewer_tool_profile` as policy metadata; do not hardcode model/version defaults in this skill
+- keep model/version defaults out of this skill; use shared tool-resolution policy
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>`; never create reviewer as a child of coder/requester

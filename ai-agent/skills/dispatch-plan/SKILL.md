@@ -46,7 +46,7 @@ When allocating a new planner lane:
 - do not silently reuse an existing planner integration branch from an earlier run; reuse is allowed only when the user explicitly says this dispatch is resuming that same unfinished plan
 - if the requested or derived `integration_branch` already exists and resume was not explicit, choose a new branch name or ask; do not dispatch onto an old branch tip
 - create the planner integration branch without switching the supervisor worktree; use the current supervisor branch as the start-point
-- if `planner_tool` is omitted, honor an explicit `planner_tool_profile` first; otherwise prefer the current session tool/command from agent-deck session metadata for continuity; otherwise resolve the planner role default via `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- if `planner_tool` is omitted, honor an explicit `planner_tool_profile` first; otherwise prefer the current session tool/command from agent-deck session metadata for continuity; otherwise resolve the planner role default through the shared tool-resolution contract
 - when `planner_session_id` is already known, treat the planner session as existing and carry forward its recorded `planner_tool_profile` / `planner_tool_cmd`; do not resolve a fresh planner command
 - default `per_task_review = required`
 - default `final_review = skip`
@@ -107,14 +107,13 @@ Round: 1
 2. resolve `workspace`
 3. set internal `planner_workspace = workspace` and `worker_workspace = workspace`
 4. resolve `planner_session_ref`; when creating a new planner and no existing ref/id is provided, generate `planner-YYYYMMDD-HHMM-<slug>` from the workspace or goal
-5. resolve planner tool policy only when allocating a new planner lane
+5. resolve planner tool policy only when allocating a new planner lane, following the shared tool-resolution contract for role `planner`
    - if `planner_session_id` is already known, skip this resolution step and carry forward the existing planner tool metadata
    - if explicit `planner_tool` is provided, preserve it unchanged as `planner_tool_cmd`
-   - otherwise, if explicit `planner_tool_profile` is provided, run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role planner --profile <planner_tool_profile> --format json`
+   - otherwise, if explicit `planner_tool_profile` is provided, resolve role `planner` with that profile
    - otherwise, if current session metadata provides the supervisor's current full tool command, reuse it as `planner_tool_cmd` and record `planner_tool_profile = inherited`
-   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role planner --format json`
+   - otherwise resolve the default role `planner` command
    - record both `planner_tool_profile` and `planner_tool_cmd`
-   - if session creation later fails because this resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed planner_tool_cmd>` and retry once with the next candidate
 6. resolve `integration_branch`
    - explicit branch name wins
    - otherwise derive a fresh planner-owned branch name from `plan_id`; prefer `plan/<plan_id>`

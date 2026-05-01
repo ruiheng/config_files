@@ -149,7 +149,7 @@ Skill-specific context resolution:
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask
 - `requester_role`: explicit -> mailbox body `From` header -> default `requester`
 - `tech_design_base_branch`: explicit -> mailbox body `Base branch` -> ask
-- `architect_tool_cmd`: explicit -> mailbox body `Tool Context`; if missing, resolve with `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role architect --profile <architect_tool_profile when present> --format json`
+- `architect_tool_cmd`: explicit -> mailbox body `Tool Context`; if missing, use the shared tool-resolution contract for role `architect`
 - `architect_tool_profile`: explicit -> mailbox body `Tool Context` -> resolver `tool_profile`
 - `round`: explicit -> mailbox body `Round` header -> default `1`
 

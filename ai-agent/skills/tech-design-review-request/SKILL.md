@@ -66,7 +66,7 @@ Skill-specific context resolution:
 - `tech_design_base_branch`: explicit -> branch creation record -> workflow context -> high-confidence merge target -> ask
   - this is the branch the tech-design branch started from and must merge back into after accepted review
   - never assume `main`/`master`; branch names are evidence, not truth
-- `architect_tool_cmd`: explicit full `architect_tool` -> workflow context resolved command -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `architect_tool_cmd`: explicit full `architect_tool` -> workflow context resolved command -> shared tool-resolution contract for role `architect`
 - `architect_tool_profile`: explicit -> workflow context -> resolver `tool_profile`
 - `round`: explicit -> workflow context -> default `1`
 
@@ -167,10 +167,9 @@ Subject: `tech-design review: <task_id> r<round>`
 Before sending:
 1. compose the body with `{{TO_SESSION_ID}}` as a placeholder
 2. if round `>1` targets an existing architect lane and `architect_session_id` is missing, stop and recover the real session id
-3. if allocating a new architect session, resolve `architect_tool_profile` / `architect_tool_cmd`
+3. if allocating a new architect session, resolve `architect_tool_profile` / `architect_tool_cmd` by the shared tool-resolution contract for role `architect`
    - preserve explicit full `architect_tool` unchanged when provided
-   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role architect --profile <architect_tool_profile when present> --format json`
-   - if architect session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed architect_tool_cmd>` and retry once with the next candidate
+   - otherwise resolve the role `architect` command
 4. if allocating a new architect session, call `agent_deck_create_session`
    - `ensure_title = <architect_session_ref>`
    - `ensure_cmd = <architect_tool_cmd>`

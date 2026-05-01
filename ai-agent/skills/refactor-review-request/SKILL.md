@@ -51,7 +51,7 @@ Skill-specific context resolution:
 - `scope`: explicit -> workflow context -> ask
 - `refactor_goal`: explicit -> workflow context -> default `identify duplication and simplification opportunities`
 - `reviewer_tool_profile`: explicit -> workflow context -> omit when `reviewer_tool` is already a full command -> default resolver role default `reviewer`
-- `reviewer_tool_cmd`: explicit full command -> workflow context resolved command -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js`
+- `reviewer_tool_cmd`: explicit full command -> workflow context resolved command -> shared tool-resolution contract for role `reviewer`
 - `round`: explicit -> workflow context -> default `1`
 
 ## Mailbox Body
@@ -129,10 +129,9 @@ Recommended subject:
 Use the `agent_mailbox` MCP tools:
 1. use `agent_mailbox`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. if this is round `1` for a new reviewer session, resolve `reviewer_tool_profile` / `reviewer_tool_cmd`
+3. if this is round `1` for a new reviewer session, resolve `reviewer_tool_profile` / `reviewer_tool_cmd` by the shared tool-resolution contract for role `reviewer`
    - preserve explicit full `reviewer_tool` unchanged when provided
-   - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role reviewer --profile <reviewer_tool_profile when present> --format json`
-   - if reviewer session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed reviewer_tool_cmd>` and retry once with the next candidate
+   - otherwise resolve the role `reviewer` command
 4. if this is round `1` for a new reviewer session, call `agent_deck_create_session`
    - `ensure_title = <refactor_reviewer_session_ref>`
    - `ensure_cmd = <reviewer_tool_cmd>`
@@ -158,6 +157,5 @@ Use the `agent_mailbox` MCP tools:
 - focus on one coherent code area or one review goal per request
 - later rounds to the same reviewer should be delta-only
 - if reviewer continuity changes, resend full context
-- keep `reviewer_tool_profile` as policy metadata and `reviewer_tool_cmd` as the concrete session-create input
 - create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
 - after the first create step, later workflow turns must reuse the real `refactor_reviewer_session_id`; do not fall back to `refactor_reviewer_session_ref`

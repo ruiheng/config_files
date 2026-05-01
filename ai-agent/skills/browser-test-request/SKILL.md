@@ -46,7 +46,7 @@ Skill-specific context resolution:
 - `browser_tester_session_ref`: explicit -> workflow context -> default `browser-tester`
 - `browser_tester_workspace`: explicit -> mailbox/review context -> current workspace
 - `browser_tester_tool_profile`: explicit -> mailbox/review context -> omit when `browser_tester_tool` is already a full command -> default resolver role default `browser_tester` only when creating a new browser-tester session
-- `browser_tester_tool_cmd`: explicit full command -> mailbox/review context resolved command -> existing session metadata on require paths -> resolve through `~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js` only on create path
+- `browser_tester_tool_cmd`: explicit full command -> mailbox/review context resolved command -> existing session metadata on require paths -> shared tool-resolution contract for role `browser_tester` only on create path
 - `round`: explicit -> context -> default `1`
 
 Identity rules:
@@ -127,10 +127,9 @@ Use the `agent_mailbox` MCP tools:
     - `workdir = <browser_tester_workspace>`
     - keep the existing browser tester tool metadata; do not resolve a fresh `browser_tester_tool_cmd`
   - if that ref does not resolve, or it resolves to a different workspace path, call `agent_deck_create_session`
-    - first resolve `browser_tester_tool_profile` / `browser_tester_tool_cmd`
+    - first resolve `browser_tester_tool_profile` / `browser_tester_tool_cmd` by the shared tool-resolution contract for role `browser_tester`
       - preserve explicit full `browser_tester_tool` unchanged when provided
-      - otherwise run `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role browser_tester --profile <browser_tester_tool_profile when present> --format json`
-      - if browser-tester session creation later fails because the resolved command is unusable and the chosen profile has more candidates, rerun the resolver with `--exclude-command <failed browser_tester_tool_cmd>` and retry once with the next candidate
+      - otherwise resolve the role `browser_tester` command
     - `ensure_title = <browser_tester_session_ref>`
     - `ensure_cmd = <browser_tester_tool_cmd>`
     - `workdir = <browser_tester_workspace>`
@@ -154,7 +153,7 @@ Use the `agent_mailbox` MCP tools:
 - if a resolved `browser-tester` ref points at a different workspace, ignore that hit and create a workspace-local browser tester instead
 - if no reusable `browser-tester` session exists in the requested workspace, create it from this request flow and continue
 - carry both requester and browser-tester workspaces in the mailbox body so later `agent_deck_require_session` calls can verify the correct worktree
-- keep `browser_tester_tool_profile` as policy metadata and `browser_tester_tool_cmd` as the concrete session-create input for newly created sessions; on require paths, preserve existing session tool metadata
+- on require paths, preserve existing session tool metadata
 - once this request resolves or creates the target, use the returned real `browser_tester_session_id` for the actual mailbox send
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
