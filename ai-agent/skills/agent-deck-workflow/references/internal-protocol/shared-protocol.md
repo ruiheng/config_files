@@ -20,6 +20,7 @@ Those belong in the concrete action skill that sends or handles that workflow me
 - `*_tool_profile`: logical workflow policy selector for a session tool
 - `*_tool_cmd`: concrete resolved command used to create or continue a session
 - `inbox_address`: `agent-deck/<agent-deck-session-id>`
+- `.agent-artifacts/planner-workspace.json`: workspace ownership record, not identity source
 
 ## Agent Deck Mode Detection
 
@@ -38,6 +39,7 @@ Use this priority chain for each field:
 `explicit input -> parsed mailbox body / workflow context -> deterministic default -> ask one short clarification question`
 
 Session identity rules:
+- use live Agent Deck or mailbox context for current-session identity; never use `planner-workspace.json`
 - use `*_session_ref` only for planned worker titles before a real session exists
 - after `agent_deck_create_session` returns, record and propagate the real `*_session_id`
 - in normal workflow turns after creation, address and compare sessions by `*_session_id` only
