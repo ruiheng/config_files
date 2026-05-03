@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roundtable Participant"
+  short_description: "Respond as a roundtable participant"
+  default_prompt: "Handle the received roundtable participant turn."

@@ -6,7 +6,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 ## Steps
 
 1. Run `mailbox_recv` exactly once
-2. If no message is returned, report that no agent mail is available and stop
+2. If no personal message is returned, check the roundtable exception below; otherwise report that no agent mail is available and stop
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
@@ -19,6 +19,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 - Never call `mailbox_wait` in this skill; it is only for manual diagnostics outside this workflow
 - Do not poll with repeated `mailbox_recv`; a no-message result is final for this turn
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
+- Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check instead of stopping. This handles group subscriber wakeups, which nudge the moderator session without creating a personal delivery.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - The current session owns only the delivery lifecycle of the inbound message it claimed with `mailbox_recv`

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roundtable"
+  short_description: "Moderate multi-agent group discussions"
+  default_prompt: "Start a roundtable discussion about the topic I provide."

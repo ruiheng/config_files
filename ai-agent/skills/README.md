@@ -33,6 +33,8 @@ Use `SKILL.md` for:
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
 - Agent 5, **Browser Tester** (`browser-test`): usually a reusable long-lived runtime validation agent, keeps browser state warm when available, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - Refactor Reviewer (`refactor-review`): advisory reviewer that inspects existing code for duplication and simplification opportunities without making changes
+- Roundtable Moderator (`roundtable`): user-facing discussion controller; creates mailbox groups, selects participants, drains group updates, and presents synthesis
+- Roundtable Participant (`roundtable-participant`): agent-deck session that reads a group stream as one participant and posts concise role-specific replies
 - User: makes acceptance decisions only when the workflow explicitly requires human gating
 
 ## Core Transport
@@ -71,6 +73,19 @@ Use `SKILL.md` for:
 5. After the assigned goal is complete, planner may request one final integrated review from its own integration branch.
 6. Planner sends one `plan_report_delivered` summary back to supervisor.
 7. After receiving a completed report with no open items, supervisor merges the planner integration branch, then cleans up the planner-owned structure for that run.
+
+## Roundtable Discussion Workflow
+
+Use `roundtable` when the user wants a multi-agent discussion, brainstorm, critique, or advisory panel.
+
+1. User talks only to the moderator.
+2. Moderator clarifies intent, proposes participants, and creates a `group/roundtable-...` mailbox group.
+3. Moderator registers itself as group notification subscriber with `mailbox_group_add_subscriber`.
+4. Participants are real agent-deck sessions created with tool commands resolved through role `roundtable_participant`.
+5. Moderator sends clarified user intent to the group and nudges selected participants with personal mailbox control messages.
+6. Participants read group unread messages with `mailbox_recv` plus `as_person`, then post one group reply.
+7. Group subscriber notification wakes the moderator; if normal `check-agent-mail` finds no personal delivery, it may hand off to `roundtable` moderator group check when active roundtable context is present.
+8. Moderator presents synthesis to the user with per-participant `message_id` traceability; raw group history remains the source of truth.
 
 ## Flow Diagram
 
