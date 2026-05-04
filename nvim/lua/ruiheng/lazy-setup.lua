@@ -729,10 +729,10 @@ require("lazy").setup({
     { "nvim-treesitter/nvim-treesitter",
       lazy = true,
       event = { "User LazyLoadProgramming" },
-      branch = 'master',
+      branch = 'main',
       build = ':TSUpdate', -- We recommend updating the parsers on update
       config = function()
-        local configs = require("nvim-treesitter.configs")
+        local configs = require("nvim-treesitter")
         configs.setup {
           ensure_installed = { "c", "cpp", "haskell", "python", "javascript", "css", "html", "markdown", "markdown_inline", "git_rebase", "gitcommit", "gitignore", "json", "lua", "make", "toml", "yaml", "vim", "vimdoc", "zig" },
           highlight = {
