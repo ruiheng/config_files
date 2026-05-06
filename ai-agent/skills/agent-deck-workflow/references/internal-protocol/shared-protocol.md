@@ -20,7 +20,7 @@ Those belong in the concrete action skill that sends or handles that workflow me
 - `*_tool_profile`: logical workflow policy selector for a session tool
 - `*_tool_cmd`: concrete resolved command used to create or continue a session
 - `inbox_address`: `agent-deck/<agent-deck-session-id>`
-- `.agent-artifacts/planner-workspace.json`: workspace ownership record, not identity source
+- `.agent-artifacts/planner-workspace.json`: task-closeout workspace reservation record, not identity source and not a cross-task scheduler lock
 
 ## Agent Deck Mode Detection
 

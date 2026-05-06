@@ -200,6 +200,25 @@ record_field() {
   jq -r --arg field "$field" '.[$field] // empty' "$file" 2>/dev/null || true
 }
 
+require_release_record_match() {
+  local record_file="$1"
+  local record_planner_session_id record_planner_session_resolved record_worker_workspace record_planner_workspace
+
+  record_planner_session_id="$(record_field "$record_file" "planner_session_id")"
+  [[ -n "$record_planner_session_id" ]] || die "workspace record missing planner_session_id: ${record_file}"
+  record_planner_session_resolved="$(try_resolve_session_id "$record_planner_session_id")"
+  if [[ "$record_planner_session_id" != "$planner_session_ref" && "$record_planner_session_id" != "$planner_session_input" && "$record_planner_session_resolved" != "$planner_session_ref" ]]; then
+    die "workspace record planner mismatch: record='${record_planner_session_id}' expected='${planner_session_ref}' file='${record_file}'"
+  fi
+
+  record_worker_workspace="$(record_field "$record_file" "worker_workspace")"
+  record_planner_workspace="$(record_field "$record_file" "planner_workspace")"
+  [[ -n "$record_worker_workspace" ]] || die "workspace record missing worker_workspace: ${record_file}"
+  [[ -n "$record_planner_workspace" ]] || die "workspace record missing planner_workspace: ${record_file}"
+  [[ "$record_worker_workspace" == "$worker_workspace" ]] || die "workspace record worker path mismatch: record='${record_worker_workspace}' expected='${worker_workspace}' file='${record_file}'"
+  [[ "$record_planner_workspace" == "$planner_workspace" ]] || die "workspace record planner path mismatch: record='${record_planner_workspace}' expected='${planner_workspace}' file='${record_file}'"
+}
+
 record_summary() {
   local file="$1"
   local planner_session_id integration_branch supervisor_session_id worker_workspace planner_workspace
@@ -385,15 +404,11 @@ planner_session_ref="$(resolve_session_id "$planner_session_ref")"
 if (( release_workspaces == 1 )); then
   removed_any=0
   for record_file in "${record_files[@]}"; do
-    if [[ ! -f "$record_file" ]]; then
-      continue
-    fi
-    record_planner_session_id="$(record_field "$record_file" "planner_session_id")"
-    [[ -n "$record_planner_session_id" ]] || die "workspace record missing planner_session_id: ${record_file}"
-    record_planner_session_resolved="$(try_resolve_session_id "$record_planner_session_id")"
-    if [[ "$record_planner_session_id" != "$planner_session_ref" && "$record_planner_session_id" != "$planner_session_input" && "$record_planner_session_resolved" != "$planner_session_ref" ]]; then
-      die "workspace record planner mismatch: record='${record_planner_session_id}' expected='${planner_session_ref}' file='${record_file}'"
-    fi
+    [[ -f "$record_file" ]] || continue
+    require_release_record_match "$record_file"
+  done
+  for record_file in "${record_files[@]}"; do
+    [[ -f "$record_file" ]] || continue
     rm -f "$record_file" || die "failed to remove workspace record: ${record_file}"
     removed_any=1
   done

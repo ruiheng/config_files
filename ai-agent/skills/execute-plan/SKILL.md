@@ -19,6 +19,7 @@ Provide the mailbox body from `execute_plan`.
 - this planner lane is one supervisor-dispatched planner run with its own planner session, workspace contract, integration branch, and cleanup lifecycle
 - this planner owns one workspace
 - this planner lane uses one workspace only
+- workspace reservation records are prepared per task and released by closeout; planner-lane exclusivity comes from this serial execution contract, not from keeping a record across task gaps
 - planner default role is coordinator, not coder
 - this planner owns task decomposition inside that workspace
 - tasks inside that workspace execute serially
@@ -54,6 +55,7 @@ Skill-specific context resolution:
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
 4. execute that task sequence serially
 5. for each implementation task:
+   - before starting the task, run workspace prepare for the recorded workspace and integration branch
    - start with `delegate-task` and apply its own decision gate for whether delegation is justified
    - if `delegate-task` says delegation is justified, send the task and pass the chosen `Per-task review` policy into the delegate brief
    - if `delegate-task` says the work should be done directly, planner may use `Direct Planner Implementation`
@@ -62,7 +64,7 @@ Skill-specific context resolution:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
 8. send one final `plan_report_delivered` message to supervisor; do not treat the plan as complete before this mailbox send succeeds
-9. after the final report is sent, if no more tasks remain in this workspace, run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --planner-session-id <planner_session_id> --release-workspaces`
+9. after the final report is sent, report completion to supervisor
 
 ## Direct Planner Implementation
 
@@ -92,7 +94,7 @@ Required sequence:
    - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
    - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>`
    - after reviewer acceptance, handle the resulting `closeout_delivered` with `planner-closeout` before marking the task done
-7. if `Per-task review: skip`, run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
+7. if `Per-task review: skip`, run workspace prepare for this task, then run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
 8. record the result under `Tasks Completed`
 
 Direct-task git writes, commits, review requests, and closeout are workflow-authorized on this direct-work path.
@@ -107,8 +109,7 @@ Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - do not treat completed implementation, review, or closeout as plan completion; the plan completes only after `plan_report_delivered` is successfully sent to supervisor
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop
-- when all current tasks in this workspace are complete and the final report is delivered, release `.agent-artifacts/planner-workspace.json`
-- use `prepare-workspaces.sh --release-workspaces` for that release; do not delete the record files ad hoc
+- do not rely on `.agent-artifacts/planner-workspace.json` as a cross-task lock; each task that can reach closeout must prepare its own reservation first
 - do not ask for routine confirmation before planner-owned branch, commit, review-request, closeout, or final-report actions
 
 ## Final Report Template
@@ -147,12 +148,12 @@ Round: final
 - keep `worker_workspace` and `planner_workspace` equal for the full dispatched plan; do not introduce a second workspace
 - preserve the workspace `integration_branch` for the full plan unless the user explicitly changes it
 - treat `integration_branch` as the planner-owned branch prepared for this dispatched plan; do not reinterpret it as the supervisor landing branch and do not silently jump onto some older leftover branch
-- run workspace prepare once at the start of plan execution; treat the resulting detached-HEAD state in `worker_workspace` as authoritative until an explicit task branch is attached
+- run workspace prepare before each task that may later require closeout; treat the resulting detached-HEAD state in `worker_workspace` as authoritative until an explicit task branch is attached
 - do not infer a task start point from current `HEAD`; use the explicit `integration_branch` from workflow context instead
 - when self-implementing on the direct-work path, attach a real task branch from `integration_branch` before committing
 - treat workspace prep as an early closeout viability gate too: if another worktree already holds `integration_branch` and planner closeout later needs to attach it here, stop immediately instead of letting the plan fail only at final closeout
 - keep the planner workspace record aligned with the current planner session; if the workspace-prep script reports a live-session mismatch, stop instead of reusing the workspace
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
-- after the planner has no remaining work in this workspace, release the workspace records with `prepare-workspaces.sh --release-workspaces`
+- do not run ad hoc workspace record cleanup; closeout helpers own release and `prepare-workspaces.sh --release-workspaces` is only for explicit script-reported cleanup recovery
 - do not naturally end after the last task if the final report to supervisor is still pending
 - if this turn owns a claimed `execute_plan` delivery, complete the final report and the delivery lifecycle step before ending

@@ -36,6 +36,8 @@ When allocating a new planner lane:
 - this dispatch targets one planner lane in one workspace
 - that planner owns task decomposition and must execute resulting tasks serially inside its workspace
 - dispatched plans use one workspace path only
+- do not dispatch another active planner lane into the same workspace unless explicitly resuming the same unfinished lane
+- workspace reservation records are task-closeout preparation records; they are not the scheduler for planner-lane exclusivity
 - internally set `planner_workspace = workspace` and `worker_workspace = workspace` for the full planner lane
 - do not introduce, infer, or later switch to a second workspace for this dispatched plan
 - prefer a child session for the dispatched planner when agent-deck can represent the workflow directly that way
@@ -89,6 +91,7 @@ Round: 1
 ## Planning Contract
 - Planner owns task decomposition and sequencing inside this workspace
 - Keep task execution serial in this workspace
+- Do not rely on workspace reservation records as cross-task locks; prepare the workspace again for each task closeout path
 - Default to `delegate-task` for code-changing implementation tasks
 - Let `delegate-task` own the delegate-vs-direct decision; do not restate a separate trivial/non-trivial test here
 - Planner may self-implement only when `delegate-task`'s own instructions say delegation is not justified and the work should be done directly

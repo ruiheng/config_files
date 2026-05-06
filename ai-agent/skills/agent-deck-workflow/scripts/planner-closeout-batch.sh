@@ -12,6 +12,7 @@ Required actions (hard-fail):
 Optional actions (soft-fail):
 - mailbox ack
 - release workspace active-task lock
+- release mirrored workspace planner records
 - prune stale task branches
 - desktop notifications
 - post-closeout health gate and disposable worker cleanup
@@ -242,6 +243,38 @@ release_active_task_lock() {
     fi
   else
     printf -v "$status_var" "not_present"
+  fi
+}
+
+release_workspace_records() {
+  local status_var="$1"
+  local release_output release_rc
+  local release_cmd=(
+    "${script_dir}/prepare-workspaces.sh"
+    --worker-workspace "$worker_workspace"
+    --planner-workspace "$planner_workspace"
+    --planner-session-id "$planner_session_ref"
+    --worker-artifact-root "$worker_artifact_root"
+    --planner-artifact-root "$planner_artifact_root"
+    --release-workspaces
+  )
+
+  set +e
+  release_output="$("${release_cmd[@]}" 2>&1)"
+  release_rc=$?
+  set -e
+  if (( release_rc == 0 )); then
+    debug "$release_output"
+    if [[ "$release_output" == *"status=already_absent"* ]]; then
+      printf -v "$status_var" "already_absent"
+    else
+      printf -v "$status_var" "released"
+    fi
+  else
+    echo "$release_output" >&2
+    printf -v "$status_var" "failed"
+    optional_fail_count=$((optional_fail_count + 1))
+    warn "failed to release mirrored workspace records rc=${release_rc}; rerun prepare-workspaces.sh --release-workspaces with the same worker/planner workspace pair"
   fi
 }
 
@@ -503,6 +536,7 @@ write_state_file() {
     --arg health_gate_status "$health_gate_status" \
     --arg workspace_lock_status "$workspace_lock_status" \
     --arg task_workspace_lock_status "$task_workspace_lock_status" \
+    --arg workspace_record_status "$workspace_record_status" \
     --arg ack_delivery_id "$ack_delivery_id" \
     --arg ack_status "$mailbox_ack_status" \
     --argjson switched_integration_branch "$switched_integration_branch" \
@@ -543,6 +577,7 @@ write_state_file() {
       optional_actions: {
         workspace_lock: $workspace_lock_status,
         task_workspace_lock: $task_workspace_lock_status,
+        workspace_records: $workspace_record_status,
         prune: $prune_status,
         health_gate: $health_gate_status
       },
@@ -617,6 +652,7 @@ prune_status="skipped"
 health_gate_status="skipped"
 workspace_lock_status="not_checked"
 task_workspace_lock_status="not_checked"
+workspace_record_status="not_checked"
 optional_fail_count=0
 mailbox_ack_requested=0
 mailbox_ack_completed=0
@@ -724,6 +760,12 @@ if (( run_health_gate )); then
     optional_fail_count=$((optional_fail_count + 1))
     warn "optional health gate script missing: ${health_gate_script}"
   fi
+fi
+
+if (( optional_fail_count == 0 )); then
+  release_workspace_records workspace_record_status
+else
+  workspace_record_status="skipped_optional_failures"
 fi
 
 write_state_file
