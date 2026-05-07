@@ -159,3 +159,4 @@ Use the `agent_mailbox` MCP tools:
 - if reviewer continuity changes, resend full context
 - create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
 - after the first create step, later workflow turns must reuse the real `refactor_reviewer_session_id`; do not fall back to `refactor_reviewer_session_ref`
+- after the send succeeds, do not call `mailbox_recv`, poll, or wait for the review report; resume only from a later nudge or explicit mailbox-check request

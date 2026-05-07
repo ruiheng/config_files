@@ -78,6 +78,7 @@ Preferred transport interface:
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
+- do not call `mailbox_recv` after `mailbox_send` just to await a reply; delivery is asynchronous
 - never call `mailbox_wait` for receiver workflow pickup; keep it only for manual diagnostics or observation
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
@@ -97,6 +98,12 @@ Worker wake rule:
 - after `mailbox_send`, the normal non-local nudge should already be handled
 - a newly created or newly started target should use the same wake path as any other target: receive the sender nudge, then run `check-agent-mail`
 - long-running agent-mail polling processes are not recommended for delivery
+
+Sender/receiver turn rule:
+- sender turn ends after the required outbound `mailbox_send` or local continuation succeeds
+- expected replies are future inbound work, not part of the sender's current turn
+- receive replies only when this session is later nudged to run `check-agent-mail`, or when the human explicitly asks for a mailbox check
+- never self-poll with `mailbox_recv`, `mailbox_wait`, or repeated status checks to simulate waiting for a reply
 
 Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
@@ -145,6 +152,11 @@ Expected behavior:
    - normal workflow: do not pass `listener_message`
 3. queue the mailbox body with `mailbox_send`
 
+After send:
+- if no immediate local continuation remains, stop the workflow turn
+- do not call `mailbox_recv` to check whether the target already replied
+- resume only from a later nudge or explicit human mailbox-check request
+
 ## Receiver Contract
 
 When a workflow session is woken:
@@ -164,6 +176,8 @@ Idle behavior:
 - `mailbox_wait` is not a receiver workflow entrypoint
 - use `check-agent-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
 - do not poll with repeated `mailbox_recv`; one no-message result ends the mailbox-check turn
+- after one claimed personal delivery is completed, do not fetch another personal delivery in the same turn
+- a just-sent outbound message is not a reason to run `check-agent-mail`
 
 ## Natural End Gate
 
@@ -180,6 +194,7 @@ Before ending a workflow turn, check:
 - if context feels incomplete after compaction or interruption, can I recover the current workflow input from the mailbox body or `mailbox_read` before deciding to stop?
 
 If the task work is done but the required workflow send-back step is still pending, do not end. Send the required mailbox message first.
+If the required workflow send-back step has succeeded, do not keep the turn alive by checking for the next reply.
 If the task is blocked and cannot continue, do not end silently. Use the appropriate lifecycle/reporting step first.
 
 ## Error Handling And Diagnostics

@@ -294,6 +294,7 @@ Rules:
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>`; never create reviewer as a child of coder/requester
 - `mailbox_send` handles the normal non-local reviewer nudge
+- after the send succeeds, do not call `mailbox_recv`, poll, or wait for the reviewer report; resume only from a later nudge or explicit mailbox-check request
 
 ## Quality Bar
 

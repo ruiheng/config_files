@@ -18,6 +18,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 - Never call `mailbox_wait` in this skill; it is only for manual diagnostics outside this workflow
 - Do not poll with repeated `mailbox_recv`; a no-message result is final for this turn
+- After completing one claimed personal delivery, do not call `mailbox_recv` again in the same turn; wait for the next wakeup nudge or explicit human mailbox-check request
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
 - Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check instead of stopping. This handles group subscriber wakeups, which nudge the moderator session without creating a personal delivery.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision

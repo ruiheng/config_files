@@ -141,6 +141,7 @@ Round: 1
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "plan dispatch: <plan_id>"`
    - `body = <execute-plan mailbox body>`
+14. after the send succeeds, do not call `mailbox_recv`, poll, or wait for the planner report; resume only from a later nudge or explicit mailbox-check request
 
 Rules:
 - use `agent_deck_create_session` only when allocating a new planner lane; use `agent_deck_require_session` when resuming an existing planner session
