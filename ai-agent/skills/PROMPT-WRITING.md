@@ -110,6 +110,7 @@ Do not leave room for the agent to improvise between several "possible" options.
   - active waiting
   - sleep/poll loops
   - sender-side `mailbox_recv` to look for a just-requested reply
+  - sender-side intervention in the receiver's execution
   - speculative closeout
   - "it should finish soon"
 - after dispatch, the normal choices are:
@@ -166,6 +167,7 @@ Before landing a prompt change, check for these:
 - Did we tell the receiver how another role works internally?
 - Did we leave room for active waiting or polling?
 - Did we let a sender call `mailbox_recv` after `mailbox_send` instead of waiting for a wakeup nudge?
+- Did we let a sender cross the mailbox/nudge boundary to manage receiver execution?
 - Did we allow the agent to mutate shared workspace state while another agent may still own it?
 - Did we describe manual steps where a script/tool should be authoritative?
 - Did we make `ack` happen before the workflow action is actually complete?

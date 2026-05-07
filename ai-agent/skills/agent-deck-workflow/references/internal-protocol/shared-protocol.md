@@ -100,10 +100,12 @@ Worker wake rule:
 - long-running agent-mail polling processes are not recommended for delivery
 
 Sender/receiver turn rule:
+- communication boundary is mailbox delivery plus the corresponding nudge; do not cross it by observing or repairing the receiver's execution
 - sender turn ends after the required outbound `mailbox_send` or local continuation succeeds
 - expected replies are future inbound work, not part of the sender's current turn
 - receive replies only when this session is later nudged to run `check-agent-mail`, or when the human explicitly asks for a mailbox check
 - never self-poll with `mailbox_recv`, `mailbox_wait`, or repeated status checks to simulate waiting for a reply
+- receiver execution problems belong to the receiver's next report, lifecycle response, or user-directed troubleshooting, not sender-side correction
 
 Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
