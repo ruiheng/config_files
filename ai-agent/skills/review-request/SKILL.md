@@ -89,6 +89,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`.
 Skill-specific context resolution:
 - `task_id`: explicit -> branch `task/<task_id>` -> delegated context -> ask
 - `planner_session_id`: explicit/context -> ask
+- `planner_workspace`: explicit -> delegated context -> current workspace when requester is planner -> ask
 - `requester_role`: explicit -> delegated context -> current workflow role -> default `coder`
 - `requester_session_id`: explicit -> current session id -> delegated context -> ask
 - `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
@@ -148,6 +149,7 @@ Action: review_requested
 From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
+Planner workspace: <planner_workspace>
 Round: <round>
 
 ## Summary
@@ -220,6 +222,7 @@ Action: review_requested
 From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
+Planner workspace: <planner_workspace>
 Round: <round>
 
 ## Summary

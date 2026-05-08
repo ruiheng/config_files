@@ -137,6 +137,7 @@ Action: <rework_required | stop_recommended>
 From: reviewer <reviewer_session_id>
 To: <requester_role> <requester_session_id>
 Planner: <planner_session_id>
+Planner workspace: <planner_workspace_or_N/A>
 Round: <round>
 
 ### Summary
@@ -204,6 +205,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask
 - `planner_session_id`: explicit -> mailbox body -> ask
+- `planner_workspace`: explicit -> mailbox body `Planner workspace` -> default `N/A`
 - `reviewer_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
 - `requester_role`: explicit -> mailbox body `From` header label -> default `coder`
 - `requester_session_id`: explicit -> mailbox body `From` header -> ask

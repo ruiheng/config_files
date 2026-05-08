@@ -42,6 +42,7 @@ Follow shared protocol in `agent-deck-workflow/SKILL.md`:
 Skill-specific context resolution:
 - `task_id`: explicit -> review report text -> ask
 - `planner_session_id`: explicit -> review context -> ask
+- `planner_workspace`: explicit -> accepted review report `Planner workspace` -> review context -> planner `agent-deck session show --json` path -> ask
 - `closeout_sender_session_id`: explicit -> current session id -> review context -> ask
 - `closeout_sender_role`: explicit -> current workflow role -> review context -> default `closeout_executor`
 - `reviewer_session_id`: explicit -> review context -> ask
@@ -68,7 +69,8 @@ If required values are resolved:
 3. use `agent_mailbox`
 4. first call `agent_deck_require_session` with:
    - `session_id = <planner_session_id>`
-   - `workdir = <current workspace>`
+   - `workdir = <planner_workspace>`
+   - do not use the reviewer/current workspace unless it is explicitly the planner workspace
 5. use `mailbox_send` with:
    - `from_address = agent-deck/<closeout_sender_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
@@ -138,6 +140,7 @@ Action: closeout_delivered
 From: <closeout_sender_role> <closeout_sender_session_id>
 To: planner <planner_session_id>
 Planner: <planner_session_id>
+Planner workspace: <planner_workspace>
 Round: final
 Accepted Review By: reviewer <reviewer_session_id>
 

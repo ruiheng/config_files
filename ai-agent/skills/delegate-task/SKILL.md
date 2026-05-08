@@ -144,6 +144,8 @@ Round: 1
 ## Agent Deck Context
 - Planner session: [planner_session_id]
 - Coder session id: {{TO_SESSION_ID}}
+- Planner workspace: [planner_workspace]
+- Worker workspace: [worker_workspace]
 - Reviewer session ref: [reviewer_session_ref or `N/A` when `Per-task review: skip`]
 - Reviewer session id: [reviewer_session_id or `N/A` when not yet created or `Per-task review: skip`]
 - Coder tool profile: [coder_tool_profile or `explicit`]
