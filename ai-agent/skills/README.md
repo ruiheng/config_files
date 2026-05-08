@@ -130,8 +130,9 @@ flowchart TD
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
-- coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not treat cross-session dispatch as a synchronous substep that will finish soon
-- after cross-session dispatch, planner either does independent non-interfering work or stops; do not sleep, poll, or proactively wait for another agent's progress
+- coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not expect cross-session dispatch to finish within a short wait
+- after cross-session dispatch, planner may wait, do independent non-interfering work, or stop
+- if a wait times out, planner either waits again or stops; it must not inspect or repair another agent's session
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
 - planner may skip per-task review when its current plan policy allows it; final integrated review can be requested later from the planner-owned integration branch

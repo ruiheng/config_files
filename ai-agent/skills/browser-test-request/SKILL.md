@@ -158,6 +158,8 @@ Use the `agent_mailbox` MCP tools:
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code
-- after the send succeeds, do not call `mailbox_recv`, poll, or wait for the browser report; resume only from a later nudge or explicit mailbox-check request
+- after the send succeeds, report the sent status, do independent local work, or optionally wait
+- if a wait times out, either wait again or stop; do not inspect or repair the browser-tester session
+- resume report handling from a later nudge, explicit human mailbox-check request, or an actually received reply
 - requester should provide required login, auth, environment, and test-data context whenever possible
 - leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction

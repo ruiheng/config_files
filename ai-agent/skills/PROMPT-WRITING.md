@@ -107,15 +107,16 @@ Do not leave room for the agent to improvise between several "possible" options.
 - cross-session work is asynchronous and may take unbounded time
 - `mailbox_send` completion means the sender is done with delivery, not that a reply is ready
 - prompts must not imply:
-  - active waiting
-  - sleep/poll loops
-  - sender-side `mailbox_recv` to look for a just-requested reply
+  - a reply should arrive within a short timeout
   - sender-side intervention in the receiver's execution
   - speculative closeout
   - "it should finish soon"
-- after dispatch, the normal choices are:
+- after dispatch or a wait timeout, the normal choices are:
+  - wait again
   - do independent work
   - or stop
+- a timeout is not evidence that the receiver is broken
+- do not inspect or repair another session because a wait timed out
 - resume reply handling only from a later wakeup nudge or explicit human mailbox-check request
 
 ### 10. Protect shared workspace state
@@ -165,8 +166,8 @@ Before landing a prompt change, check for these:
 - Did we make the agent infer a choice that should be fixed by policy?
 - Did we duplicate another skill's logic instead of referencing it?
 - Did we tell the receiver how another role works internally?
-- Did we leave room for active waiting or polling?
-- Did we let a sender call `mailbox_recv` after `mailbox_send` instead of waiting for a wakeup nudge?
+- Did we imply a reply should arrive within a short timeout?
+- Did we define timeout behavior as wait again or stop?
 - Did we let a sender cross the mailbox/nudge boundary to manage receiver execution?
 - Did we allow the agent to mutate shared workspace state while another agent may still own it?
 - Did we describe manual steps where a script/tool should be authoritative?

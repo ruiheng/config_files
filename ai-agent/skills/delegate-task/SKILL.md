@@ -134,6 +134,7 @@ Round: 1
 
 ## Required Workflow Step
 - If `Per-task review: required`, coder must run the `review-request` skill after the delivery commit; that skill creates or reuses the reviewer on demand as a child of planner
+- After `review-request` sends the request, coder may wait, do independent local work, or stop; if waiting times out, wait again or stop instead of inspecting or repairing the reviewer session
 - If `Per-task review: skip`, do not start reviewer for this task unless planner explicitly requests review later
 
 ## Important Notes
@@ -218,9 +219,9 @@ Rules:
 - when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send/nudge path that applies has completed
 - if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path
-- treat coder/reviewer progress as asynchronous with unbounded duration; do not assume a closeout or reply will arrive within this turn
+- treat coder/reviewer progress as asynchronous with unbounded duration; a wait timeout means no reply yet, not a failure
 - after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise report current state and stop instead of waiting
-- after sending, do not sleep, poll, or proactively check mail just to await coder/reviewer progress
+- if waiting for coder/reviewer progress times out, either wait again or stop; do not inspect or repair the target session
 - in the delegated task workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
 - if `worker_workspace == planner_workspace`, planner must still avoid touching that delegated task worktree state outside the delegate/closeout workflow
 - if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion

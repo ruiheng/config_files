@@ -78,10 +78,12 @@ Preferred transport interface:
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
-- do not call `mailbox_recv` after `mailbox_send` just to await a reply; delivery is asynchronous
 - never call `mailbox_wait` for receiver workflow pickup; keep it only for manual diagnostics or observation
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
+- after outbound `mailbox_send` succeeds, any same-turn wait is optional observation; a timeout means no reply yet, not a receiver failure
+- after a wait timeout, either wait again or stop and report the sent status
+- `mailbox_read` / `mailbox_list` are for recovering this session's prior workflow input, not for diagnosing why a just-requested reply has not arrived
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
 - `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail` apply only to the currently claimed inbound delivery in this session
 - `mailbox_send` has no sender-side `ack`; sender-side completion is the successful `mailbox_send` result
@@ -104,7 +106,8 @@ Sender/receiver turn rule:
 - sender turn ends after the required outbound `mailbox_send` or local continuation succeeds
 - expected replies are future inbound work, not part of the sender's current turn
 - receive replies only when this session is later nudged to run `check-agent-mail`, or when the human explicitly asks for a mailbox check
-- never self-poll with `mailbox_recv`, `mailbox_wait`, or repeated status checks to simulate waiting for a reply
+- do not treat missing replies after a short wait as actionable failure evidence
+- never use repeated status checks, session inspection, or target workspace inspection to explain or repair a missing reply
 - receiver execution problems belong to the receiver's next report, lifecycle response, or user-directed troubleshooting, not sender-side correction
 
 Inbox rule:
@@ -155,8 +158,8 @@ Expected behavior:
 3. queue the mailbox body with `mailbox_send`
 
 After send:
-- if no immediate local continuation remains, stop the workflow turn
-- do not call `mailbox_recv` to check whether the target already replied
+- if no immediate local continuation remains, either stop or wait for a reply as optional observation
+- if waiting times out, wait again or stop; do not inspect or repair the target session
 - resume only from a later nudge or explicit human mailbox-check request
 
 ## Receiver Contract

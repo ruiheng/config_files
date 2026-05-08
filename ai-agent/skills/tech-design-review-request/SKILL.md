@@ -184,7 +184,10 @@ Before sending:
    - `subject = "tech-design review: <task_id> r<round>"`
    - `body = <tech-design review request body>`
 
-After sending, do not sleep, poll, or proactively check mail just to await the architect report.
+After sending:
+- report the sent status, do independent local work, or optionally wait
+- if a wait times out, either wait again or stop; do not inspect or repair the architect session
+- resume report handling from a later nudge, explicit human mailbox-check request, or an actually received reply
 
 ## After Report Handling
 
