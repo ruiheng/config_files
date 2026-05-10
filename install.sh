@@ -35,6 +35,7 @@ ALL_REPLACE=0
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
 AGENT_MAILBOX_MCP_AVAILABLE=0
+CODEX_CLI_COMMAND="codext"
 
 # Colors for output
 RED='\033[0;31m'
@@ -547,6 +548,123 @@ install_agent_browser() {
     return 1
 }
 
+install_codext() {
+    log_info "Checking codext..."
+
+    if ! ensure_required_command "npm"; then
+        log_error "codext requires npm"
+        return 1
+    fi
+
+    if command -v codext &>/dev/null; then
+        CODEX_CLI_COMMAND="codext"
+        log_ok "Found codext"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: npm install -g @loongphy/codext"
+        CODEX_CLI_COMMAND="codext"
+        return 0
+    fi
+
+    log_info "Running: npm install -g @loongphy/codext"
+    if ! npm install -g @loongphy/codext; then
+        log_error "Failed to install codext with npm"
+        return 1
+    fi
+
+    if command -v codext &>/dev/null; then
+        CODEX_CLI_COMMAND="codext"
+        log_ok "Installed codext"
+        return 0
+    fi
+
+    log_error "Command still unavailable after install: codext"
+    return 1
+}
+
+ensure_toml_string_key() {
+    local file="$1"
+    local section="$2"
+    local key="$3"
+    local value="$4"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would ensure [$section] $key in: $file"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$file")" || {
+        log_error "Failed to create config directory for: $file"
+        return 1
+    }
+    touch "$file" || {
+        log_error "Failed to create config file: $file"
+        return 1
+    }
+
+    TOML_SECTION="$section" TOML_KEY="$key" TOML_VALUE="$value" perl -0pi -e '
+        my $section = $ENV{TOML_SECTION};
+        my $key = $ENV{TOML_KEY};
+        my $value = $ENV{TOML_VALUE};
+
+        my $section_re = quotemeta($section);
+        my $key_re = quotemeta($key);
+        $value =~ s/\\/\\\\/g;
+        $value =~ s/"/\\"/g;
+        my $entry = "$key = \"$value\"";
+
+        my @lines = split /\n/, $_, -1;
+        pop @lines if @lines && $lines[-1] eq "";
+
+        my @out = ();
+        my $in_section = 0;
+        my $found_section = 0;
+        my $found_key = 0;
+
+        for my $line (@lines) {
+          if ($line =~ /^\s*\[$section_re\]\s*$/) {
+            $in_section = 1;
+            $found_section = 1;
+            push @out, $line;
+            next;
+          }
+
+          if ($in_section && $line =~ /^\s*\[/) {
+            push @out, $entry unless $found_key;
+            $in_section = 0;
+          }
+
+          if ($in_section && $line =~ /^\s*$key_re\s*=/) {
+            push @out, $entry;
+            $found_key = 1;
+            next;
+          }
+
+          push @out, $line;
+        }
+
+        if ($found_section && $in_section && !$found_key) {
+          push @out, $entry;
+        }
+
+        if (!$found_section) {
+          push @out, "" if @out && $out[-1] ne "";
+          push @out, "[$section]", $entry;
+        }
+
+        $_ = join("\n", @out);
+        $_ .= "\n";
+    ' "$file" || {
+        log_error "Failed to update TOML config: $file"
+        return 1
+    }
+
+    log_ok "Ensured [$section] $key in: $file"
+    return 0
+}
+
 ensure_agent_mailbox_mcp_command() {
     if [[ $AGENT_MAILBOX_MCP_AVAILABLE -eq 1 ]]; then
         log_ok "agent_mailbox MCP command already available"
@@ -657,28 +775,28 @@ install_gemini_agent_mailbox_mcp() {
 }
 
 remove_codex_legacy_workflow_mailbox_mcp() {
-    if ! command -v codex &>/dev/null; then
+    if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: codex mcp remove workflow_mailbox"
+        log_dry "Would run: $CODEX_CLI_COMMAND mcp remove workflow_mailbox"
         return 0
     fi
 
-    codex mcp remove workflow_mailbox >/dev/null 2>&1 || true
+    "$CODEX_CLI_COMMAND" mcp remove workflow_mailbox >/dev/null 2>&1 || true
 }
 
 codex_agent_mailbox_uses_builtin_command() {
     local mcp_config
 
-    mcp_config="$(codex mcp get agent_mailbox 2>/dev/null)" || return 1
+    mcp_config="$("$CODEX_CLI_COMMAND" mcp get agent_mailbox 2>/dev/null)" || return 1
     [[ "$mcp_config" == *"command: agent-mailbox"* ]] && [[ "$mcp_config" == *"args: mcp"* ]]
 }
 
 install_codex_agent_mailbox_mcp() {
-    if ! command -v codex &>/dev/null; then
-        log_warn "Skipping Codex MCP install (codex not found)"
+    if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
+        log_warn "Skipping Codex MCP install ($CODEX_CLI_COMMAND not found)"
         return 0
     fi
 
@@ -687,17 +805,17 @@ install_codex_agent_mailbox_mcp() {
     if codex_agent_mailbox_uses_builtin_command; then
         log_ok "Codex MCP already configured: agent_mailbox"
     else
-        if codex mcp get agent_mailbox >/dev/null 2>&1; then
+        if "$CODEX_CLI_COMMAND" mcp get agent_mailbox >/dev/null 2>&1; then
             if [[ $DRY_RUN -eq 1 ]]; then
-                log_dry "Would run: codex mcp remove agent_mailbox"
+                log_dry "Would run: $CODEX_CLI_COMMAND mcp remove agent_mailbox"
             else
-                codex mcp remove agent_mailbox >/dev/null 2>&1 || true
+                "$CODEX_CLI_COMMAND" mcp remove agent_mailbox >/dev/null 2>&1 || true
             fi
         fi
 
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would run: codex mcp add agent_mailbox -- agent-mailbox mcp"
-        elif ! codex mcp add agent_mailbox -- agent-mailbox mcp; then
+            log_dry "Would run: $CODEX_CLI_COMMAND mcp add agent_mailbox -- agent-mailbox mcp"
+        elif ! "$CODEX_CLI_COMMAND" mcp add agent_mailbox -- agent-mailbox mcp; then
             log_error "Failed to configure Codex MCP: agent_mailbox"
             return 1
         fi
@@ -709,6 +827,10 @@ install_codex_agent_mailbox_mcp() {
 
     local codex_config="$HOME/.codex/config.toml"
     if [[ ! -f "$codex_config" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would create Codex config: $codex_config"
+            return 0
+        fi
         log_error "Missing Codex config: $codex_config"
         return 1
     fi
@@ -916,6 +1038,58 @@ check_agent_deck_prerequisites() {
     return 0
 }
 
+agent_deck_supports_codex_command_config() {
+    local probe_home
+    local probe_project
+    local probe_output
+
+    probe_home="$(mktemp -d "${TMPDIR:-/tmp}/agent-deck-codext-probe-home.XXXXXX")" || return 1
+    probe_project="$(mktemp -d "${TMPDIR:-/tmp}/agent-deck-codext-probe-project.XXXXXX")" || {
+        rm -rf "$probe_home"
+        return 1
+    }
+
+    mkdir -p "$probe_home/.agent-deck" || {
+        rm -rf "$probe_home" "$probe_project"
+        return 1
+    }
+
+    printf '[codex]\ncommand = "codext"\n' > "$probe_home/.agent-deck/config.toml" || {
+        rm -rf "$probe_home" "$probe_project"
+        return 1
+    }
+
+    probe_output="$(HOME="$probe_home" agent-deck add "$probe_project" -t codext-probe -c codex --no-parent --json 2>/dev/null)" || {
+        rm -rf "$probe_home" "$probe_project"
+        return 1
+    }
+
+    rm -rf "$probe_home" "$probe_project"
+
+    jq -e '.resolved_command == "codext"' >/dev/null 2>&1 <<< "$probe_output"
+}
+
+configure_agent_deck_codex_command() {
+    local agent_deck_config="$HOME/.agent-deck/config.toml"
+
+    if ! command -v agent-deck &>/dev/null; then
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would probe agent-deck support for [codex].command"
+        log_dry "Would ensure [codex] command in: $agent_deck_config"
+        return 0
+    fi
+
+    if ! agent_deck_supports_codex_command_config; then
+        log_warn "Installed agent-deck does not support [codex].command; update agent-deck before using codext sessions"
+        return 0
+    fi
+
+    ensure_toml_string_key "$agent_deck_config" "codex" "command" "codext"
+}
+
 is_agent_deck_related_skill() {
     local skill_name="$1"
     case "$skill_name" in
@@ -939,6 +1113,10 @@ setup_agent_deck_integration() {
     log_ok "Found agent-deck"
 
     if ! check_agent_deck_prerequisites; then
+        return 1
+    fi
+
+    if ! configure_agent_deck_codex_command; then
         return 1
     fi
 
@@ -1434,6 +1612,13 @@ install_codex_skills() {
     install_skills_individually "Codex" "$HOME/.codex/skills"
 }
 
+ensure_codex_tui_usage_limit_resume_prompt() {
+    local codex_config="$HOME/.codex/config.toml"
+    local prompt="The previous turn stopped because the active account hit a usage limit. You can go on now."
+
+    ensure_toml_string_key "$codex_config" "tui" "usage_limit_resume_prompt" "$prompt"
+}
+
 install_opencode_skills() {
     install_skills_individually "OpenCode" "$HOME/.config/opencode/skills"
 }
@@ -1469,6 +1654,7 @@ install_codex_config() {
     fi
 
     install_codex_skills
+    ensure_codex_tui_usage_limit_resume_prompt || return 1
 
     # Link Codex escalation rules for workflow automation approvals
     if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
@@ -1827,6 +2013,10 @@ main() {
     ensure_path_contains_local_bin
 
     if ! install_agent_browser; then
+        exit 1
+    fi
+
+    if ! install_codext; then
         exit 1
     fi
 
