@@ -1038,37 +1038,6 @@ check_agent_deck_prerequisites() {
     return 0
 }
 
-agent_deck_supports_codex_command_config() {
-    local probe_home
-    local probe_project
-    local probe_output
-
-    probe_home="$(mktemp -d "${TMPDIR:-/tmp}/agent-deck-codext-probe-home.XXXXXX")" || return 1
-    probe_project="$(mktemp -d "${TMPDIR:-/tmp}/agent-deck-codext-probe-project.XXXXXX")" || {
-        rm -rf "$probe_home"
-        return 1
-    }
-
-    mkdir -p "$probe_home/.agent-deck" || {
-        rm -rf "$probe_home" "$probe_project"
-        return 1
-    }
-
-    printf '[codex]\ncommand = "codext"\n' > "$probe_home/.agent-deck/config.toml" || {
-        rm -rf "$probe_home" "$probe_project"
-        return 1
-    }
-
-    probe_output="$(HOME="$probe_home" agent-deck add "$probe_project" -t codext-probe -c codex --no-parent --json 2>/dev/null)" || {
-        rm -rf "$probe_home" "$probe_project"
-        return 1
-    }
-
-    rm -rf "$probe_home" "$probe_project"
-
-    jq -e '.resolved_command == "codext"' >/dev/null 2>&1 <<< "$probe_output"
-}
-
 configure_agent_deck_codex_command() {
     local agent_deck_config="$HOME/.agent-deck/config.toml"
 
@@ -1077,13 +1046,7 @@ configure_agent_deck_codex_command() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would probe agent-deck support for [codex].command"
         log_dry "Would ensure [codex] command in: $agent_deck_config"
-        return 0
-    fi
-
-    if ! agent_deck_supports_codex_command_config; then
-        log_warn "Installed agent-deck does not support [codex].command; update agent-deck before using codext sessions"
         return 0
     fi
 
