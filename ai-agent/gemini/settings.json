@@ -1,5 +1,18 @@
 {
+  "general": {
+    "enableAutoUpdate": false
+  },
+  "security": {
+    "enablePermanentToolApproval": true,
+    "disableAlwaysAllow": false
+  },
   "mcpServers": {
+    "agent-mailbox": {
+      "command": "agent-mailbox",
+      "args": [
+        "mcp"
+      ]
+    },
     "context7": {
       "url": "https://mcp.context7.com/mcp",
       "type": "http"

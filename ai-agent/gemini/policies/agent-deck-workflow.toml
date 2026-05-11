@@ -1,15 +1,35 @@
-[[policy]]
+[[rule]]
 name = "allow_agent_deck_cli"
 enabled = true
 decision = "allow"
 toolName = "run_shell_command"
-commandPrefix = "agent-deck"
-priority = 100
+commandPrefix = ["agent-deck"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
 
-[[policy]]
+[[rule]]
+name = "allow_agent_mailbox_cli"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["agent-mailbox"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
+
+[[rule]]
+name = "allow_agent_mailbox_mcp"
+enabled = true
+decision = "allow"
+toolName = "*"
+mcpName = "agent-mailbox"
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
+
+[[rule]]
 name = "allow_agent_deck_workflow_dispatch"
 enabled = true
 decision = "allow"
 toolName = "run_shell_command"
-commandPrefix = "~/.local/bin/adwf-send-and-wake"
-priority = 100
+commandPrefix = ["~/.local/bin/adwf-send-and-wake"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]

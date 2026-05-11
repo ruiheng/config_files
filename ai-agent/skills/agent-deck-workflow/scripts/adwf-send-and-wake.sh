@@ -94,7 +94,21 @@ listener_message=""
 wake_message=""
 wake_delay_seconds="10"
 json_output=0
-readonly fixed_wake_message="Use the check-agent-mail skill now. Receive the pending message and execute its requested action."
+
+workflow_wake_message() {
+  local tool_cmd="$1"
+  case "${tool_cmd%% *}" in
+    codex|codext)
+      printf '$check-agent-mail\nReceive the pending message and execute its requested action.'
+      ;;
+    claude|gemini|opencode)
+      printf '/check-agent-mail\nReceive the pending message and execute its requested action.'
+      ;;
+    *)
+      printf 'Use the check-agent-mail skill now. Receive the pending message and execute its requested action.'
+      ;;
+  esac
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -162,6 +176,18 @@ get_session_title() {
     return 1
   fi
   printf '%s' "$show_json" | json_get_field '.title'
+}
+
+get_session_command() {
+  local session="$1"
+  local show_json
+  if ! show_json="$(agent-deck session show "$session" --json 2>/dev/null)"; then
+    return 1
+  fi
+  if [[ "$(printf '%s' "$show_json" | json_get_field '.success')" == "false" ]]; then
+    return 1
+  fi
+  printf '%s' "$show_json" | json_get_field '.command'
 }
 
 if [[ -z "$to_session_id" ]]; then
@@ -243,6 +269,10 @@ start_status="skipped_same_session"
 listener_status="skipped_same_session"
 wakeup_status="skipped_same_session"
 nudge_after_send=0
+target_tool_cmd="$(get_session_command "$to_session_id" || true)"
+if [[ -z "$target_tool_cmd" && -n "$ensure_target_cmd" ]]; then
+  target_tool_cmd="$ensure_target_cmd"
+fi
 
 if [[ "$current_session_id" != "$to_session_id" ]]; then
   if (( created_target )); then
@@ -314,7 +344,7 @@ if (( nudge_after_send )); then
   if [[ -n "$wake_delay_seconds" && "$wake_delay_seconds" != "0" ]]; then
     sleep "$wake_delay_seconds"
   fi
-  run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$fixed_wake_message" >/dev/null
+  run_capture "agent-deck session send (${to_session_id})" agent-deck session send --no-wait "$to_session_id" "$(workflow_wake_message "$target_tool_cmd")" >/dev/null
   wakeup_status="sent"
 fi
 

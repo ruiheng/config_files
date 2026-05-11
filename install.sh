@@ -694,36 +694,62 @@ rewrite_gemini_agent_mailbox_config() {
     local gemini_config="$HOME/.gemini/settings.json"
     local tmp_file
 
-    if [[ ! -f "$gemini_config" ]]; then
-        return 1
-    fi
-
     if [[ $DRY_RUN -eq 1 ]]; then
         log_dry "Would rewrite Gemini MCP config in: $gemini_config"
         return 0
     fi
+
+    mkdir -p "$(dirname "$gemini_config")"
 
     tmp_file="$(mktemp "${TMPDIR:-/tmp}/gemini-mcp-config.XXXXXX")" || {
         log_error "Failed to create temporary file for Gemini MCP config"
         return 1
     }
 
-    if ! jq '
-        .mcpServers = ((.mcpServers // {})
-            | del(.workflow_mailbox)
-            | .agent_mailbox = (
-                (.agent_mailbox // {})
-                | .command = "agent-mailbox"
-                | .args = ["mcp"]
-            ))
-    ' "$gemini_config" > "$tmp_file"; then
+    if [[ -f "$gemini_config" ]]; then
+        if ! jq '
+            .general = ((.general // {})
+                | .enableAutoUpdate = false)
+            | .security = ((.security // {})
+                | .enablePermanentToolApproval = true
+                | .disableAlwaysAllow = false)
+            | .mcpServers as $mcpServers
+            | .mcpServers = (($mcpServers // {})
+                | del(.workflow_mailbox, .agent_mailbox)
+                | ."agent-mailbox" = ((($mcpServers // {})["agent-mailbox"] // {})
+                  | . + {
+                    "command": "agent-mailbox",
+                    "args": ["mcp"]
+                  }))
+        ' "$gemini_config" > "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to rewrite Gemini MCP config: $gemini_config"
+            return 1
+        fi
+    elif ! jq -n '
+        {
+          "general": {
+            "enableAutoUpdate": false
+          },
+          "security": {
+            "enablePermanentToolApproval": true,
+            "disableAlwaysAllow": false
+          },
+          "mcpServers": {
+            "agent-mailbox": {
+              "command": "agent-mailbox",
+              "args": ["mcp"]
+            }
+          }
+        }
+    ' > "$tmp_file"; then
         rm -f "$tmp_file"
         log_error "Failed to rewrite Gemini MCP config: $gemini_config"
         return 1
     fi
 
     if mv "$tmp_file" "$gemini_config"; then
-        log_ok "Rewrote Gemini MCP config: agent_mailbox"
+        log_ok "Rewrote Gemini MCP config: agent-mailbox"
         return 0
     fi
 
@@ -740,38 +766,18 @@ remove_gemini_stale_agent_mailbox_mcps() {
     if [[ $DRY_RUN -eq 1 ]]; then
         log_dry "Would run: gemini mcp remove workflow_mailbox"
         log_dry "Would run: gemini mcp remove agent_mailbox"
+        log_dry "Would run: gemini mcp remove agent-mailbox"
         return 0
     fi
 
     gemini mcp remove workflow_mailbox >/dev/null 2>&1 || true
     gemini mcp remove agent_mailbox >/dev/null 2>&1 || true
+    gemini mcp remove agent-mailbox >/dev/null 2>&1 || true
 }
 
 install_gemini_agent_mailbox_mcp() {
-    if [[ -f "$HOME/.gemini/settings.json" ]]; then
-        rewrite_gemini_agent_mailbox_config || return 1
-        return 0
-    fi
-
-    if ! command -v gemini &>/dev/null; then
-        log_warn "Skipping Gemini MCP install (gemini not found)"
-        return 0
-    fi
-
     remove_gemini_stale_agent_mailbox_mcps
-
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: gemini mcp add -s user agent_mailbox agent-mailbox mcp"
-        return 0
-    fi
-
-    if gemini mcp add -s user agent_mailbox agent-mailbox mcp; then
-        log_ok "Configured Gemini MCP: agent_mailbox"
-        return 0
-    fi
-
-    log_error "Failed to configure Gemini MCP: agent_mailbox"
-    return 1
+    rewrite_gemini_agent_mailbox_config || return 1
 }
 
 remove_codex_legacy_workflow_mailbox_mcp() {

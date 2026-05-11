@@ -79,6 +79,7 @@ Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
 - use `mailbox_recv` to claim mail
 - never call `mailbox_wait` for receiver workflow pickup; keep it only for manual diagnostics or observation
+- never pass `group/` addresses to `mailbox_bind`; group streams are read with explicit `mailbox_recv addresses=[...] as_person=...`
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
 - after outbound `mailbox_send` succeeds, any same-turn wait is optional observation; a timeout means no reply yet, not a receiver failure

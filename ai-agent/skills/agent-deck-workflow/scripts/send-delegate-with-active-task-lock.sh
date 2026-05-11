@@ -57,7 +57,21 @@ wake_fail() {
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly fixed_wake_message="Use the check-agent-mail skill now. Receive the pending message and execute its requested action."
+
+workflow_wake_message() {
+  local tool_cmd="$1"
+  case "${tool_cmd%% *}" in
+    codex|codext)
+      printf '$check-agent-mail\nReceive the pending message and execute its requested action.'
+      ;;
+    claude|gemini|opencode)
+      printf '/check-agent-mail\nReceive the pending message and execute its requested action.'
+      ;;
+    *)
+      printf 'Use the check-agent-mail skill now. Receive the pending message and execute its requested action.'
+      ;;
+  esac
+}
 
 workdir=""
 task_id=""
@@ -112,6 +126,16 @@ done
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v agent-mailbox >/dev/null 2>&1 || die "agent-mailbox is required"
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck is required"
+
+get_session_command() {
+  local session_id="$1"
+  local show_json
+
+  if ! show_json="$(agent-deck session show "$session_id" --json 2>/dev/null)"; then
+    return 1
+  fi
+  jq -r 'if type == "object" then .command // empty else empty end' <<<"$show_json"
+}
 
 abs_path() {
   (
@@ -365,7 +389,7 @@ if [[ -n "$wake_delay_seconds" && "$wake_delay_seconds" != "0" ]]; then
 fi
 
 set +e
-wake_output="$(agent-deck session send --no-wait "$coder_session_id" "$fixed_wake_message" 2>&1)"
+wake_output="$(agent-deck session send --no-wait "$coder_session_id" "$(workflow_wake_message "$(get_session_command "$coder_session_id" || true)")" 2>&1)"
 wake_rc=$?
 set -e
 if (( wake_rc == 0 )); then

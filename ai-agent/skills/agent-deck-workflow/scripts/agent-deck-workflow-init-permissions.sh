@@ -399,40 +399,66 @@ configure_gemini() {
     mkdir -p "$policies_dir"
 
     for script_name in "${WORKFLOW_HELPER_SCRIPTS[@]}"; do
-        workflow_script_rules+="[[rules]]
-pattern = \"^${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/${script_name//./\\.}( .*)?$\"\naction = \"allow\"\ndescription = \"Workflow helper script (tilde)\"\n\n"
-        workflow_script_rules+="[[rules]]
-pattern = \".*/\\.config/ai-agent/skills/agent-deck-workflow/scripts/${script_name//./\\.}( .*)?$\"\naction = \"allow\"\ndescription = \"Workflow helper script (absolute)\"\n\n"
+        workflow_script_rules+="[[rule]]
+name = \"allow_${script_name//[^A-Za-z0-9]/_}_tilde\"
+enabled = true
+decision = \"allow\"
+toolName = \"run_shell_command\"
+commandPrefix = [\"${INSTALLED_WORKFLOW_SCRIPTS_TILDE}/${script_name}\"]
+priority = 950
+modes = [\"default\", \"autoEdit\", \"yolo\"]
+
+"
+        workflow_script_rules+="[[rule]]
+name = \"allow_${script_name//[^A-Za-z0-9]/_}_absolute\"
+enabled = true
+decision = \"allow\"
+toolName = \"run_shell_command\"
+commandPrefix = [\"${HOME}/.config/ai-agent/skills/agent-deck-workflow/scripts/${script_name}\"]
+priority = 950
+modes = [\"default\", \"autoEdit\", \"yolo\"]
+
+"
     done
 
     cat > "$policy_file" << 'EOF'
-# Agent Deck Workflow - Shell policy rules
-# Auto-approve commands required for the workflow
+# Agent Deck Workflow - Gemini policy rules
 
-[[rules]]
-pattern = "^agent-deck( .*)?$"
-action = "allow"
-description = "Agent deck commands"
+[[rule]]
+name = "allow_agent_deck_cli"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["agent-deck"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
 
-[[rules]]
-pattern = "^agent-mailbox( .*)?$"
-action = "allow"
-description = "Agent mailbox commands"
+[[rule]]
+name = "allow_agent_mailbox_cli"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["agent-mailbox"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
 
-[[rules]]
-pattern = "^jq( .*)?$"
-action = "allow"
-description = "jq JSON processing commands"
+[[rule]]
+name = "allow_agent_mailbox_mcp"
+enabled = true
+decision = "allow"
+toolName = "*"
+mcpName = "agent-mailbox"
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
 
-[[rules]]
-pattern = "^~/.local/bin/adwf-send-and-wake( .*)?$"
-action = "allow"
-description = "Workflow send+wakeup helper (tilde)"
-
-[[rules]]
-pattern = ".*/\\.local/bin/adwf-send-and-wake( .*)?$"
-action = "allow"
-description = "Workflow send+wakeup helper (absolute)"
+[[rule]]
+name = "allow_agent_deck_workflow_dispatch"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["~/.local/bin/adwf-send-and-wake"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
 EOF
 
     printf "%b" "$workflow_script_rules" >> "$policy_file"

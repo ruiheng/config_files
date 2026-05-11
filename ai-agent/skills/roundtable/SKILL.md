@@ -23,9 +23,11 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
 - `roundtable_id`: stable id, default `rt-YYYYMMDD-HHMM-<slug>`
 - `group_address`: default `group/roundtable-<roundtable_id>`
 - `moderator_session_id`: current agent-deck session id
+- `moderator_group_path`: current agent-deck group path, default current session group
 - `moderator_person`: default `moderator`
 - `moderator_notify_address`: `agent-deck/<moderator_session_id>`
 - `participant_session_ref`: default `roundtable-<roundtable_id>-<participant_slug>`
+- `participant_group_path`: explicit -> `<moderator_group_path>/roundtable-<roundtable_id>`; example `config_files/roundtable-<roundtable_id>`
 - `participant_session_id`: real id returned by `agent_deck_create_session`
 - `participant_person`: `participant/<slug>`
 - `participant_tool_profile`: explicit -> participant config -> default resolver role `roundtable_participant`
@@ -53,7 +55,9 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
    - `ensure_title = <participant_session_ref>`
    - `ensure_cmd = <participant_tool_cmd>`
    - `workdir = current workspace`
-   - prefer `group_path = roundtable/<roundtable_id>` and `no_parent_link = true` when no parent relationship is needed
+   - `group_path = <participant_group_path>`
+   - `no_parent_link = true`
+   - leave `startup_instruction` / `listener_message` empty; control mail plus wakeup is the bootstrap path
 6. Send the opening user-intent message to the group with `mailbox_send group:true`.
 7. Mark the moderator's own group send read as `moderator` using the Own Send Read Rule.
 8. Send each participant one personal control message with Action `roundtable_participant_turn`.

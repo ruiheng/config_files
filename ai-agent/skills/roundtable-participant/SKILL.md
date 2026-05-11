@@ -56,6 +56,8 @@ If `group_address`, `participant_person`, or `role` is missing, do not guess. As
 
 ## Reply Format
 
+Default format:
+
 ```markdown
 Roundtable: <roundtable_id>
 Participant: <participant_person>
@@ -72,5 +74,7 @@ Round: <round>
 ## Challenge Or Question
 [one challenge to another view, or one question the moderator should consider next]
 ```
+
+If the Moderator Request explicitly requires exact/raw output or a different format, obey that request instead.
 
 If there were no unread group messages, still answer the moderator request if it is self-contained. If it is not self-contained, send a short group reply saying what context is missing.
