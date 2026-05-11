@@ -3,6 +3,7 @@
 *.swp
 *~
 Session.vim
+nvim.log
 
 # Compiled source #
 ###################
