@@ -377,7 +377,18 @@ function Ensure-UserPathEntry($Path) {
         Write-Dry "Would add to User PATH: $fullPath"
     } else {
         $newParts = @($parts + $fullPath)
-        [Environment]::SetEnvironmentVariable("Path", ($newParts -join ";"), "User")
+        $newPath = $newParts -join ";"
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        $savedPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        if (-not (($savedPath -split ";") | Where-Object { $_.TrimEnd("\") -ieq $fullPath.TrimEnd("\") })) {
+            Set-ItemProperty -Path "HKCU:\Environment" -Name "Path" -Value $newPath
+            $savedPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        }
+        if (-not (($savedPath -split ";") | Where-Object { $_.TrimEnd("\") -ieq $fullPath.TrimEnd("\") })) {
+            Write-Err "Failed to persist User PATH entry: $fullPath"
+            $script:Failed += 1
+            return
+        }
         $script:PathChanged = $true
         Write-Ok "Added to User PATH: $fullPath"
     }
@@ -632,8 +643,8 @@ function Install-AiAgent($CommandBinDir) {
         Install-Skills "Gemini CLI" (Join-Path $geminiDir "skills")
     }
 
-    Link-ItemPath "ai-agent\bin\adwf.ps1" (Join-Path $CommandBinDir "adwf.ps1")
-    Link-ItemPath "ai-agent\bin\adwf.cmd" (Join-Path $CommandBinDir "adwf.cmd")
+    Link-ManagedFile "ai-agent\bin\adwf.ps1" (Join-Path $CommandBinDir "adwf.ps1")
+    Link-ManagedFile "ai-agent\bin\adwf.cmd" (Join-Path $CommandBinDir "adwf.cmd")
     Ensure-UserPathEntry $CommandBinDir
     Ensure-Codext
     Configure-AgentDeckCodex

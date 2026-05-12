@@ -26,7 +26,39 @@ function Resolve-SelfPath {
 
 $SelfPath = Resolve-SelfPath
 $SelfDir = Split-Path -Parent $SelfPath
-$AiAgentRoot = Split-Path -Parent $SelfDir
+
+function Test-AiAgentRoot($Path) {
+    return ($Path -and
+        (Test-Path -LiteralPath (Join-Path $Path "skills\agent-deck-workflow\scripts") -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path $Path "config\tool-profiles.toml") -PathType Leaf))
+}
+
+function Resolve-AiAgentRoot {
+    $candidates = @(
+        (Split-Path -Parent $SelfDir)
+    )
+
+    if ($env:XDG_CONFIG_HOME) {
+        $candidates += (Join-Path $env:XDG_CONFIG_HOME "ai-agent")
+    }
+    if ($env:USERPROFILE) {
+        $candidates += (Join-Path $env:USERPROFILE ".config\ai-agent")
+    }
+    if ($env:HOME) {
+        $candidates += (Join-Path $env:HOME ".config/ai-agent")
+    }
+
+    foreach ($candidate in $candidates) {
+        if (-not $candidate) { continue }
+        if (Test-AiAgentRoot $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    throw "Cannot locate ai-agent root; expected skills/agent-deck-workflow under the repo or ~/.config/ai-agent."
+}
+
+$AiAgentRoot = Resolve-AiAgentRoot
 $WorkflowScripts = Join-Path $AiAgentRoot "skills\agent-deck-workflow\scripts"
 
 function Show-Usage {
