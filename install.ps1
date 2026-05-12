@@ -17,6 +17,7 @@ $script:Skipped = 0
 $script:Failed = 0
 $script:BackedUp = 0
 $script:PathChanged = $false
+$script:CodexCliCommand = "codext"
 
 function Write-Info($Message) { Write-Host "[INFO] $Message" }
 function Write-Ok($Message) { Write-Host "[OK] $Message" }
@@ -292,9 +293,104 @@ function Ensure-Jq {
     Write-Skip "jq install attempted but jq is still not available in PATH; open a new terminal or install manually"
 }
 
+function Ensure-Codext {
+    Write-Info "Checking codext..."
+
+    if (Test-Command "codext") {
+        $script:CodexCliCommand = "codext"
+        Write-Ok "Found: codext"
+        return
+    }
+
+    if (-not (Test-Command "npm")) {
+        Write-Err "codext requires npm"
+        $script:Failed += 1
+        return
+    }
+
+    if ($DryRun) {
+        Write-Dry "Would run: npm install -g @loongphy/codext"
+        $script:CodexCliCommand = "codext"
+        return
+    }
+
+    Write-Info "Running: npm install -g @loongphy/codext"
+    npm install -g "@loongphy/codext"
+    if ($LASTEXITCODE -eq 0 -and (Test-Command "codext")) {
+        $script:CodexCliCommand = "codext"
+        Write-Ok "Installed: codext"
+        return
+    }
+
+    Write-Err "Command still unavailable after install: codext"
+    $script:Failed += 1
+}
+
+function Ensure-TomlStringKey($File, $Section, $Key, $Value) {
+    if ($DryRun) {
+        Write-Dry "Would ensure [$Section] $Key in: $File"
+        return
+    }
+
+    Ensure-Directory (Split-Path -Parent $File)
+    $lines = @()
+    if (Test-Path -LiteralPath $File) {
+        $lines = @(Get-Content -LiteralPath $File)
+    }
+
+    $out = New-Object System.Collections.Generic.List[string]
+    $inSection = $false
+    $foundSection = $false
+    $foundKey = $false
+    $entry = "$Key = `"$Value`""
+    $sectionHeader = "[$Section]"
+
+    foreach ($line in $lines) {
+        if ($line -match "^\s*\[$([Regex]::Escape($Section))\]\s*$") {
+            $inSection = $true
+            $foundSection = $true
+            $out.Add($line)
+            continue
+        }
+
+        if ($inSection -and $line -match "^\s*\[") {
+            if (-not $foundKey) { $out.Add($entry) }
+            $inSection = $false
+        }
+
+        if ($inSection -and $line -match "^\s*$([Regex]::Escape($Key))\s*=") {
+            $out.Add($entry)
+            $foundKey = $true
+            continue
+        }
+
+        $out.Add($line)
+    }
+
+    if ($foundSection -and $inSection -and -not $foundKey) {
+        $out.Add($entry)
+    }
+
+    if (-not $foundSection) {
+        if ($out.Count -gt 0 -and $out[$out.Count - 1] -ne "") {
+            $out.Add("")
+        }
+        $out.Add($sectionHeader)
+        $out.Add($entry)
+    }
+
+    Set-Content -LiteralPath $File -Value $out -Encoding UTF8
+    Write-Ok "Ensured [$Section] $Key in: $File"
+}
+
+function Configure-AgentDeckCodex {
+    $agentDeckConfig = Join-Path $HomeDir ".agent-deck\config.toml"
+    Ensure-TomlStringKey $agentDeckConfig "codex" "command" "codext"
+}
+
 function Show-Prerequisites {
     Write-Info "Checking AI workflow commands..."
-    foreach ($cmd in @("git", "node", "npm", "bash", "codex", "claude", "gemini")) {
+    foreach ($cmd in @("git", "node", "npm", "bash", "codex", "codext", "claude", "gemini")) {
         if (Test-Command $cmd) {
             Write-Ok "Found: $cmd"
         } else {
@@ -388,6 +484,7 @@ function Install-AiAgent($CommandBinDir) {
 
     $geminiDir = Join-Path $HomeDir ".gemini"
     Link-ItemPath "ai-agent\GEMINI.md" (Join-Path $geminiDir "GEMINI.md")
+    Link-ItemPath "ai-agent\gemini\settings.json" (Join-Path $geminiDir "settings.json")
     Link-ItemPath "ai-agent\modules" (Join-Path $geminiDir "modules")
     Link-ItemPath "ai-agent\gemini\policies\agent-deck-workflow.toml" (Join-Path $geminiDir "policies\agent-deck-workflow.toml")
 
@@ -401,6 +498,8 @@ function Install-AiAgent($CommandBinDir) {
     Link-ItemPath "ai-agent\bin\adwf.ps1" (Join-Path $CommandBinDir "adwf.ps1")
     Link-ItemPath "ai-agent\bin\adwf.cmd" (Join-Path $CommandBinDir "adwf.cmd")
     Ensure-UserPathEntry $CommandBinDir
+    Ensure-Codext
+    Configure-AgentDeckCodex
     Configure-AgentMailboxMcp
 }
 
