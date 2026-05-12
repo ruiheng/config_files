@@ -19,11 +19,7 @@ Use the PowerShell installer:
 
 See [`WINDOWS.md`](./WINDOWS.md) for the Windows compatibility model and AI workflow prerequisites.
 
-**Note for Windows**: Creating symbolic links requires either:
-- Running as Administrator, OR
-- Enabling Developer Mode in Windows Settings (Windows 10 version 1703+)
-
-To enable Developer Mode: Settings → Update & Security → For developers → Developer Mode
+**Note for Windows**: The installer prefers symbolic links. If Windows blocks them, it falls back to directory junctions and file hardlinks, which normally work without Administrator privileges.
 
 ## Installation Script
 
@@ -31,7 +27,7 @@ The supported installer is:
 
 - **`install.ps1`** - For Windows PowerShell, including AI-agent configs and skills
 
-It creates symbolic links from this repository to their proper system locations.
+It links this repository to the proper system locations.
 
 ```powershell
 .\install.ps1 [OPTIONS]
@@ -144,16 +140,14 @@ ln -s /opt/nvim-linux-x86_64/bin/nvim ~/.local/bin/nvim
 
 ## Windows Notes
 
-1. **Symbolic Links Require Elevation**: On Windows, creating symbolic links requires either:
-   - Running Command Prompt/PowerShell as Administrator
-   - Enabling Developer Mode in Windows Settings (Windows 10 version 1703+)
+1. **Link Creation**: The installer prefers symbolic links, then falls back to directory junctions and file hardlinks when symlink creation is blocked.
 
 2. **AI Workflow Commands**:
    - `jq` is installed automatically with `winget` when missing.
    - Missing `agent-mailbox` or `agent-deck` is reported as a warning; install them before using full workflow automation.
    - If `agent-mailbox` exists, the installer configures the `agent_mailbox` MCP server for installed Claude/Codex/Gemini CLIs.
 
-3. **Workflow Entry Point**: Skills call workflow helpers through `adwf <command>`. The installer places `adwf.cmd` in the selected command shim directory and adds that directory to the User PATH. Some `adwf` subcommands are still Bash-backed internally, so Git Bash, MSYS2, or WSL is needed until those internals are migrated.
+3. **Workflow Entry Point**: Skills call workflow helpers through `adwf <command>`. The installer places `adwf.cmd` in the selected command shim directory and adds that directory to the User PATH. Node-backed `adwf` commands run natively on Windows/Linux/macOS; remaining legacy Bash-backed commands need Git Bash or MSYS2 on native Windows until migrated.
 
 4. **Neovim on Windows**: Neovim config is linked to `%LOCALAPPDATA%\nvim` (usually `C:\Users\<username>\AppData\Local\nvim`)
 
@@ -161,7 +155,7 @@ ln -s /opt/nvim-linux-x86_64/bin/nvim ~/.local/bin/nvim
 
 ### General
 
-1. **No Overwrite by Default**: If a file already exists at the target (and is not a symlink), the script will skip it and report. Use `--force` to backup and replace, or `--interactive` to be prompted for each conflict.
+1. **No Overwrite by Default**: If a file already exists at the target and is not one of the installer's managed links, the script will skip it and report. Use `--force` to backup and replace, or `--interactive` to be prompted for each conflict.
 
 ### Local Overrides
 
@@ -196,13 +190,11 @@ candidates = [
 
 3. **Backup**: When using `--force` or choosing backup in interactive mode, original files are backed up as `<filename>.backup.<timestamp>`
 
-4. **Relative Paths**: Some symlinks use relative paths (e.g., `../config_files/nvim`). These work correctly when the repository is at `~/config_files`.
+4. **Links**: On Windows, links may be symbolic links, directory junctions, or file hardlinks depending on available permissions.
 
 ### Windows-Specific Notes
 
-1. **Symbolic Links Require Elevation**: Creating symlinks on Windows requires either:
-   - Running as Administrator, OR
-   - Developer Mode enabled in Windows Settings
+1. **Link Creation**: `install.ps1` prefers symlinks, but falls back to junctions and hardlinks so normal user shells can install configs.
 
 2. **Windows Installer Scope**: Use `install.ps1` for AI-agent configs and skills. Most other tools (i3, sway, tmux, etc.) are Unix-specific.
 

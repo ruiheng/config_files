@@ -53,7 +53,8 @@ Commands:
 
 Notes:
   Skills should call this stable adwf entrypoint instead of direct .sh/.ps1 paths.
-  Bash-backed commands require Git Bash, MSYS2, or WSL bash in PATH until migrated natively.
+  Commands with Node implementations run natively on Windows/Linux/macOS.
+  Legacy Bash-backed commands still require Git Bash/MSYS2 on native Windows until migrated.
 "@ | Write-Output
 }
 
@@ -63,6 +64,78 @@ function Require-Command($Name) {
         throw "Missing required command: $Name"
     }
     return $cmd.Source
+}
+
+function Test-Executable($Path) {
+    return ($Path -and (Test-Path -LiteralPath $Path -PathType Leaf))
+}
+
+function Resolve-BashCommand {
+    $candidates = @()
+    $allowWslBash = $false
+    if ($env:ADWF_BASH) {
+        $candidates += $env:ADWF_BASH
+        $allowWslBash = $true
+    }
+
+    if ($IsWindows -or $env:OS -eq "Windows_NT") {
+        $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+        $candidates += @(
+            (Join-Path $env:ProgramFiles "Git\bin\bash.exe"),
+            (Join-Path $env:ProgramFiles "Git\usr\bin\bash.exe"),
+            (Join-Path $env:LocalAppData "Programs\Git\bin\bash.exe"),
+            (Join-Path $env:LocalAppData "Programs\Git\usr\bin\bash.exe"),
+            "C:\msys64\usr\bin\bash.exe",
+            "C:\msys64\mingw64\bin\bash.exe"
+        )
+        if ($programFilesX86) {
+            $candidates += @(
+                (Join-Path $programFilesX86 "Git\bin\bash.exe"),
+                (Join-Path $programFilesX86 "Git\usr\bin\bash.exe")
+            )
+        }
+    }
+
+    $pathBashes = Get-Command -All bash -ErrorAction SilentlyContinue | ForEach-Object { $_.Source }
+    $candidates += $pathBashes
+
+    $seen = @{}
+    foreach ($candidate in $candidates) {
+        if (-not (Test-Executable $candidate)) { continue }
+        $resolvedPath = (Resolve-Path -LiteralPath $candidate).Path
+        if (($IsWindows -or $env:OS -eq "Windows_NT") -and -not $allowWslBash) {
+            if ($resolvedPath -match "\\Windows\\System32\\bash\.exe$" -or $resolvedPath -match "\\Microsoft\\WindowsApps\\bash\.exe$") {
+                continue
+            }
+        }
+
+        $key = $resolvedPath.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+
+        try {
+            & $candidate --version *> $null
+            if ($LASTEXITCODE -eq 0) {
+                return $candidate
+            }
+        } catch {
+            continue
+        }
+    }
+
+    throw "Missing usable Git Bash/MSYS2 bash. Install Git Bash/MSYS2, or set ADWF_BASH to a specific bash executable."
+}
+
+function ConvertTo-BashPath($Bash, $Path) {
+    if (-not ($IsWindows -or $env:OS -eq "Windows_NT")) {
+        return $Path
+    }
+
+    $converted = & $Bash -lc 'if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; elif command -v wslpath >/dev/null 2>&1; then wslpath -u "$1"; else printf "%s\n" "$1"; fi' "adwf-path" $Path
+    if ($LASTEXITCODE -ne 0 -or -not $converted) {
+        throw "Failed to convert Windows path for bash: $Path"
+    }
+    return $converted[0]
 }
 
 function Invoke-NodeScript($ScriptName, [string[]]$RemainingArgs) {
@@ -75,13 +148,30 @@ function Invoke-NodeScript($ScriptName, [string[]]$RemainingArgs) {
     exit $LASTEXITCODE
 }
 
+function Invoke-WorkflowScript($CommandName, [string[]]$RemainingArgs) {
+    $nodeScript = "$CommandName.js"
+    $nodePath = Join-Path $WorkflowScripts $nodeScript
+    if (Test-Path -LiteralPath $nodePath) {
+        Invoke-NodeScript $nodeScript $RemainingArgs
+    }
+
+    $bashScript = "$CommandName.sh"
+    $bashPath = Join-Path $WorkflowScripts $bashScript
+    if (Test-Path -LiteralPath $bashPath) {
+        Invoke-BashScript $bashScript $RemainingArgs
+    }
+
+    throw "Unknown workflow command: $CommandName"
+}
+
 function Invoke-BashScript($ScriptName, [string[]]$RemainingArgs) {
-    $bash = Require-Command "bash"
+    $bash = Resolve-BashCommand
     $script = Join-Path $WorkflowScripts $ScriptName
     if (-not (Test-Path -LiteralPath $script)) {
         throw "Missing workflow script: $script"
     }
-    & $bash $script @RemainingArgs
+    $bashScript = ConvertTo-BashPath $bash $script
+    & $bash $bashScript @RemainingArgs
     exit $LASTEXITCODE
 }
 
@@ -95,29 +185,33 @@ $remaining = if ($AdwfArgs.Count -gt 1) { $AdwfArgs[1..($AdwfArgs.Count - 1)] } 
 
 $normalized = $command -replace '\.sh$', '' -replace '\.js$', ''
 
-switch ($normalized) {
-    { $_ -in @("-h", "--help", "help") } {
-        Show-Usage
-        exit 0
+try {
+    switch ($normalized) {
+        { $_ -in @("-h", "--help", "help") } {
+            Show-Usage
+            exit 0
+        }
+        "resolve-tool-command" {
+            $configPath = Join-Path $AiAgentRoot "config\tool-profiles.toml"
+            Invoke-NodeScript "resolve-tool-command.js" (@("--config", $configPath) + $remaining)
+        }
+        "init-permissions" {
+            Invoke-WorkflowScript "agent-deck-workflow-init-permissions" $remaining
+        }
+        "agent-deck-workflow-init-permissions" {
+            Invoke-WorkflowScript "agent-deck-workflow-init-permissions" $remaining
+        }
+        "send-and-wake" {
+            Invoke-WorkflowScript "adwf-send-and-wake" $remaining
+        }
+        "adwf-send-and-wake" {
+            Invoke-WorkflowScript "adwf-send-and-wake" $remaining
+        }
+        default {
+            Invoke-WorkflowScript $normalized $remaining
+        }
     }
-    "resolve-tool-command" {
-        $configPath = Join-Path $AiAgentRoot "config\tool-profiles.toml"
-        Invoke-NodeScript "resolve-tool-command.js" (@("--config", $configPath) + $remaining)
-    }
-    "init-permissions" {
-        Invoke-BashScript "agent-deck-workflow-init-permissions.sh" $remaining
-    }
-    "agent-deck-workflow-init-permissions" {
-        Invoke-BashScript "agent-deck-workflow-init-permissions.sh" $remaining
-    }
-    "send-and-wake" {
-        Invoke-BashScript "adwf-send-and-wake.sh" $remaining
-    }
-    "adwf-send-and-wake" {
-        Invoke-BashScript "adwf-send-and-wake.sh" $remaining
-    }
-    default {
-        $scriptName = "$normalized.sh"
-        Invoke-BashScript $scriptName $remaining
-    }
+} catch {
+    Write-Host "[ERR] $($_.Exception.Message)"
+    exit 1
 }

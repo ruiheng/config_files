@@ -3,20 +3,19 @@
 This repo can keep most AI-agent functionality on Windows, split into two layers:
 
 - Native Windows config links: Claude, Codex, Gemini, skills, modules, Git, and Neovim.
-- Unix-like workflow runtime: Bash scripts under `ai-agent/skills/agent-deck-workflow/scripts/` still need Git Bash, MSYS2, or WSL.
+- Workflow runtime: Node-backed `adwf` helpers run natively; remaining legacy Bash helpers still need Git Bash or MSYS2 for native Windows use.
 
 ## Recommended Setup
 
-1. Enable Windows Developer Mode, or run PowerShell as Administrator.
-2. Install core commands:
+1. Install core commands:
 
 ```powershell
 winget install Git.Git OpenJS.NodeJS jqlang.jq Neovim.Neovim
 ```
 
-3. Install the AI CLIs you use: `codex`, `claude`, `gemini`.
-4. Install workflow tools: `agent-mailbox`, `agent-deck`. The installer warns if these are missing.
-5. Run the Windows installer:
+2. Install the AI CLIs you use: `codex`, `claude`, `gemini`.
+3. Install workflow tools: `agent-mailbox`, `agent-deck`. The installer warns if these are missing.
+4. Run the Windows installer:
 
 ```powershell
 .\install.ps1 -DryRun
@@ -24,6 +23,10 @@ winget install Git.Git OpenJS.NodeJS jqlang.jq Neovim.Neovim
 ```
 
 If a target already exists, rerun with `-Interactive` or `-Force`. Use `-BinDir <path>` to place command shims somewhere other than the default `~/.local/bin`; in interactive mode the installer prompts for this path.
+
+The installer prefers symbolic links. If Windows blocks them, it falls back to directory junctions and file hardlinks, so Administrator privileges or Developer Mode are not required for normal installs.
+
+For remaining Bash-backed `adwf` commands, install Git Bash or MSYS2. `adwf.ps1` intentionally avoids auto-selecting WSL `bash.exe` because WSL and Windows paths/tool installs are separate environments. Set `ADWF_BASH` to a specific `bash.exe` path only when you want to override detection.
 
 ## What `install.ps1` Links
 
@@ -44,7 +47,7 @@ Skills should call workflow helpers as `adwf <command>` only. The dispatcher hid
 
 ## Runtime Expectations
 
-Most skills are plain Markdown and work natively once linked. The workflow automation scripts are Bash scripts and assume Unix-like tools:
+Most skills are plain Markdown and work natively once linked. Node-backed workflow helpers work natively through `adwf`. Remaining legacy workflow scripts are Bash scripts and assume Unix-like tools:
 
 - `bash`
 - `jq`
@@ -53,12 +56,12 @@ Most skills are plain Markdown and work natively once linked. The workflow autom
 - `agent-mailbox`
 - `agent-deck`
 
-Use Git Bash or MSYS2 when running those scripts from native Windows. WSL is the most complete option if `agent-deck` depends on Unix terminal/session primitives on your machine.
+Use Git Bash or MSYS2 when running those scripts from native Windows. If you prefer WSL, install and run this repo's workflow inside WSL so paths, git worktrees, and CLI tools live in one environment.
 
 ## Practical Compatibility Model
 
 - Best native support: prompts, skills, module imports, MCP config snippets, `resolve-tool-command.js`, Neovim, Git config.
-- Needs Git Bash/MSYS2: `agent-deck-workflow` shell helpers, sync scripts, Claude statusline script.
-- Best in WSL: full `agent-deck` multi-session workflow if terminal/session behavior is unreliable under native Windows.
+- Needs Git Bash/MSYS2: remaining legacy `agent-deck-workflow` shell helpers, sync scripts, Claude statusline script.
+- WSL: use a WSL-side install/checkout instead of mixing Windows `adwf.cmd` with WSL paths.
 
-For maximum compatibility, keep this repo checked out at the same Windows path and expose it to WSL through `/mnt/c/...` only when needed. Avoid maintaining separate divergent clones.
+For maximum compatibility, keep native Windows and WSL installs separate unless you are only reading files across the boundary.

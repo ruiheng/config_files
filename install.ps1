@@ -38,6 +38,36 @@ function Resolve-ExistingPath($Path) {
     }
 }
 
+function New-LinkPath($Source, $TargetPath, $Type) {
+    try {
+        New-Item -ItemType SymbolicLink -Path $TargetPath -Target $Source -Force | Out-Null
+        Write-Ok "Linked $Type`: $TargetPath -> $Source"
+        return $true
+    } catch {
+        Write-Info "Symlink unavailable; trying fallback: $TargetPath :: $($_.Exception.Message)"
+    }
+
+    if ($Type -eq "Directory") {
+        try {
+            New-Item -ItemType Junction -Path $TargetPath -Target $Source -Force | Out-Null
+            Write-Ok "Linked Directory (junction): $TargetPath -> $Source"
+            return $true
+        } catch {
+            Write-Err "Failed to create junction: $TargetPath :: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    try {
+        New-Item -ItemType HardLink -Path $TargetPath -Target $Source -Force | Out-Null
+        Write-Ok "Linked File (hardlink): $TargetPath -> $Source"
+        return $true
+    } catch {
+        Write-Err "Failed to create hardlink: $TargetPath :: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Backup-ItemPath($Path) {
     $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $backup = "$Path.backup.$stamp"
@@ -150,12 +180,13 @@ function Link-ItemPath($RelativeSource, $TargetPath) {
     try {
         $sourceItem = Get-Item -LiteralPath $source -Force
         $type = if ($sourceItem.PSIsContainer) { "Directory" } else { "File" }
-        New-Item -ItemType SymbolicLink -Path $TargetPath -Target $source -Force | Out-Null
-        Write-Ok "Linked $type`: $TargetPath -> $source"
-        $script:Linked += 1
+        if (New-LinkPath $source $TargetPath $type) {
+            $script:Linked += 1
+        } else {
+            $script:Failed += 1
+        }
     } catch {
         Write-Err "Failed to link: $TargetPath :: $($_.Exception.Message)"
-        Write-Info "Enable Windows Developer Mode or run PowerShell as Administrator for symlinks."
         $script:Failed += 1
     }
 }
