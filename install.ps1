@@ -9,8 +9,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
-$HomeDir = [Environment]::GetFolderPath("UserProfile")
-$LocalAppData = [Environment]::GetFolderPath("LocalApplicationData")
+function Resolve-KnownFolder($EnvName, $FolderName) {
+    $envValue = [Environment]::GetEnvironmentVariable($EnvName)
+    if (-not [string]::IsNullOrWhiteSpace($envValue)) {
+        return $envValue
+    }
+    return [Environment]::GetFolderPath($FolderName)
+}
+
+$HomeDir = Resolve-KnownFolder "USERPROFILE" "UserProfile"
+$LocalAppData = Resolve-KnownFolder "LOCALAPPDATA" "LocalApplicationData"
 
 $script:Linked = 0
 $script:Skipped = 0
@@ -190,6 +198,121 @@ function Link-ItemPath($RelativeSource, $TargetPath) {
         Write-Err "Failed to link: $TargetPath :: $($_.Exception.Message)"
         $script:Failed += 1
     }
+}
+
+function Link-ManagedFile($RelativeSource, $TargetPath) {
+    $source = Join-Path $ScriptDir $RelativeSource
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        Write-Err "Source does not exist: $source"
+        $script:Failed += 1
+        return
+    }
+
+    $targetParent = Split-Path -Parent $TargetPath
+    if ($targetParent) { Ensure-Directory $targetParent }
+
+    if (Test-Path -LiteralPath $TargetPath) {
+        $sameContent = $false
+        try {
+            $sameContent = (Get-FileHash -Algorithm SHA256 -LiteralPath $TargetPath).Hash -eq (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash
+        } catch {
+            $sameContent = $false
+        }
+
+        if ($sameContent) {
+            Write-Skip "Already current: $TargetPath"
+            $script:Skipped += 1
+            return
+        }
+
+        if (-not (Backup-ItemPath $TargetPath)) { return }
+    }
+
+    if ($DryRun) {
+        Write-Dry "Would link managed file: $TargetPath -> $source"
+        $script:Linked += 1
+        return
+    }
+
+    if (New-LinkPath $source $TargetPath "File") {
+        $script:Linked += 1
+    } else {
+        $script:Failed += 1
+    }
+}
+
+function Ensure-JsonObjectProperty($Object, $Name) {
+    $prop = $Object.PSObject.Properties[$Name]
+    if (-not $prop) {
+        $value = [pscustomobject]@{}
+        Add-Member -InputObject $Object -MemberType NoteProperty -Name $Name -Value $value
+        return $value
+    }
+    return $prop.Value
+}
+
+function Set-JsonProperty($Object, $Name, $Value) {
+    if ($Object.PSObject.Properties[$Name]) {
+        $Object.PSObject.Properties[$Name].Value = $Value
+    } else {
+        Add-Member -InputObject $Object -MemberType NoteProperty -Name $Name -Value $Value
+    }
+}
+
+function Remove-JsonProperty($Object, $Name) {
+    if ($Object.PSObject.Properties[$Name]) {
+        $Object.PSObject.Properties.Remove($Name)
+    }
+}
+
+function Configure-GeminiSettings($TargetPath) {
+    $source = Join-Path $ScriptDir "ai-agent\gemini\settings.json"
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        Write-Err "Source does not exist: $source"
+        $script:Failed += 1
+        return
+    }
+
+    if ($DryRun) {
+        Write-Dry "Would merge Gemini settings: $TargetPath"
+        return
+    }
+
+    Ensure-Directory (Split-Path -Parent $TargetPath)
+    $defaults = Get-Content -LiteralPath $source -Raw | ConvertFrom-Json
+    $settings = [pscustomobject]@{}
+
+    if (Test-Path -LiteralPath $TargetPath) {
+        try {
+            $settings = Get-Content -LiteralPath $TargetPath -Raw | ConvertFrom-Json
+            if (-not $settings) { $settings = [pscustomobject]@{} }
+        } catch {
+            if (-not (Backup-ItemPath $TargetPath)) { return }
+            $settings = [pscustomobject]@{}
+        }
+    }
+
+    $general = Ensure-JsonObjectProperty $settings "general"
+    Set-JsonProperty $general "enableAutoUpdate" $false
+
+    $security = Ensure-JsonObjectProperty $settings "security"
+    Set-JsonProperty $security "enablePermanentToolApproval" $true
+    Set-JsonProperty $security "disableAlwaysAllow" $false
+
+    $mcpServers = Ensure-JsonObjectProperty $settings "mcpServers"
+    Remove-JsonProperty $mcpServers "workflow_mailbox"
+    Remove-JsonProperty $mcpServers "agent_mailbox"
+
+    foreach ($defaultServer in $defaults.mcpServers.PSObject.Properties) {
+        if ($defaultServer.Name -eq "agent-mailbox") {
+            Set-JsonProperty $mcpServers $defaultServer.Name $defaultServer.Value
+        } elseif (-not $mcpServers.PSObject.Properties[$defaultServer.Name]) {
+            Add-Member -InputObject $mcpServers -MemberType NoteProperty -Name $defaultServer.Name -Value $defaultServer.Value
+        }
+    }
+
+    $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $TargetPath -Encoding UTF8
+    Write-Ok "Merged Gemini settings: $TargetPath"
 }
 
 function Install-Skills($ToolName, $TargetDir) {
@@ -498,9 +621,9 @@ function Install-AiAgent($CommandBinDir) {
 
     $geminiDir = Join-Path $HomeDir ".gemini"
     Link-ItemPath "ai-agent\GEMINI.md" (Join-Path $geminiDir "GEMINI.md")
-    Link-ItemPath "ai-agent\gemini\settings.json" (Join-Path $geminiDir "settings.json")
+    Configure-GeminiSettings (Join-Path $geminiDir "settings.json")
     Link-ItemPath "ai-agent\modules" (Join-Path $geminiDir "modules")
-    Link-ItemPath "ai-agent\gemini\policies\agent-deck-workflow.toml" (Join-Path $geminiDir "policies\agent-deck-workflow.toml")
+    Link-ManagedFile "ai-agent\gemini\policies\agent-deck-workflow.toml" (Join-Path $geminiDir "policies\agent-deck-workflow.toml")
 
     $agentsSkills = Join-Path $HomeDir ".agents\skills"
     if (Test-Path -LiteralPath $agentsSkills) {
