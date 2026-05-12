@@ -17,11 +17,11 @@ const {
 test("resolveAiAgentConfigDir follows XDG config conventions", () => {
   assert.equal(
     resolveAiAgentConfigDir({ XDG_CONFIG_HOME: "/tmp/custom-config" }, "/home/tester"),
-    "/tmp/custom-config/ai-agent/config"
+    path.resolve("/tmp/custom-config", "ai-agent", "config")
   );
   assert.equal(
     resolveAiAgentConfigDir({}, "/home/tester"),
-    "/home/tester/.config/ai-agent/config"
+    path.resolve("/home/tester", ".config", "ai-agent", "config")
   );
 });
 
@@ -33,13 +33,13 @@ test("resolveDefaultLocalConfigPaths layers user then current directory override
       "/workspace/project"
     ),
     [
-      "/tmp/custom-config/ai-agent/config/tool-profiles.local.toml",
-      "/workspace/project/tool-profiles.local.toml",
+      path.resolve("/tmp/custom-config", "ai-agent", "config", "tool-profiles.local.toml"),
+      path.resolve("/workspace/project", "tool-profiles.local.toml"),
     ]
   );
   assert.equal(
     resolveCwdLocalConfigPath("/workspace/project"),
-    "/workspace/project/tool-profiles.local.toml"
+    path.resolve("/workspace/project", "tool-profiles.local.toml")
   );
 });
 

@@ -38,6 +38,26 @@ const DEFAULT_LOCAL_CONFIG_PATH = path.join(
 );
 const DEFAULT_LOCAL_CONFIG_PATHS = resolveDefaultLocalConfigPaths();
 
+function usage() {
+  process.stdout.write(`Resolve an agent-deck workflow tool command.
+
+Usage:
+  resolve-tool-command.js [options]
+
+Options:
+  --role <name>                Resolve the default profile for a role
+  --profile <name>             Resolve an explicit profile
+  --command <command>          Return an explicit command unchanged
+  --inherit-command <command>  Return an inherited command when no profile applies
+  --exclude-command <command>  Exclude one candidate; repeatable
+  --config <path>              Base tool profile config
+  --local-config <path>        Local override config
+  --format <json|text>         Output format (default: json)
+  --json                       Output JSON
+  -h, --help                   Show help
+`);
+}
+
 function stripInlineComment(line) {
   let escaped = false;
   let stringQuote = "";
@@ -449,6 +469,9 @@ function parseArgs(argv) {
       options.format = argv[++i] || "json";
     } else if (arg === "--json") {
       options.format = "json";
+    } else if (arg === "-h" || arg === "--help") {
+      usage();
+      process.exit(0);
     } else {
       throw new Error(`unknown argument: ${arg}`);
     }

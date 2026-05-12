@@ -56,6 +56,23 @@ resolve_jq_cmd() {
     return 1
 }
 
+show_usage() {
+    cat <<'EOF'
+Initialize agent-deck-workflow permissions for AI agent tools.
+
+Usage:
+  agent-deck-workflow-init-permissions.sh [project-dir]
+
+Options:
+  -h, --help    Show help
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    show_usage
+    exit 0
+fi
+
 # Determine project directory
 PROJECT_DIR="${1:-.}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
