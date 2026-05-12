@@ -426,6 +426,15 @@ function Invoke-LoggedCommand($Command, [string[]]$Arguments, $DryRunText) {
     return $false
 }
 
+function Invoke-BestEffortCommand($Command, [string[]]$Arguments, $DryRunText) {
+    if ($DryRun) {
+        Write-Dry $DryRunText
+        return
+    }
+
+    & $Command @Arguments | Out-Null
+}
+
 function Configure-AgentMailboxMcp {
     if (-not (Test-Command "agent-mailbox")) {
         Write-Skip "Skipping agent_mailbox MCP config (agent-mailbox not found)"
@@ -434,14 +443,16 @@ function Configure-AgentMailboxMcp {
 
     Write-Info "Configuring agent_mailbox MCP servers..."
 
-    if (Test-Command "codex") {
-        if (Invoke-LoggedCommand "codex" @("mcp", "add", "agent_mailbox", "--", "agent-mailbox", "mcp") "Would run: codex mcp add agent_mailbox -- agent-mailbox mcp") {
+    if (Test-Command $script:CodexCliCommand) {
+        Invoke-BestEffortCommand $script:CodexCliCommand @("mcp", "remove", "workflow_mailbox") "Would run: $script:CodexCliCommand mcp remove workflow_mailbox"
+        Invoke-BestEffortCommand $script:CodexCliCommand @("mcp", "remove", "agent_mailbox") "Would run: $script:CodexCliCommand mcp remove agent_mailbox"
+        if (Invoke-LoggedCommand $script:CodexCliCommand @("mcp", "add", "agent_mailbox", "--", "agent-mailbox", "mcp") "Would run: $script:CodexCliCommand mcp add agent_mailbox -- agent-mailbox mcp") {
             Write-Ok "Configured Codex MCP: agent_mailbox"
         } else {
             Write-Skip "Failed to configure Codex MCP: agent_mailbox"
         }
     } else {
-        Write-Skip "Skipping Codex MCP config (codex not found)"
+        Write-Skip "Skipping Codex MCP config ($script:CodexCliCommand not found)"
     }
 
     if (Test-Command "claude") {
@@ -455,6 +466,9 @@ function Configure-AgentMailboxMcp {
     }
 
     if (Test-Command "gemini") {
+        Invoke-BestEffortCommand "gemini" @("mcp", "remove", "workflow_mailbox") "Would run: gemini mcp remove workflow_mailbox"
+        Invoke-BestEffortCommand "gemini" @("mcp", "remove", "agent_mailbox") "Would run: gemini mcp remove agent_mailbox"
+        Invoke-BestEffortCommand "gemini" @("mcp", "remove", "agent-mailbox") "Would run: gemini mcp remove agent-mailbox"
         if (Invoke-LoggedCommand "gemini" @("mcp", "add", "-s", "user", "agent_mailbox", "agent-mailbox", "mcp") "Would run: gemini mcp add -s user agent_mailbox agent-mailbox mcp") {
             Write-Ok "Configured Gemini MCP: agent_mailbox"
         } else {
