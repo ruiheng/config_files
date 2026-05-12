@@ -40,6 +40,22 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+resolve_jq_cmd() {
+    local candidate
+
+    for candidate in jq.exe jq; do
+        if ! command -v "$candidate" &>/dev/null; then
+            continue
+        fi
+        if "$candidate" --version &>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # Determine project directory
 PROJECT_DIR="${1:-.}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -189,10 +205,8 @@ EOF
         # Backup existing file
         cp "$settings_file" "$settings_file.backup.$(date +%Y%m%d_%H%M%S)"
 
-        # Use jq to merge permissions
-        if command -v jq &>/dev/null; then
-            local new_permissions
-            new_permissions=$(cat <<EOF
+        local new_permissions
+        new_permissions=$(cat <<EOF
 [
   "Bash(agent-deck)",
   "Bash(agent-deck *)",
@@ -211,13 +225,34 @@ $git_readonly_permissions_json
 EOF
 )
 
-            jq --argjson perms "$new_permissions" '
+        # Use jq to merge permissions, or Node when jq is not executable in Git Bash.
+        local jq_cmd
+        if jq_cmd="$(resolve_jq_cmd)"; then
+            "$jq_cmd" --argjson perms "$new_permissions" '
                 .permissions.allow = ((.permissions.allow // []) + $perms | unique)
             ' "$settings_file" > "$settings_file.tmp" && mv "$settings_file.tmp" "$settings_file"
 
             log_ok "Merged permissions into $settings_file"
+        elif command -v node &>/dev/null; then
+            PERMS_JSON="$new_permissions" node - "$settings_file" <<'NODE'
+const fs = require("node:fs");
+
+const settingsFile = process.argv[2];
+const permissions = JSON.parse(process.env.PERMS_JSON || "[]");
+const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+settings.permissions ||= {};
+const existing = Array.isArray(settings.permissions.allow)
+  ? settings.permissions.allow
+  : [];
+settings.permissions.allow = Array.from(new Set([...existing, ...permissions])).sort();
+
+fs.writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
+NODE
+
+            log_ok "Merged permissions into $settings_file"
         else
-            log_warn "jq not found, cannot merge automatically"
+            log_warn "jq/node not found, cannot merge automatically"
             log_info "Please manually add these permissions to $settings_file:"
             cat <<EOF
 {

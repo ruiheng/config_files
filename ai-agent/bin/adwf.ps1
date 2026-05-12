@@ -167,7 +167,7 @@ function ConvertTo-BashPath($Bash, $Path) {
     if ($LASTEXITCODE -ne 0 -or -not $converted) {
         throw "Failed to convert Windows path for bash: $Path"
     }
-    return $converted[0]
+    return @($converted)[0]
 }
 
 function Invoke-NodeScript($ScriptName, [string[]]$RemainingArgs) {
