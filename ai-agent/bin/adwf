@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_self_path() {
+  local path="${BASH_SOURCE[0]}"
+  local dir target
+
+  while [[ -L "$path" ]]; do
+    dir="$(cd -P "$(dirname "$path")" >/dev/null 2>&1 && pwd)"
+    target="$(readlink "$path")"
+    if [[ "$target" == /* ]]; then
+      path="$target"
+    else
+      path="$dir/$target"
+    fi
+  done
+
+  dir="$(cd -P "$(dirname "$path")" >/dev/null 2>&1 && pwd)"
+  printf '%s/%s\n' "$dir" "$(basename "$path")"
+}
+
+test_ai_agent_root() {
+  local root="$1"
+  [[ -n "$root" ]] &&
+    [[ -d "$root/skills/agent-deck-workflow/scripts" ]] &&
+    [[ -f "$root/config/tool-profiles.toml" ]]
+}
+
+resolve_ai_agent_root() {
+  local self_path self_dir candidate
+  self_path="$(resolve_self_path)"
+  self_dir="$(dirname "$self_path")"
+
+  for candidate in \
+    "$(cd -P "$self_dir/.." >/dev/null 2>&1 && pwd)" \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/ai-agent" \
+    "$HOME/.config/ai-agent"; do
+    if test_ai_agent_root "$candidate"; then
+      cd -P "$candidate" >/dev/null 2>&1
+      pwd
+      return 0
+    fi
+  done
+
+  printf '[ERR] Cannot locate ai-agent root; expected skills/agent-deck-workflow under the repo or ~/.config/ai-agent.\n' >&2
+  return 1
+}
+
+show_usage() {
+  cat <<'EOF'
+Usage:
+  adwf <command> [args...]
+
+Commands:
+  resolve-tool-command
+  acquire-active-task-lock
+  send-delegate-with-active-task-lock
+  prepare-workspaces
+  prepare-planner-workspace
+  planner-closeout-batch
+  archive-and-remove-planner-group-sessions
+  archive-and-remove-task-sessions
+  closeout-health-gate
+  ensure-planner-scoped-session
+  ensure-supervised-planner-session
+  prune-task-branches
+  notify-workflow-event
+  init-permissions
+  send-and-wake
+
+Notes:
+  Skills should call this stable adwf entrypoint instead of direct .sh/.ps1 paths.
+  Commands with Node implementations run natively on Windows/Linux/macOS.
+  Legacy Bash-backed commands require Bash.
+EOF
+}
+
+invoke_node_script() {
+  local script_name="$1"
+  shift
+  local script="$WORKFLOW_SCRIPTS/$script_name"
+  if [[ ! -f "$script" ]]; then
+    printf '[ERR] Missing workflow script: %s\n' "$script" >&2
+    return 1
+  fi
+  exec node "$script" "$@"
+}
+
+invoke_bash_script() {
+  local script_name="$1"
+  shift
+  local script="$WORKFLOW_SCRIPTS/$script_name"
+  if [[ ! -f "$script" ]]; then
+    printf '[ERR] Missing workflow script: %s\n' "$script" >&2
+    return 1
+  fi
+  exec bash "$script" "$@"
+}
+
+invoke_workflow_script() {
+  local command_name="$1"
+  shift
+  if [[ -f "$WORKFLOW_SCRIPTS/$command_name.js" ]]; then
+    invoke_node_script "$command_name.js" "$@"
+  fi
+  if [[ -f "$WORKFLOW_SCRIPTS/$command_name.sh" ]]; then
+    invoke_bash_script "$command_name.sh" "$@"
+  fi
+  printf '[ERR] Unknown workflow command: %s\n' "$command_name" >&2
+  return 1
+}
+
+if [[ $# -eq 0 ]]; then
+  show_usage
+  exit 2
+fi
+
+command_name="$1"
+shift
+normalized="${command_name%.sh}"
+normalized="${normalized%.js}"
+
+if [[ "$normalized" == "-h" || "$normalized" == "--help" || "$normalized" == "help" ]]; then
+  show_usage
+  exit 0
+fi
+
+AI_AGENT_ROOT="$(resolve_ai_agent_root)"
+WORKFLOW_SCRIPTS="$AI_AGENT_ROOT/skills/agent-deck-workflow/scripts"
+
+case "$normalized" in
+  resolve-tool-command)
+    invoke_node_script "resolve-tool-command.js" --config "$AI_AGENT_ROOT/config/tool-profiles.toml" "$@"
+    ;;
+  init-permissions|agent-deck-workflow-init-permissions)
+    invoke_workflow_script "agent-deck-workflow-init-permissions" "$@"
+    ;;
+  send-and-wake|adwf-send-and-wake)
+    invoke_workflow_script "adwf-send-and-wake" "$@"
+    ;;
+  *)
+    invoke_workflow_script "$normalized" "$@"
+    ;;
+esac

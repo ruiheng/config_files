@@ -17,6 +17,13 @@ Use the PowerShell installer:
 .\install.ps1
 ```
 
+On Linux/macOS/WSL, install the shared AI workflow entrypoint:
+
+```bash
+./install.sh --dry-run
+./install.sh
+```
+
 See [`WINDOWS.md`](./WINDOWS.md) for the Windows compatibility model and AI workflow prerequisites.
 
 **Note for Windows**: The installer prefers symbolic links. If Windows blocks them, it falls back to directory junctions and file hardlinks, which normally work without Administrator privileges.
@@ -26,6 +33,7 @@ See [`WINDOWS.md`](./WINDOWS.md) for the Windows compatibility model and AI work
 The supported installer is:
 
 - **`install.ps1`** - For Windows PowerShell, including AI-agent configs and skills
+- **`install.sh`** - For POSIX shells, installing `~/.config/ai-agent` and `~/.local/bin/adwf`
 
 It links this repository to the proper system locations.
 
@@ -147,7 +155,7 @@ ln -s /opt/nvim-linux-x86_64/bin/nvim ~/.local/bin/nvim
    - Missing `agent-mailbox` or `agent-deck` is reported as a warning; install them before using full workflow automation.
    - If `agent-mailbox` exists, the installer configures the `agent_mailbox` MCP server for installed Claude/Codex/Gemini CLIs.
 
-3. **Workflow Entry Point**: Skills call workflow helpers through `adwf <command>`. The installer places `adwf.cmd` in the selected command shim directory and adds that directory to the User PATH. Node-backed `adwf` commands run natively on Windows/Linux/macOS; remaining legacy Bash-backed commands need Git Bash or MSYS2 on native Windows until migrated.
+3. **Workflow Entry Point**: Skills call workflow helpers through `adwf <command>`. The installers place `adwf` plus Windows `adwf.cmd`/`adwf.ps1` shims in the selected command shim directory. Node-backed `adwf` commands run natively on Windows/Linux/macOS; remaining legacy Bash-backed commands need Git Bash or MSYS2 on native Windows until migrated.
 
 4. **Neovim on Windows**: Neovim config is linked to `%LOCALAPPDATA%\nvim` (usually `C:\Users\<username>\AppData\Local\nvim`)
 

@@ -12,3 +12,8 @@ prefix_rule(
     pattern=["~/.local/bin/adwf.cmd"],
     decision="allow",
 )
+
+prefix_rule(
+    pattern=["~/.local/bin/adwf"],
+    decision="allow",
+)

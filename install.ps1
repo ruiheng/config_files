@@ -655,6 +655,7 @@ function Install-AiAgent($CommandBinDir) {
 
     Link-ManagedFile "ai-agent\bin\adwf.ps1" (Join-Path $CommandBinDir "adwf.ps1")
     Link-ManagedFile "ai-agent\bin\adwf.cmd" (Join-Path $CommandBinDir "adwf.cmd")
+    Link-ManagedFile "ai-agent\bin\adwf" (Join-Path $CommandBinDir "adwf")
     Ensure-UserPathEntry $CommandBinDir
     Ensure-Codext
     Configure-AgentDeckCodex

@@ -233,6 +233,8 @@ EOF
   "Bash(jq *)",
 $git_readonly_permissions_json
   "Bash(adwf *)",
+  "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf *)",
+  "Bash(${INSTALLED_LOCAL_BIN}/adwf *)",
   "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf.cmd *)",
   "Bash(${INSTALLED_LOCAL_BIN}/adwf.cmd *)",
   "$installed_skills_read_permission_tilde",
@@ -283,6 +285,8 @@ NODE
       "Bash(jq *)",
 $git_readonly_permissions_json
       "Bash(adwf *)",
+      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf *)",
+      "Bash(${INSTALLED_LOCAL_BIN}/adwf *)",
       "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf.cmd *)",
       "Bash(${INSTALLED_LOCAL_BIN}/adwf.cmd *)",
       "$installed_skills_read_permission_tilde",
@@ -308,6 +312,8 @@ EOF
       "Bash(jq *)",
 $git_readonly_permissions_json
       "Bash(adwf *)",
+      "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf *)",
+      "Bash(${INSTALLED_LOCAL_BIN}/adwf *)",
       "Bash(${INSTALLED_LOCAL_BIN_TILDE}/adwf.cmd *)",
       "Bash(${INSTALLED_LOCAL_BIN}/adwf.cmd *)",
       "$installed_skills_read_permission_tilde",
@@ -389,6 +395,18 @@ prefix_rule(
     decision = "allow",
     justification = "Agent Deck workflow dispatcher (installed local bin, absolute)",
 )
+
+prefix_rule(
+    pattern = ["$INSTALLED_LOCAL_BIN_TILDE/adwf"],
+    decision = "allow",
+    justification = "Agent Deck workflow dispatcher (installed local bin, tilde)",
+)
+
+prefix_rule(
+    pattern = ["$INSTALLED_LOCAL_BIN/adwf"],
+    decision = "allow",
+    justification = "Agent Deck workflow dispatcher (installed local bin, absolute)",
+)
 EOF
 
     cat >> "$rules_file" << 'EOF'
@@ -461,6 +479,15 @@ enabled = true
 decision = "allow"
 toolName = "run_shell_command"
 commandPrefix = ["~/.local/bin/adwf.cmd"]
+priority = 950
+modes = ["default", "autoEdit", "yolo"]
+
+[[rule]]
+name = "allow_agent_deck_workflow_dispatch_local_bin"
+enabled = true
+decision = "allow"
+toolName = "run_shell_command"
+commandPrefix = ["~/.local/bin/adwf"]
 priority = 950
 modes = ["default", "autoEdit", "yolo"]
 
