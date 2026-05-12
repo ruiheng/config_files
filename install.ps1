@@ -130,6 +130,16 @@ function Remove-ExistingPath($Path) {
     }
 }
 
+function Write-TextUtf8NoBom($Path, [string]$Value) {
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [IO.File]::WriteAllText($Path, $Value, $encoding)
+}
+
+function Write-LinesUtf8NoBom($Path, [string[]]$Value) {
+    $text = ($Value -join [Environment]::NewLine) + [Environment]::NewLine
+    Write-TextUtf8NoBom $Path $text
+}
+
 function Ensure-Directory($Path) {
     if (Test-Path -LiteralPath $Path) { return }
     if ($DryRun) {
@@ -311,7 +321,7 @@ function Configure-GeminiSettings($TargetPath) {
         }
     }
 
-    $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $TargetPath -Encoding UTF8
+    Write-TextUtf8NoBom $TargetPath (($settings | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
     Write-Ok "Merged Gemini settings: $TargetPath"
 }
 
@@ -513,7 +523,7 @@ function Ensure-TomlStringKey($File, $Section, $Key, $Value) {
         $out.Add($entry)
     }
 
-    Set-Content -LiteralPath $File -Value $out -Encoding UTF8
+    Write-LinesUtf8NoBom $File $out
     Write-Ok "Ensured [$Section] $Key in: $File"
 }
 
