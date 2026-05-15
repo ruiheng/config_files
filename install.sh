@@ -719,7 +719,12 @@ rewrite_gemini_agent_mailbox_config() {
                 | ."agent-mailbox" = ((($mcpServers // {})["agent-mailbox"] // {})
                   | . + {
                     "command": "agent-mailbox",
-                    "args": ["mcp"]
+                    "args": ["mcp"],
+                    "env": {
+                      "TMUX": "$TMUX",
+                      "AGENTDECK_INSTANCE_ID": "$AGENTDECK_INSTANCE_ID",
+                      "GEMINI_CLI": "$GEMINI_CLI"
+                    }
                   }))
         ' "$gemini_config" > "$tmp_file"; then
             rm -f "$tmp_file"
@@ -738,7 +743,12 @@ rewrite_gemini_agent_mailbox_config() {
           "mcpServers": {
             "agent-mailbox": {
               "command": "agent-mailbox",
-              "args": ["mcp"]
+              "args": ["mcp"],
+              "env": {
+                "TMUX": "$TMUX",
+                "AGENTDECK_INSTANCE_ID": "$AGENTDECK_INSTANCE_ID",
+                "GEMINI_CLI": "$GEMINI_CLI"
+              }
             }
           }
         }
@@ -842,7 +852,7 @@ install_codex_agent_mailbox_mcp() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would ensure TMUX and AGENTDECK_INSTANCE_ID passthrough in: $codex_config"
+        log_dry "Would ensure TMUX, AGENTDECK_INSTANCE_ID, and CODEX_SESSION_ID passthrough in: $codex_config"
         return 0
     fi
 
@@ -863,7 +873,7 @@ install_codex_agent_mailbox_mcp() {
           }
 
           if ($in_section && $line =~ /^\[/) {
-            push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID" ]} unless $inserted;
+            push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID" ]} unless $inserted;
             $inserted = 1;
             $in_section = 0;
           }
@@ -873,7 +883,7 @@ install_codex_agent_mailbox_mcp() {
         }
 
         if ($in_section && !$inserted) {
-          push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID" ]};
+          push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID" ]};
         }
 
         die "agent_mailbox section not found\n" unless $found;
@@ -882,16 +892,16 @@ install_codex_agent_mailbox_mcp() {
         $_ .= "\n" unless $_ =~ /\n\z/;
     ' "$codex_config" && perl -0ne '
         exit(
-          /\[mcp_servers\.agent_mailbox\][\s\S]*?^env_vars\s*=\s*\[\s*"TMUX"\s*,\s*"AGENTDECK_INSTANCE_ID"\s*\]/m
+          /\[mcp_servers\.agent_mailbox\][\s\S]*?^env_vars\s*=\s*\[\s*"TMUX"\s*,\s*"AGENTDECK_INSTANCE_ID"\s*,\s*"CODEX_SESSION_ID"\s*\]/m
             ? 0
             : 1
         );
     ' "$codex_config"; then
-        log_ok "Ensured Codex MCP TMUX and AGENTDECK_INSTANCE_ID passthrough: agent_mailbox"
+        log_ok "Ensured Codex MCP TMUX, AGENTDECK_INSTANCE_ID, and CODEX_SESSION_ID passthrough: agent_mailbox"
         return 0
     fi
 
-    log_error "Failed to update Codex MCP TMUX and AGENTDECK_INSTANCE_ID passthrough: agent_mailbox"
+    log_error "Failed to update Codex MCP TMUX, AGENTDECK_INSTANCE_ID, and CODEX_SESSION_ID passthrough: agent_mailbox"
     return 1
 }
 
@@ -922,6 +932,11 @@ rewrite_claude_agent_mailbox_config() {
                 | .type = (.type // "stdio")
                 | .command = "agent-mailbox"
                 | .args = ["mcp"]
+                | .env = {
+                    "TMUX": "${TMUX:-}",
+                    "AGENTDECK_INSTANCE_ID": "${AGENTDECK_INSTANCE_ID:-}",
+                    "CLAUDE_CODE_SESSION_ID": "${CLAUDE_CODE_SESSION_ID:-}"
+                }
             ))
     ' "$claude_config" > "$tmp_file"; then
         rm -f "$tmp_file"
@@ -974,6 +989,7 @@ install_claude_agent_mailbox_mcp() {
 
     if claude mcp add -s user agent_mailbox -- agent-mailbox mcp; then
         log_ok "Configured Claude MCP: agent_mailbox"
+        rewrite_claude_agent_mailbox_config || return 1
         return 0
     fi
 
