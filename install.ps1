@@ -705,11 +705,11 @@ function Configure-AgentMailboxMcp {
 
     if (Test-Command "claude") {
         if (Invoke-LoggedCommand "claude" @("mcp", "add", "-s", "user", "agent_mailbox", "--", "agent-mailbox", "mcp") "Would run: claude mcp add -s user agent_mailbox -- agent-mailbox mcp") {
-            Ensure-ClaudeAgentMailboxEnv
             Write-Ok "Configured Claude MCP: agent_mailbox"
         } else {
-            Write-Skip "Failed to configure Claude MCP: agent_mailbox"
+            Write-Skip "Claude MCP add skipped or failed; ensuring config directly if present"
         }
+        Ensure-ClaudeAgentMailboxEnv
     } else {
         Write-Skip "Skipping Claude MCP config (claude not found)"
     }
