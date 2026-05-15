@@ -527,9 +527,112 @@ function Ensure-TomlStringKey($File, $Section, $Key, $Value) {
     Write-Ok "Ensured [$Section] $Key in: $File"
 }
 
+function Ensure-TomlArrayKey($File, $Section, $Key, [string[]]$Values) {
+    if ($DryRun) {
+        Write-Dry "Would ensure [$Section] $Key in: $File"
+        return
+    }
+
+    Ensure-Directory (Split-Path -Parent $File)
+    $lines = @()
+    if (Test-Path -LiteralPath $File) {
+        $lines = @(Get-Content -LiteralPath $File)
+    }
+
+    $escapedValues = $Values | ForEach-Object {
+        $escaped = $_.Replace('\', '\\').Replace('"', '\"')
+        "`"$escaped`""
+    }
+    $entry = "$Key = [ $($escapedValues -join ', ') ]"
+    $sectionHeader = "[$Section]"
+    $out = New-Object System.Collections.Generic.List[string]
+    $inSection = $false
+    $foundSection = $false
+    $foundKey = $false
+
+    foreach ($line in $lines) {
+        if ($line -match "^\s*\[$([Regex]::Escape($Section))\]\s*$") {
+            $inSection = $true
+            $foundSection = $true
+            $out.Add($line)
+            continue
+        }
+
+        if ($inSection -and $line -match "^\s*\[") {
+            if (-not $foundKey) { $out.Add($entry) }
+            $inSection = $false
+        }
+
+        if ($inSection -and $line -match "^\s*$([Regex]::Escape($Key))\s*=") {
+            $out.Add($entry)
+            $foundKey = $true
+            continue
+        }
+
+        $out.Add($line)
+    }
+
+    if ($foundSection -and $inSection -and -not $foundKey) {
+        $out.Add($entry)
+    }
+
+    if (-not $foundSection) {
+        if ($out.Count -gt 0 -and $out[$out.Count - 1] -ne "") {
+            $out.Add("")
+        }
+        $out.Add($sectionHeader)
+        $out.Add($entry)
+    }
+
+    Write-LinesUtf8NoBom $File $out
+    Write-Ok "Ensured [$Section] $Key in: $File"
+}
+
 function Configure-AgentDeckCodex {
     $agentDeckConfig = Join-Path $HomeDir ".agent-deck\config.toml"
     Ensure-TomlStringKey $agentDeckConfig "codex" "command" "codext"
+}
+
+function Ensure-CodexAgentMailboxEnv {
+    $codexConfig = Join-Path $HomeDir ".codex\config.toml"
+    Ensure-TomlArrayKey $codexConfig "mcp_servers.agent_mailbox" "env_vars" @("TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID")
+}
+
+function Ensure-ClaudeAgentMailboxEnv {
+    $claudeConfig = Join-Path $HomeDir ".claude.json"
+
+    if ($DryRun) {
+        Write-Dry "Would ensure Claude MCP env passthrough in: $claudeConfig"
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $claudeConfig -PathType Leaf)) {
+        Write-Skip "Skipping Claude MCP env passthrough (.claude.json not found)"
+        return
+    }
+
+    try {
+        $config = Get-Content -LiteralPath $claudeConfig -Raw | ConvertFrom-Json
+        if (-not $config) { $config = [pscustomobject]@{} }
+    } catch {
+        if (-not (Backup-ItemPath $claudeConfig)) { return }
+        $config = [pscustomobject]@{}
+    }
+
+    $mcpServers = Ensure-JsonObjectProperty $config "mcpServers"
+    $server = Ensure-JsonObjectProperty $mcpServers "agent_mailbox"
+    Set-JsonProperty $server "type" "stdio"
+    Set-JsonProperty $server "command" "agent-mailbox"
+    $serverArgs = @("mcp")
+    Set-JsonProperty $server "args" $serverArgs
+
+    $envObject = Ensure-JsonObjectProperty $server "env"
+    Set-JsonProperty $envObject "TMUX" '${TMUX:-}'
+    Set-JsonProperty $envObject "AGENTDECK_INSTANCE_ID" '${AGENTDECK_INSTANCE_ID:-}'
+    Set-JsonProperty $envObject "CLAUDE_CODE_SESSION_ID" '${CLAUDE_CODE_SESSION_ID:-}'
+
+    Write-TextUtf8NoBom $claudeConfig (($config | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+    Write-Ok "Ensured Claude MCP env passthrough: agent_mailbox"
 }
 
 function Show-Prerequisites {
@@ -591,6 +694,7 @@ function Configure-AgentMailboxMcp {
         Invoke-BestEffortCommand $script:CodexCliCommand @("mcp", "remove", "workflow_mailbox") "Would run: $script:CodexCliCommand mcp remove workflow_mailbox"
         Invoke-BestEffortCommand $script:CodexCliCommand @("mcp", "remove", "agent_mailbox") "Would run: $script:CodexCliCommand mcp remove agent_mailbox"
         if (Invoke-LoggedCommand $script:CodexCliCommand @("mcp", "add", "agent_mailbox", "--", "agent-mailbox", "mcp") "Would run: $script:CodexCliCommand mcp add agent_mailbox -- agent-mailbox mcp") {
+            Ensure-CodexAgentMailboxEnv
             Write-Ok "Configured Codex MCP: agent_mailbox"
         } else {
             Write-Skip "Failed to configure Codex MCP: agent_mailbox"
@@ -601,6 +705,7 @@ function Configure-AgentMailboxMcp {
 
     if (Test-Command "claude") {
         if (Invoke-LoggedCommand "claude" @("mcp", "add", "-s", "user", "agent_mailbox", "--", "agent-mailbox", "mcp") "Would run: claude mcp add -s user agent_mailbox -- agent-mailbox mcp") {
+            Ensure-ClaudeAgentMailboxEnv
             Write-Ok "Configured Claude MCP: agent_mailbox"
         } else {
             Write-Skip "Failed to configure Claude MCP: agent_mailbox"
@@ -612,12 +717,7 @@ function Configure-AgentMailboxMcp {
     if (Test-Command "gemini") {
         Invoke-BestEffortCommand "gemini" @("mcp", "remove", "workflow_mailbox") "Would run: gemini mcp remove workflow_mailbox"
         Invoke-BestEffortCommand "gemini" @("mcp", "remove", "agent_mailbox") "Would run: gemini mcp remove agent_mailbox"
-        Invoke-BestEffortCommand "gemini" @("mcp", "remove", "agent-mailbox") "Would run: gemini mcp remove agent-mailbox"
-        if (Invoke-LoggedCommand "gemini" @("mcp", "add", "-s", "user", "agent_mailbox", "agent-mailbox", "mcp") "Would run: gemini mcp add -s user agent_mailbox agent-mailbox mcp") {
-            Write-Ok "Configured Gemini MCP: agent_mailbox"
-        } else {
-            Write-Skip "Failed to configure Gemini MCP: agent_mailbox"
-        }
+        Write-Ok "Configured Gemini MCP: agent-mailbox"
     } else {
         Write-Skip "Skipping Gemini MCP config (gemini not found)"
     }

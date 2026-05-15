@@ -11,7 +11,12 @@
       "command": "agent-mailbox",
       "args": [
         "mcp"
-      ]
+      ],
+      "env": {
+        "TMUX": "$TMUX",
+        "AGENTDECK_INSTANCE_ID": "$AGENTDECK_INSTANCE_ID",
+        "GEMINI_CLI": "$GEMINI_CLI"
+      }
     },
     "context7": {
       "url": "https://mcp.context7.com/mcp",
