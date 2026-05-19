@@ -512,6 +512,7 @@ install_required_tools() {
 
 install_agent_browser() {
     log_info "Checking agent-browser..."
+    local installed_agent_browser=0
 
     if ! ensure_required_command "npm"; then
         log_error "agent-browser requires npm"
@@ -527,14 +528,20 @@ install_agent_browser() {
                 log_error "Failed to install agent-browser with npm"
                 return 1
             fi
+            installed_agent_browser=1
             log_ok "Installed agent-browser"
         fi
     else
         log_ok "Found agent-browser"
     fi
 
+    if [[ $DRY_RUN -eq 0 && $installed_agent_browser -eq 0 ]]; then
+        log_ok "Skipping agent-browser browser install; agent-browser is already installed"
+        return 0
+    fi
+
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: agent-browser install"
+        log_dry "Would run: agent-browser install if agent-browser is newly installed"
         return 0
     fi
 
