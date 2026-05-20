@@ -5,7 +5,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Steps
 
-1. Run `mailbox_recv` with a long timeout when no visible local work remains; use `2h`
+1. Run `mailbox_wait` with timeout `2h` when no visible local work remains; if mail is available, immediately run `mailbox_recv` to claim it
 2. If no personal message is returned:
    - check the roundtable exception below
    - report that no agent mail is available and continue or stop as appropriate
@@ -18,11 +18,11 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Rules
 
-- Use blocking `mailbox_recv` for workflow pickup; prefer `timeout: "2h"` when idle
-- `mailbox_wait` is only for non-claiming observation; use `mailbox_recv` to claim and execute work
+- Use `mailbox_wait` for idle waiting; prefer `timeout: "2h"`
+- `mailbox_recv` only reads and claims available mail; do not rely on it to wait
 - While a claimed personal delivery is incomplete, do not call `mailbox_recv` for another personal delivery
 - After the claimed delivery is complete, do not start another receive in the same check unless the current task explicitly asks for another idle wait cycle
-- If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
+- If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry the same `mailbox_wait` -> `mailbox_recv` sequence
 - Never pass a `group/` address to `mailbox_bind`; group addresses are read only with explicit `mailbox_recv addresses=[...] as_person=...`
 - Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check before reporting no personal mail. This handles group subscriber wakeups, which may not create a personal delivery.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision

@@ -141,7 +141,7 @@ Round: <round>
 - Keep the answer concise and assume the moderator will translate for the user.
 ```
 
-After participant control mail is sent, do independent moderator work when available. If no visible local work remains, wait once for mailbox activity with timeout `2h`; group subscriber notification is only best-effort acceleration.
+After participant control mail is sent, do independent moderator work when available. If no visible local work remains, wait once for mailbox activity with `mailbox_wait timeout = 2h`, then run `Moderator Group Check`; group subscriber notification is only best-effort acceleration.
 
 ## Ending
 

@@ -186,8 +186,8 @@ Before sending:
 
 After sending:
 - do independent local work when available
-- if no visible local work remains, wait once for the architect report with blocking `mailbox_recv` using timeout `2h`
-- if the receive times out, report that no architect report has arrived yet; do not inspect or repair the architect session
+- if no visible local work remains, wait once for the architect report with `mailbox_wait timeout = 2h`, then claim it with `mailbox_recv`
+- if the wait times out, report that no architect report has arrived yet; do not inspect or repair the architect session
 
 ## After Report Handling
 

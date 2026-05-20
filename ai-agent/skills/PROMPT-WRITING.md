@@ -113,9 +113,9 @@ Do not leave room for the agent to improvise between several "possible" options.
   - "it should finish soon"
 - after dispatch, the normal choices are:
   - do independent work
-  - or wait with blocking `mailbox_recv`
-- when no visible local work remains, use one long receive timeout; use `2h`
-- after a receive timeout, report that no mail/reply arrived yet instead of looping
+  - or wait with `mailbox_wait`, then claim with `mailbox_recv`
+- when no visible local work remains, use one long wait timeout; use `2h`
+- after a wait timeout, report that no mail/reply arrived yet instead of looping
 - a timeout is not evidence that the receiver is broken
 - do not inspect or repair another session because a wait timed out
 - notification nudges are optional acceleration, not a correctness dependency
@@ -168,7 +168,7 @@ Before landing a prompt change, check for these:
 - Did we duplicate another skill's logic instead of referencing it?
 - Did we tell the receiver how another role works internally?
 - Did we imply a reply should arrive within a short timeout?
-- Did we define idle timeout behavior as one long receive, then report no mail/reply?
+- Did we define idle timeout behavior as one long wait, then report no mail/reply?
 - Did we let a sender cross the mailbox/nudge boundary to manage receiver execution?
 - Did we allow the agent to mutate shared workspace state while another agent may still own it?
 - Did we describe manual steps where a script/tool should be authoritative?
