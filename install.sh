@@ -1646,7 +1646,7 @@ install_codex_config() {
     fi
 
     install_codex_skills
-    ensure_codex_tui_usage_limit_resume_prompt || return 1
+    # ensure_codex_tui_usage_limit_resume_prompt || return 1
 
     # Link Codex escalation rules for workflow automation approvals
     if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
