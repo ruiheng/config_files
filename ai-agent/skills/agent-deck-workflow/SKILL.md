@@ -1,6 +1,6 @@
 ---
 name: agent-deck-workflow
-description: Shared transport and mailbox workflow protocol for multi-session AI collaboration, using agent-mailbox as the authoritative message layer and agent-deck only for wakeups. Use when workflow tasks need cross-session message delivery, mailbox lifecycle handling, or a common workflow envelope format.
+description: Shared transport and mailbox workflow protocol for multi-session AI collaboration, using agent-mailbox as the authoritative message layer and agent-deck for session lifecycle plus optional wakeups. Use when workflow tasks need cross-session message delivery, mailbox lifecycle handling, or a common workflow envelope format.
 ---
 
 # Agent Deck Workflow

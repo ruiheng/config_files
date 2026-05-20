@@ -159,6 +159,6 @@ Use the `agent_mailbox` MCP tools:
 - if reviewer continuity changes, resend full context
 - create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
 - after the first create step, later workflow turns must reuse the real `refactor_reviewer_session_id`; do not fall back to `refactor_reviewer_session_ref`
-- after the send succeeds, report the sent status, do independent local work, or optionally wait
-- if a wait times out, either wait again or stop; do not inspect or repair the reviewer session
-- resume report handling from a later nudge, explicit human mailbox-check request, or an actually received reply
+- after the send succeeds, do independent local work when available
+- if no visible local work remains, wait once for the advisory report with blocking `mailbox_recv` using timeout `2h`
+- if the receive times out, report that no advisory report has arrived yet; do not inspect or repair the reviewer session

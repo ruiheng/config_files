@@ -57,7 +57,7 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
    - `workdir = current workspace`
    - `group_path = <participant_group_path>`
    - `no_parent_link = true`
-   - leave `startup_instruction` / `listener_message` empty; control mail plus wakeup is the bootstrap path
+   - leave `startup_instruction` / `listener_message` empty; control mail is the bootstrap path and wakeup is best-effort
 6. Send the opening user-intent message to the group with `mailbox_send group:true`.
 7. Mark the moderator's own group send read as `moderator` using the Own Send Read Rule.
 8. Send each participant one personal control message with Action `roundtable_participant_turn`.
@@ -141,7 +141,7 @@ Round: <round>
 - Keep the answer concise and assume the moderator will translate for the user.
 ```
 
-After the participant control mail is sent, do not wait for the participant. Group subscriber notification will wake the moderator after participant group posts.
+After participant control mail is sent, do independent moderator work when available. If no visible local work remains, wait once for mailbox activity with timeout `2h`; group subscriber notification is only best-effort acceleration.
 
 ## Ending
 

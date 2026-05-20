@@ -5,8 +5,10 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Steps
 
-1. Run `mailbox_recv` exactly once
-2. If no personal message is returned, check the roundtable exception below; otherwise report that no agent mail is available and stop
+1. Run `mailbox_recv` with a long timeout when no visible local work remains; use `2h`
+2. If no personal message is returned:
+   - check the roundtable exception below
+   - report that no agent mail is available and continue or stop as appropriate
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
@@ -16,12 +18,13 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Rules
 
-- Never call `mailbox_wait` in this skill; it is only for manual diagnostics outside this workflow
-- Do not poll with repeated `mailbox_recv`; a no-message result is final for this turn
-- After completing one claimed personal delivery, do not call `mailbox_recv` again in the same turn; wait for the next wakeup nudge or explicit human mailbox-check request
+- Use blocking `mailbox_recv` for workflow pickup; prefer `timeout: "2h"` when idle
+- `mailbox_wait` is only for non-claiming observation; use `mailbox_recv` to claim and execute work
+- While a claimed personal delivery is incomplete, do not call `mailbox_recv` for another personal delivery
+- After the claimed delivery is complete, do not start another receive in the same check unless the current task explicitly asks for another idle wait cycle
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry `mailbox_recv`
 - Never pass a `group/` address to `mailbox_bind`; group addresses are read only with explicit `mailbox_recv addresses=[...] as_person=...`
-- Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check instead of stopping. This handles group subscriber wakeups, which nudge the moderator session without creating a personal delivery.
+- Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check before reporting no personal mail. This handles group subscriber wakeups, which may not create a personal delivery.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - The current session owns only the delivery lifecycle of the inbound message it claimed with `mailbox_recv`
