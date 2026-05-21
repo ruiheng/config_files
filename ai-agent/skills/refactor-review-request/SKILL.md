@@ -160,5 +160,5 @@ Use the `agent_mailbox` MCP tools:
 - create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
 - after the first create step, later workflow turns must reuse the real `refactor_reviewer_session_id`; do not fall back to `refactor_reviewer_session_ref`
 - after the send succeeds, do independent local work when available
-- if no visible local work remains, wait once for the advisory report with `mailbox_wait timeout = 2h`, then claim it with `mailbox_recv`
+- if no visible local work remains, wait once for the advisory report with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
 - if the wait times out, report that no advisory report has arrived yet; do not inspect or repair the reviewer session

@@ -134,7 +134,7 @@ Round: 1
 
 ## Required Workflow Step
 - If `Per-task review: required`, coder must run the `review-request` skill after the delivery commit; that skill creates or reuses the reviewer on demand as a child of planner
-- After `review-request` sends the request, coder should do independent local work when available; otherwise wait once with `mailbox_wait timeout = 2h`, then claim with `mailbox_recv`
+- After `review-request` sends the request, coder should do independent local work when available; otherwise wait once with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
 - If the wait times out, report that no reviewer reply has arrived yet instead of inspecting or repairing the reviewer session
 - If `Per-task review: skip`, do not start reviewer for this task unless planner explicitly requests review later
 
@@ -223,7 +223,7 @@ Rules:
 - report target readiness only after the resolve/create/send path that applies has completed
 - if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path
 - treat coder/reviewer progress as asynchronous with unbounded duration; a wait timeout means no reply yet, not a failure
-- after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise wait once with `mailbox_wait timeout = 2h`, then claim with `mailbox_recv`
+- after sending, do independent planner work only when it does not depend on coder/reviewer progress; otherwise wait once with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
 - if waiting for coder/reviewer progress times out, report that no reply has arrived yet; do not inspect or repair the target session
 - in the delegated task workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
 - if `worker_workspace == planner_workspace`, planner must still avoid touching that delegated task worktree state outside the delegate/closeout workflow

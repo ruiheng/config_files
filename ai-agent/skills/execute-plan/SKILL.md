@@ -59,7 +59,7 @@ Skill-specific context resolution:
    - start with `delegate-task` and apply its own decision gate for whether delegation is justified
    - if `delegate-task` says delegation is justified, send the task and pass the chosen `Per-task review` policy into the delegate brief
    - if `delegate-task` says the work should be done directly, planner may use `Direct Planner Implementation`
-6. coder/reviewer/architect progress may take unbounded time; when no visible local work remains, wait once with `mailbox_wait timeout = 2h`, then claim with `mailbox_recv`
+6. coder/reviewer/architect progress may take unbounded time; when no visible local work remains, wait once with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
    - if the wait times out, report that no reply has arrived yet instead of inspecting or repairing the target session
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
@@ -94,7 +94,7 @@ Required sequence:
 6. if `Per-task review: required`:
    - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
    - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>`
-   - after `review-request` sends the request, do independent local work when available; otherwise wait once with `mailbox_wait timeout = 2h`, then claim with `mailbox_recv`
+   - after `review-request` sends the request, do independent local work when available; otherwise wait once with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
    - if the wait times out, report that no reviewer reply has arrived yet; do not inspect or repair the reviewer session
    - when a later inbound reviewer acceptance produces `closeout_delivered`, handle it with `planner-closeout` before marking the task done
 7. if `Per-task review: skip`, run workspace prepare for this task, then run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done

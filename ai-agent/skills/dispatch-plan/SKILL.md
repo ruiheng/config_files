@@ -142,7 +142,7 @@ Round: 1
    - `subject = "plan dispatch: <plan_id>"`
    - `body = <execute-plan mailbox body>`
 14. after the send succeeds, do independent local work when available
-15. if no visible local work remains, wait once for planner mail with `mailbox_wait timeout = 2h`, then claim it with `mailbox_recv`
+15. if no visible local work remains, wait once for planner mail with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
 16. if the wait times out, report that no planner mail has arrived yet; do not inspect or repair the planner session
 
 Rules:

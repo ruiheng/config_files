@@ -134,7 +134,7 @@ Commit reference rule:
 
 Post-send behavior:
 - after `mailbox_send` succeeds, do independent local work when available
-- if no visible local work remains, wait once for the review reply with `mailbox_wait timeout = 2h`, then claim it with `mailbox_recv`
+- if no visible local work remains, wait once for the review reply with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
 - if the wait times out, report that no review reply has arrived yet; do not inspect or repair the reviewer session
 
 ## Output Template
@@ -300,7 +300,7 @@ Rules:
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>`; never create reviewer as a child of coder/requester
 - `mailbox_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
 - after the send succeeds, do independent local work when available
-- if no visible local work remains, wait once for the review reply with `mailbox_wait timeout = 2h`, then claim it with `mailbox_recv`
+- if no visible local work remains, wait once for the review reply with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
 - if the wait times out, report that no review reply has arrived yet; do not inspect or repair the reviewer session
 
 ## Quality Bar

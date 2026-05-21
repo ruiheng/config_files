@@ -186,7 +186,7 @@ Before sending:
 
 After sending:
 - do independent local work when available
-- if no visible local work remains, wait once for the architect report with `mailbox_wait timeout = 2h`, then claim it with `mailbox_recv`
+- if no visible local work remains, wait once for the architect report with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
 - if the wait times out, report that no architect report has arrived yet; do not inspect or repair the architect session
 
 ## After Report Handling
