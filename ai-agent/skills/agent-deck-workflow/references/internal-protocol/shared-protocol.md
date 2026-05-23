@@ -79,6 +79,8 @@ Preferred transport interface:
 
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
+- keep outbound mailbox bodies in the `mailbox_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
+- if a shell helper requires a real body file, write it under the sending workflow workdir's `.agent-artifacts/` tree, for example `<workdir>/.agent-artifacts/mailbox/`; do not use `/tmp`, `/var/tmp`, or other global temp dirs for mailbox body files because that can trigger unattended approval prompts
 - use `mailbox_wait` to wait for mail, then `mailbox_recv` to read and claim it
 - when no visible local work remains, call `mailbox_wait` once with timeout `110s`
 - if the wait times out, report that no mail is available and rely on a later nudge or user-triggered mailbox check; do not loop

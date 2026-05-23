@@ -17,7 +17,8 @@ Required:
   --coder-session-ref <ref>       Coder session ref/title
   --task-branch <ref>             Task branch
   --subject <text>                Mailbox subject
-  --body-file <path|->            Body source, or "-" for stdin
+  --body-file <path|->            Body source, or "-" for stdin.
+                                  If a real file is needed, keep it under <workdir>/.agent-artifacts/.
 
 Optional:
   --artifact-root <path>          Artifact root (default: <workdir>/.agent-artifacts)
