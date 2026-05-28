@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simplify Review"
+  short_description: "Find code that can be shorter and clearer"
+  default_prompt: "Use $simplify-review to review this code for simplification opportunities without changing behavior."
