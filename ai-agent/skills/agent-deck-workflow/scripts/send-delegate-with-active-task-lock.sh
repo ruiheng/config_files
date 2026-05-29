@@ -9,7 +9,7 @@ Usage:
   send-delegate-with-active-task-lock.sh [options]
 
 Required:
-  --workdir <path>                Worker workspace that owns .agent-artifacts/
+  --workdir <path>                Worker/shared workspace that owns the active-task artifacts
   --task-id <id>                  Task id
   --integration-branch <ref>      Non-task landing branch
   --planner-session-id <id>       Planner sender session id
@@ -18,7 +18,7 @@ Required:
   --task-branch <ref>             Task branch
   --subject <text>                Mailbox subject
   --body-file <path|->            Body source, or "-" for stdin.
-                                  If a real file is needed, keep it under <workdir>/.agent-artifacts/.
+                                  If a real file is needed, keep it under the current agent workdir's .agent-artifacts tree.
 
 Optional:
   --artifact-root <path>          Artifact root (default: <workdir>/.agent-artifacts)

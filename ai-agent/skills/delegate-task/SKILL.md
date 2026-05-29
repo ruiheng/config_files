@@ -200,7 +200,7 @@ Workflow send sequence:
    - `--subject "delegate: <task_id> -> coder"`
    - `--body-file <delegate mailbox body file or "-">`
      - prefer `-` and pipe the body through stdin
-     - if a real file is needed, write it under `<worker_workspace>/.agent-artifacts/`, not `/tmp` or another global temp dir
+     - if a real file is needed, write it under the current agent workdir's `.agent-artifacts/mailbox/`; never under the delegated worker workdir unless it is also the current workdir
    - the wrapper owns active-task lock acquisition, delegate send, send failure rollback, and target wakeup
 
 Recommended subject:
