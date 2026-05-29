@@ -18,7 +18,7 @@ Required:
   --task-branch <ref>             Task branch
   --subject <text>                Mailbox subject
   --body-file <path|->            Body source, or "-" for stdin.
-                                  If a real file is needed, keep it under <workdir>/.agent-artifacts/.
+                                  If a real file is needed, keep it under the sender workdir's .agent-artifacts/.
 
 Optional:
   --artifact-root <path>          Artifact root (default: <workdir>/.agent-artifacts)
