@@ -185,9 +185,9 @@ Before sending:
    - `body = <tech-design review request body>`
 
 After sending:
-- report the sent status, do independent local work, or optionally wait
-- if a wait times out, either wait again or stop; do not inspect or repair the architect session
-- resume report handling from a later nudge, explicit human mailbox-check request, or an actually received reply
+- do independent local work when available
+- if no visible local work remains, wait once for the architect report with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
+- if the wait times out, report that no architect report has arrived yet; do not inspect or repair the architect session
 
 ## After Report Handling
 

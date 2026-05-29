@@ -7,7 +7,8 @@ Those belong in the concrete action skill that sends or handles that workflow me
 ## Core Transport Rule
 
 - `agent-mailbox` carries the real workflow message
-- `agent-deck` is used to create new lifecycle-owned sessions, require existing target sessions before send, and nudge them to check mail
+- `agent-deck` is used to create new lifecycle-owned sessions and require existing target sessions before send
+- notification nudges are best-effort acceleration only; one bounded `mailbox_wait` followed by `mailbox_recv` is the reliable continuity path
 - use the `agent_mailbox` MCP tools as the default transport interface
 - use `check-agent-mail` for receiver-side wake handling
 - Agent Deck sessions are external workflow peers, not host-internal subagents; do not apply host subagent tool restrictions to `agent_deck_create_session`, `agent_deck_require_session`, `agent-deck`, or mailbox dispatch.
@@ -64,6 +65,7 @@ Preferred transport interface:
 - `mailbox_bind`
 - `mailbox_status`
 - `mailbox_send`
+- `mailbox_wait`
 - `mailbox_recv`
 - `mailbox_list`
 - `mailbox_read`
@@ -77,13 +79,18 @@ Preferred transport interface:
 
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
-- use `mailbox_recv` to claim mail
-- never call `mailbox_wait` for receiver workflow pickup; keep it only for manual diagnostics or observation
+- keep outbound mailbox bodies in the `mailbox_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
+- if a shell helper requires a real body file, write it under the sending workflow workdir's `.agent-artifacts/` tree, for example `<workdir>/.agent-artifacts/mailbox/`; do not use `/tmp`, `/var/tmp`, or other global temp dirs for mailbox body files because that can trigger unattended approval prompts
+- use `mailbox_wait` to wait for mail, then `mailbox_recv` to read and claim it
+- when no visible local work remains, call `mailbox_wait` once with timeout `110s`
+- if the wait times out, report that no mail is available and rely on a later nudge or user-triggered mailbox check; do not loop
+- after `mailbox_wait` reports available mail, immediately follow with `mailbox_recv`
 - never pass `group/` addresses to `mailbox_bind`; group streams are read with explicit `mailbox_recv addresses=[...] as_person=...`
 - use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
 - use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
-- after outbound `mailbox_send` succeeds, any same-turn wait is optional observation; a timeout means no reply yet, not a receiver failure
-- after a wait timeout, either wait again or stop and report the sent status
+- after outbound `mailbox_send` succeeds, use independent local work if available; otherwise wait once for the next mailbox delivery with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
+- a timeout means no reply yet, not a receiver failure
+- after a timeout, report that no mail is available; do not inspect or repair the target session
 - `mailbox_read` / `mailbox_list` are for recovering this session's prior workflow input, not for diagnosing why a just-requested reply has not arrived
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
 - `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail` apply only to the currently claimed inbound delivery in this session
@@ -98,16 +105,16 @@ Transport rules:
 - leave `startup_instruction` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
 
 Worker wake rule:
-- after `mailbox_send`, the normal non-local nudge should already be handled
-- a newly created or newly started target should use the same wake path as any other target: receive the sender nudge, then run `check-agent-mail`
-- long-running agent-mail polling processes are not recommended for delivery
+- after `mailbox_send`, the normal non-local nudge may be handled by mailbox transport or sender tooling
+- nudges are optional optimization; receivers should use one bounded `mailbox_wait` then `mailbox_recv` when idle
+- mailbox transport may suppress redundant nudges when the mail is claimed quickly
+- do not build correctness on nudge delivery
 
 Sender/receiver turn rule:
-- communication boundary is mailbox delivery plus the corresponding nudge; do not cross it by observing or repairing the receiver's execution
+- communication boundary is mailbox delivery; do not cross it by observing or repairing the receiver's execution
 - sender turn ends after the required outbound `mailbox_send` or local continuation succeeds
-- expected replies are future inbound work, not part of the sender's current turn
-- receive replies only when this session is later nudged to run `check-agent-mail`, or when the human explicitly asks for a mailbox check
-- do not treat missing replies after a short wait as actionable failure evidence
+- expected replies are future inbound work; wait once for them with bounded `mailbox_wait` only when no local continuation remains
+- do not treat missing replies after a wait timeout as actionable failure evidence
 - never use repeated status checks, session inspection, or target workspace inspection to explain or repair a missing reply
 - receiver execution problems belong to the receiver's next report, lifecycle response, or user-directed troubleshooting, not sender-side correction
 
@@ -159,14 +166,15 @@ Expected behavior:
 3. queue the mailbox body with `mailbox_send`
 
 After send:
-- if no immediate local continuation remains, either stop or wait for a reply as optional observation
-- if waiting times out, wait again or stop; do not inspect or repair the target session
-- resume only from a later nudge or explicit human mailbox-check request
+- if immediate local continuation remains, do it
+- if no visible local work remains, wait once for a reply with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
+- if waiting times out, report that no reply has arrived yet
+- do not inspect or repair the target session because a wait timed out
 
 ## Receiver Contract
 
 When a workflow session is woken:
-1. run `mailbox_recv`
+1. run `mailbox_wait` with timeout `110s` when no visible local work remains; if mail is available, run `mailbox_recv` to claim it
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
@@ -178,12 +186,13 @@ Complete the message's required workflow action before `ack`ing the claimed inbo
 Do not `ack` outbound mail that this session just sent.
 
 Idle behavior:
-- long-running wait loops are not recommended for workflow continuity
-- `mailbox_wait` is not a receiver workflow entrypoint
-- use `check-agent-mail` when a wakeup nudge arrives or when a human explicitly asks for a mailbox check
-- do not poll with repeated `mailbox_recv`; one no-message result ends the mailbox-check turn
-- after one claimed personal delivery is completed, do not fetch another personal delivery in the same turn
-- a just-sent outbound message is not a reason to run `check-agent-mail`
+- one bounded `mailbox_wait` followed by `mailbox_recv` is recommended for workflow continuity when no other visible work remains
+- use `check-agent-mail` for mailbox pickup after a wakeup nudge, an explicit human mailbox-check request, or idle workflow waiting
+- call `mailbox_wait` with timeout `110s` for idle waiting, then `mailbox_recv` to claim available mail
+- if the wait times out or `mailbox_recv` returns no message, report that no mail is available and wait for a later nudge or user-triggered check instead of waiting again
+- while a claimed personal delivery is incomplete, do not fetch another personal delivery
+- after the claimed delivery is completed, do not start another wait/receive cycle in the same check unless the current task explicitly asks for it
+- a just-sent outbound message is a reason to wait only when this session has no immediate local continuation
 
 ## Natural End Gate
 
@@ -192,7 +201,7 @@ Do not naturally end a workflow turn just because the main task work looks finis
 Natural end is allowed only when one of these is true:
 - all required workflow actions for this turn are already done, including any required `mailbox_send` / `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
 - this turn is an explicit same-session continuation and control has already been handed to the next local step
-- this turn was only a mailbox check and `mailbox_recv` returned no message
+- this turn was only a mailbox check, `mailbox_recv` returned no message, and there is visible non-mailbox work or a user-facing reason to stop
 
 Before ending a workflow turn, check:
 - did I finish the required send-back or handoff step for this action?
@@ -200,7 +209,7 @@ Before ending a workflow turn, check:
 - if context feels incomplete after compaction or interruption, can I recover the current workflow input from the mailbox body or `mailbox_read` before deciding to stop?
 
 If the task work is done but the required workflow send-back step is still pending, do not end. Send the required mailbox message first.
-If the required workflow send-back step has succeeded, do not keep the turn alive by checking for the next reply.
+If the required workflow send-back step has succeeded and no other visible work remains, wait once with `mailbox_wait timeout = 110s`; claim available mail with `mailbox_recv`.
 If the task is blocked and cannot continue, do not end silently. Use the appropriate lifecycle/reporting step first.
 
 ## Error Handling And Diagnostics
@@ -211,7 +220,7 @@ If workflow send or worker start fails, report concise stderr summary and run th
 3. did `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
-If a target missed mailbox work, retry the nudge path instead of resending mailbox content.
+If a target appears idle, do not resend mailbox content; rely on receiver-side bounded `mailbox_wait` plus `mailbox_recv`, and retry a nudge only as explicit troubleshooting.
 
 If closeout or cleanup helpers fail, include:
 1. blocked reason

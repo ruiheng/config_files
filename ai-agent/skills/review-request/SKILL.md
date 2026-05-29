@@ -133,9 +133,9 @@ Commit reference rule:
 - in mailbox content, use a short commit ref, not a full 40-char hash
 
 Post-send behavior:
-- after `mailbox_send` succeeds, report the sent status, do independent local work, or optionally wait
-- if a wait times out, either wait again or stop; do not inspect or repair the reviewer session
-- resume report handling from a later nudge, explicit human mailbox-check request, or an actually received reply
+- after `mailbox_send` succeeds, do independent local work when available
+- if no visible local work remains, wait once for the review reply with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
+- if the wait times out, report that no review reply has arrived yet; do not inspect or repair the reviewer session
 
 ## Output Template
 
@@ -298,9 +298,10 @@ Rules:
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>`; never create reviewer as a child of coder/requester
-- `mailbox_send` handles the normal non-local reviewer nudge
-- after the send succeeds, report the sent status, do independent local work, or optionally wait
-- if a wait times out, either wait again or stop; do not inspect or repair the reviewer session
+- `mailbox_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
+- after the send succeeds, do independent local work when available
+- if no visible local work remains, wait once for the review reply with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
+- if the wait times out, report that no review reply has arrived yet; do not inspect or repair the reviewer session
 
 ## Quality Bar
 
