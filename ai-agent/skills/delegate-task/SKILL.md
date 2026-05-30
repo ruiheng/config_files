@@ -200,7 +200,7 @@ Workflow send sequence:
    - `--subject "delegate: <task_id> -> coder"`
    - `--body-file <delegate mailbox body file or "-">`
      - prefer `-` and pipe the body through stdin
-     - if a real file is needed, write it under the planner/current agent workdir's `.agent-artifacts/mailbox/`; never under the delegated worker workdir unless it is also the current workdir
+     - if a real file is needed, write it under this agent's `.agent-artifacts/mailbox/`
    - the wrapper owns active-task lock acquisition, delegate send, send failure rollback, and target wakeup
 
 Recommended subject:
@@ -221,7 +221,7 @@ Rules:
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
-- for delegate mailbox body staging, planner is the sender and must use stdin or planner-owned artifacts; do not write staging files in worker-owned paths
+- for delegate mailbox body staging, use stdin or this agent's artifacts
 - when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send path that applies has completed
 - if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path
