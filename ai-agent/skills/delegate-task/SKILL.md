@@ -221,7 +221,6 @@ Rules:
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
-- for delegate mailbox body staging, use stdin or this agent's artifacts
 - when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send path that applies has completed
 - if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path

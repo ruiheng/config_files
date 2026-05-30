@@ -1,6 +1,6 @@
 ---
 name: simplify-review
-description: Review code and tests for simplification opportunities without making changes. Use when the goal is to reduce AI-written bloat, repeated local fixes, near-duplicate logic, unnecessary abstraction, dead code, excessive branching, deep nesting, verbose tests, low-value assertions, or tests that freeze incidental development mistakes while preserving behavior and compatibility.
+description: Review code and tests for safe simplification opportunities without making changes.
 ---
 
 # Simplify Review
