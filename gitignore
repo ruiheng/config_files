@@ -46,10 +46,13 @@ Thumbs.db
 
 
 # AI agents and related
-.claude
-.codex
-.gemini
-.serena
+.claude/
+.codex/
+.gemini/
+.antigravitycli/
+.codegraph/
+.worktrees/
+.serena/
 
 # my workflow
 delegate-task-*.md
