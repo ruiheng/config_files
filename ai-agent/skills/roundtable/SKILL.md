@@ -137,6 +137,9 @@ Round: <round>
 ## Rules
 - Read group unread messages as `<participant_person>`.
 - Reply to the group only.
+- Send with `from_address = <participant_person>`.
+- Use subject `roundtable: <roundtable_id> r<round> <participant_person>`.
+- Keep envelope metadata out of the body; start the body at the participant's actual response, usually `## Position`.
 - Do not address the user directly.
 - Keep the answer concise and assume the moderator will translate for the user.
 ```

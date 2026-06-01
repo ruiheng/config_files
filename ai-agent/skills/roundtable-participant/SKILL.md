@@ -34,6 +34,7 @@ If `group_address`, `participant_person`, or `role` is missing, do not guess. As
 4. Compose one group reply.
 5. Send the reply with `mailbox_send`:
    - `to_address = group_address`
+   - `from_address = participant_person`
    - `group = true`
    - `subject = "roundtable: <roundtable_id> r<round> <participant_person>"`
    - `body = <reply>`
@@ -59,11 +60,6 @@ If `group_address`, `participant_person`, or `role` is missing, do not guess. As
 Default format:
 
 ```markdown
-Roundtable: <roundtable_id>
-Participant: <participant_person>
-Role: <role>
-Round: <round>
-
 ## Position
 [core answer in 1-3 short paragraphs]
 
@@ -74,6 +70,8 @@ Round: <round>
 ## Challenge Or Question
 [one challenge to another view, or one question the moderator should consider next]
 ```
+
+Keep envelope metadata out of the body. `roundtable_id`, `round`, and `participant_person` belong in `subject`; participant identity belongs in `from_address`. Include role only when it is part of the argument, not as a header.
 
 If the Moderator Request explicitly requires exact/raw output or a different format, obey that request instead.
 
