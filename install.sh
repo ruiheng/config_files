@@ -591,6 +591,39 @@ install_codext() {
     return 1
 }
 
+install_codegraph() {
+    log_info "Checking codegraph..."
+
+    if ! ensure_required_command "npm"; then
+        log_error "codegraph requires npm"
+        return 1
+    fi
+
+    if command -v codegraph &>/dev/null; then
+        log_ok "Found codegraph"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: npm install -g @colbymchenry/codegraph"
+        return 0
+    fi
+
+    log_info "Running: npm install -g @colbymchenry/codegraph"
+    if ! npm install -g @colbymchenry/codegraph; then
+        log_error "Failed to install codegraph with npm"
+        return 1
+    fi
+
+    if command -v codegraph &>/dev/null; then
+        log_ok "Installed codegraph"
+        return 0
+    fi
+
+    log_error "Command still unavailable after install: codegraph"
+    return 1
+}
+
 ensure_toml_string_key() {
     local file="$1"
     local section="$2"
@@ -2009,6 +2042,10 @@ main() {
     fi
 
     if ! install_codext; then
+        exit 1
+    fi
+
+    if ! install_codegraph; then
         exit 1
     fi
 
