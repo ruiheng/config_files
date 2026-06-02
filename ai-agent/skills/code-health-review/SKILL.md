@@ -1,6 +1,6 @@
 ---
 name: code-health-review
-description: Review codebases from a high-level maintainability and reliability perspective. Use when the goal is to identify systemic design problems rather than local cleanup, especially for repeated bug patterns, high-churn modules, patch-on-patch fixes, weak typing, duplicated decision logic, pattern-level repetition, poor testability, or slow/non-converging fix-review cycles. Return advisory findings without making code changes.
+description: Review systemic maintainability and reliability risks without making code changes.
 ---
 
 # Code Health Review

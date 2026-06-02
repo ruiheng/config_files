@@ -11,7 +11,7 @@ Required:
   --from-session-id <id>         Sender session id
   --subject <text>               Mailbox subject
   --body-file <path|->           Body source, or "-" for stdin.
-                                  If a real file is needed, keep it under <workdir>/.agent-artifacts/.
+                                  Prefer stdin; keep real files under the caller's .agent-artifacts tree.
 
 Target selection:
   --to-session-id <id>           Existing target session id
