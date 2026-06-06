@@ -17,6 +17,7 @@ nvim.log
 *.pyc
 *.pyo
 *.pyd
+__pycache__/
 *.a
 
 # Packages #
