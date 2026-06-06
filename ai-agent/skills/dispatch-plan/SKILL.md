@@ -142,8 +142,9 @@ Round: 1
    - `subject = "plan dispatch: <plan_id>"`
    - `body = <execute-plan mailbox body>`
 14. after the send succeeds, do independent local work when available
-15. if no visible local work remains, wait once for planner mail with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
-16. if the wait times out, report that no planner mail has arrived yet; do not inspect or repair the planner session
+15. do not call `mailbox_wait` or `mailbox_recv` to wait for planner mail in the same turn
+16. return the user-facing dispatch confirmation immediately after the send completes; later planner reports are handled by wakeup, user-triggered mailbox checks, or `plan-report`
+17. do not inspect or repair the planner session merely because no immediate report is present
 
 Rules:
 - use `agent_deck_create_session` only when allocating a new planner lane; use `agent_deck_require_session` when resuming an existing planner session

@@ -6,7 +6,7 @@ description: Generates tech-design review requests from committed docs and defin
 # Tech-Design Review Request
 
 Generate a concise mailbox message that asks an architect to review the latest committed tech-design docs on a branch.
-Drive the architect-review loop until it reaches a deliverable conclusion or a clear user-decision blocker.
+When reports arrive, drive the architect-review loop until it reaches a deliverable conclusion or a clear user-decision blocker.
 
 Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
@@ -186,8 +186,9 @@ Before sending:
 
 After sending:
 - do independent local work when available
-- if no visible local work remains, wait once for the architect report with `mailbox_wait timeout = 110s`, then claim it with `mailbox_recv`
-- if the wait times out, report that no architect report has arrived yet; do not inspect or repair the architect session
+- do not call `mailbox_wait` or `mailbox_recv` to wait for the architect report in the same turn
+- return the user-facing request confirmation immediately after the send completes; later reports are handled by wakeup, user-triggered mailbox checks, or report-handling mode
+- do not inspect or repair the architect session merely because no immediate report is present
 
 ## After Report Handling
 
