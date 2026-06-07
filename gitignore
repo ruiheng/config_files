@@ -51,8 +51,11 @@ Thumbs.db
 .codex/
 .gemini/
 .antigravitycli/
+.screenshots/
 .codegraph/
 .worktrees/
+.agent-worktrees/
+.superpowers/
 .serena/
 
 # my workflow
