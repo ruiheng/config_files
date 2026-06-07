@@ -830,6 +830,95 @@ install_gemini_agent_mailbox_mcp() {
     rewrite_gemini_agent_mailbox_config || return 1
 }
 
+rewrite_antigravity_agent_mailbox_config() {
+    local antigravity_mcp_config="$HOME/.gemini/config/mcp_config.json"
+    local antigravity_settings="$HOME/.gemini/antigravity-cli/settings.json"
+    local tmp_file
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would rewrite Antigravity MCP config in: $antigravity_mcp_config"
+        log_dry "Would remove legacy Antigravity mailbox MCP entries from: $antigravity_settings"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$antigravity_mcp_config")"
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/antigravity-mcp-config.XXXXXX")" || {
+        log_error "Failed to create temporary file for Antigravity MCP config"
+        return 1
+    }
+
+    if [[ -s "$antigravity_mcp_config" ]]; then
+        if ! jq '
+            .mcpServers as $mcpServers
+            | .mcpServers = (($mcpServers // {})
+                | del(.workflow_mailbox, .agent_mailbox)
+                | ."agent-mailbox" = ((($mcpServers // {})["agent-mailbox"] // {})
+                  | . + {
+                    "command": "agent-mailbox",
+                    "args": ["mcp"]
+                  }
+                  | del(.env)))
+        ' "$antigravity_mcp_config" > "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to rewrite Antigravity MCP config: $antigravity_mcp_config"
+            return 1
+        fi
+    elif ! jq -n '
+        {
+          "mcpServers": {
+            "agent-mailbox": {
+              "command": "agent-mailbox",
+              "args": ["mcp"]
+            }
+          }
+        }
+    ' > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to rewrite Antigravity MCP config: $antigravity_mcp_config"
+        return 1
+    fi
+
+    if ! mv "$tmp_file" "$antigravity_mcp_config"; then
+        rm -f "$tmp_file"
+        log_error "Failed to write Antigravity MCP config: $antigravity_mcp_config"
+        return 1
+    fi
+
+    if [[ -s "$antigravity_settings" ]]; then
+        tmp_file="$(mktemp "${TMPDIR:-/tmp}/antigravity-settings.XXXXXX")" || {
+            log_error "Failed to create temporary file for Antigravity settings cleanup"
+            return 1
+        }
+
+        if ! jq '
+            if (.mcpServers | type) == "object" then
+                .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox")
+                | if (.mcpServers == {}) then del(.mcpServers) else . end
+            else
+                .
+            end
+        ' "$antigravity_settings" > "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to clean legacy Antigravity MCP config: $antigravity_settings"
+            return 1
+        fi
+
+        if ! mv "$tmp_file" "$antigravity_settings"; then
+            rm -f "$tmp_file"
+            log_error "Failed to write Antigravity settings cleanup: $antigravity_settings"
+            return 1
+        fi
+    fi
+
+    log_ok "Rewrote Antigravity MCP config: agent-mailbox"
+    return 0
+}
+
+install_antigravity_agent_mailbox_mcp() {
+    rewrite_antigravity_agent_mailbox_config || return 1
+}
+
 remove_codex_legacy_workflow_mailbox_mcp() {
     if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
         return 0
@@ -1595,6 +1684,23 @@ install_gemini_skills() {
     install_skills_individually "Gemini CLI" "$HOME/.gemini/skills"
 }
 
+install_antigravity_skills() {
+    install_skills_individually "Antigravity CLI" "$HOME/.gemini/antigravity-cli/skills"
+}
+
+install_antigravity_config() {
+    log_info "Installing Antigravity CLI config..."
+
+    install_antigravity_skills
+
+    if ! ensure_agent_mailbox_mcp_command; then
+        log_error "Failed to verify built-in agent_mailbox MCP command for Antigravity"
+        return 1
+    fi
+
+    install_antigravity_agent_mailbox_mcp
+}
+
 install_gemini_config() {
     log_info "Installing Gemini CLI config..."
 
@@ -2062,6 +2168,7 @@ main() {
     install_local_bin_helpers
     install_claude_config
     install_gemini_config
+    install_antigravity_config
     install_codex_config
     install_opencode_config
     install_serena_config

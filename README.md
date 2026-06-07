@@ -156,6 +156,15 @@ Options:
 
 **Note**: If `~/.agents/skills` exists, installer uses it as the shared Gemini skills path and skips `~/.gemini/skills` to avoid duplicate skill conflict warnings. If `~/.agents/skills` does not exist, installer links skills under `~/.gemini/skills`.
 
+### Antigravity CLI Configuration
+
+| Source | Target | Description |
+|--------|--------|-------------|
+| `ai-agent/skills/<skill>/` | `~/.gemini/antigravity-cli/skills/<skill>/` | **Each skill linked individually** |
+| `agent-mailbox mcp` | `~/.gemini/config/mcp_config.json` | Antigravity CLI MCP server config |
+
+**Note**: Antigravity MCP servers inherit the parent process environment. The installer does not write an `env` block for Antigravity.
+
 ### Other Special Configurations
 
 | Source | Target | Description |
