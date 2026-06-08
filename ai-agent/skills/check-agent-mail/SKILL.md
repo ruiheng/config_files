@@ -5,10 +5,11 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Steps
 
-1. Run `mailbox_wait` with timeout `110s` when no visible local work remains; if mail is available, immediately run `mailbox_recv` to claim it
+1. Run `mailbox_recv` first to claim already-available mail
 2. If no personal message is returned:
    - check the roundtable exception below
-   - report that no agent mail is available and continue or stop as appropriate
+   - if no visible local work remains and waiting is appropriate, run `mailbox_wait` with timeout `110s`; if mail is available, immediately run `mailbox_recv` to claim it
+   - if waiting also finds no mail, report that no agent mail is available and continue or stop as appropriate
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
@@ -18,11 +19,11 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Rules
 
-- Use `mailbox_wait` for idle waiting; prefer `timeout: "110s"` to stay below MCP tool call limits
+- Use `mailbox_wait` only for idle waiting after `mailbox_recv` found no mail; prefer `timeout: "110s"` to stay below MCP tool call limits
 - `mailbox_recv` only reads and claims available mail; do not rely on it to wait
 - While a claimed personal delivery is incomplete, do not call `mailbox_recv` for another personal delivery
 - After the claimed delivery is complete, do not start another wait/receive cycle in the same check unless the current task explicitly asks for it
-- If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry the same `mailbox_wait` -> `mailbox_recv` sequence
+- If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry the same `mailbox_recv` first sequence
 - Never pass a `group/` address to `mailbox_bind`; group addresses are read only with explicit `mailbox_recv addresses=[...] as_person=...`
 - Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check before reporting no personal mail. This handles group subscriber wakeups, which may not create a personal delivery.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
