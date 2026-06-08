@@ -730,6 +730,66 @@ ensure_agent_mailbox_mcp_command() {
     return 0
 }
 
+ensure_top_level_mcp_stdio_server() {
+    local tool_name="$1"
+    local config_file="$2"
+    local server_name="$3"
+    local command_name="$4"
+    local args_json="$5"
+    local tmp_file
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would ensure $tool_name MCP config in: $config_file"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$config_file")"
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/mcp-config.XXXXXX")" || {
+        log_error "Failed to create temporary file for $tool_name MCP config"
+        return 1
+    }
+
+    if [[ -s "$config_file" ]]; then
+        if ! MCP_SERVER_NAME="$server_name" MCP_COMMAND="$command_name" MCP_ARGS_JSON="$args_json" jq '
+            .mcpServers = ((.mcpServers // {})
+                | del(.workflow_mailbox, .agent_mailbox)
+                | .[$ENV.MCP_SERVER_NAME] = ((.[$ENV.MCP_SERVER_NAME] // {})
+                    | . + {
+                        "command": $ENV.MCP_COMMAND,
+                        "args": ($ENV.MCP_ARGS_JSON | fromjson)
+                    }
+                    | del(.env)))
+        ' "$config_file" > "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to update $tool_name MCP config: $config_file"
+            return 1
+        fi
+    elif ! MCP_SERVER_NAME="$server_name" MCP_COMMAND="$command_name" MCP_ARGS_JSON="$args_json" jq -n '
+        {
+            "mcpServers": {
+                ($ENV.MCP_SERVER_NAME): {
+                    "command": $ENV.MCP_COMMAND,
+                    "args": ($ENV.MCP_ARGS_JSON | fromjson)
+                }
+            }
+        }
+    ' > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to create $tool_name MCP config: $config_file"
+        return 1
+    fi
+
+    if mv "$tmp_file" "$config_file"; then
+        log_ok "Ensured $tool_name MCP config: $server_name"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_error "Failed to write $tool_name MCP config: $config_file"
+    return 1
+}
+
 rewrite_gemini_agent_mailbox_config() {
     local gemini_config="$HOME/.gemini/settings.json"
     local tmp_file
@@ -835,57 +895,14 @@ rewrite_antigravity_agent_mailbox_config() {
     local antigravity_settings="$HOME/.gemini/antigravity-cli/settings.json"
     local tmp_file
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would rewrite Antigravity MCP config in: $antigravity_mcp_config"
-        log_dry "Would remove legacy Antigravity mailbox MCP entries from: $antigravity_settings"
-        return 0
-    fi
-
-    mkdir -p "$(dirname "$antigravity_mcp_config")"
-
-    tmp_file="$(mktemp "${TMPDIR:-/tmp}/antigravity-mcp-config.XXXXXX")" || {
-        log_error "Failed to create temporary file for Antigravity MCP config"
-        return 1
-    }
-
-    if [[ -s "$antigravity_mcp_config" ]]; then
-        if ! jq '
-            .mcpServers as $mcpServers
-            | .mcpServers = (($mcpServers // {})
-                | del(.workflow_mailbox, .agent_mailbox)
-                | ."agent-mailbox" = ((($mcpServers // {})["agent-mailbox"] // {})
-                  | . + {
-                    "command": "agent-mailbox",
-                    "args": ["mcp"]
-                  }
-                  | del(.env)))
-        ' "$antigravity_mcp_config" > "$tmp_file"; then
-            rm -f "$tmp_file"
-            log_error "Failed to rewrite Antigravity MCP config: $antigravity_mcp_config"
-            return 1
-        fi
-    elif ! jq -n '
-        {
-          "mcpServers": {
-            "agent-mailbox": {
-              "command": "agent-mailbox",
-              "args": ["mcp"]
-            }
-          }
-        }
-    ' > "$tmp_file"; then
-        rm -f "$tmp_file"
-        log_error "Failed to rewrite Antigravity MCP config: $antigravity_mcp_config"
-        return 1
-    fi
-
-    if ! mv "$tmp_file" "$antigravity_mcp_config"; then
-        rm -f "$tmp_file"
-        log_error "Failed to write Antigravity MCP config: $antigravity_mcp_config"
-        return 1
-    fi
+    ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "agent-mailbox" "agent-mailbox" '["mcp"]' || return 1
 
     if [[ -s "$antigravity_settings" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would remove legacy Antigravity mailbox MCP entries from: $antigravity_settings"
+            return 0
+        fi
+
         tmp_file="$(mktemp "${TMPDIR:-/tmp}/antigravity-settings.XXXXXX")" || {
             log_error "Failed to create temporary file for Antigravity settings cleanup"
             return 1
@@ -917,6 +934,10 @@ rewrite_antigravity_agent_mailbox_config() {
 
 install_antigravity_agent_mailbox_mcp() {
     rewrite_antigravity_agent_mailbox_config || return 1
+}
+
+install_kiro_agent_mailbox_mcp() {
+    ensure_top_level_mcp_stdio_server "Kiro CLI" "$HOME/.kiro/settings/mcp.json" "agent-mailbox" "agent-mailbox" '["mcp"]'
 }
 
 remove_codex_legacy_workflow_mailbox_mcp() {
@@ -1701,6 +1722,29 @@ install_antigravity_config() {
     install_antigravity_agent_mailbox_mcp
 }
 
+install_kiro_skills() {
+    install_skills_individually "Kiro CLI" "$HOME/.kiro/skills"
+}
+
+install_kiro_config() {
+    log_info "Installing Kiro CLI config..."
+
+    if command -v kiro-cli &>/dev/null; then
+        log_ok "Found kiro-cli"
+    else
+        log_warn "kiro-cli not found; writing Kiro config files only"
+    fi
+
+    install_kiro_skills
+
+    if ! ensure_agent_mailbox_mcp_command; then
+        log_error "Failed to verify built-in agent_mailbox MCP command for Kiro CLI"
+        return 1
+    fi
+
+    install_kiro_agent_mailbox_mcp
+}
+
 install_gemini_config() {
     log_info "Installing Gemini CLI config..."
 
@@ -2169,6 +2213,7 @@ main() {
     install_claude_config
     install_gemini_config
     install_antigravity_config
+    install_kiro_config
     install_codex_config
     install_opencode_config
     install_serena_config

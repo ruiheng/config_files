@@ -165,6 +165,13 @@ Options:
 
 **Note**: Antigravity MCP servers inherit the parent process environment. The installer does not write an `env` block for Antigravity.
 
+### Kiro CLI Configuration
+
+| Source | Target | Description |
+|--------|--------|-------------|
+| `ai-agent/skills/<skill>/` | `~/.kiro/skills/<skill>/` | **Each skill linked individually** |
+| `agent-mailbox mcp` | `~/.kiro/settings/mcp.json` | Kiro CLI MCP server config |
+
 ### Other Special Configurations
 
 | Source | Target | Description |
