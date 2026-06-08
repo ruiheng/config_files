@@ -70,3 +70,6 @@ nvim/lazy-lock.json
 /nvim/coc-settings.local.json
 /ai-agent/config/tool-profiles.local.toml
 /tool-profiles.local.toml
+
+
+ai-agent/skills/spark/
