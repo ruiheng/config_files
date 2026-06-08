@@ -705,6 +705,85 @@ ensure_toml_string_key() {
     return 0
 }
 
+ensure_toml_literal_key() {
+    local file="$1"
+    local section="$2"
+    local key="$3"
+    local value="$4"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would ensure [$section] $key in: $file"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$file")" || {
+        log_error "Failed to create config directory for: $file"
+        return 1
+    }
+    touch "$file" || {
+        log_error "Failed to create config file: $file"
+        return 1
+    }
+
+    TOML_SECTION="$section" TOML_KEY="$key" TOML_VALUE="$value" perl -0pi -e '
+        my $section = $ENV{TOML_SECTION};
+        my $key = $ENV{TOML_KEY};
+        my $value = $ENV{TOML_VALUE};
+
+        my $section_re = quotemeta($section);
+        my $key_re = quotemeta($key);
+        my $entry = "$key = $value";
+
+        my @lines = split /\n/, $_, -1;
+        pop @lines if @lines && $lines[-1] eq "";
+
+        my @out = ();
+        my $in_section = 0;
+        my $found_section = 0;
+        my $found_key = 0;
+
+        for my $line (@lines) {
+          if ($line =~ /^\s*\[$section_re\]\s*$/) {
+            $in_section = 1;
+            $found_section = 1;
+            push @out, $line;
+            next;
+          }
+
+          if ($in_section && $line =~ /^\s*\[/) {
+            push @out, $entry unless $found_key;
+            $in_section = 0;
+          }
+
+          if ($in_section && $line =~ /^\s*$key_re\s*=/) {
+            push @out, $entry;
+            $found_key = 1;
+            next;
+          }
+
+          push @out, $line;
+        }
+
+        if ($found_section && $in_section && !$found_key) {
+          push @out, $entry;
+        }
+
+        if (!$found_section) {
+          push @out, "" if @out && $out[-1] ne "";
+          push @out, "[$section]", $entry;
+        }
+
+        $_ = join("\n", @out);
+        $_ .= "\n";
+    ' "$file" || {
+        log_error "Failed to update TOML config: $file"
+        return 1
+    }
+
+    log_ok "Ensured [$section] $key in: $file"
+    return 0
+}
+
 ensure_agent_mailbox_mcp_command() {
     if [[ $AGENT_MAILBOX_MCP_AVAILABLE -eq 1 ]]; then
         log_ok "agent_mailbox MCP command already available"
@@ -1210,7 +1289,7 @@ check_agent_deck_prerequisites() {
     return 0
 }
 
-configure_agent_deck_codex_command() {
+remove_agent_deck_codext_command() {
     local agent_deck_config="$HOME/.agent-deck/config.toml"
 
     if ! command -v agent-deck &>/dev/null; then
@@ -1218,11 +1297,71 @@ configure_agent_deck_codex_command() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would ensure [codex] command in: $agent_deck_config"
+        log_dry "Would remove obsolete [codex] command = \"codext\" references from: $agent_deck_config"
         return 0
     fi
 
-    ensure_toml_string_key "$agent_deck_config" "codex" "command" "codext"
+    if [[ ! -f "$agent_deck_config" ]]; then
+        return 0
+    fi
+
+    perl -0pi -e '
+        my @lines = split /\n/, $_, -1;
+        pop @lines if @lines && $lines[-1] eq "";
+
+        my @out = ();
+        my $in_codex = 0;
+
+        for my $line (@lines) {
+          if ($line =~ /^\s*\[codex\]\s*$/) {
+            $in_codex = 1;
+            push @out, $line;
+            next;
+          }
+
+          if ($in_codex && $line =~ /^\s*\[/) {
+            $in_codex = 0;
+          }
+
+          if ($in_codex && $line =~ /^\s*#?\s*command\s*=\s*"codext"\s*$/) {
+            next;
+          }
+
+          push @out, $line;
+        }
+
+        $_ = join("\n", @out);
+        $_ .= "\n";
+    ' "$agent_deck_config" || {
+        log_error "Failed to remove obsolete Codex command from: $agent_deck_config"
+        return 1
+    }
+
+    log_ok "Removed obsolete [codex] codext command references when present"
+    return 0
+}
+
+configure_agent_deck_updates() {
+    local agent_deck_config="$HOME/.agent-deck/config.toml"
+
+    if ! command -v agent-deck &>/dev/null; then
+        return 0
+    fi
+
+    ensure_toml_literal_key "$agent_deck_config" "updates" "auto_update" "false" || return 1
+    ensure_toml_literal_key "$agent_deck_config" "updates" "check_enabled" "false" || return 1
+    ensure_toml_literal_key "$agent_deck_config" "updates" "notify_in_cli" "false" || return 1
+}
+
+configure_agent_deck_kiro_tool() {
+    local agent_deck_config="$HOME/.agent-deck/config.toml"
+
+    if ! command -v agent-deck &>/dev/null; then
+        return 0
+    fi
+
+    ensure_toml_string_key "$agent_deck_config" "tools.kiro" "command" "kiro-cli" || return 1
+    ensure_toml_literal_key "$agent_deck_config" "tools.kiro" "busy_patterns" '["thinking...", "processing..."]' || return 1
 }
 
 is_agent_deck_related_skill() {
@@ -1251,7 +1390,15 @@ setup_agent_deck_integration() {
         return 1
     fi
 
-    if ! configure_agent_deck_codex_command; then
+    if ! remove_agent_deck_codext_command; then
+        return 1
+    fi
+
+    if ! configure_agent_deck_updates; then
+        return 1
+    fi
+
+    if ! configure_agent_deck_kiro_tool; then
         return 1
     fi
 
