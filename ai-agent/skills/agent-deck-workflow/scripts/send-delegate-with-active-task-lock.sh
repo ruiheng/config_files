@@ -69,7 +69,7 @@ workflow_wake_message() {
       printf '/check-agent-mail\nReceive the pending message and execute its requested action.'
       ;;
     *)
-      printf 'Use the check-agent-mail skill now. Receive the pending message and execute its requested action.'
+      printf 'Use the check-agent-mail skill once. Receive the pending message and execute its requested action.'
       ;;
   esac
 }
