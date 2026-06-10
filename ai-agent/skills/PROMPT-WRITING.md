@@ -114,8 +114,8 @@ Do not leave room for the agent to improvise between several "possible" options.
 - after dispatch, the normal choices are:
   - do independent work
 - or return a concise request/dispatch confirmation
-- use one bounded `mailbox_wait timeout = 110s` only for receiver-side or explicit idle mailbox checks
-- after a wait timeout, report that no mail/reply arrived yet instead of looping; rely on a later nudge or user-triggered check
+- use `mailbox_recv` first for receiver-side or explicit mailbox checks; use one bounded `mailbox_wait timeout = 110s` only after no mail was immediately available
+- after a mailbox-check wait timeout, report that no mail is available instead of looping; rely on a later nudge or user-triggered check
 - a timeout is not evidence that the receiver is broken
 - do not inspect or repair another session because a wait timed out
 - notification nudges are optional acceleration, not a correctness dependency

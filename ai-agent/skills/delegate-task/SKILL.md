@@ -134,8 +134,9 @@ Round: 1
 
 ## Required Workflow Step
 - If `Per-task review: required`, coder must run the `review-request` skill after the delivery commit; that skill creates or reuses the reviewer on demand as a child of planner
-- After `review-request` sends the request, coder should do independent local work when available; otherwise wait once with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
-- If the wait times out, report that no reviewer reply has arrived yet instead of inspecting or repairing the reviewer session
+- After `review-request` sends the request, coder should do independent local work when available; otherwise return the review-request confirmation and stop
+- Do not call `mailbox_wait` or `mailbox_recv` to wait for the reviewer reply in the same turn
+- Do not infer reviewer failure or inspect/repair the reviewer session merely because no immediate reply is present
 - If `Per-task review: skip`, do not start reviewer for this task unless planner explicitly requests review later
 
 ## Important Notes

@@ -41,7 +41,7 @@ Use `SKILL.md` for:
 
 - `agent-mailbox` is the authoritative workflow message layer
 - `agent-deck` is used to start or require target sessions
-- notification nudges are optional acceleration; receivers and explicitly idle mailbox checks may wait once with `mailbox_wait timeout = 110s`, then claim with `mailbox_recv`
+- notification nudges are optional acceleration; receivers and explicit mailbox checks should claim available mail with `mailbox_recv` first, then use one bounded `mailbox_wait timeout = 110s` only when idle and no mail was available
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
 - use mailbox tools directly; use `mailbox_bind` only when custom addresses are needed or mailbox context is missing
@@ -85,7 +85,7 @@ Use `roundtable` when the user wants a multi-agent discussion, brainstorm, criti
 4. Participants are real agent-deck sessions created with tool commands resolved through role `roundtable_participant`.
 5. Moderator sends clarified user intent to the group and nudges selected participants with personal mailbox control messages.
 6. Participants read group unread messages with `mailbox_recv` plus `as_person`, then post one group reply.
-7. Group subscriber notification may wake the moderator; idle moderator sessions should still use one bounded `mailbox_wait timeout = 110s`, then `mailbox_recv`. If normal `check-agent-mail` finds no personal delivery, it may hand off to `roundtable` moderator group check when active roundtable context is present.
+7. Group subscriber notification may wake the moderator; idle moderator sessions should still use normal `check-agent-mail` pickup: `mailbox_recv` first, then one bounded `mailbox_wait timeout = 110s` only when no personal mail was available. If normal `check-agent-mail` finds no personal delivery, it may hand off to `roundtable` moderator group check when active roundtable context is present.
 8. Moderator presents synthesis to the user with per-participant `message_id` traceability; raw group history remains the source of truth.
 
 ## Flow Diagram
@@ -133,7 +133,7 @@ flowchart TD
 - Use `check-agent-mail` as the receiver-side wake handler
 - coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not expect cross-session dispatch to finish within a short wait timeout
 - after cross-session dispatch, planner should do independent non-interfering work when available; otherwise return a concise dispatch/request confirmation without waiting for the target's reply in the same turn
-- use a single `110s` wait timeout only for receiver-side or explicit idle mailbox checks; if it times out, report that no mail/reply has arrived yet and rely on a later nudge or user-triggered check
+- use a single `110s` wait timeout only for receiver-side or explicit idle mailbox checks; if it times out, report that no mail is available and rely on a later nudge or user-triggered check
 - a wait timeout is not failure evidence; do not inspect or repair another agent's session because of it
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
@@ -148,7 +148,7 @@ Current recommended operating mode:
 1. Keep `planner` as a long-lived session.
 2. Create `coder-<task_id>` and `architect-<task_id>` per task as needed; create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
 3. Queue mail first. Best-effort nudges may wake non-local targets, but correctness comes from receiver-side mailbox pickup, not sender-side waiting.
-   Newly created or restarted targets should use the same mailbox wait-and-receive path as any other target.
+   Newly created or restarted targets should use the same mailbox recv-first pickup path as any other target.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep workflow content in mailbox body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
