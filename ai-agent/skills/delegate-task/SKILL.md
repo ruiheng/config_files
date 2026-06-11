@@ -133,27 +133,20 @@ Round: 1
 - [testable completion item]
 
 ## Required Workflow Step
-- If `Per-task review: required`, coder must run the `review-request` skill after the delivery commit; that skill creates or reuses the reviewer on demand as a child of planner
-- After `review-request` sends the request, coder should do independent local work when available; otherwise return the review-request confirmation and stop
-- Do not call `mailbox_wait` or `mailbox_recv` to wait for the reviewer reply in the same turn
-- Do not infer reviewer failure or inspect/repair the reviewer session merely because no immediate reply is present
-- If `Per-task review: skip`, do not start reviewer for this task unless planner explicitly requests review later
+- If `Per-task review: required`, run `review-request` after the delivery commit; then continue only with independent local work or stop after confirming the request was sent
+- Do not wait for, inspect, or repair the reviewer in the same turn after sending `review-request`
+- If `Per-task review: skip`, do not start reviewer unless planner explicitly requests it later
 
 ## Important Notes
 - Coder git writes and commits for this delegated task are pre-authorized
 - Coder must follow the recorded branch plan and must not invent a different working branch
 
 ## Agent Deck Context
-- Planner session: [planner_session_id]
-- Coder session id: {{TO_SESSION_ID}}
-- Planner workspace: [planner_workspace]
-- Worker workspace: [worker_workspace]
-- Reviewer session ref: [reviewer_session_ref or `N/A` when `Per-task review: skip`]
-- Reviewer session id: [reviewer_session_id or `N/A` when not yet created or `Per-task review: skip`]
-- Coder tool profile: [coder_tool_profile or `explicit`]
-- Coder tool cmd: [coder_tool_cmd]
-- Reviewer tool profile: [reviewer_tool_profile or `N/A` when `Per-task review: skip`]
-- Reviewer tool cmd: [reviewer_tool_cmd or `N/A` when `Per-task review: skip`]
+- Planner: [planner_session_id] | Coder: {{TO_SESSION_ID}}
+- Workspaces: planner=[planner_workspace] worker=[worker_workspace]
+- Coder tool: profile=[coder_tool_profile or `explicit`] cmd=[coder_tool_cmd]
+- Reviewer: ref=[reviewer_session_ref or `N/A`] id=[reviewer_session_id or `N/A`]
+- Reviewer tool: profile=[reviewer_tool_profile or `N/A`] cmd=[reviewer_tool_cmd or `N/A`]
 
 ## Workflow Policy
 [resolved workflow policy]
