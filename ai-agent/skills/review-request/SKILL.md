@@ -281,6 +281,7 @@ Workflow send sequence:
    - `ensure_cmd = <reviewer_tool_cmd>`
    - `workdir = <current workspace>`
    - `parent_session_id = <planner_session_id>`
+   - `group_path = <planner session group; empty string for root>`
    - `no_parent_link = false`
 5. use the returned `session_id` as the authoritative `reviewer_session_id`
 6. fill the final body and call `mailbox_send` with:
@@ -298,7 +299,7 @@ Rules:
 - keep model/version defaults out of this skill; use shared tool-resolution policy
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
-- coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>`; never create reviewer as a child of coder/requester
+- coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>` plus `group_path = <planner session group; empty string for root>`; never create reviewer as a child of coder/requester
 - `mailbox_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
 - after the send succeeds, do independent local work when available
 - do not call `mailbox_wait` or `mailbox_recv` to wait for the review reply in the same turn

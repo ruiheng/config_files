@@ -94,7 +94,7 @@ Required sequence:
 5. stage and commit the task change without asking the user for routine commit confirmation
 6. if `Per-task review: required`:
    - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
-   - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>`
+   - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>` and the planner session group, including empty string for root
    - after `review-request` sends the request, do independent local work when available; otherwise return a concise awaiting-review status without calling `mailbox_wait` or `mailbox_recv`
    - do not inspect or repair the reviewer session merely because no immediate reply is present
    - when a later inbound reviewer acceptance produces `closeout_delivered`, handle it with `planner-closeout` before marking the task done

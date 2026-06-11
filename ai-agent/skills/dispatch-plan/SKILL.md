@@ -129,6 +129,7 @@ Round: 1
    - `ensure_cmd = <planner_tool_cmd>`
    - `workdir = <planner_workspace>`
    - `parent_session_id = <supervisor_session_id>`
+   - `group_path = <supervisor session group; empty string for root>`
    - `no_parent_link = false`
    - record the returned `planner_session_id` and carry it in all later workflow turns for that lane
 10. otherwise call `agent_deck_require_session`
@@ -148,6 +149,7 @@ Round: 1
 
 Rules:
 - use `agent_deck_create_session` only when allocating a new planner lane; use `agent_deck_require_session` when resuming an existing planner session
+- new planner lanes must pass `group_path = <supervisor session group; empty string for root>` with `parent_session_id`; do not rely on path-derived default grouping
 - after a planner lane is created, later workflow turns must reuse the real `planner_session_id`; do not resume a normal workflow turn by `planner_session_ref`
 - do not create planner sessions through direct `agent-deck` CLI in the normal path
 - treat MCP session create/require as a synchronous step; wait for it to return before composing or sending mailbox content

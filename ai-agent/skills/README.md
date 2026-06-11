@@ -123,7 +123,7 @@ flowchart TD
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
-- planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session`; any subgroup fallback stays inside the session manager
+- planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session` with explicit parent group; root group is empty and valid
 - delegated coder flow creates or reuses reviewer only through `review-request`; reviewer must be parented to planner, not coder
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.

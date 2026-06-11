@@ -183,6 +183,7 @@ Workflow send sequence:
    - `ensure_cmd = <coder_tool_cmd>`
    - `workdir = <worker_workspace>`
    - `parent_session_id = <planner_session_id>`
+   - `group_path = <planner session group; empty string for root>`
    - `no_parent_link = false`
 6. use the returned `session_id` as the authoritative `coder_session_id`
 7. if `Per-task review: required`, resolve `reviewer_tool_profile` / `reviewer_tool_cmd` using the shared tool-resolution contract for role `reviewer`
@@ -216,8 +217,8 @@ Rules:
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the session create step reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the real session ids are allocated
-- create coder sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>` and `no_parent_link = false`; subgroup fallback, when needed, is handled inside the session manager
-- do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>`
+- create coder sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>`, `group_path = <planner session group; empty string for root>`, and `no_parent_link = false`; do not rely on path-derived default grouping
+- do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>` and `group_path = <planner session group; empty string for root>`
 - ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
 - send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic

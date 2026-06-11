@@ -80,6 +80,7 @@ planner_json="$(session_json "$planner_session_ref")"
 [[ -n "$planner_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$planner_json" || die "planner session recorded in workspace no longer exists: ${planner_session_ref}"
 planner_session_id="$(jq -r '.id // empty' <<<"$planner_json" 2>/dev/null || true)"
 [[ -n "$planner_session_id" ]] || die "planner session recorded in workspace has no canonical id: ${planner_session_ref}"
+planner_group="$(jq -r '.group // empty' <<<"$planner_json" 2>/dev/null || true)"
 
 existing_json="$(session_json "$session_ref")"
 if [[ -n "$existing_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existing_json"; then
@@ -92,6 +93,11 @@ if [[ -n "$existing_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existi
 
   [[ "$existing_path" == "$session_workspace" ]] || die "session path mismatch: ref='${session_ref}' existing='${existing_path}' expected='${session_workspace}'"
   [[ "$existing_parent_session_id" == "$planner_session_id" ]] || die "existing session '${session_ref}' is not a child of planner session '${planner_session_id}'"
+  if [[ "$existing_group" != "$planner_group" ]]; then
+    ad group move "$existing_session_id" "$planner_group" >/dev/null
+    existing_group="$planner_group"
+    ensure_status="${ensure_status}_moved"
+  fi
 
   case "$existing_status" in
     running|waiting|idle) ;;
@@ -105,8 +111,15 @@ if [[ -n "$existing_json" ]] && jq -e '.id // empty' >/dev/null 2>&1 <<<"$existi
   exit 0
 fi
 
-launch_json="$(ad launch "$session_workspace" -t "$session_ref" --parent "$planner_session_id" -c "$session_cmd" --no-wait --json 2>/dev/null || true)"
+launch_cmd=(launch "$session_workspace" -t "$session_ref" --parent "$planner_session_id" -c "$session_cmd" --no-wait --json)
+if [[ -n "$planner_group" ]]; then
+  launch_cmd+=(-g "$planner_group")
+fi
+launch_json="$(ad "${launch_cmd[@]}" 2>/dev/null || true)"
 session_id="$(jq -r '.id // empty' <<<"$launch_json" 2>/dev/null || true)"
 [[ -n "$session_id" ]] || die "failed to create child session '${session_ref}' under planner session '${planner_session_id}'"
+if [[ -z "$planner_group" ]]; then
+  ad group move "$session_id" "" >/dev/null
+fi
 
-echo "planner_scoped_session status=created session_id=${session_id} session_ref=${session_ref} planner_session_id=${planner_session_id}"
+echo "planner_scoped_session status=created session_id=${session_id} session_ref=${session_ref} planner_session_id=${planner_session_id} session_group=${planner_group}"

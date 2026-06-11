@@ -191,6 +191,18 @@ get_session_command() {
   printf '%s' "$show_json" | json_get_field '.command'
 }
 
+get_session_group() {
+  local session="$1"
+  local show_json
+  if ! show_json="$(agent-deck session show "$session" --json 2>/dev/null)"; then
+    return 1
+  fi
+  if [[ "$(printf '%s' "$show_json" | json_get_field '.success')" == "false" ]]; then
+    return 1
+  fi
+  printf '%s' "$show_json" | json_get_field '.group'
+}
+
 if [[ -z "$to_session_id" ]]; then
   if [[ -n "$to_session_ref" ]]; then
     if resolved_id="$(resolve_session_id "$to_session_ref")" && [[ -n "$resolved_id" ]]; then
@@ -203,6 +215,7 @@ if [[ -z "$to_session_id" ]]; then
     [[ -n "$ensure_target_cmd" ]] || dispatch_blocker "workflow_dispatch_target_cmd_missing" "--ensure-target-cmd is required when creating target session"
     [[ -n "$parent_session_id" ]] || dispatch_blocker "workflow_dispatch_parent_missing" "--parent-session-id is required when creating target session"
     [[ -d "$workdir" ]] || dispatch_blocker "workflow_dispatch_workdir_missing" "workdir does not exist: $workdir"
+    parent_group="$(get_session_group "$parent_session_id" || true)"
 
     launch_cmd=(
       agent-deck launch
@@ -211,6 +224,9 @@ if [[ -z "$to_session_id" ]]; then
       --parent "$parent_session_id"
       --cmd "$ensure_target_cmd"
     )
+    if [[ -n "$parent_group" ]]; then
+      launch_cmd+=(--group "$parent_group")
+    fi
     if [[ -n "$listener_message" ]]; then
       launch_cmd+=(--message "$listener_message")
     fi
@@ -218,6 +234,9 @@ if [[ -z "$to_session_id" ]]; then
     create_json="$(run_capture "agent-deck launch" "${launch_cmd[@]}")"
     to_session_id="$(printf '%s' "$create_json" | json_get_field '.id')"
     [[ -n "$to_session_id" ]] || die "failed to parse created target session id"
+    if [[ -z "$parent_group" ]]; then
+      run_capture "agent-deck group move (${to_session_id})" agent-deck group move "$to_session_id" "" >/dev/null
+    fi
     if [[ -z "$to_session_ref" ]]; then
       to_session_ref="$ensure_target_title"
     fi

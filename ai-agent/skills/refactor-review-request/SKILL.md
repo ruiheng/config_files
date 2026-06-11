@@ -137,6 +137,7 @@ Use the `agent_mailbox` MCP tools:
    - `ensure_cmd = <reviewer_tool_cmd>`
    - `workdir = <current workspace>`
    - `parent_session_id = <requester_session_id>`
+   - `group_path = <requester session group; empty string for root>`
    - `no_parent_link = false`
    - record the returned `refactor_reviewer_session_id` and carry it in all later workflow turns
 5. otherwise call `agent_deck_require_session`
@@ -157,7 +158,7 @@ Use the `agent_mailbox` MCP tools:
 - focus on one coherent code area or one review goal per request
 - later rounds to the same reviewer should be delta-only
 - if reviewer continuity changes, resend full context
-- create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>` and `no_parent_link = false`
+- create new refactor-reviewer sessions through `agent_deck_create_session` with `parent_session_id = <requester_session_id>`, `group_path = <requester session group; empty string for root>`, and `no_parent_link = false`
 - after the first create step, later workflow turns must reuse the real `refactor_reviewer_session_id`; do not fall back to `refactor_reviewer_session_ref`
 - after the send succeeds, do independent local work when available
 - do not call `mailbox_wait` or `mailbox_recv` to wait for the advisory report in the same turn

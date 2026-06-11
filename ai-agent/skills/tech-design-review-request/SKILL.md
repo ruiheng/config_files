@@ -175,6 +175,7 @@ Before sending:
    - `ensure_cmd = <architect_tool_cmd>`
    - `workdir = <current workspace>`
    - `parent_session_id = <requester_session_id>`
+   - `group_path = <requester session group; empty string for root>`
    - `no_parent_link = false`
 5. otherwise require the existing `architect_session_id`
 6. use the returned session id as authoritative
