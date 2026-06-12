@@ -23,7 +23,6 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 - `mailbox_recv` only reads and claims available mail; do not rely on it to wait
 - While a claimed personal delivery is incomplete, do not call `mailbox_recv` for another personal delivery
 - After the claimed delivery is complete, do not start another wait/receive cycle in the same check unless the current task explicitly asks for it
-- If this mailbox check interrupted other visible local work, resume that prior work after the claimed delivery lifecycle is complete; do not stop just because the mail action finished
 - If mailbox context is not bound yet, first run `agent-deck session current --json`, derive the current session inbox address, call `mailbox_bind`, then retry the same `mailbox_recv` first sequence
 - Never pass a `group/` address to `mailbox_bind`; group addresses are read only with explicit `mailbox_recv addresses=[...] as_person=...`
 - Roundtable exception: if no personal message is returned and the current session has explicit active `roundtable` moderator context, run the `roundtable` skill's moderator group check before reporting no personal mail. This handles group subscriber wakeups, which may not create a personal delivery.

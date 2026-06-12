@@ -97,18 +97,7 @@ wake_delay_seconds="10"
 json_output=0
 
 workflow_wake_message() {
-  local tool_cmd="$1"
-  case "${tool_cmd%% *}" in
-    codex|codext)
-      printf '$check-agent-mail\nReceive the pending message, complete its requested action, then resume any prior local work that remains.'
-      ;;
-    claude|gemini|opencode)
-      printf '/check-agent-mail\nReceive the pending message, complete its requested action, then resume any prior local work that remains.'
-      ;;
-    *)
-      printf 'Use the check-agent-mail skill now. Receive the pending message, complete its requested action, then resume any prior local work that remains.'
-      ;;
-  esac
+  printf 'NOTICE: There might be new mail in agent-mailbox.'
 }
 
 while [[ $# -gt 0 ]]; do
