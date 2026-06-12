@@ -9,6 +9,7 @@ Those belong in the concrete action skill that sends or handles that workflow me
 - `agent-mailbox` carries the real workflow message
 - `agent-deck` is used to create new lifecycle-owned sessions and require existing target sessions before send
 - notification nudges are best-effort acceleration only; receiver-side mailbox pickup is the reliable continuity path
+- target session status is not reliable progress evidence across agent types; treat mailbox delivery and later receiver reports as authoritative
 - use the `agent_mailbox` MCP tools as the default transport interface
 - use `check-agent-mail` for receiver-side wake handling
 - Agent Deck sessions are external workflow peers, not host-internal subagents; do not apply host subagent tool restrictions to `agent_deck_create_session`, `agent_deck_require_session`, `agent-deck`, or mailbox dispatch.
@@ -91,6 +92,8 @@ Transport rules:
 - after outbound `mailbox_send` succeeds, use independent local work if available; otherwise end with the concrete action skill's user-facing confirmation/status
 - a timeout means no reply yet, not a receiver failure
 - after a timeout, report that no mail is available; do not inspect or repair the target session
+- do not poll, inspect, or reason from the target Agent Deck session's `running` / `waiting` / `idle` status to infer whether the receiver is working
+- ignore best-effort target status hints reported by mailbox tooling for sender-side progress decisions; they are diagnostic noise unless explicit troubleshooting asks for them
 - `mailbox_read` / `mailbox_list` are for recovering this session's prior workflow input, not for diagnosing why a just-requested reply has not arrived
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
 - `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail` apply only to the currently claimed inbound delivery in this session
@@ -117,6 +120,7 @@ Sender/receiver turn rule:
 - expected replies are future inbound work; do not wait for them in the sender's same turn unless the concrete action skill explicitly requires a synchronous mailbox check
 - do not treat missing replies after a wait timeout as actionable failure evidence
 - never use repeated status checks, session inspection, or target workspace inspection to explain or repair a missing reply
+- do not escalate or resend because Agent Deck or mailbox status metadata labels the target `idle`; non-Claude session status can be stale or wrong while the agent is already working
 - receiver execution problems belong to the receiver's next report, lifecycle response, or user-directed troubleshooting, not sender-side correction
 
 Inbox rule:
@@ -222,7 +226,7 @@ If workflow send or worker start fails, report concise stderr summary and run th
 3. did `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
-If a target appears idle, do not resend mailbox content; rely on receiver-side mailbox pickup, and retry a nudge only as explicit troubleshooting.
+If a target appears idle, do not resend mailbox content or poll harder; rely on receiver-side mailbox pickup, and retry a nudge only as explicit troubleshooting.
 
 If closeout or cleanup helpers fail, include:
 1. blocked reason

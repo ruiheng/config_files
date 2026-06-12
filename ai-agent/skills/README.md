@@ -42,6 +42,7 @@ Use `SKILL.md` for:
 - `agent-mailbox` is the authoritative workflow message layer
 - `agent-deck` is used to start or require target sessions
 - notification nudges are optional acceleration; receivers and explicit mailbox checks should claim available mail with `mailbox_recv` first, then use one bounded `mailbox_wait timeout = 110s` only when idle and no mail was available
+- target Agent Deck status is diagnostic only; do not use `idle` / `running` / `waiting` or mailbox-reported target status as sender-side progress evidence
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
 - use mailbox tools directly; use `mailbox_bind` only when custom addresses are needed or mailbox context is missing
@@ -135,6 +136,7 @@ flowchart TD
 - after cross-session dispatch, planner should do independent non-interfering work when available; otherwise return a concise dispatch/request confirmation without waiting for the target's reply in the same turn
 - use a single `110s` wait timeout only for receiver-side or explicit idle mailbox checks; if it times out, report that no mail is available and rely on a later nudge or user-triggered check
 - a wait timeout is not failure evidence; do not inspect or repair another agent's session because of it
+- do not poll target session status after dispatch; non-Claude agent status can be stale or wrong, so progress must come from mailbox replies or explicit receiver reports
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
 - planner may skip per-task review when its current plan policy allows it; final integrated review can be requested later from the planner-owned integration branch
