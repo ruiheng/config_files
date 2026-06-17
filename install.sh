@@ -972,13 +972,59 @@ install_gemini_agent_mailbox_mcp() {
 rewrite_antigravity_agent_mailbox_config() {
     local antigravity_mcp_config="$HOME/.gemini/config/mcp_config.json"
     local antigravity_settings="$HOME/.gemini/antigravity-cli/settings.json"
+    local antigravity_permissions_json
     local tmp_file
+
+    antigravity_permissions_json='[
+        "mcp(agent-mailbox/agent_deck_create_session)",
+        "mcp(agent-mailbox/agent_deck_require_session)",
+        "mcp(agent-mailbox/agent_deck_resolve_session)",
+        "mcp(agent-mailbox/mailbox_ack)",
+        "mcp(agent-mailbox/mailbox_address_inspect)",
+        "mcp(agent-mailbox/mailbox_bind)",
+        "mcp(agent-mailbox/mailbox_claim_history)",
+        "mcp(agent-mailbox/mailbox_debug)",
+        "mcp(agent-mailbox/mailbox_defer)",
+        "mcp(agent-mailbox/mailbox_fail)",
+        "mcp(agent-mailbox/mailbox_forward)",
+        "mcp(agent-mailbox/mailbox_group_add_member)",
+        "mcp(agent-mailbox/mailbox_group_add_subscriber)",
+        "mcp(agent-mailbox/mailbox_group_create)",
+        "mcp(agent-mailbox/mailbox_group_members)",
+        "mcp(agent-mailbox/mailbox_group_remove_member)",
+        "mcp(agent-mailbox/mailbox_group_remove_subscriber)",
+        "mcp(agent-mailbox/mailbox_group_subscribers)",
+        "mcp(agent-mailbox/mailbox_list)",
+        "mcp(agent-mailbox/mailbox_read)",
+        "mcp(agent-mailbox/mailbox_recv)",
+        "mcp(agent-mailbox/mailbox_release)",
+        "mcp(agent-mailbox/mailbox_send)",
+        "mcp(agent-mailbox/mailbox_status)",
+        "mcp(agent-mailbox/mailbox_wait)"
+    ]'
 
     ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "agent-mailbox" "agent-mailbox" '["mcp"]' || return 1
 
+    if [[ $DRY_RUN -eq 1 && ! -s "$antigravity_settings" ]]; then
+        log_dry "Would create Antigravity settings file and merge mailbox permissions into: $antigravity_settings"
+    fi
+
+    if [[ $DRY_RUN -eq 0 ]]; then
+        mkdir -p "$(dirname "$antigravity_settings")" || {
+            log_error "Failed to create Antigravity settings directory"
+            return 1
+        }
+        if [[ ! -s "$antigravity_settings" ]]; then
+            printf '{}\n' > "$antigravity_settings" || {
+                log_error "Failed to create Antigravity settings file: $antigravity_settings"
+                return 1
+            }
+        fi
+    fi
+
     if [[ -s "$antigravity_settings" ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would remove legacy Antigravity mailbox MCP entries from: $antigravity_settings"
+            log_dry "Would clean legacy Antigravity MCP entries and merge mailbox permissions into: $antigravity_settings"
             return 0
         fi
 
@@ -987,13 +1033,14 @@ rewrite_antigravity_agent_mailbox_config() {
             return 1
         }
 
-        if ! jq '
+        if ! jq --argjson perms "$antigravity_permissions_json" '
             if (.mcpServers | type) == "object" then
                 .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox")
                 | if (.mcpServers == {}) then del(.mcpServers) else . end
             else
                 .
             end
+            | .permissions.allow = ((.permissions.allow // []) + $perms | unique)
         ' "$antigravity_settings" > "$tmp_file"; then
             rm -f "$tmp_file"
             log_error "Failed to clean legacy Antigravity MCP config: $antigravity_settings"
@@ -1007,7 +1054,7 @@ rewrite_antigravity_agent_mailbox_config() {
         fi
     fi
 
-    log_ok "Rewrote Antigravity MCP config: agent-mailbox"
+    log_ok "Rewrote Antigravity MCP config and permissions: agent-mailbox"
     return 0
 }
 
@@ -1134,6 +1181,79 @@ install_codex_agent_mailbox_mcp() {
     return 1
 }
 
+ensure_claude_agent_mailbox_permissions() {
+    local claude_settings="$HOME/.claude/settings.json"
+    local claude_permissions_json
+    local tmp_file
+
+    claude_permissions_json='[
+        "mcp__agent_mailbox__agent_deck_create_session",
+        "mcp__agent_mailbox__agent_deck_require_session",
+        "mcp__agent_mailbox__agent_deck_resolve_session",
+        "mcp__agent_mailbox__mailbox_ack",
+        "mcp__agent_mailbox__mailbox_address_inspect",
+        "mcp__agent_mailbox__mailbox_bind",
+        "mcp__agent_mailbox__mailbox_claim_history",
+        "mcp__agent_mailbox__mailbox_debug",
+        "mcp__agent_mailbox__mailbox_defer",
+        "mcp__agent_mailbox__mailbox_fail",
+        "mcp__agent_mailbox__mailbox_forward",
+        "mcp__agent_mailbox__mailbox_group_add_member",
+        "mcp__agent_mailbox__mailbox_group_add_subscriber",
+        "mcp__agent_mailbox__mailbox_group_create",
+        "mcp__agent_mailbox__mailbox_group_members",
+        "mcp__agent_mailbox__mailbox_group_remove_member",
+        "mcp__agent_mailbox__mailbox_group_remove_subscriber",
+        "mcp__agent_mailbox__mailbox_group_subscribers",
+        "mcp__agent_mailbox__mailbox_list",
+        "mcp__agent_mailbox__mailbox_read",
+        "mcp__agent_mailbox__mailbox_recv",
+        "mcp__agent_mailbox__mailbox_release",
+        "mcp__agent_mailbox__mailbox_send",
+        "mcp__agent_mailbox__mailbox_status",
+        "mcp__agent_mailbox__mailbox_wait"
+    ]'
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would merge Claude agent_mailbox MCP tool permissions into: $claude_settings"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$claude_settings")" || {
+        log_error "Failed to create Claude settings directory"
+        return 1
+    }
+
+    if [[ ! -s "$claude_settings" ]]; then
+        printf '{}\n' > "$claude_settings" || {
+            log_error "Failed to create Claude settings file: $claude_settings"
+            return 1
+        }
+    fi
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/claude-settings.XXXXXX")" || {
+        log_error "Failed to create temporary file for Claude settings"
+        return 1
+    }
+
+    if ! jq --argjson perms "$claude_permissions_json" '
+        .permissions.allow = ((.permissions.allow // []) + $perms | unique)
+    ' "$claude_settings" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to merge Claude permissions: $claude_settings"
+        return 1
+    fi
+
+    if mv "$tmp_file" "$claude_settings"; then
+        log_ok "Merged Claude agent_mailbox MCP tool permissions"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_error "Failed to write Claude settings: $claude_settings"
+    return 1
+}
+
 rewrite_claude_agent_mailbox_config() {
     local claude_config="$HOME/.claude.json"
     local tmp_file
@@ -1201,6 +1321,7 @@ remove_claude_stale_agent_mailbox_mcps() {
 install_claude_agent_mailbox_mcp() {
     if [[ -f "$HOME/.claude.json" ]]; then
         rewrite_claude_agent_mailbox_config || return 1
+        ensure_claude_agent_mailbox_permissions || return 1
         return 0
     fi
 
@@ -1219,6 +1340,7 @@ install_claude_agent_mailbox_mcp() {
     if claude mcp add -s user agent_mailbox -- agent-mailbox mcp; then
         log_ok "Configured Claude MCP: agent_mailbox"
         rewrite_claude_agent_mailbox_config || return 1
+        ensure_claude_agent_mailbox_permissions || return 1
         return 0
     fi
 
