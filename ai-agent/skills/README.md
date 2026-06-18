@@ -41,7 +41,7 @@ Use `SKILL.md` for:
 
 - `agent-mailbox` is the authoritative workflow message layer
 - `agent-deck` is used to start or require target sessions
-- notification nudges are optional acceleration; receivers and explicit mailbox checks should claim available mail with `mailbox_recv` first, then use one bounded `mailbox_wait timeout = 110s` only when idle and no mail was available
+- notification nudges are optional acceleration; receiver-side checks are `mailbox_recv`, then at most one idle `mailbox_wait timeout = 110s`; after timeout, stop until a later nudge or explicit check
 - target Agent Deck status is diagnostic only; do not use `idle` / `running` / `waiting` or mailbox-reported target status as sender-side progress evidence
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
@@ -134,7 +134,7 @@ flowchart TD
 - Use `check-agent-mail` as the receiver-side wake handler
 - coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not expect cross-session dispatch to finish within a short wait timeout
 - after cross-session dispatch, planner should do independent non-interfering work when available; otherwise return a concise dispatch/request confirmation without waiting for the target's reply in the same turn
-- use a single `110s` wait timeout only for receiver-side or explicit idle mailbox checks; if it times out, report that no mail is available and rely on a later nudge or user-triggered check
+- use one `110s` wait timeout only for receiver-side or explicit idle mailbox checks; after timeout, report no mail and stop until a later nudge or user-triggered check
 - a wait timeout is not failure evidence; do not inspect or repair another agent's session because of it
 - do not poll target session status after dispatch; non-Claude agent status can be stale or wrong, so progress must come from mailbox replies or explicit receiver reports
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there

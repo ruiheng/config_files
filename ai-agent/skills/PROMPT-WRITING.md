@@ -111,13 +111,9 @@ Do not leave room for the agent to improvise between several "possible" options.
   - sender-side intervention in the receiver's execution
   - speculative closeout
   - "it should finish soon"
-- after dispatch, the normal choices are:
-  - do independent work
-- or return a concise request/dispatch confirmation
-- use `mailbox_recv` first for receiver-side or explicit mailbox checks; use one bounded `mailbox_wait timeout = 110s` only after no mail was immediately available
-- after a mailbox-check wait timeout, report that no mail is available instead of looping; rely on a later nudge or user-triggered check
-- a timeout is not evidence that the receiver is broken
-- do not inspect or repair another session because a wait timed out
+- after dispatch, either do independent non-interfering work or return a concise request/dispatch confirmation
+- receiver-side waits must be bounded; after a no-message result, stop instead of self-polling
+- a timeout is not failure evidence and does not justify inspecting or repairing another session
 - notification nudges are optional acceleration, not a correctness dependency
 
 ### 10. Protect shared workspace state
@@ -168,7 +164,7 @@ Before landing a prompt change, check for these:
 - Did we duplicate another skill's logic instead of referencing it?
 - Did we tell the receiver how another role works internally?
 - Did we imply a reply should arrive within a short timeout?
-- Did we scope idle timeout behavior to receiver-side or explicit mailbox checks?
+- Did we make idle waits bounded and non-polling?
 - Did we let a sender cross the mailbox/nudge boundary to manage receiver execution?
 - Did we allow the agent to mutate shared workspace state while another agent may still own it?
 - Did we describe manual steps where a script/tool should be authoritative?
