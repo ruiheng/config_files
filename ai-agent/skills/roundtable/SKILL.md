@@ -7,7 +7,7 @@ description: Run a real multi-agent roundtable or brainstorming discussion with 
 
 Moderate a group discussion. The user talks to you; participants talk in the mailbox group.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Role
 

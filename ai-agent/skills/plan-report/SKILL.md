@@ -7,7 +7,7 @@ description: Handle a final `plan_report_delivered` message from a planner, inte
 
 Handle one final planner report from `plan_report_delivered`.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 

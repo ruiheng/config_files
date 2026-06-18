@@ -7,7 +7,7 @@ description: Use for non-trivial implementation tasks that require meaningful co
 
 Create one concise, execution-ready mailbox message for another AI agent.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 Use this skill for non-trivial implementation work.
 
@@ -28,7 +28,7 @@ Keep the delegate brief directly in the mailbox body.
 Keep it locally actionable, but include enough upstream context that coder can optimize for the parent goal instead of only the local wording.
 
 Agent Deck mode:
-- Follow shared rules in `agent-deck-workflow/SKILL.md`
+- Use the `agent-deck-workflow` skill for shared rules
 - delegate creator is planner sender
 - This delegation is Agent Deck mailbox/session workflow, not a host built-in subagent call.
 
@@ -240,4 +240,4 @@ After sending:
   - recipient inbox address
   - listener/send summary, including any best-effort nudge if reported
 - Keep raw mailbox JSON internal unless user explicitly asks
-- If listener/send fails, report stderr summary and include shared diagnostics checklist from `agent-deck-workflow/SKILL.md`
+- If listener/send fails, report stderr summary and include the shared diagnostics checklist from the `agent-deck-workflow` skill

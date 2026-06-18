@@ -8,7 +8,7 @@ description: Send an `execute_plan` workflow message to a planner that should co
 Send one supervisor-assigned goal to a planner session.
 This creates one planner lane or resumes one existing lane by real `planner_session_id`.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Inputs
 

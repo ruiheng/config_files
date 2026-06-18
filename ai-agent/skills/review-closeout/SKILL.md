@@ -7,7 +7,7 @@ description: Extracts a concise closeout summary from a full review report and, 
 
 Extract a closeout summary from a full review report.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Purpose
 
@@ -34,7 +34,7 @@ Provide the accepted full review report text.
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`:
+Use the `agent-deck-workflow` skill for shared protocol:
 - `Agent Deck Mode Detection`
 - `Context Resolution Priority`
 - `Error Handling and Diagnostics`

@@ -7,7 +7,7 @@ description: Participate in a roundtable discussion from a personal mailbox cont
 
 Speak as the assigned participant. The moderator talks to the user; you talk to the group.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Inputs
 

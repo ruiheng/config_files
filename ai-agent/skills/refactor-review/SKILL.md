@@ -9,7 +9,7 @@ Review existing code for duplication, unnecessary abstraction, and simplificatio
 
 This skill is advisory only.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Hard Boundary
 
@@ -132,7 +132,7 @@ When invoked directly by the user instead of mailbox workflow:
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> default `N/A`

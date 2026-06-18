@@ -9,7 +9,7 @@ Find what can be deleted, merged, inlined, or made more direct without changing 
 
 This skill is advisory only. Do not edit files, apply patches, or produce commit-ready diffs unless the user explicitly asks later.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
@@ -122,7 +122,7 @@ Direct-use mode skips the mailbox header block and starts at `## Simplification 
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> default `N/A`

@@ -7,7 +7,7 @@ description: Generates a browser-check mailbox message for runtime page validati
 
 Generate a concise mailbox message that asks a browser-tester to validate one coherent browser test batch with `agent-browser`.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Inputs
 
@@ -34,7 +34,7 @@ Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox/review context -> ask

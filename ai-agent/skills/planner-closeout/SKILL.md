@@ -7,7 +7,7 @@ description: Handles a `closeout_delivered` workflow message and completes plann
 
 Complete planner-side closeout from a `closeout_delivered` workflow message.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
@@ -16,7 +16,7 @@ Use this skill only after that closeout message is actually received.
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`:
+Use the `agent-deck-workflow` skill for shared protocol:
 - `Agent Deck Mode Detection`
 - `Context Resolution Priority`
 - `Error Handling and Diagnostics`

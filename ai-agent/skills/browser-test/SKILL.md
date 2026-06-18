@@ -7,7 +7,7 @@ description: Validates browser behavior with agent-browser and sends a browser-c
 
 Run browser validation from a `browser_check_requested` mailbox body and report the result back to the requester session.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
@@ -121,7 +121,7 @@ PASS / FAIL / UNKNOWN
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask

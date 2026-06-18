@@ -7,7 +7,7 @@ description: Reviews the latest committed tech-design docs on a branch and sends
 
 Review committed tech-design docs and return an advisory report.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
@@ -141,7 +141,7 @@ When invoked directly by the user instead of mailbox workflow:
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> ask

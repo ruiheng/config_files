@@ -10,7 +10,7 @@ Prefer structural diagnoses that explain multiple symptoms at once instead of li
 
 This skill is advisory only.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Hard Boundary
 
@@ -222,7 +222,7 @@ When invoked directly by the user instead of mailbox workflow:
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox body -> default `N/A`

@@ -8,7 +8,7 @@ description: Generates tech-design review requests from committed docs and defin
 Generate a concise mailbox message that asks an architect to review the latest committed tech-design docs on a branch.
 When reports arrive, drive the architect-review loop until it reaches a deliverable conclusion or a clear user-decision blocker.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Inputs
 
@@ -51,7 +51,7 @@ Round `>1` to the same architect session:
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> mailbox/workflow context -> ask

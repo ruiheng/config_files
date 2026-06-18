@@ -7,7 +7,7 @@ description: Reviews code changes for logical correctness, design quality, and s
 
 Review code changes for logical correctness, design quality, and security.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
@@ -197,7 +197,7 @@ For the implementer/author:
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`:
+Use the `agent-deck-workflow` skill for shared protocol:
 - `Agent Deck Mode Detection`
 - `Context Resolution Priority`
 - `Error Handling and Diagnostics`

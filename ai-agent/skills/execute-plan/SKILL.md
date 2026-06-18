@@ -8,7 +8,7 @@ description: Execute one supervisor-assigned goal inside one workspace, decompos
 Execute one supervisor-provided goal inside one workspace.
 This session owns one planner lane.
 
-Workflow protocol baseline is defined by `agent-deck-workflow/SKILL.md`.
+Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
@@ -33,7 +33,7 @@ Provide the mailbox body from `execute_plan`.
 
 ## Agent Deck Mode
 
-Follow shared protocol in `agent-deck-workflow/SKILL.md`.
+Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `plan_id`: explicit -> mailbox body -> ask

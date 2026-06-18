@@ -159,16 +159,16 @@ Current recommended operating mode:
 
 Use skills:
 
-- Project workflow skill: `agent-deck-workflow` (`ai-agent/skills/agent-deck-workflow/SKILL.md`)
-- Receiver wake handler: `check-agent-mail` (`ai-agent/skills/check-agent-mail/SKILL.md`)
-- Planner closeout: `planner-closeout` (`ai-agent/skills/planner-closeout/SKILL.md`)
-- Plan dispatch: `dispatch-plan` (`ai-agent/skills/dispatch-plan/SKILL.md`)
-- Plan execution: `execute-plan` (`ai-agent/skills/execute-plan/SKILL.md`)
-- Plan report: `plan-report` (`ai-agent/skills/plan-report/SKILL.md`)
-- Tech-design review request: `tech-design-review-request` (`ai-agent/skills/tech-design-review-request/SKILL.md`)
-- Architect review: `tech-design-review` (`ai-agent/skills/tech-design-review/SKILL.md`)
-- Browser check request: `browser-test-request` (`ai-agent/skills/browser-test-request/SKILL.md`)
-- Browser tester: `browser-test` (`ai-agent/skills/browser-test/SKILL.md`)
-- Refactor review request: `refactor-review-request` (`ai-agent/skills/refactor-review-request/SKILL.md`)
-- Refactor advisor: `refactor-review` (`ai-agent/skills/refactor-review/SKILL.md`)
-- Agent Deck skill + docs bundle: `ai-agent/skills/agent-deck/SKILL.md` and `ai-agent/skills/agent-deck/references/`
+- Project workflow skill: `agent-deck-workflow`
+- Receiver wake handler: `check-agent-mail`
+- Planner closeout: `planner-closeout`
+- Plan dispatch: `dispatch-plan`
+- Plan execution: `execute-plan`
+- Plan report: `plan-report`
+- Tech-design review request: `tech-design-review-request`
+- Architect review: `tech-design-review`
+- Browser check request: `browser-test-request`
+- Browser tester: `browser-test`
+- Refactor review request: `refactor-review-request`
+- Refactor advisor: `refactor-review`
+- Agent Deck skill + docs bundle: use `agent-deck`; docs live under its `references/`
