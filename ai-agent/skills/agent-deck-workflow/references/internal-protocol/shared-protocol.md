@@ -83,7 +83,7 @@ Transport rules:
 - keep outbound mailbox bodies in the `mailbox_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
 - if a shell helper requires a real body file, write it under this agent's `.agent-artifacts/mailbox/`; do not use target workdirs or global temp dirs
 - for receiver-side wake handling or explicit mailbox checks, call `mailbox_recv` first to claim already-available mail
-- if idle after an empty `mailbox_recv`, call at most one `mailbox_wait timeout=110s` per assistant turn
+- if idle after an empty `mailbox_recv`, call at most one `mailbox_wait timeout=10m` per assistant turn
 - on timeout/no-message, report no mail and stop checking until a later nudge or user-triggered mailbox check
 - after `mailbox_wait` reports available mail, immediately follow with `mailbox_recv`
 - never pass `group/` addresses to `mailbox_bind`; group streams are read with explicit `mailbox_recv addresses=[...] as_person=...`
@@ -180,7 +180,7 @@ After send:
 ## Receiver Contract
 
 When a workflow session is woken:
-1. run `mailbox_recv` first to claim already-available mail; if no mail is returned and no visible local work remains, run at most one `mailbox_wait` with timeout `110s`, then `mailbox_recv` if mail becomes available
+1. run `mailbox_recv` first to claim already-available mail; if no mail is returned and no visible local work remains, run at most one `mailbox_wait` with timeout `10m`, then `mailbox_recv` if mail becomes available
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
@@ -194,7 +194,7 @@ Do not `ack` outbound mail that this session just sent.
 Idle behavior:
 - one bounded `mailbox_wait` after an empty `mailbox_recv` is recommended for workflow continuity when no other visible work remains; max once per assistant turn
 - use `check-agent-mail` for mailbox pickup after a wakeup nudge, an explicit human mailbox-check request, or idle workflow waiting
-- call `mailbox_recv` first; use `mailbox_wait` with timeout `110s` only for idle waiting after no mail is immediately available
+- call `mailbox_recv` first; use `mailbox_wait` with timeout `10m` only for idle waiting after no mail is immediately available
 - if the wait times out or `mailbox_recv` returns no message, report no mail and wait for a later nudge or user-triggered check instead of waiting again
 - while a claimed personal delivery is incomplete, do not fetch another personal delivery
 - after the claimed delivery is completed, do not start another wait/receive cycle in the same check unless the current task explicitly asks for it

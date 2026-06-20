@@ -36,6 +36,9 @@ ALL_REPLACE=0
 AGENT_DECK_AVAILABLE=0
 AGENT_MAILBOX_MCP_AVAILABLE=0
 CODEX_CLI_COMMAND="codext"
+# Keep the MCP client deadline above the 10m mailbox_wait long-poll timeout.
+AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC=660
+AGENT_MAILBOX_MCP_TOOL_TIMEOUT_MS=660000
 
 # Colors for output
 RED='\033[0;31m'
@@ -1128,11 +1131,14 @@ install_codex_agent_mailbox_mcp() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would ensure TMUX, AGENTDECK_INSTANCE_ID, and CODEX_SESSION_ID passthrough in: $codex_config"
+        log_dry "Would ensure TMUX, AGENTDECK_INSTANCE_ID, CODEX_SESSION_ID passthrough and 11-minute tool timeout in: $codex_config"
         return 0
     fi
 
-    if perl -0pi -e '
+    if AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC="$AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC" perl -0pi -e '
+        my $tool_timeout_sec = $ENV{AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC};
+        my $env_vars_line = q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID" ]};
+        my $tool_timeout_line = "tool_timeout_sec = $tool_timeout_sec";
         my @lines = split /\n/, $_, -1;
         my @out = ();
         my $found = 0;
@@ -1149,35 +1155,39 @@ install_codex_agent_mailbox_mcp() {
           }
 
           if ($in_section && $line =~ /^\[/) {
-            push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID" ]} unless $inserted;
+            push @out, $tool_timeout_line unless $inserted;
+            push @out, $env_vars_line unless $inserted;
             $inserted = 1;
             $in_section = 0;
           }
 
-          next if $in_section && $line =~ /^\s*env_vars\s*=/;
+          next if $in_section && $line =~ /^\s*(env_vars|tool_timeout_sec)\s*=/;
           push @out, $line;
         }
 
         if ($in_section && !$inserted) {
-          push @out, q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID" ]};
+          push @out, $tool_timeout_line;
+          push @out, $env_vars_line;
         }
 
         die "agent_mailbox section not found\n" unless $found;
 
         $_ = join("\n", @out);
         $_ .= "\n" unless $_ =~ /\n\z/;
-    ' "$codex_config" && perl -0ne '
+    ' "$codex_config" && AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC="$AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC" perl -0ne '
+        my $tool_timeout_sec = quotemeta $ENV{AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC};
         exit(
           /\[mcp_servers\.agent_mailbox\][\s\S]*?^env_vars\s*=\s*\[\s*"TMUX"\s*,\s*"AGENTDECK_INSTANCE_ID"\s*,\s*"CODEX_SESSION_ID"\s*\]/m
+          && /\[mcp_servers\.agent_mailbox\][\s\S]*?^tool_timeout_sec\s*=\s*$tool_timeout_sec\s*$/m
             ? 0
             : 1
         );
     ' "$codex_config"; then
-        log_ok "Ensured Codex MCP TMUX, AGENTDECK_INSTANCE_ID, and CODEX_SESSION_ID passthrough: agent_mailbox"
+        log_ok "Ensured Codex MCP env passthrough and 11-minute tool timeout: agent_mailbox"
         return 0
     fi
 
-    log_error "Failed to update Codex MCP TMUX, AGENTDECK_INSTANCE_ID, and CODEX_SESSION_ID passthrough: agent_mailbox"
+    log_error "Failed to update Codex MCP env passthrough and 11-minute tool timeout: agent_mailbox"
     return 1
 }
 
@@ -1263,7 +1273,7 @@ rewrite_claude_agent_mailbox_config() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would rewrite Claude MCP config in: $claude_config"
+        log_dry "Would rewrite Claude MCP config with 11-minute tool timeout in: $claude_config"
         return 0
     fi
 
@@ -1272,7 +1282,7 @@ rewrite_claude_agent_mailbox_config() {
         return 1
     }
 
-    if ! jq '
+    if ! jq --argjson timeout "$AGENT_MAILBOX_MCP_TOOL_TIMEOUT_MS" '
         .mcpServers = ((.mcpServers // {})
             | del(.workflow_mailbox)
             | del(.["adwf-mailbox"])
@@ -1281,11 +1291,8 @@ rewrite_claude_agent_mailbox_config() {
                 | .type = (.type // "stdio")
                 | .command = "agent-mailbox"
                 | .args = ["mcp"]
-                | .env = {
-                    "TMUX": "${TMUX:-}",
-                    "AGENTDECK_INSTANCE_ID": "${AGENTDECK_INSTANCE_ID:-}",
-                    "CLAUDE_CODE_SESSION_ID": "${CLAUDE_CODE_SESSION_ID:-}"
-                }
+                | .timeout = $timeout
+                | .env = {}
             ))
     ' "$claude_config" > "$tmp_file"; then
         rm -f "$tmp_file"
@@ -1294,7 +1301,7 @@ rewrite_claude_agent_mailbox_config() {
     fi
 
     if mv "$tmp_file" "$claude_config"; then
-        log_ok "Rewrote Claude MCP config: agent_mailbox"
+        log_ok "Rewrote Claude MCP config with 11-minute tool timeout: agent_mailbox"
         return 0
     fi
 

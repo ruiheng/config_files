@@ -8,7 +8,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 1. Run `mailbox_recv` first to claim already-available mail
 2. If no personal message is returned:
    - check the roundtable exception below
-   - if no visible local work remains and waiting is appropriate, run at most one `mailbox_wait timeout=110s`; if mail is available, immediately run `mailbox_recv`
+   - if no visible local work remains and waiting is appropriate, run at most one `mailbox_wait timeout=10m`; if mail is available, immediately run `mailbox_recv`
    - if waiting finds no mail, report no agent mail and stop until a later nudge or explicit check
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
@@ -19,7 +19,7 @@ description: Claim pending agent mail with `mailbox_recv` and immediately execut
 
 ## Rules
 
-- Use `mailbox_wait` only for idle waiting after empty `mailbox_recv`; max once per assistant turn, `timeout: "110s"`, no loop/retry
+- Use `mailbox_wait` only for idle waiting after empty `mailbox_recv`; max once per assistant turn, `timeout: "10m"`, no loop/retry
 - `mailbox_recv` only reads and claims available mail; do not rely on it to wait
 - While a claimed personal delivery is incomplete, do not call `mailbox_recv` for another personal delivery
 - After the claimed delivery is complete, do not start another wait/receive cycle in the same check unless the current task explicitly asks for it
