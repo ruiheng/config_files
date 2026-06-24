@@ -17,10 +17,6 @@ git commit -m "feat(buffer-nexus): add window picker integration"
 git commit -m "fix: resolve layout offset calculation"
 ```
 
-## Commit Approval
-
-User approval is required before creating commits by default.
-
 ## Branch Strategy
 
 - `master` / `main`: Primary branch for PRs
