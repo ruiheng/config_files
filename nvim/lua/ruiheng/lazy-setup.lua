@@ -947,7 +947,7 @@ require("lazy").setup({
       build = "./dl_binaries.sh",
       lazy = true,
       event = { "User LazyLoadAI" },
-      enabled = true,
+      enabled = false,
       config = function ()
         require('tabnine').setup({
           disable_auto_comment=true,
