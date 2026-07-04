@@ -1,0 +1,110 @@
+#!/bin/sh
+set -u
+
+# ponytail: text-only CLIPBOARD bridge; remove it when Xwayland provides native sync here.
+interval=${CLIPBOARD_BRIDGE_INTERVAL:-1}
+display=${DISPLAY:-:0}
+runtime_base=${XDG_RUNTIME_DIR:-/tmp}
+state_dir=$(mktemp -d "$runtime_base/x11-wayland-clipboard-bridge.XXXXXX") || exit 1
+
+umask 077
+chmod 700 "$state_dir"
+cleanup() {
+	rm -rf "$state_dir"
+}
+
+stop() {
+	cleanup
+	exit 0
+}
+
+trap cleanup EXIT
+trap stop INT TERM HUP
+
+x_now=$state_dir/x.now
+w_now=$state_dir/wayland.now
+last_x=$state_dir/x.last
+last_w=$state_dir/wayland.last
+
+changed() {
+	[ -s "$1" ] && { [ ! -f "$2" ] || ! cmp -s "$1" "$2"; }
+}
+
+read_x11() {
+	tmp=$state_dir/x.tmp
+	rm -f "$tmp"
+
+	if DISPLAY=$display timeout 1s xclip -selection clipboard -out -target UTF8_STRING >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+		mv "$tmp" "$x_now"
+		return 0
+	fi
+
+	if DISPLAY=$display timeout 1s xclip -selection clipboard -out -target text/plain >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+		mv "$tmp" "$x_now"
+		return 0
+	fi
+
+	rm -f "$tmp"
+	return 1
+}
+
+read_wayland() {
+	tmp=$state_dir/wayland.tmp
+	rm -f "$tmp"
+
+	if timeout 1s wl-paste --no-newline --type text/plain >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+		mv "$tmp" "$w_now"
+		return 0
+	fi
+
+	if timeout 1s wl-paste --no-newline >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+		mv "$tmp" "$w_now"
+		return 0
+	fi
+
+	rm -f "$tmp"
+	return 1
+}
+
+sync_x11_to_wayland() {
+	wl-copy --type text/plain <"$x_now" &&
+		cp "$x_now" "$last_x" &&
+		cp "$x_now" "$last_w"
+}
+
+sync_wayland_to_x11() {
+	DISPLAY=$display xclip -selection clipboard -in <"$w_now" &&
+		DISPLAY=$display xclip -selection primary -in <"$w_now" &&
+		cp "$w_now" "$last_w" &&
+		cp "$w_now" "$last_x"
+}
+
+init_state() {
+	x_ok=0
+	w_ok=0
+	read_x11 && x_ok=1
+	read_wayland && w_ok=1
+
+	if [ "$x_ok" -eq 1 ] && [ "$w_ok" -eq 0 ]; then
+		sync_x11_to_wayland
+	elif [ "$w_ok" -eq 1 ] && [ "$x_ok" -eq 0 ]; then
+		sync_wayland_to_x11
+	else
+		[ "$x_ok" -eq 1 ] && cp "$x_now" "$last_x"
+		[ "$w_ok" -eq 1 ] && cp "$w_now" "$last_w"
+	fi
+}
+
+init_state
+
+while :; do
+	if read_x11 && changed "$x_now" "$last_x"; then
+		sync_x11_to_wayland || printf '%s\n' 'x11-wayland-clipboard-bridge: failed to sync X11 to Wayland' >&2
+	fi
+
+	if read_wayland && changed "$w_now" "$last_w"; then
+		sync_wayland_to_x11 || printf '%s\n' 'x11-wayland-clipboard-bridge: failed to sync Wayland to X11' >&2
+	fi
+
+	sleep "$interval"
+done

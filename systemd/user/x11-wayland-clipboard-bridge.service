@@ -1,12 +1,13 @@
 [Unit]
-Description=Cliphist clipboard store (Wayland)
+Description=Text clipboard bridge between X11 and Wayland
 PartOf=graphical-session.target
 After=graphical-session.target
 Requisite=graphical-session.target
+Conflicts=clipboard-sync.service
 
 [Service]
 Type=simple
-ExecStart=wl-paste --watch cliphist store
+ExecStart=/home/ruiheng/config_files/scripts/x11-wayland-clipboard-bridge
 Restart=on-failure
 RestartSec=1
 
