@@ -11,18 +11,6 @@ HIGH_DENSITY_MULTIPLIER="1.15"
 # This script only reads font= from the main foot.ini file. If your active
 # font is defined via include=, keep that font definition in foot.ini instead.
 
-has_foot_server_socket() {
-    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "$XDG_RUNTIME_DIR/foot-$WAYLAND_DISPLAY.sock" ]; then
-        return 0
-    fi
-
-    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "$XDG_RUNTIME_DIR/foot.sock" ]; then
-        return 0
-    fi
-
-    [ -S /tmp/foot.sock ]
-}
-
 get_size_multiplier() {
     output_json="$(niri msg -j focused-output 2>/dev/null || true)"
 
@@ -31,8 +19,29 @@ get_size_multiplier() {
         return
     fi
 
-    width="$(printf '%s' "$output_json" | jq -r '.logical.width // .modes[.current_mode].width // empty' 2>/dev/null || true)"
-    height="$(printf '%s' "$output_json" | jq -r '.logical.height // .modes[.current_mode].height // empty' 2>/dev/null || true)"
+    # Use physical mode size first; logical size hides HiDPI scaling.
+    width="$(
+        printf '%s' "$output_json" | jq -r '
+            if .current_mode != null and .modes[.current_mode] != null then
+                .modes[.current_mode].width
+            elif .logical.width != null then
+                (.logical.width * (.logical.scale // 1) | floor)
+            else
+                empty
+            end
+        ' 2>/dev/null || true
+    )"
+    height="$(
+        printf '%s' "$output_json" | jq -r '
+            if .current_mode != null and .modes[.current_mode] != null then
+                .modes[.current_mode].height
+            elif .logical.height != null then
+                (.logical.height * (.logical.scale // 1) | floor)
+            else
+                empty
+            end
+        ' 2>/dev/null || true
+    )"
 
     case "$width:$height" in
         ''|:*|*:)
@@ -136,10 +145,6 @@ size_multiplier="$(get_size_multiplier)"
 base_font="$(read_base_font)"
 
 launch_cmd() {
-    if has_foot_server_socket && footclient -N -E -a foot "$@" >/dev/null 2>&1; then
-        exit 0
-    fi
-
     exec foot -a foot "$@"
 }
 
