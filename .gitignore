@@ -73,3 +73,5 @@ nvim/lazy-lock.json
 
 
 ai-agent/skills/spark/
+ai-agent/skills/ast-grep/
+ai-agent/skills/ast-grep-outline/
