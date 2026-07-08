@@ -30,20 +30,16 @@ If `group_address`, `participant_person`, or `role` is missing, do not guess. As
    - `as_person = participant_person`
 3. Repeat group `mailbox_recv` until it returns `no_message`.
    - This loop is only for group stream reads.
-   - Stop after 20 messages and note that the response is based on the first 20 unread messages.
+   - Stop after 100 messages and note that the response is based on the first 100 unread messages.
 4. Compose one group reply.
 5. Send the reply with `mailbox_send`:
    - `to_address = group_address`
    - `from_address = participant_person`
+   - `as_person = participant_person`
    - `group = true`
    - `subject = "roundtable: <roundtable_id> r<round> <participant_person>"`
    - `body = <reply>`
-6. Mark the participant's own group send read:
-   - take the returned `message_id`
-   - call `mailbox_recv` with `addresses = [group_address]` and `as_person = participant_person`
-   - stop when the returned `message.message_id` matches the sent message id
-   - if a different message appears first, keep reading until the sent message is read or report the inconsistency
-7. `mailbox_ack` the personal control delivery only after the group reply send succeeds and the own group send is marked read.
+6. `mailbox_ack` the personal control delivery only after the group reply send succeeds.
 
 ## Reply Rules
 

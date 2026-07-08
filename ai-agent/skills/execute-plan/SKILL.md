@@ -59,9 +59,7 @@ Skill-specific context resolution:
    - start with `delegate-task` and apply its own decision gate for whether delegation is justified
    - if `delegate-task` says delegation is justified, send the task and pass the chosen `Per-task review` policy into the delegate brief
    - if `delegate-task` says the work should be done directly, planner may use `Direct Planner Implementation`
-6. coder/reviewer/architect progress may take unbounded time; after sending asynchronous cross-session work, do not call `mailbox_wait` or `mailbox_recv` for that progress in the same turn
-   - return a concise status instead; later progress is handled by wakeup, user-triggered mailbox checks, or the relevant closeout/report-handling workflow
-   - do not inspect or repair the target session merely because no immediate reply is present
+6. coder/reviewer/architect progress may take unbounded time; after sending asynchronous cross-session work, follow the shared Async sender rule
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
@@ -95,8 +93,7 @@ Required sequence:
 6. if `Per-task review: required`:
    - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
    - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>` and the planner session group, including empty string for root
-   - after `review-request` sends the request, do independent local work when available; otherwise return a concise awaiting-review status without calling `mailbox_wait` or `mailbox_recv`
-   - do not inspect or repair the reviewer session merely because no immediate reply is present
+   - after `review-request` sends the request, follow the shared Async sender rule
    - when a later inbound reviewer acceptance produces `closeout_delivered`, handle it with `planner-closeout` before marking the task done
 7. if `Per-task review: skip`, run workspace prepare for this task, then run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
 8. record the result under `Tasks Completed`

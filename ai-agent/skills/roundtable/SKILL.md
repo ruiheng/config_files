@@ -21,13 +21,14 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 Resolve by priority: explicit input -> current roundtable context -> mailbox body -> ask.
 
 - `roundtable_id`: stable id, default `rt-YYYYMMDD-HHMM-<slug>`
-- `group_address`: default `group/roundtable-<roundtable_id>`
+- `group_address`: `Group-Address` control header -> current context -> default `group/roundtable-<roundtable_id>`
 - `moderator_session_id`: current agent-deck session id
 - `moderator_group_path`: current agent-deck group path, default current session group
-- `moderator_person`: default `moderator`
+- `moderator_person`: `As-Person` control header -> current context -> default `moderator`
 - `moderator_notify_address`: `agent-deck/<moderator_session_id>`
+  - use this as moderator group-send `from_address`; agent-mailbox maps it to `moderator` read state and suppresses the moderator's own subscriber delivery
 - `participant_session_ref`: default `roundtable-<roundtable_id>-<participant_slug>`
-- `participant_group_path`: explicit -> `<moderator_group_path>/roundtable-<roundtable_id>`; example `config_files/roundtable-<roundtable_id>`
+- `participant_group_path`: explicit -> if moderator group is root, `roundtable-<roundtable_id>`; otherwise `<moderator_group_path>/roundtable-<roundtable_id>`
 - `participant_session_id`: real id returned by `agent_deck_create_session`
 - `participant_person`: `participant/<slug>`
 - `participant_tool_profile`: explicit -> participant config -> default resolver role `roundtable_participant`
@@ -37,6 +38,7 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
 ## Start A Roundtable
 
 1. Clarify the topic until the user's goal, audience, constraints, and stop condition are clear.
+   - Record the stop condition and check it after each synthesis.
 2. Propose 3-5 participants and ask for user confirmation before creating sessions.
    - Include each participant's name, role, viewpoint, and tool profile.
    - Default set when the user gives no preference: systems thinker, builder, skeptic, user advocate, contrarian.
@@ -55,12 +57,12 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
    - `ensure_title = <participant_session_ref>`
    - `ensure_cmd = <participant_tool_cmd>`
    - `workdir = current workspace`
+   - `parent_session_id = <moderator_session_id>`
    - `group_path = <participant_group_path>`
-   - `no_parent_link = true`
+   - `no_parent_link = false`
    - leave `startup_instruction` / `listener_message` empty; control mail is the bootstrap path and wakeup is best-effort
-6. Send the opening user-intent message to the group with `mailbox_send group:true`.
-7. Mark the moderator's own group send read as `moderator` using the Own Send Read Rule.
-8. Send each participant one personal control message with Action `roundtable_participant_turn`.
+6. Send the opening user-intent message to the group with `mailbox_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
+7. Send each participant one personal control message with Action `roundtable_participant_turn`; first turns are parallel by default.
 
 ## User Input Turn
 
@@ -69,34 +71,23 @@ When the user adds a new thought or question:
 1. Restate the user's intent clearly and compactly.
 2. Ask one clarification only if the next participant turn would otherwise be misdirected.
 3. Drain moderator group unread first if there may be pending participant replies.
-4. Send the clarified intent to the group as the moderator.
-5. Mark the moderator's own group send read as `moderator` using the Own Send Read Rule.
-6. Decide who speaks next:
-   - default: round-robin one participant at a time
-   - use all-participant parallel only when the user asks for breadth or a brainstorming burst
-   - use targeted follow-up when a participant needs to answer a challenge
-7. Send personal control messages to the selected participant sessions.
-
-## Own Send Read Rule
-
-After any moderator `mailbox_send group:true`, take the returned `message_id` and immediately call group `mailbox_recv` as `moderator` until one of these happens:
-
-- the returned `message.message_id` matches the sent `message_id`: stop; the moderator's own send is now read
-- another unread message appears first: keep it for normal moderator synthesis, then continue
-- `no_message`: report a mailbox inconsistency instead of ignoring it
-
-This prevents later group subscriber wakeups from surfacing the moderator's own prompts as new participant replies.
+4. Send the clarified intent to the group with `mailbox_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
+5. Decide who speaks next:
+   - default for a new broad user prompt: all participants in parallel
+   - default after synthesis: targeted follow-up to the participants needed for the next decision
+   - use round-robin only when the user asks for sequential turns or lower churn
+6. Send personal control messages to the selected participant sessions.
 
 ## Moderator Group Check
 
-Use this when woken by a group subscriber notification or when the user asks for updates.
+Use this for `Action: group_message_available` personal control mail or when the user asks for updates.
 
 1. Call `mailbox_recv` with:
-   - `addresses = [group_address]`
-   - `as_person = moderator`
+   - `addresses = [Group-Address from control mail or group_address]`
+   - `as_person = [As-Person from control mail or moderator]`
 2. Repeat group `mailbox_recv` until it returns `no_message`.
    - This loop is only for group stream draining; do not repeat personal `mailbox_recv`.
-   - Stop after 20 messages and report that more unread group messages remain.
+   - Stop after 100 messages and report that more unread group messages remain.
 3. If no group messages were read, say no roundtable updates are available.
 4. If messages were read, synthesize for the user.
 
@@ -144,7 +135,7 @@ Round: <round>
 - Keep the answer concise and assume the moderator will translate for the user.
 ```
 
-After participant control mail is sent, do independent moderator work when available. If no visible local work remains, wait once for mailbox activity with `mailbox_wait timeout = 10m`, then run `Moderator Group Check`; group subscriber notification is only best-effort acceleration.
+After participant control mail is sent, do independent moderator work when available. If no visible local work remains, use normal `check-agent-mail`; group subscriber updates arrive as durable personal `group_message_available` deliveries, while external wake notification is only best-effort acceleration.
 
 ## Ending
 
@@ -156,4 +147,13 @@ When the user says `stop`, `end`, `止`, or `结束`:
    - unresolved disagreements
    - useful next questions
    - compact ASCII knowledge map when it helps
-3. Do not delete group or sessions.
+3. State whether the recorded stop condition is satisfied.
+4. Keep the group and sessions by default.
+
+When the user explicitly asks to clean up or archive:
+
+1. Drain moderator group unread messages first.
+2. Produce the final synthesis before deleting anything.
+3. Remove participant sessions with `agent-deck remove <participant_session_id>`.
+4. Delete the participant Agent Deck group with `agent-deck group delete <participant_group_path>` only after participant sessions are gone.
+5. Do not delete the mailbox group unless the user explicitly asks to delete the raw discussion history.

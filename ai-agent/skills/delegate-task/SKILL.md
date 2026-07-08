@@ -41,6 +41,10 @@ Branch-plan terms:
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
 - `planner_session_id`: explicit -> context -> bound mailbox sender context -> ask
+- `planner_workspace`: explicit -> workflow context -> current workspace -> ask
+- `worker_workspace`: explicit -> workflow context -> `planner_workspace`
+  - do not silently infer, create, or switch to a different worker workspace
+  - if a separate or temporary worker workspace seems useful but was not explicit, ask the user before dispatch
 - `start_branch`: explicit -> context -> ask
 - `integration_branch`: explicit -> context -> if `start_branch` is the intended non-task landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or recorded workflow context for `start_branch`; if confidence is low, ask rather than guessing
   - integration branch must be the non-task landing branch; never use `task/*` as `integration_branch`
@@ -165,6 +169,7 @@ Preferred path: use the `agent_mailbox` MCP tools.
 
 Workflow send sequence:
 1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
+   - never substitute a new temp directory for unclear workspace context without user confirmation; resolve the workspace fields first
 2. use `agent_mailbox`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
 4. resolve `coder_tool_profile` / `coder_tool_cmd` using the shared tool-resolution contract for role `coder`
@@ -209,6 +214,7 @@ Rules:
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the session create step reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
+- do not silently create ad hoc temporary workspaces; separate worker workspaces require explicit context or user confirmation
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the real session ids are allocated
 - create coder sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>`, `group_path = <planner session group; empty string for root>`, and `no_parent_link = false`; do not rely on path-derived default grouping
 - do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>` and `group_path = <planner session group; empty string for root>`
@@ -220,9 +226,7 @@ Rules:
 - report target readiness only after the resolve/create/send path that applies has completed
 - if the delegate send wrapper reports an existing active task, surface that result instead of retrying through another send path
 - treat coder/reviewer progress as asynchronous with unbounded duration; delegated implementation is expected to outlive this dispatch turn
-- after sending a delegate, do not call `mailbox_wait` or `mailbox_recv` to wait for coder/reviewer progress in the same turn
-- return the user-facing dispatch confirmation immediately after the send/wakeup path completes; later progress is handled by wakeup, user-triggered mailbox checks, or closeout workflow
-- do not inspect or repair the target session merely because no immediate reply is present
+- follow the shared Async sender rule for coder/reviewer progress
 - in the delegated task workspace, treat the active task worktree state as coder-owned until closeout; do not change branch state, modify files, or otherwise alter that workspace state there
 - if `worker_workspace == planner_workspace`, planner must still avoid touching that delegated task worktree state outside the delegate/closeout workflow
 - if execution evidence suggests the delegated task is framed too narrowly, coder should ask planner instead of forcing a local-only completion

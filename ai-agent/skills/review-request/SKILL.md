@@ -132,12 +132,6 @@ Identity rules:
 Commit reference rule:
 - in mailbox content, use a short commit ref, not a full 40-char hash
 
-Post-send behavior:
-- after `mailbox_send` succeeds, do independent local work when available
-- do not call `mailbox_wait` or `mailbox_recv` to wait for the review reply in the same turn
-- return the user-facing request confirmation immediately after the send completes; later replies are handled by wakeup, user-triggered mailbox checks, or the relevant report-handling workflow
-- do not inspect or repair the reviewer session merely because no immediate reply is present
-
 ## Output Template
 
 Round `1` or new reviewer session: use the full body below.
@@ -301,10 +295,7 @@ Rules:
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>` plus `group_path = <planner session group; empty string for root>`; never create reviewer as a child of coder/requester
 - `mailbox_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
-- after the send succeeds, do independent local work when available
-- do not call `mailbox_wait` or `mailbox_recv` to wait for the review reply in the same turn
-- return the user-facing request confirmation immediately after the send completes; later replies are handled by wakeup, user-triggered mailbox checks, or the relevant report-handling workflow
-- do not inspect or repair the reviewer session merely because no immediate reply is present
+- follow the shared Async sender rule for the review reply
 
 ## Quality Bar
 

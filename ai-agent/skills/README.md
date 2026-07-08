@@ -24,6 +24,11 @@ Use `SKILL.md` for:
 - decision rules the executing agent must follow
 - references or scripts the executing agent should load or use
 
+`agents/openai.yaml` files are Codex skill interface metadata. Keep them with the
+owning skill unless replacing that skill's Codex-facing name, description, or
+default prompt; they are not dead files just because this repo has no internal
+reference to them.
+
 ## Roles
 
 - Agent 1, **Planner** (`delegate-task`, `execute-plan`, `planner-closeout`): planning agent, prepares execution briefs, can execute a supervisor-assigned task list inside one workspace, and completes planner-side closeout
@@ -41,8 +46,7 @@ Use `SKILL.md` for:
 
 - `agent-mailbox` is the authoritative workflow message layer
 - `agent-deck` is used to start or require target sessions
-- notification nudges are optional acceleration; receiver-side checks are `mailbox_recv`, then at most one idle `mailbox_wait timeout = 10m`; after timeout, stop until a later nudge or explicit check
-- target Agent Deck status is diagnostic only; do not use `idle` / `running` / `waiting` or mailbox-reported target status as sender-side progress evidence
+- `agent-deck-workflow/references/internal-protocol/shared-protocol.md` owns recv/wait, async sender, and target-status rules
 - `agent_mailbox` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
 - use mailbox tools directly; use `mailbox_bind` only when custom addresses are needed or mailbox context is missing
@@ -83,11 +87,12 @@ Use `roundtable` when the user wants a multi-agent discussion, brainstorm, criti
 1. User talks only to the moderator.
 2. Moderator clarifies intent, proposes participants, and creates a `group/roundtable-...` mailbox group.
 3. Moderator registers itself as group notification subscriber with `mailbox_group_add_subscriber`.
-4. Participants are real agent-deck sessions created with tool commands resolved through role `roundtable_participant`.
-5. Moderator sends clarified user intent to the group and nudges selected participants with personal mailbox control messages.
+4. Participants are real child agent-deck sessions of the moderator, with tool commands resolved through role `roundtable_participant`.
+5. Moderator sends clarified user intent to the group and nudges selected participants with personal mailbox control messages; the first turn is parallel by default, later turns are targeted unless the user asks for sequential round-robin.
 6. Participants read group unread messages with `mailbox_recv` plus `as_person`, then post one group reply.
-7. Group subscriber notification may wake the moderator; idle moderator sessions should still use normal `check-agent-mail` pickup: `mailbox_recv` first, then one bounded `mailbox_wait timeout = 10m` only when no personal mail was available. If normal `check-agent-mail` finds no personal delivery, it may hand off to `roundtable` moderator group check when active roundtable context is present.
+7. Group subscriber updates arrive as normal personal `group_message_available` deliveries, so the moderator uses normal `check-agent-mail` pickup and then runs `roundtable` Moderator Group Check.
 8. Moderator presents synthesis to the user with per-participant `message_id` traceability; raw group history remains the source of truth.
+9. Ending keeps sessions and mailbox history by default; explicit cleanup removes participant sessions and the Agent Deck participant group after final synthesis.
 
 ## Flow Diagram
 
@@ -124,6 +129,7 @@ flowchart TD
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
+- `check-agent-mail` routes `group/roundtable-*` `group_message_available` control mail to `roundtable`; replace this name-pattern rule with an explicit mapping if another group workflow is added
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session` with explicit parent group; root group is empty and valid
 - delegated coder flow creates or reuses reviewer only through `review-request`; reviewer must be parented to planner, not coder
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
@@ -132,11 +138,7 @@ flowchart TD
 - The receiver should always read mailbox `body` first
 - A received workflow mail is executable work, not a notification to acknowledge and ignore
 - Use `check-agent-mail` as the receiver-side wake handler
-- coder/reviewer/architect progress is asynchronous and may take unbounded time; planner must not expect cross-session dispatch to finish within a short wait timeout
-- after cross-session dispatch, planner should do independent non-interfering work when available; otherwise return a concise dispatch/request confirmation without waiting for the target's reply in the same turn
-- use one `10m` wait timeout only for receiver-side or explicit idle mailbox checks; after timeout, report no mail and stop until a later nudge or user-triggered check
-- a wait timeout is not failure evidence; do not inspect or repair another agent's session because of it
-- do not poll target session status after dispatch; non-Claude agent status can be stale or wrong, so progress must come from mailbox replies or explicit receiver reports
+- cross-session progress is asynchronous; follow the shared Async sender rule after dispatch
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
 - planner may skip per-task review when its current plan policy allows it; final integrated review can be requested later from the planner-owned integration branch

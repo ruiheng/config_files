@@ -186,10 +186,7 @@ Before sending:
    - `body = <tech-design review request body>`
 
 After sending:
-- do independent local work when available
-- do not call `mailbox_wait` or `mailbox_recv` to wait for the architect report in the same turn
-- return the user-facing request confirmation immediately after the send completes; later reports are handled by wakeup, user-triggered mailbox checks, or report-handling mode
-- do not inspect or repair the architect session merely because no immediate report is present
+- follow the shared Async sender rule for the architect report
 
 ## After Report Handling
 

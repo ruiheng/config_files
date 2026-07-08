@@ -80,6 +80,8 @@ Preferred transport interface:
 
 Transport rules:
 - use `mailbox_send` for normal cross-session workflow delivery
+- for `mailbox_send group:true`, agent-mailbox marks the sender's own group message read and queues durable personal `group_message_available` deliveries for active subscribers other than the sender
+- when a group sender has a known group `person`, pass `as_person`; agent-mailbox validates active membership and marks that person's stream read without relying on address/person inference
 - keep outbound mailbox bodies in the `mailbox_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
 - if a shell helper requires a real body file, write it under this agent's `.agent-artifacts/mailbox/`; do not use target workdirs or global temp dirs
 - for receiver-side wake handling or explicit mailbox checks, call `mailbox_recv` first to claim already-available mail
@@ -123,6 +125,12 @@ Sender/receiver turn rule:
 - do not escalate or resend because Agent Deck or mailbox status metadata labels the target `idle`; non-Claude session status can be stale or wrong while the agent is already working
 - receiver execution problems belong to the receiver's next report, lifecycle response, or user-directed troubleshooting, not sender-side correction
 
+Async sender rule:
+- after sending an asynchronous request, continue only with independent local work
+- if no local work remains, return the concrete action skill's confirmation/status
+- do not call `mailbox_wait` / `mailbox_recv` for the expected reply in the same sender turn
+- do not inspect or repair the target session merely because no immediate reply is present
+
 Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
 - no separate registration step is needed
@@ -147,6 +155,7 @@ Round: <round_or_final>
 
 Envelope rules:
 - `Action:` must be a stable machine-readable token chosen by the concrete action skill
+- `group_message_available` is an agent-mailbox generated control action; read `Group-Address` with `As-Person`, then `ack` the personal delivery only after the group handler completes
 - when a role has a dedicated action skill for that workflow action, treat that skill as the runtime handler for the received message
 - `closeout_delivered` is a planner-handled workflow action; use a planner-side closeout skill for it
 - `execute_plan` is a planner-handled workflow action; use a planner-side execution skill for it
