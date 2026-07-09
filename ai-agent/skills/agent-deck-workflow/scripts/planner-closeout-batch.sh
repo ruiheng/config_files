@@ -15,7 +15,7 @@ Optional actions (soft-fail):
 - release mirrored workspace planner records
 - prune stale task branches
 - desktop notifications
-- post-closeout health gate and disposable worker cleanup
+- post-closeout health gate and task-session cleanup
 
 Usage:
   planner-closeout-batch.sh [options]

@@ -45,6 +45,7 @@ Resolve by priority:
 - `worker_workspace`: explicit -> workflow context -> `planner_workspace`
   - do not silently infer, create, or switch to a different worker workspace
   - if a separate or temporary worker workspace seems useful but was not explicit, ask the user before dispatch
+  - if you create a temporary worker worktree, remove it after closeout
 - `start_branch`: explicit -> context -> ask
 - `integration_branch`: explicit -> context -> if `start_branch` is the intended non-task landing line for this delegated change, use `start_branch`; otherwise infer from explicit user intent or recorded workflow context for `start_branch`; if confidence is low, ask rather than guessing
   - integration branch must be the non-task landing branch; never use `task/*` as `integration_branch`
@@ -148,6 +149,7 @@ Round: 1
 ## Agent Deck Context
 - Planner: [planner_session_id] | Coder: {{TO_SESSION_ID}}
 - Workspaces: planner=[planner_workspace] worker=[worker_workspace]
+- Workspace lifecycle: [shared/existing | temp path=<path> cleanup=planner-after-closeout]
 - Coder tool: profile=[coder_tool_profile or `explicit`] cmd=[coder_tool_cmd]
 - Reviewer: ref=[reviewer_session_ref or `N/A`] id=[reviewer_session_id or `N/A`]
 - Reviewer tool: profile=[reviewer_tool_profile or `N/A`] cmd=[reviewer_tool_cmd or `N/A`]
@@ -201,7 +203,7 @@ Workflow send sequence:
    - `--body-file <delegate mailbox body file or "-">`
      - prefer `-` and pipe the body through stdin
      - if a real file is needed, write it under this agent's `.agent-artifacts/mailbox/`
-   - the wrapper owns active-task lock acquisition, delegate send, send failure rollback, and target wakeup
+   - use the wrapper for active-task lock acquisition, delegate send, send failure rollback, and target wakeup
 
 Recommended subject:
 - `delegate: <task_id> -> coder`
@@ -215,6 +217,7 @@ Rules:
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the session create step reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
 - do not silently create ad hoc temporary workspaces; separate worker workspaces require explicit context or user confirmation
+- record path and cleanup responsibility for any temporary worktree you create
 - use `coder-<task_id>` and `reviewer-<task_id>` as session refs until the real session ids are allocated
 - create coder sessions through `agent_deck_create_session` with `parent_session_id = <planner_session_id>`, `group_path = <planner session group; empty string for root>`, and `no_parent_link = false`; do not rely on path-derived default grouping
 - do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>` and `group_path = <planner session group; empty string for root>`
@@ -241,6 +244,7 @@ After sending:
   - `coder_session_id` / `reviewer_session_ref` and any known `reviewer_session_id`
   - `coder_tool_profile` / `reviewer_tool_profile`
   - `coder_tool_cmd` / `reviewer_tool_cmd`
+  - temporary worktree path/cleanup, if created
   - recipient inbox address
   - listener/send summary, including any best-effort nudge if reported
 - Keep raw mailbox JSON internal unless user explicitly asks

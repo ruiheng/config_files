@@ -1,8 +1,7 @@
 # Shared Workflow Protocol
 
 This document defines only the shared transport, envelope, and lifecycle contract.
-It should not define role-specific business semantics, action ownership, branch policy, or lane transitions.
-Those belong in the concrete action skill that sends or handles that workflow message.
+Use concrete action skills for role-specific business semantics, action ownership, branch policy, and lane transitions.
 
 ## Core Transport Rule
 
@@ -135,6 +134,9 @@ Inbox rule:
 - derive inbox address as `agent-deck/<agent-deck-session-id>`
 - no separate registration step is needed
 - when a workflow turn needs multiple lifecycle steps, execute them sequentially, not in parallel
+
+Workspace lifecycle rule:
+- if you create a temporary worktree/workspace, remove it after workflow closeout
 
 ## Mailbox Envelope
 

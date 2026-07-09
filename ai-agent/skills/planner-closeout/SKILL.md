@@ -72,9 +72,9 @@ Optional command additions:
 - use the closeout body as the primary planner handoff; do not reread the full review unless the closeout body is insufficient
 - coder/reviewer execution is asynchronous and may take unbounded time; this skill starts only after the closeout message actually arrives
 - do not start planner closeout speculatively while coder or reviewer work is still in progress
-- the planner closeout script owns required closeout actions, progress recording, and planner-side cleanup
+- run the planner closeout script for required closeout actions, progress recording, and planner-side cleanup
 - after planner closeout, later tasks in the same workflow must run workspace prepare again before their own closeout path
-- do not treat a released workspace reservation record as permission to dispatch another planner lane into the same workspace; lane scheduling is owned by the supervisor/dispatcher contract
+- do not dispatch another planner lane into the same workspace merely because the reservation record was released; let the supervisor/dispatcher schedule lanes
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
 - keep mailbox JSON internal unless the user explicitly asks
