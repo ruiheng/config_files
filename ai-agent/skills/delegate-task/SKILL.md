@@ -191,7 +191,7 @@ Workflow send sequence:
    - otherwise resolve the role `reviewer` command
 8. do not create the reviewer during delegate dispatch; pass `reviewer_session_ref`, `reviewer_tool_profile`, and `reviewer_tool_cmd` so `review-request` can create it on demand
 9. fill the final body
-10. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` with:
+10. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh` outside the restricted shell with:
    - `--workdir <worker_workspace>`
    - `--task-id <task_id>`
    - `--integration-branch <integration_branch>`
