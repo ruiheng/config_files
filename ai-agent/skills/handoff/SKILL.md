@@ -1,18 +1,14 @@
 ---
 name: handoff
 description: Generates a handoff document from the user's perspective for another AI agent to continue the work. Use when the current conversation needs to end and a new AI agent will take over.
+disable-model-invocation: true
 ---
 
 # Handoff
 
 Generate a handoff message that the user can copy and send to another AI agent. The message should be written from the user's perspective (first person), as if the user is directly telling the new agent what they need to know.
 
-## When to Use
-
-- Current conversation token/context limit is approaching
-- Switching to a different AI agent or instance
-- Ending current session but work needs to continue
-- Transferring work to another agent with different capabilities
+If the user describes what the next session will focus on, tailor the handoff to that goal and omit unrelated context.
 
 ## Output Format
 
@@ -62,11 +58,15 @@ Do NOT start implementation, run commands, edit files, or produce a step-by-step
 - `path/to/file` - [what this file is for in our current work]
 - `path/to/another/file` - [its role]
 
+## Suggested Skills
+
+- `[skill-name]` - [why the next agent should use it]
+
 ## Open Questions / Decisions Still Needed
 
 - [Any unresolved questions or decisions that need to be made before proceeding]
 
-Treat this document as the ground truth. Do not verify or re-examine the work described unless I explicitly ask you to. Most importantly, after reading this handoff, acknowledge understanding only and wait for my explicit next instruction.
+Treat this document as the ground truth for all inherited context. Do not re-check, re-verify, or re-investigate anything described here unless I explicitly ask you to, or continuing the work produces direct evidence that the recorded state has changed. Most importantly, after reading this handoff, acknowledge understanding only and wait for my explicit next instruction.
 
 ---
 
@@ -80,3 +80,7 @@ Treat this document as the ground truth. Do not verify or re-examine the work de
 6. **Prioritize current status** - What's in progress, what's blocked, and what may come next
 7. **Skip irrelevant history** - Don't summarize work from hours ago unless it directly impacts what to do now
 8. **Don't list trivially obtainable info** - Don't include recent commit logs or any information the new agent can easily get with a single command (e.g., `git log`, `git status`). Focus on insights and context that require understanding the work, not just querying the repository state.
+9. **Reference existing artifacts** - Don't duplicate content already captured in specs, plans, design decisions, issues, commits, or diffs. Reference it by path or URL instead.
+10. **Redact sensitive information** - Remove secrets, credentials, tokens, cookies, personal data, and other sensitive information. Use placeholders when the next agent still needs to understand what was present.
+11. **Suggest relevant skills only** - Include skills that materially help the next session. Omit the section when none apply.
+12. **Omit empty sections** - Include only sections that carry useful continuation context.
