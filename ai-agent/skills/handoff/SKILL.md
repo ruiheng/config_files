@@ -9,6 +9,7 @@ disable-model-invocation: true
 Generate a handoff message that the user can copy and send to another AI agent. The message should be written from the user's perspective (first person), as if the user is directly telling the new agent what they need to know.
 
 If the user describes what the next session will focus on, tailor the handoff to that goal and omit unrelated context.
+Treat the receiving agent as continuing the same working memory across a session boundary, not as auditing an untrusted report. State this continuity model explicitly in the generated handoff.
 
 ## Output Format
 
@@ -17,6 +18,14 @@ Generate the following handoff message in first person (as if the user is speaki
 ---
 
 Hi, I'm continuing a conversation from another AI agent. Here's what you need to know:
+
+## Continuity Model
+
+I am using this handoff to transfer the previous agent's working memory so you can continue seamlessly, not to request a fresh audit.
+
+- Trust recorded facts, checks, and decisions as you would your own immediately preceding verified context. Do not restart investigation merely because the agent instance changed.
+- Re-verify only when I ask, direct evidence conflicts with the handoff, or the next action needs a fresh value from inherently time-sensitive state.
+- Treat the mandatory first-reply pause below as an authorization boundary, not a reason to distrust or audit this handoff.
 
 ## What We Were Doing
 
@@ -66,7 +75,7 @@ Do NOT start implementation, run commands, edit files, or produce a step-by-step
 
 - [Any unresolved questions or decisions that need to be made before proceeding]
 
-Treat this document as the ground truth for all inherited context. Do not re-check, re-verify, or re-investigate anything described here unless I explicitly ask you to, or continuing the work produces direct evidence that the recorded state has changed. Most importantly, after reading this handoff, acknowledge understanding only and wait for my explicit next instruction.
+Follow the continuity model above. Most importantly, after reading this handoff, acknowledge understanding only and wait for my explicit next instruction.
 
 ---
 
