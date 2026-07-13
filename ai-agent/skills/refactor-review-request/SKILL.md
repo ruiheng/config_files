@@ -18,7 +18,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 - `refactor_goal`
 - optional `constraints`
 - optional `original_task`
-- optional `current_pain_points`
+- optional `current_pain_points` (observed symptoms only; no diagnosis or prescribed refactor)
 - optional `reviewer_tool`
 - optional `reviewer_tool_profile`
 - optional `planner_session_id`
@@ -56,6 +56,10 @@ Skill-specific context resolution:
 
 ## Mailbox Body
 
+Provide scope, review goal, constraints, and observed symptoms, not a diagnosis or candidate solution.
+- Let the reviewer identify causes, opportunities, and sequencing independently.
+- Treat any requested focus as optional emphasis that does not limit the full scoped review.
+
 Round `1` or new reviewer session: use the full body below.
 
 ```markdown
@@ -72,8 +76,8 @@ Round: <round>
 ## Scope
 [Files, module, branch, or code area in scope]
 
-## Refactor Goal
-[What kind of simplification is wanted]
+## Review Goal
+[What outcome or question should be assessed; do not prescribe a refactor]
 
 ## Original Task
 [Original task or `N/A`]
@@ -81,8 +85,8 @@ Round: <round>
 ## Constraints
 - [constraint or `None`]
 
-## Current Pain Points
-- [pain point or `None`]
+## Observed Symptoms
+- [Factual pain signal or `None`; do not supply a diagnosis]
 
 ## Review Boundaries
 - advisory only
@@ -109,12 +113,12 @@ Round: <round>
 
 ## Delta Since Last Round
 - Scope changes: [what changed or `None`]
-- New pain points: [what changed or `None`]
+- New observed symptoms: [what changed or `None`]
 - Constraints changed: [what changed or `None`]
 - Previous advice adopted or rejected: [brief summary or `N/A`]
 
-## Current Review Goal
-[What this round should focus on]
+## Optional Review Focus
+[Unresolved question deserving emphasis or `None`; do not limit the full scoped review]
 
 ## Tool Context
 - Reviewer tool profile: [reviewer_tool_profile or `existing-session`]

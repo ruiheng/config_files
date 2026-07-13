@@ -39,6 +39,9 @@ Branch plan continuity rule:
   - `reviewer_session_ref`
   - `reviewer_session_id`
   - `review_lane`
+  - `review_focus` (explicit optional emphasis; do not infer)
+  - `author_intent`
+  - `author_noted_issues`
   - `coder_tool`
   - `coder_tool_profile`
   - `reviewer_tool`
@@ -82,6 +85,13 @@ Rules:
 3. for committed scope, omit unrelated noise unless it materially affects review framing
 4. ask one short clarification question if relevance is uncertain
 
+## Review Independence
+
+Provide task intent, scope, constraints, and verification evidence, not a pre-review.
+- Treat `Author Intent`, `Optional Review Focus`, and `Author-Noted Issues or Limitations` as non-authoritative and non-exhaustive context.
+- Let the reviewer inspect the full scope and choose risk angles independently.
+- Omit optional focus and author notes when the original task plus git target are enough.
+
 ## Agent Deck Mode
 
 Use the `agent-deck-workflow` skill for shared protocol.
@@ -118,7 +128,7 @@ Review-request continuity rule:
 - if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
 - delta-only means terse:
   - do not repeat the original task, branch plan, file list, or unchanged verification
-  - summarize only what changed since the last review and what you want the reviewer to re-check
+  - summarize only changed scope, responses to prior findings, and new verification evidence; let the reviewer decide what to re-check
   - if the whole message is effectively "please re-review after addressing the prior findings", prefer a short subject and a one-line body
   - if the transport or tooling can support it, body can be minimal; otherwise keep it to a single short sentence
 
@@ -136,7 +146,7 @@ Commit reference rule:
 
 Round `1` or new reviewer session: use the full body below.
 
-Use this exact structure as the mailbox body:
+Use this structure as the mailbox body. Omit sections marked optional when empty.
 
 ```markdown
 Task: <task_id>
@@ -173,12 +183,11 @@ Round: <round>
 - Reviewer tool profile: [reviewer_tool_profile or `existing-session`]
 - Reviewer tool cmd: [reviewer_tool_cmd or `existing-session`]
 
-## Review Focus
-- [Primary risk/review angle 1]
-- [Primary risk/review angle 2]
+## Optional Review Focus
+- [Explicit optional emphasis; must not limit the full independent review]
 
-## Implementation Summary
-[Brief intent-level summary; do not restate the whole diff]
+## Author Intent (Optional)
+[Brief non-authoritative intent note; do not restate the diff]
 
 ## Changed Paths Summary
 - In-scope changed paths: [count + key paths, or `See scope target` when the git target is enough]
@@ -198,8 +207,8 @@ Round: <round>
 ## Special Requirements
 [only when present]
 
-## Known Issues or Limitations
-[Known limitations; if none, write: None identified]
+## Author-Noted Issues or Limitations (Optional)
+[Non-exhaustive author notes]
 ```
 
 Round `>1` to the same reviewer session: send only delta.
@@ -227,7 +236,7 @@ Round: <round>
 - Scope: [what changed in reviewed scope]
 - Findings addressed: [adopted items]
 - Findings rejected: [rejected items + rationale]
-- New risks or open questions: [only if changed]
+- Author-noted new risks or open questions: [only if changed]
 
 ## Branch Plan
 - Start branch: [start_branch]
@@ -238,8 +247,8 @@ Round: <round>
 ## Review Context
 - Lane: [task | integration_final]
 
-## Updated Implementation Summary
-[Only what changed since the last review request; do not restate the whole diff]
+## Author Update Since Last Review (Optional)
+[Non-authoritative intent note for what changed; do not restate the diff]
 
 ## Changed Paths Since Last Review
 - [count + key paths, or `See scope target` when the git target is enough]
@@ -252,8 +261,8 @@ Round: <round>
 - Other verification: [new manual/browser/scripted checks or `No change`]
 - Coverage gaps: [remaining gaps after this round]
 
-## Known Issues or Limitations
-[Current remaining limitations; if none, write: None identified]
+## Author-Noted Issues or Limitations (Optional)
+[Current non-exhaustive author notes]
 ```
 
 ## Mailbox Send + Wakeup
@@ -304,6 +313,6 @@ Rules:
 3. Changed paths summary is enough for routing; reviewer should use the git target for exact file details
 4. Prefer facts over speculation
 5. Keep raw mailbox JSON internal unless user asks
-6. Always include `Review Focus` and `Checks Already Run` fields
+6. Always include `Checks Already Run`; include `Optional Review Focus` only when the requester explicitly provides useful emphasis
 7. Preserve `workflow_policy` unchanged when present
 8. Preserve `special_requirements` unchanged when present

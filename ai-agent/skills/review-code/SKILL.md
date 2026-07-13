@@ -14,7 +14,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 Provide one of:
 1. the mailbox body from `review_requested`
 2. the mailbox body from `browser_check_report` plus current review context
-3. original task + implementation summary + code changes
+3. original task + code changes, with optional author intent or notes
 
 ## Input Completeness Gate (Required)
 
@@ -23,7 +23,6 @@ Before reviewing quality, verify:
 - branch plan is explicit (`start_branch`, `integration_branch`, `task_branch`)
 - implementation intent is explicit (what change is meant to accomplish)
 - behavior/compatibility constraints are explicit (what must not change)
-- review focus or risk angles are stated
 - verification evidence is present (tests, results, known gaps)
 
 If critical context is missing:
@@ -32,6 +31,13 @@ If critical context is missing:
 - keep evidence factual; do not fabricate assumptions
 
 ## Review Discipline
+
+Treat the original task and explicit behavior/compatibility constraints as authoritative review contracts.
+Treat `Author Intent`, `Optional Review Focus`, and `Author-Noted Issues or Limitations` as author context:
+- non-authoritative and non-exhaustive
+- never a substitute for inspecting the full review scope
+- never a reason to skip independent risk discovery
+- optional focus may set emphasis but must not constrain the review; its absence is not missing context
 
 Before enumerating issues, build a short frame:
 - intended change
@@ -148,7 +154,6 @@ Round: <round>
 - Branch plan continuity: [PASS / FAIL]
 - Intent clarity: [PASS / FAIL]
 - Behavior/compatibility constraints: [PASS / FAIL]
-- Review focus/risk angles: [PASS / FAIL]
 - Verification evidence: [PASS / FAIL]
 If any FAIL, explain why in `Critical Issues`.
 
