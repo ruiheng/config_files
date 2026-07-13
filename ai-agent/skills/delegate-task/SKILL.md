@@ -5,7 +5,7 @@ description: Use for non-trivial implementation tasks that require meaningful co
 
 # Delegate Task
 
-Create one concise, execution-ready mailbox message for another AI agent.
+Create one concise, outcome-oriented mailbox message for another AI agent.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
@@ -26,6 +26,14 @@ Execution mode: strict serial; do not send the next delegated task before closeo
 
 Keep the delegate brief directly in the mailbox body.
 Keep it locally actionable, but include enough upstream context that coder can optimize for the parent goal instead of only the local wording.
+
+Delegate the outcome, not a solution recipe:
+- Assume coder and reviewer can investigate, decompose, reason, and validate independently.
+- Provide parent intent, known evidence, hard boundaries, fixed upstream decisions, and testable acceptance criteria.
+- Omit speculative file/function lists, step-by-step implementation plans, guessed decomposition, and explanations the receiving agent can derive from the workspace.
+- Preserve decision provenance: label a choice as fixed only when the user, reviewed design, or existing contract actually fixed it. Otherwise leave the choice to coder.
+- Give reviewers scope, artifacts, and criteria without seeding expected findings or verdicts.
+- Treat an unusually long brief as a scope/framing smell; remove detail that does not change the outcome, boundary, risk, or acceptance criteria.
 
 Agent Deck mode:
 - Use the `agent-deck-workflow` skill for shared rules
@@ -99,11 +107,8 @@ Round: 1
 ## Objective
 [One sentence]
 
-## Components to Address
-- [component]: [responsibility] | Key question: [...]
-
-## Critical Decisions
-- [decision]: Options / trade-offs / recommendation
+## Known Evidence
+- [established fact, symptom, or relevant artifact; omit inferred solutions and omit this section when empty]
 
 ## Branch Plan
 - Start branch: [start_branch]
@@ -112,9 +117,10 @@ Round: 1
 - Rationale: [why dedicated task branch vs reused topic branch]
 
 ## Constraints & Risks
-- [hard constraint / risk / mitigation]
+- [hard constraint / fixed upstream decision with provenance / material risk; omit this section when empty]
 
 ## Implementation Discipline
+- Own the investigation, local decomposition, design choice, implementation, and validation within this scope
 - Optimize for the smallest conflict surface that still completes the task
 - Do not perform unrelated refactors, renames, file moves, or broad cleanups
 - Keep touched files and mechanical rewrites to the minimum needed for this task
@@ -124,18 +130,17 @@ Round: 1
 - Per-task review: [required | skip]
 - Final integration review: [planner-managed | required | skip]
 
-## Context to Acquire
-- Read before starting: [...]
-- Reference as needed: [...]
-- Know it exists: [...]
-- Reviewed design docs: [branch + commit + doc paths when this task is based on a tech-design review]
+## Starting Context
+- Read before starting: [binding contracts and required artifacts; include reviewed design docs when applicable]
+- Reference as needed: [optional supporting material]
+- Know it exists: [useful discovery pointers that need not be read up front]
 
 ## Escalate Back To Planner
 - Ask planner before proceeding if: [scope no longer matches evidence, local optimum appears to hurt the parent goal, or the task needs a material boundary/plan change]
 - Keep moving without asking only when: [the remaining uncertainty is local and does not change the parent goal or branch plan]
 
 ## Acceptance Criteria
-- [testable completion item]
+- [testable outcome; avoid prescribing implementation shape]
 
 ## Required Workflow Step
 - If `Per-task review: required`, run `review-request` after the delivery commit; then continue only with independent local work or stop after confirming the request was sent
@@ -212,7 +217,7 @@ Rules:
 - keep the full delegate brief in mailbox body
 - do not replace this path with host subagent tools; use `agent_deck_create_session` only for lifecycle allocation, and let `send-delegate-with-active-task-lock.sh` own delegate send and wakeup
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
-- if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths in `Context to Acquire`
+- if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths under `Starting Context` -> `Read before starting`
 - make conflict-minimizing implementation discipline explicit in the delegate brief when this workspace may later be integrated with parallel work
 - keep the workspace planner record aligned with the recorded `integration_branch`; if the session create step reports a mismatch, stop instead of dispatching
 - pass `--override-workspaces` only after explicit user confirmation to replace the mirrored `planner-workspace.json` records
