@@ -36,9 +36,6 @@ Round `1` or new architect session:
 - `problem`
 - `goals`
 - `constraints`
-- `proposed_tech_design_summary`
-- optional `alternatives_considered`
-- optional `open_questions`
 
 Round `>1` to the same architect session:
 - optional `requester_notes` for non-git context only
@@ -81,6 +78,10 @@ Continuity rule:
 
 The body is a review brief plus committed-doc pointers only.
 Do not paste full design docs into the mailbox body.
+Provide review intent and authoritative constraints, not a pre-review:
+- Let the architect inspect the committed docs, choose review angles, and derive findings independently.
+- Keep design rationale, alternatives, tradeoffs, risks, and open questions in the committed docs; do not restate them in the request to compensate for missing design content.
+- Use `feedback_requested` only as optional emphasis. It must not narrow the full review or imply expected findings or a verdict.
 
 Round `1` or new architect session: use the full body below.
 
@@ -103,15 +104,6 @@ Round: <round>
 ## Constraints
 - [constraint]
 
-## Proposed Tech Design Summary
-[Short committed-design summary]
-
-## Alternatives Considered
-- [alternative or `None identified`]
-
-## Open Questions
-- [question or `None`]
-
 ## Tech Design Snapshot
 - Base branch: [branch the tech-design branch started from]
 - Branch: [tech-design branch]
@@ -119,11 +111,8 @@ Round: <round>
   - `path/to/doc1.md`
   - `path/to/doc2.md`
 
-## Feedback Requested
-- [what kind of feedback is wanted]
-
-## Known Risks or Gaps
-[Current known risks, tradeoffs, or `None identified`]
+## Optional Review Focus
+- [optional emphasis or `None`; do not limit the architect's full independent review]
 
 ## Tool Context
 - Architect tool profile: [architect_tool_profile or `explicit`]
@@ -149,8 +138,8 @@ Round: <round>
   - `path/to/doc1.md`
   - `path/to/doc2.md`
 
-## Feedback Requested
-- [what remains unresolved in this round]
+## Optional Review Focus
+- [what remains unresolved in this round or `None`; do not limit independent review]
 
 ## Requester Notes
 - [Optional non-git context, feedback disagreement, or `None`]
