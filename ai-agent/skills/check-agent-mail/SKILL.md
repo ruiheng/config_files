@@ -1,13 +1,13 @@
 ---
 name: check-agent-mail
-description: Claim pending agent mail with `mailbox_recv` and immediately execute the requested workflow action.
+description: Claim and process pending agent mail one delivery at a time with `mailbox_recv`.
 ---
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Steps
 
-1. Start the shared Receiver Contract by running `mailbox_recv` first for personal mail.
+1. Start the shared Receiver Contract by running `mailbox_recv` first to claim one personal delivery.
 2. If no personal message is returned:
    - if no visible local work remains, finish the shared Receiver Contract's single idle wait path
    - if still no mail, report no agent mail and stop until a later nudge or explicit check
@@ -18,6 +18,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
    - otherwise execute that workflow stage immediately
 4. Only `mailbox_ack` the currently claimed inbound delivery, and only after the message's required workflow action is complete
 5. If the message cannot be acted on yet, use `mailbox_release`, `mailbox_defer`, or `mailbox_fail` instead of silently dropping it
+6. After a delivery is completed and `mailbox_ack` succeeds, return to step 1. Process mail strictly as `recv one → act → settle → recv next`; do not pre-claim a batch
 
 ## Rules
 
@@ -25,6 +26,9 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 - Ask the user for the next step only when the mailbox body explicitly requires a user decision
 - Read external files only when the mailbox body explicitly says they are needed
 - The current session owns only the delivery lifecycle of the inbound message it claimed with `mailbox_recv`
+- Do not call `mailbox_recv` again while a personal delivery remains claimed
+- After a successful `mailbox_ack`, immediately call `mailbox_recv` again; stop the serial receive cycle only when it returns no personal mail
+- After `mailbox_release`, `mailbox_defer`, or `mailbox_fail`, follow the action skill's continuation policy; do not blindly re-claim the released delivery
 - Do not `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail` outbound mail that this session sent, or a delivery claimed by another session
 - The action skill decides the exact serialized completion point for `mailbox_ack` or the alternate lifecycle step
 - Determine workflow behavior from this mailbox input plus the current action skill; you do not need to inspect another role's implementation details

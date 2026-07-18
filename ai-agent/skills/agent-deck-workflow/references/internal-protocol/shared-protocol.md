@@ -83,7 +83,7 @@ Transport rules:
 - when a group sender has a known group `person`, pass `as_person`; agent-mailbox validates active membership and marks that person's stream read without relying on address/person inference
 - keep outbound mailbox bodies in the `mailbox_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
 - if a shell helper requires a real body file, write it under this agent's `.agent-artifacts/mailbox/`; do not use target workdirs or global temp dirs
-- for receiver-side wake handling or explicit mailbox checks, call `mailbox_recv` first to claim already-available mail
+- for receiver-side wake handling or explicit mailbox checks, call `mailbox_recv` first to claim one already-available personal delivery
 - if idle after an empty `mailbox_recv`, call at most one `mailbox_wait timeout=10m` per assistant turn
 - on timeout/no-message, report no mail and stop checking until a later nudge or user-triggered mailbox check
 - after `mailbox_wait` reports available mail, immediately follow with `mailbox_recv`
@@ -191,13 +191,14 @@ After send:
 ## Receiver Contract
 
 When a workflow session is woken:
-1. run `mailbox_recv` first to claim already-available mail; if no mail is returned and no visible local work remains, run at most one `mailbox_wait` with timeout `10m`, then `mailbox_recv` if mail becomes available
+1. run `mailbox_recv` first to claim one available personal delivery; if no mail is returned and no visible local work remains, run at most one `mailbox_wait` with timeout `10m`, then `mailbox_recv` if mail becomes available
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
 5. `mailbox_ack` only after the message's required workflow action has completed
 6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
 7. keep mailbox lifecycle steps serialized
+8. after a delivery is completed and `mailbox_ack` succeeds, return to step 1 to claim the next delivery; process personal mail as `recv one → act → settle → recv next`
 
 Complete the message's required workflow action before `ack`ing the claimed inbound delivery.
 Do not `ack` outbound mail that this session just sent.
@@ -208,7 +209,9 @@ Idle behavior:
 - call `mailbox_recv` first; use `mailbox_wait` with timeout `10m` only for idle waiting after no mail is immediately available
 - if the wait times out or `mailbox_recv` returns no message, report no mail and wait for a later nudge or user-triggered check instead of waiting again
 - while a claimed personal delivery is incomplete, do not fetch another personal delivery
-- after the claimed delivery is completed, do not start another wait/receive cycle in the same check unless the current task explicitly asks for it
+- after a delivery is completed and `mailbox_ack` succeeds, immediately call `mailbox_recv` again; do not pre-claim a batch of personal deliveries
+- after `mailbox_release`, `mailbox_defer`, or `mailbox_fail`, follow the concrete action skill's continuation policy; do not blindly re-claim a released delivery
+- only start `mailbox_wait` after `mailbox_recv` returns no message
 - a just-sent outbound message is not by itself a reason for sender-side waiting
 
 ## Natural End Gate
@@ -223,6 +226,7 @@ Natural end is allowed only when one of these is true:
 Before ending a workflow turn, check:
 - did I finish the required send-back or handoff step for this action?
 - did I finish the required mailbox lifecycle step for the message I received?
+- after a successfully acknowledged personal delivery, did I run the required next `mailbox_recv` and receive no more mail before ending?
 - if context feels incomplete after compaction or interruption, can I recover the current workflow input from the mailbox body or `mailbox_read` before deciding to stop?
 
 If the task work is done but the required workflow send-back step is still pending, do not end. Send the required mailbox message first.
