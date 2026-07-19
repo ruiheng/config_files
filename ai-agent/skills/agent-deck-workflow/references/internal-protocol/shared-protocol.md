@@ -6,7 +6,7 @@ Use concrete action skills for role-specific business semantics, action ownershi
 ## Core Transport Rule
 
 - `agent-mailbox` carries the real workflow message
-- `agent-deck` is used to create new lifecycle-owned sessions and require existing target sessions before send
+- `agent-deck` manages workflow-owned sessions
 - notification nudges are best-effort acceleration only; receiver-side mailbox pickup is the reliable continuity path
 - target session status is not reliable progress evidence across agent types; treat mailbox delivery and later receiver reports as authoritative
 - use the `agent_mailbox` MCP tools as the default transport interface
@@ -48,6 +48,15 @@ Session identity rules:
 - concrete action skills may define a target as intentionally on-demand; in that case the missing `*_session_id` is normal until the action creates or reuses that target
 - when `from_session_id == to_session_id`, treat it as an explicit same-session continuation already established by context, not something inferred from matching provider names
 - creating or starting an Agent Deck target session is workflow session lifecycle, not use of a host subagent API
+
+## Target Lifecycle Gate
+
+This section overrides conflicting action-skill send sequencing.
+
+- Confirmation is scoped to a task/lane + workdir; it requires create/require or explicit matching `session_id` + workdir
+- At first dispatch, creation/takeover/recovery, uncertain identity/workdir, or explicit immediate activation: create the target or `require` the existing target; batch same-workdir requires
+- Otherwise, send normal follow-ups directly to the confirmed `session_id`; this only guarantees the delivery is queued
+- Treat `mailbox_send` notification fields as diagnostics only
 
 Tool resolution rules:
 - keep model/provider/version defaults out of concrete action skills when a shared tool profile can own them instead
@@ -102,10 +111,9 @@ Transport rules:
 - use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
 - use `agent_deck_create_session` only when the current role owns lifecycle allocation of a missing target session
-- use `agent_deck_require_session` before sending to an already assigned target session
 - in normal workflow delivery, identify an already assigned target by `session_id`, not `session_ref`
 - concrete action skills may define a narrow exception for a self-owned reusable helper session whose request body is already self-contained enough to bootstrap that helper; in that case the skill may look up a stable `session_ref` and create the helper only when it is absent
-- always pass explicit `workdir`
+- always pass explicit `workdir` to create/require session tools
 - when creating a parent-linked workflow session, pass explicit `group_path` from the parent session; root group is the empty string and is valid
 - leave `listener_message` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
 
@@ -172,15 +180,8 @@ Envelope rules:
 Use `mailbox_send` for the normal mailbox delivery path.
 
 Expected behavior:
-1. if the current role is allocating a new workflow-owned target session, call `agent_deck_create_session`
-   - use create only in the role that owns target lifecycle allocation
-   - always pass `workdir`
-   - if passing `parent_session_id`, also pass the parent session's `group_path`; use empty string for root group
-   - normal workflow: do not pass `listener_message`
-2. otherwise call `agent_deck_require_session` for the existing target session before send
-   - always pass `workdir`
-   - normal workflow: do not pass `listener_message`
-3. queue the mailbox body with `mailbox_send`
+1. follow Target Lifecycle Gate
+2. queue the mailbox body with `mailbox_send`
 
 After send:
 - if immediate local continuation remains, do it
