@@ -7,8 +7,8 @@
     "disableAlwaysAllow": false
   },
   "mcpServers": {
-    "agent-mailbox": {
-      "command": "agent-mailbox",
+    "waypost": {
+      "command": "waypost",
       "args": [
         "mcp"
       ]

@@ -25,21 +25,21 @@ If `group_address`, `participant_person`, or `role` is missing, do not guess. As
 ## Steps
 
 1. Read the received personal control message.
-2. Use `agent_mailbox` MCP `mailbox_recv` with:
+2. Use `waypost` MCP `waypost_recv` with:
    - `addresses = [group_address]`
    - `as_person = participant_person`
-3. Repeat group `mailbox_recv` until it returns `no_message`.
+3. Repeat group `waypost_recv` until it returns `no_message`.
    - This loop is only for group stream reads.
    - Stop after 100 messages and note that the response is based on the first 100 unread messages.
 4. Compose one group reply.
-5. Send the reply with `mailbox_send`:
+5. Send the reply with `waypost_send`:
    - `to_address = group_address`
    - `from_address = participant_person`
    - `as_person = participant_person`
    - `group = true`
    - `subject = "roundtable: <roundtable_id> r<round> <participant_person>"`
    - `body = <reply>`
-6. `mailbox_ack` the personal control delivery only after the group reply send succeeds.
+6. `waypost_ack` the personal control delivery only after the group reply send succeeds.
 
 ## Reply Rules
 

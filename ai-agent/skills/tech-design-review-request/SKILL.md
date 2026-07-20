@@ -168,7 +168,7 @@ Before sending:
    - `no_parent_link = false`
 5. otherwise require the existing `architect_session_id`
 6. use the returned session id as authoritative
-7. fill the final body and send it with `mailbox_send`
+7. fill the final body and send it with `waypost_send`
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<architect_session_id>`
    - `subject = "tech-design review: <task_id> r<round>"`

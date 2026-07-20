@@ -123,7 +123,7 @@ Round: 1
 7. create the planner integration branch from the current supervisor branch before dispatch
    - do not switch the supervisor worktree onto that branch
    - if the preferred branch name already exists and resume was not explicit, choose a new unique suffix instead of reusing that ref
-8. use `agent_mailbox`
+8. use `waypost`
 9. if this dispatch is allocating a new planner lane, call `agent_deck_create_session` for the planner target
    - `ensure_title = <planner_session_ref>`
    - `ensure_cmd = <planner_tool_cmd>`

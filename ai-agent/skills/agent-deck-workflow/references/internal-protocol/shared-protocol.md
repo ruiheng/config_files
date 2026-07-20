@@ -5,11 +5,11 @@ Use concrete action skills for role-specific business semantics, action ownershi
 
 ## Core Transport Rule
 
-- `agent-mailbox` carries the real workflow message
+- `waypost` carries the real workflow message
 - `agent-deck` manages workflow-owned sessions
 - notification nudges are best-effort acceleration only; receiver-side mailbox pickup is the reliable continuity path
 - target session status is not reliable progress evidence across agent types; treat mailbox delivery and later receiver reports as authoritative
-- use the `agent_mailbox` MCP tools as the default transport interface
+- use the `waypost` MCP tools as the default transport interface
 - use `check-agent-mail` for receiver-side wake handling
 - Agent Deck sessions are external workflow peers, not host-internal subagents; do not apply host subagent tool restrictions to `agent_deck_create_session`, `agent_deck_require_session`, `agent-deck`, or mailbox dispatch.
 
@@ -56,7 +56,7 @@ This section overrides conflicting action-skill send sequencing.
 - Confirmation is scoped to a task/lane + workdir; it requires create/require or explicit matching `session_id` + workdir
 - At first dispatch, creation/takeover/recovery, uncertain identity/workdir, or explicit immediate activation: create the target or `require` the existing target; batch same-workdir requires
 - Otherwise, send normal follow-ups directly to the confirmed `session_id`; this only guarantees the delivery is queued
-- Treat `mailbox_send` notification fields as diagnostics only
+- Treat `waypost_send` notification fields as diagnostics only
 
 Tool resolution rules:
 - keep model/provider/version defaults out of concrete action skills when a shared tool profile can own them instead
@@ -71,44 +71,44 @@ Tool resolution rules:
 ## Mailbox Transport
 
 Preferred transport interface:
-- `mailbox_bind`
-- `mailbox_status`
-- `mailbox_send`
-- `mailbox_wait`
-- `mailbox_recv`
-- `mailbox_list`
-- `mailbox_read`
-- `mailbox_ack`
-- `mailbox_release`
-- `mailbox_defer`
-- `mailbox_fail`
+- `waypost_bind`
+- `waypost_status`
+- `waypost_send`
+- `waypost_wait`
+- `waypost_recv`
+- `waypost_list`
+- `waypost_read`
+- `waypost_ack`
+- `waypost_release`
+- `waypost_defer`
+- `waypost_fail`
 - `agent_deck_resolve_session`
 - `agent_deck_create_session`
 - `agent_deck_require_session`
 
 Transport rules:
-- use `mailbox_send` for normal cross-session workflow delivery
-- for `mailbox_send group:true`, agent-mailbox marks the sender's own group message read and queues durable personal `group_message_available` deliveries for active subscribers other than the sender
-- when a group sender has a known group `person`, pass `as_person`; agent-mailbox validates active membership and marks that person's stream read without relying on address/person inference
-- keep outbound mailbox bodies in the `mailbox_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
+- use `waypost_send` for normal cross-session workflow delivery
+- for `waypost_send group:true`, waypost marks the sender's own group message read and queues durable personal `group_message_available` deliveries for active subscribers other than the sender
+- when a group sender has a known group `person`, pass `as_person`; waypost validates active membership and marks that person's stream read without relying on address/person inference
+- keep outbound mailbox bodies in the `waypost_send` body string or pipe them through stdin when a shell helper requires `--body-file -`
 - if a shell helper requires a real body file, write it under this agent's `.agent-artifacts/mailbox/`; do not use target workdirs or global temp dirs
-- for receiver-side wake handling or explicit mailbox checks, call `mailbox_recv` first to claim one already-available personal delivery
-- if idle after an empty `mailbox_recv`, call at most one `mailbox_wait timeout=10m` per assistant turn
+- for receiver-side wake handling or explicit mailbox checks, call `waypost_recv` first to claim one already-available personal delivery
+- if idle after an empty `waypost_recv`, call at most one `waypost_wait timeout=10m` per assistant turn
 - on timeout/no-message, report no mail and stop checking until a later nudge or user-triggered mailbox check
-- after `mailbox_wait` reports available mail, immediately follow with `mailbox_recv`
-- never pass `group/` addresses to `mailbox_bind`; group streams are read with explicit `mailbox_recv addresses=[...] as_person=...`
-- use `mailbox_read` to reread persisted deliveries after `ack` or other context loss
-- use `mailbox_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
-- after outbound `mailbox_send` succeeds, use independent local work if available; otherwise end with the concrete action skill's user-facing confirmation/status
+- after `waypost_wait` reports available mail, immediately follow with `waypost_recv`
+- never pass `group/` addresses to `waypost_bind`; group streams are read with explicit `waypost_recv addresses=[...] as_person=...`
+- use `waypost_read` to reread persisted deliveries after `ack` or other context loss
+- use `waypost_list` to inspect persisted deliveries by inbox/state when you need a specific older delivery id
+- after outbound `waypost_send` succeeds, use independent local work if available; otherwise end with the concrete action skill's user-facing confirmation/status
 - a timeout means no reply yet, not a receiver failure
 - after a timeout, report that no mail is available; do not inspect or repair the target session
 - do not poll, inspect, or reason from the target Agent Deck session's `running` / `waiting` / `idle` status to infer whether the receiver is working
 - ignore best-effort target status hints reported by mailbox tooling for sender-side progress decisions; they are diagnostic noise unless explicit troubleshooting asks for them
-- `mailbox_read` / `mailbox_list` are for recovering this session's prior workflow input, not for diagnosing why a just-requested reply has not arrived
+- `waypost_read` / `waypost_list` are for recovering this session's prior workflow input, not for diagnosing why a just-requested reply has not arrived
 - use lifecycle tools for `ack` / `release` / `defer` / `fail`
-- `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail` apply only to the currently claimed inbound delivery in this session
-- `mailbox_send` has no sender-side `ack`; sender-side completion is the successful `mailbox_send` result
-- use `mailbox_bind` only for custom addresses or recovery when mailbox context is missing
+- `waypost_ack` / `waypost_release` / `waypost_defer` / `waypost_fail` apply only to the currently claimed inbound delivery in this session
+- `waypost_send` has no sender-side `ack`; sender-side completion is the successful `waypost_send` result
+- use `waypost_bind` only for custom addresses or recovery when mailbox context is missing
 - keep the full workflow body in the MCP `body` string instead of generated Markdown handoff files
 - use `agent_deck_create_session` only when the current role owns lifecycle allocation of a missing target session
 - in normal workflow delivery, identify an already assigned target by `session_id`, not `session_ref`
@@ -118,14 +118,14 @@ Transport rules:
 - leave `listener_message` empty in normal workflow; use it only for rare bootstrap/control cases that must happen before mailbox pickup
 
 Worker wake rule:
-- after `mailbox_send`, the normal non-local nudge may be handled by mailbox transport or sender tooling
-- nudges are optional optimization; receivers should use `mailbox_recv` first, then at most one bounded `mailbox_wait` only when idle and no mail was already available
+- after `waypost_send`, the normal non-local nudge may be handled by mailbox transport or sender tooling
+- nudges are optional optimization; receivers should use `waypost_recv` first, then at most one bounded `waypost_wait` only when idle and no mail was already available
 - mailbox transport may suppress redundant nudges when the mail is claimed quickly
 - do not build correctness on nudge delivery
 
 Sender/receiver turn rule:
 - communication boundary is mailbox delivery; do not cross it by observing or repairing the receiver's execution
-- sender turn ends after the required outbound `mailbox_send` or local continuation succeeds
+- sender turn ends after the required outbound `waypost_send` or local continuation succeeds
 - expected replies are future inbound work; do not wait for them in the sender's same turn unless the concrete action skill explicitly requires a synchronous mailbox check
 - do not treat missing replies after a wait timeout as actionable failure evidence
 - never use repeated status checks, session inspection, or target workspace inspection to explain or repair a missing reply
@@ -135,7 +135,7 @@ Sender/receiver turn rule:
 Async sender rule:
 - after sending an asynchronous request, continue only with independent local work
 - if no local work remains, return the concrete action skill's confirmation/status
-- do not call `mailbox_wait` / `mailbox_recv` for the expected reply in the same sender turn
+- do not call `waypost_wait` / `waypost_recv` for the expected reply in the same sender turn
 - do not inspect or repair the target session merely because no immediate reply is present
 
 Inbox rule:
@@ -165,7 +165,7 @@ Round: <round_or_final>
 
 Envelope rules:
 - `Action:` must be a stable machine-readable token chosen by the concrete action skill
-- `group_message_available` is an agent-mailbox generated control action; read `Group-Address` with `As-Person`, then `ack` the personal delivery only after the group handler completes
+- `group_message_available` is an waypost generated control action; read `Group-Address` with `As-Person`, then `ack` the personal delivery only after the group handler completes
 - when a role has a dedicated action skill for that workflow action, treat that skill as the runtime handler for the received message
 - `closeout_delivered` is a planner-handled workflow action; use a planner-side closeout skill for it
 - `execute_plan` is a planner-handled workflow action; use a planner-side execution skill for it
@@ -177,11 +177,11 @@ Envelope rules:
 
 ## Delivery Order Contract
 
-Use `mailbox_send` for the normal mailbox delivery path.
+Use `waypost_send` for the normal mailbox delivery path.
 
 Expected behavior:
 1. follow Target Lifecycle Gate
-2. queue the mailbox body with `mailbox_send`
+2. queue the mailbox body with `waypost_send`
 
 After send:
 - if immediate local continuation remains, do it
@@ -192,27 +192,27 @@ After send:
 ## Receiver Contract
 
 When a workflow session is woken:
-1. run `mailbox_recv` first to claim one available personal delivery; if no mail is returned and no visible local work remains, run at most one `mailbox_wait` with timeout `10m`, then `mailbox_recv` if mail becomes available
+1. run `waypost_recv` first to claim one available personal delivery; if no mail is returned and no visible local work remains, run at most one `waypost_wait` with timeout `10m`, then `waypost_recv` if mail becomes available
 2. treat the returned `body` as the primary task input
 3. parse the `Action:` header and immediately hand control to the concrete action skill for that action
 4. only read supplemental files when the body explicitly requires them
-5. `mailbox_ack` only after the message's required workflow action has completed
-6. use `mailbox_release` / `mailbox_defer` / `mailbox_fail` instead of silently dropping leased work
+5. `waypost_ack` only after the message's required workflow action has completed
+6. use `waypost_release` / `waypost_defer` / `waypost_fail` instead of silently dropping leased work
 7. keep mailbox lifecycle steps serialized
-8. after a delivery is completed and `mailbox_ack` succeeds, return to step 1 to claim the next delivery; process personal mail as `recv one → act → settle → recv next`
+8. after a delivery is completed and `waypost_ack` succeeds, return to step 1 to claim the next delivery; process personal mail as `recv one → act → settle → recv next`
 
 Complete the message's required workflow action before `ack`ing the claimed inbound delivery.
 Do not `ack` outbound mail that this session just sent.
 
 Idle behavior:
-- one bounded `mailbox_wait` after an empty `mailbox_recv` is recommended for workflow continuity when no other visible work remains; max once per assistant turn
+- one bounded `waypost_wait` after an empty `waypost_recv` is recommended for workflow continuity when no other visible work remains; max once per assistant turn
 - use `check-agent-mail` for mailbox pickup after a wakeup nudge, an explicit human mailbox-check request, or idle workflow waiting
-- call `mailbox_recv` first; use `mailbox_wait` with timeout `10m` only for idle waiting after no mail is immediately available
-- if the wait times out or `mailbox_recv` returns no message, report no mail and wait for a later nudge or user-triggered check instead of waiting again
+- call `waypost_recv` first; use `waypost_wait` with timeout `10m` only for idle waiting after no mail is immediately available
+- if the wait times out or `waypost_recv` returns no message, report no mail and wait for a later nudge or user-triggered check instead of waiting again
 - while a claimed personal delivery is incomplete, do not fetch another personal delivery
-- after a delivery is completed and `mailbox_ack` succeeds, immediately call `mailbox_recv` again; do not pre-claim a batch of personal deliveries
-- after `mailbox_release`, `mailbox_defer`, or `mailbox_fail`, follow the concrete action skill's continuation policy; do not blindly re-claim a released delivery
-- only start `mailbox_wait` after `mailbox_recv` returns no message
+- after a delivery is completed and `waypost_ack` succeeds, immediately call `waypost_recv` again; do not pre-claim a batch of personal deliveries
+- after `waypost_release`, `waypost_defer`, or `waypost_fail`, follow the concrete action skill's continuation policy; do not blindly re-claim a released delivery
+- only start `waypost_wait` after `waypost_recv` returns no message
 - a just-sent outbound message is not by itself a reason for sender-side waiting
 
 ## Natural End Gate
@@ -220,15 +220,15 @@ Idle behavior:
 Do not naturally end a workflow turn just because the main task work looks finished.
 
 Natural end is allowed only when one of these is true:
-- all required workflow actions for this turn are already done, including any required `mailbox_send` / `mailbox_ack` / `mailbox_release` / `mailbox_defer` / `mailbox_fail`
+- all required workflow actions for this turn are already done, including any required `waypost_send` / `waypost_ack` / `waypost_release` / `waypost_defer` / `waypost_fail`
 - this turn is an explicit same-session continuation and control has already been handed to the next local step
-- this turn was only a mailbox check, `mailbox_recv` returned no message, and there is visible non-mailbox work or a user-facing reason to stop
+- this turn was only a mailbox check, `waypost_recv` returned no message, and there is visible non-mailbox work or a user-facing reason to stop
 
 Before ending a workflow turn, check:
 - did I finish the required send-back or handoff step for this action?
 - did I finish the required mailbox lifecycle step for the message I received?
-- after a successfully acknowledged personal delivery, did I run the required next `mailbox_recv` and receive no more mail before ending?
-- if context feels incomplete after compaction or interruption, can I recover the current workflow input from the mailbox body or `mailbox_read` before deciding to stop?
+- after a successfully acknowledged personal delivery, did I run the required next `waypost_recv` and receive no more mail before ending?
+- if context feels incomplete after compaction or interruption, can I recover the current workflow input from the mailbox body or `waypost_read` before deciding to stop?
 
 If the task work is done but the required workflow send-back step is still pending, do not end. Send the required mailbox message first.
 If the required workflow send-back step has succeeded and no other visible work remains, end with the concrete action skill's user-facing confirmation/status unless the current task explicitly requires a synchronous mailbox check.
@@ -239,7 +239,7 @@ If the task is blocked and cannot continue, do not end silently. Use the appropr
 If workflow send or worker start fails, report concise stderr summary and run these checks:
 1. is sender or target session reachable via `agent_deck_resolve_session`?
 2. is the command running in the expected workflow session context?
-3. did `mailbox_send` / `mailbox_recv` / lifecycle tools return success?
+3. did `waypost_send` / `waypost_recv` / lifecycle tools return success?
 
 If sandbox-external execution triggers an approval prompt, explain it as a host-shell permission requirement.
 If a target appears idle, do not resend mailbox content or poll harder; rely on receiver-side mailbox pickup, and retry a nudge only as explicit troubleshooting.
@@ -251,6 +251,6 @@ If closeout or cleanup helpers fail, include:
 
 ## Execution Environment
 
-Use the `agent_mailbox` MCP tools as the default workflow transport surface.
-When shell fallback is unavoidable, run `agent-deck` and `agent-mailbox` commands in host shell.
+Use the `waypost` MCP tools as the default workflow transport surface.
+When shell fallback is unavoidable, run `agent-deck` and `waypost` commands in host shell.
 When workflow commands create sessions via `--cmd`, use full commands instead of bare provider names when the concrete action skill defines one.

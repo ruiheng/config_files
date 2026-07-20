@@ -60,7 +60,7 @@ wake_fail() {
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 workflow_wake_message() {
-  printf 'NOTICE: There might be new mail in agent-mailbox.'
+  printf 'NOTICE: There might be new mail in waypost.'
 }
 
 workdir=""
@@ -114,7 +114,7 @@ done
 [[ -n "$body_file" ]] || die "--body-file is required"
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
-command -v agent-mailbox >/dev/null 2>&1 || die "agent-mailbox is required"
+command -v waypost >/dev/null 2>&1 || die "waypost is required"
 command -v agent-deck >/dev/null 2>&1 || die "agent-deck is required"
 
 get_session_command() {
@@ -341,7 +341,7 @@ validate_delegate_body "$body"
 send_in_progress=1
 set +e
 send_output="$(
-  printf '%s' "$body" | agent-mailbox send \
+  printf '%s' "$body" | waypost send \
     --to "agent-deck/${coder_session_id}" \
     --from "agent-deck/${planner_session_id}" \
     --subject "$subject" \
@@ -353,7 +353,7 @@ send_rc=$?
 set -e
 send_in_progress=0
 if (( send_rc != 0 )); then
-  send_fail "agent-mailbox send failed: ${send_output:-exit code ${send_rc}}"
+  send_fail "waypost send failed: ${send_output:-exit code ${send_rc}}"
 fi
 send_completed=1
 rollback_allowed=0

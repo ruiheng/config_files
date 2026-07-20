@@ -1,13 +1,13 @@
-# Agent Mailbox MCP
+# Waypost MCP
 
-The canonical MCP server is the built-in Go server from the `agent-mailbox`
+The canonical MCP server is the built-in Go server from the `waypost`
 binary:
 
 ```bash
-agent-mailbox mcp
+waypost mcp
 ```
 
-This repo does not carry a separate JavaScript `agent_mailbox` MCP wrapper.
-Install scripts should configure clients to run `agent-mailbox mcp` directly.
+This repo does not carry a separate JavaScript `waypost` MCP wrapper.
+Install scripts should configure clients to run `waypost mcp` directly.
 
-See the `agent-mailbox` repository for the current tool list and behavior.
+See the `waypost` repository for the current tool list and behavior.

@@ -113,8 +113,8 @@ Round: <round>
 Recommended subject:
 - `browser check: <task_id> r<round>`
 
-Use the `agent_mailbox` MCP tools:
-- use `agent_mailbox`
+Use the `waypost` MCP tools:
+- use `waypost`
 - resolve the browser tester target before send:
   - if `browser_tester_session_id` is already known, call `agent_deck_require_session`
     - `session_id = <browser_tester_session_id>`
@@ -136,7 +136,7 @@ Use the `agent_mailbox` MCP tools:
     - `no_parent_link = true`
 - use the returned `session_id` as the authoritative `browser_tester_session_id`
 - fill `{{TO_SESSION_ID}}` in the mailbox body before sending
-- call `mailbox_send` with:
+- call `waypost_send` with:
   - `from_address = agent-deck/<requester_session_id>`
   - `to_address = agent-deck/<browser_tester_session_id>`
   - `subject = "browser check: <task_id> r<round>"`

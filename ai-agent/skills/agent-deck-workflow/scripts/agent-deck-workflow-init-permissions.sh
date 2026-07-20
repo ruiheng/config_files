@@ -214,8 +214,8 @@ EOF
 [
   "Bash(agent-deck)",
   "Bash(agent-deck *)",
-  "Bash(agent-mailbox)",
-  "Bash(agent-mailbox *)",
+  "Bash(waypost)",
+  "Bash(waypost *)",
   "Bash(jq)",
   "Bash(jq *)",
 $git_readonly_permissions_json
@@ -243,8 +243,8 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
-      "Bash(agent-mailbox)",
-      "Bash(agent-mailbox *)",
+      "Bash(waypost)",
+      "Bash(waypost *)",
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
@@ -268,8 +268,8 @@ EOF
     "allow": [
       "Bash(agent-deck)",
       "Bash(agent-deck *)",
-      "Bash(agent-mailbox)",
-      "Bash(agent-mailbox *)",
+      "Bash(waypost)",
+      "Bash(waypost *)",
       "Bash(jq)",
       "Bash(jq *)",
 $git_readonly_permissions_json
@@ -335,9 +335,9 @@ prefix_rule(
     ],
 )
 
-# Allow all agent-mailbox commands
+# Allow all waypost commands
 prefix_rule(
-    pattern = ["agent-mailbox"],
+    pattern = ["waypost"],
     decision = "allow",
     justification = "Mailbox workflow transport commands",
 )
@@ -434,20 +434,20 @@ priority = 950
 modes = ["default", "autoEdit", "yolo"]
 
 [[rule]]
-name = "allow_agent_mailbox_cli"
+name = "allow_waypost_cli"
 enabled = true
 decision = "allow"
 toolName = "run_shell_command"
-commandPrefix = ["agent-mailbox"]
+commandPrefix = ["waypost"]
 priority = 950
 modes = ["default", "autoEdit", "yolo"]
 
 [[rule]]
-name = "allow_agent_mailbox_mcp"
+name = "allow_waypost_mcp"
 enabled = true
 decision = "allow"
 toolName = "*"
-mcpName = "agent-mailbox"
+mcpName = "waypost"
 priority = 950
 modes = ["default", "autoEdit", "yolo"]
 

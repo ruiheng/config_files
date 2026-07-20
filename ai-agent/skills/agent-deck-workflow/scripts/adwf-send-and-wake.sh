@@ -97,7 +97,7 @@ wake_delay_seconds="10"
 json_output=0
 
 workflow_wake_message() {
-  printf 'NOTICE: There might be new mail in agent-mailbox.'
+  printf 'NOTICE: There might be new mail in waypost.'
 }
 
 while [[ $# -gt 0 ]]; do
@@ -127,7 +127,7 @@ done
 [[ -n "$body_file" ]] || die "--body-file is required"
 
 require_cmd agent-deck
-require_cmd agent-mailbox
+require_cmd waypost
 require_cmd jq
 
 created_target=0
@@ -321,7 +321,7 @@ fi
 
 set +e
 send_output="$(
-  printf '%s' "$body" | agent-mailbox send \
+  printf '%s' "$body" | waypost send \
     --to "$to_address" \
     --from "$from_address" \
     --subject "$subject" \
@@ -333,9 +333,9 @@ send_status=$?
 set -e
 if (( send_status != 0 )); then
   if [[ -n "$send_output" ]]; then
-    dispatch_blocker "workflow_dispatch_send_failed" "agent-mailbox send failed: $send_output"
+    dispatch_blocker "workflow_dispatch_send_failed" "waypost send failed: $send_output"
   fi
-  dispatch_blocker "workflow_dispatch_send_failed" "agent-mailbox send failed with exit code $send_status"
+  dispatch_blocker "workflow_dispatch_send_failed" "waypost send failed with exit code $send_status"
 fi
 
 message_id=""

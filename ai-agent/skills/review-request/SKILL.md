@@ -270,10 +270,10 @@ Round: <round>
 Recommended subject:
 - `review request: <task_id> r<round>`
 
-Preferred path: use the `agent_mailbox` MCP tools.
+Preferred path: use the `waypost` MCP tools.
 
 Workflow send sequence:
-1. use `agent_mailbox`
+1. use `waypost`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
 3. if `reviewer_session_id` is known, call `agent_deck_require_session`
    - identify target with `session_id = <reviewer_session_id>`
@@ -287,7 +287,7 @@ Workflow send sequence:
    - `group_path = <planner session group; empty string for root>`
    - `no_parent_link = false`
 5. use the returned `session_id` as the authoritative `reviewer_session_id`
-6. fill the final body and call `mailbox_send` with:
+6. fill the final body and call `waypost_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
@@ -303,7 +303,7 @@ Rules:
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>` plus `group_path = <planner session group; empty string for root>`; never create reviewer as a child of coder/requester
-- `mailbox_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
+- `waypost_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
 - follow the shared Async sender rule for the review reply
 
 ## Quality Bar

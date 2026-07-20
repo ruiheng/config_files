@@ -136,7 +136,7 @@ Execution flow in Agent Deck mode:
 1. review the requested scope
 2. produce one advisory `simplify_review_report`
 3. call `agent_deck_require_session` for the requester session in the current workdir
-4. send the report with `mailbox_send`
+4. send the report with `waypost_send`
    - `from_address = agent-deck/<simplify_reviewer_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "simplify review report: <task_id> r<round>"`

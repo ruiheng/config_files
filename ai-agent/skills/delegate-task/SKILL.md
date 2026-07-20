@@ -172,12 +172,12 @@ Tool-routing rule:
 
 ## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
 
-Preferred path: use the `agent_mailbox` MCP tools.
+Preferred path: use the `waypost` MCP tools.
 
 Workflow send sequence:
 1. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id>` before dispatch
    - never substitute a new temp directory for unclear workspace context without user confirmation; resolve the workspace fields first
-2. use `agent_mailbox`
+2. use `waypost`
 3. compose the body with `{{TO_SESSION_ID}}` placeholders where the real coder session id must appear
 4. resolve `coder_tool_profile` / `coder_tool_cmd` using the shared tool-resolution contract for role `coder`
    - preserve explicit full `coder_tool` unchanged when provided

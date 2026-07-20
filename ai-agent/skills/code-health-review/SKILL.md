@@ -235,16 +235,16 @@ Skill-specific context resolution:
 Execution flow in Agent Deck mode:
 1. review the requested scope
 2. produce one advisory `code_health_review_report`
-3. use `agent_mailbox`
+3. use `waypost`
 4. first call `agent_deck_require_session` with:
    - `session_id = <requester_session_id>`
    - `workdir = <current workspace>`
-5. send the report back with `mailbox_send`
+5. send the report back with `waypost_send`
    - `from_address = agent-deck/<code_health_reviewer_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "code health review report: <task_id> r<round>"`
    - `body = <code health review report body>`
-6. do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
+6. do not naturally end after drafting the report; this workflow turn is complete only after the required `waypost_send` back to the requester has succeeded
 
 ## Rules
 

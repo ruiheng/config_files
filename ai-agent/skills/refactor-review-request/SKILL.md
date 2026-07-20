@@ -130,8 +130,8 @@ Round: <round>
 Recommended subject:
 - `refactor review request: <task_id> r<round>`
 
-Use the `agent_mailbox` MCP tools:
-1. use `agent_mailbox`
+Use the `waypost` MCP tools:
+1. use `waypost`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
 3. if this is round `1` for a new reviewer session, resolve `reviewer_tool_profile` / `reviewer_tool_cmd` by the shared tool-resolution contract for role `reviewer`
    - preserve explicit full `reviewer_tool` unchanged when provided
@@ -148,7 +148,7 @@ Use the `agent_mailbox` MCP tools:
    - `session_id = <refactor_reviewer_session_id>`
    - `workdir = <current workspace>`
 6. use the returned `session_id` as the authoritative `refactor_reviewer_session_id`
-7. fill the final body and call `mailbox_send` with:
+7. fill the final body and call `waypost_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<refactor_reviewer_session_id>`
    - `subject = "refactor review request: <task_id> r<round>"`

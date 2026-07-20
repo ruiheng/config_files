@@ -93,9 +93,9 @@ Do not leave room for the agent to improvise between several "possible" options.
 
 ### 8. Be precise about completion and `ack`
 
-- default rule: `mailbox_ack` only after the message's required workflow action is complete
+- default rule: `waypost_ack` only after the message's required workflow action is complete
 - when you mean mailbox lifecycle, say `ack claimed inbound delivery`, not just `ack`
-- never imply a sender-side `ack` after `mailbox_send`; sender-side completion is `mailbox_send` success
+- never imply a sender-side `ack` after `waypost_send`; sender-side completion is `waypost_send` success
 - do not use vague wording such as:
   - "incorporated into working state"
   - "picked up"
@@ -105,7 +105,7 @@ Do not leave room for the agent to improvise between several "possible" options.
 ### 9. Respect asynchronous work
 
 - cross-session work is asynchronous and may take unbounded time
-- `mailbox_send` completion means the sender is done with delivery, not that a reply is ready
+- `waypost_send` completion means the sender is done with delivery, not that a reply is ready
 - prompts must not imply:
   - a reply should arrive within a short timeout
   - sender-side intervention in the receiver's execution

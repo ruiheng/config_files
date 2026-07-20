@@ -400,7 +400,7 @@ fi
 command -v git >/dev/null 2>&1 || die "git is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
 if [[ -n "$ack_delivery_id" ]]; then
-  command -v agent-mailbox >/dev/null 2>&1 || die "agent-mailbox is required when ack args are provided"
+  command -v waypost >/dev/null 2>&1 || die "waypost is required when ack args are provided"
 fi
 if [[ -z "$planner_session_ref" ]]; then
   command -v agent-deck >/dev/null 2>&1 || die "agent-deck is required to infer planner session id; pass --planner-session-id"
@@ -671,7 +671,7 @@ write_state_file
 
 if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
   set +e
-  ack_output="$(agent-mailbox ack --delivery "$ack_delivery_id" --lease-token "$ack_lease_token" 2>&1)"
+  ack_output="$(waypost ack --delivery "$ack_delivery_id" --lease-token "$ack_lease_token" 2>&1)"
   ack_rc=$?
   set -e
   if (( ack_rc != 0 )); then

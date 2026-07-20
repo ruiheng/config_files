@@ -18,7 +18,7 @@ Interpret references to the shared workflow protocol as:
 - use the `agent-deck-workflow` skill as the entry point
 - then follow `references/internal-protocol/shared-protocol.md`
 
-Use `agent-deck/<agent-deck-session-id>` as the default agent-mailbox sender.
+Use `agent-deck/<agent-deck-session-id>` as the default waypost sender.
 
 ## Agent Deck Mode Detection
 

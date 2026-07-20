@@ -76,7 +76,7 @@ For browser-test work, default to `snapshot -i` to get stable element refs, then
 
 Before the first browser action in a workflow turn, run a minimal environment check:
 1. confirm `agent-browser` is available with `command -v agent-browser`
-2. use `agent_mailbox`
+2. use `waypost`
 
 ## Output Format
 
@@ -140,11 +140,11 @@ Execution flow:
    - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
 3. collect runtime evidence
 4. produce one `browser_check_report`
-5. use `agent_mailbox`
+5. use `waypost`
 6. first call `agent_deck_require_session` with:
    - `session_id = <requester_session_id>`
    - `workdir = <requester_workspace>`
-7. send it back to the requester with `mailbox_send`
+7. send it back to the requester with `waypost_send`
    - `from_address = agent-deck/<browser_tester_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "browser report: <task_id> r<round>"`
@@ -162,4 +162,4 @@ Execution flow:
 - keep findings factual and tied to observed browser evidence
 - prefer requester-provided login/auth/setup context over re-discovering it from scratch
 - use the requester workspace from the mailbox body for reply-path session verification; do not substitute the browser-tester's current workspace
-- Do not naturally end after writing the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
+- Do not naturally end after writing the report; this workflow turn is complete only after the required `waypost_send` back to the requester has succeeded

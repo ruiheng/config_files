@@ -145,11 +145,11 @@ Skill-specific context resolution:
 Execution flow in Agent Deck mode:
 1. review the requested scope
 2. produce one advisory `refactor_review_report`
-3. use `agent_mailbox`
+3. use `waypost`
 4. first call `agent_deck_require_session` with:
    - `session_id = <requester_session_id>`
    - `workdir = <current workspace>`
-5. send the report back with `mailbox_send`
+5. send the report back with `waypost_send`
    - `from_address = agent-deck/<refactor_reviewer_session_id>`
    - `to_address = agent-deck/<requester_session_id>`
    - `subject = "refactor review report: <task_id> r<round>"`
@@ -165,4 +165,4 @@ Execution flow in Agent Deck mode:
 - prefer high-leverage suggestions over long laundry lists
 - if the code is already reasonably simple, say so directly
 - do not turn advisory findings into implementation work inside this skill
-- Do not naturally end after drafting the report; this workflow turn is complete only after the required `mailbox_send` back to the requester has succeeded
+- Do not naturally end after drafting the report; this workflow turn is complete only after the required `waypost_send` back to the requester has succeeded

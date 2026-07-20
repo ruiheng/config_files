@@ -44,12 +44,12 @@ reference to them.
 
 ## Core Transport
 
-- `agent-mailbox` is the authoritative workflow message layer
+- `waypost` is the authoritative workflow message layer
 - `agent-deck` is used to start or require target sessions
 - `agent-deck-workflow/references/internal-protocol/shared-protocol.md` owns recv/wait, async sender, and target-status rules
-- `agent_mailbox` MCP is the default transport interface for agents
+- `waypost` MCP is the default transport interface for agents
 - Workflow messages live in mailbox `subject` + `body`
-- use mailbox tools directly; use `mailbox_bind` only when custom addresses are needed or mailbox context is missing
+- use mailbox tools directly; use `waypost_bind` only when custom addresses are needed or mailbox context is missing
 - The workflow does not generate Markdown handoff files by default
 
 ## End-to-End Loop
@@ -86,10 +86,10 @@ Use `roundtable` when the user wants a multi-agent discussion, brainstorm, criti
 
 1. User talks only to the moderator.
 2. Moderator clarifies intent, proposes participants, and creates a `group/roundtable-...` mailbox group.
-3. Moderator registers itself as group notification subscriber with `mailbox_group_add_subscriber`.
+3. Moderator registers itself as group notification subscriber with `waypost_group_add_subscriber`.
 4. Participants are real child agent-deck sessions of the moderator, with tool commands resolved through role `roundtable_participant`.
 5. Moderator sends clarified user intent to the group and nudges selected participants with personal mailbox control messages; the first turn is parallel by default, later turns are targeted unless the user asks for sequential round-robin.
-6. Participants read group unread messages with `mailbox_recv` plus `as_person`, then post one group reply.
+6. Participants read group unread messages with `waypost_recv` plus `as_person`, then post one group reply.
 7. Group subscriber updates arrive as normal personal `group_message_available` deliveries, so the moderator uses normal `check-agent-mail` pickup and then runs `roundtable` Moderator Group Check.
 8. Moderator presents synthesis to the user with per-participant `message_id` traceability; raw group history remains the source of truth.
 9. Ending keeps sessions and mailbox history by default; explicit cleanup removes participant sessions and the Agent Deck participant group after final synthesis.
@@ -142,7 +142,7 @@ flowchart TD
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
 - planner may skip per-task review when its current plan policy allows it; final integrated review can be requested later from the planner-owned integration branch
-- Use `mailbox_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
+- Use `waypost_list` with `state: acked` only when you need to find a specific older persisted delivery to reread
 - External files are supplemental references only, not the default transport
 
 ## Incremental Automation with Agent Deck

@@ -65,13 +65,13 @@ If required values are resolved:
    - if normalization fails for required identity, ask one short clarification question before sending
 2. send mode:
    - if `closeout_sender_session_id == planner_session_id`, skip cross-session delivery and continue locally
-   - otherwise send `closeout_delivered` to planner through `mailbox_send`
-3. use `agent_mailbox`
+   - otherwise send `closeout_delivered` to planner through `waypost_send`
+3. use `waypost`
 4. first call `agent_deck_require_session` with:
    - `session_id = <planner_session_id>`
    - `workdir = <planner_workspace>`
    - do not use the reviewer/current workspace unless it is explicitly the planner workspace
-5. use `mailbox_send` with:
+5. use `waypost_send` with:
    - `from_address = agent-deck/<closeout_sender_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "closeout delivered: <task_id>"`
@@ -180,4 +180,4 @@ Then append only non-empty sections.
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
-9. Do not naturally end after drafting the closeout text; this workflow turn is complete only after the required local continuation or `mailbox_send` delivery step has succeeded
+9. Do not naturally end after drafting the closeout text; this workflow turn is complete only after the required local continuation or `waypost_send` delivery step has succeeded

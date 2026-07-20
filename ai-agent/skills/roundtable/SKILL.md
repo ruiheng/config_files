@@ -1,6 +1,6 @@
 ---
 name: roundtable
-description: Run a real multi-agent roundtable or brainstorming discussion with agent-mailbox group addresses and agent-deck sessions. Use when the user asks to start, continue, moderate, summarize, or inspect a roundtable discussion, including wakeups from group subscriber notifications.
+description: Run a real multi-agent roundtable or brainstorming discussion with waypost group addresses and agent-deck sessions. Use when the user asks to start, continue, moderate, summarize, or inspect a roundtable discussion, including wakeups from group subscriber notifications.
 ---
 
 # Roundtable
@@ -26,7 +26,7 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
 - `moderator_group_path`: current agent-deck group path, default current session group
 - `moderator_person`: `As-Person` control header -> current context -> default `moderator`
 - `moderator_notify_address`: `agent-deck/<moderator_session_id>`
-  - use this as moderator group-send `from_address`; agent-mailbox maps it to `moderator` read state and suppresses the moderator's own subscriber delivery
+  - use this as moderator group-send `from_address`; waypost maps it to `moderator` read state and suppresses the moderator's own subscriber delivery
 - `participant_session_ref`: default `roundtable-<roundtable_id>-<participant_slug>`
 - `participant_group_path`: explicit -> if moderator group is root, `roundtable-<roundtable_id>`; otherwise `<moderator_group_path>/roundtable-<roundtable_id>`
 - `participant_session_id`: real id returned by `agent_deck_create_session`
@@ -42,11 +42,11 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
 2. Propose 3-5 participants and ask for user confirmation before creating sessions.
    - Include each participant's name, role, viewpoint, and tool profile.
    - Default set when the user gives no preference: systems thinker, builder, skeptic, user advocate, contrarian.
-3. Use `agent_mailbox` MCP tools:
-   - `mailbox_group_create` with `group_address`
-   - `mailbox_group_add_member` for `moderator`
-   - `mailbox_group_add_subscriber` with `notify_address = agent-deck/<moderator_session_id>` and `person = moderator`
-   - `mailbox_group_add_member` for each `participant/<slug>`
+3. Use `waypost` MCP tools:
+   - `waypost_group_create` with `group_address`
+   - `waypost_group_add_member` for `moderator`
+   - `waypost_group_add_subscriber` with `notify_address = agent-deck/<moderator_session_id>` and `person = moderator`
+   - `waypost_group_add_member` for each `participant/<slug>`
 4. Resolve every participant tool with:
    - `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role roundtable_participant --profile <participant_tool_profile> --format json`
    - omit `--profile` when no explicit profile is set
@@ -61,7 +61,7 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
    - `group_path = <participant_group_path>`
    - `no_parent_link = false`
    - leave `startup_instruction` / `listener_message` empty; control mail is the bootstrap path and wakeup is best-effort
-6. Send the opening user-intent message to the group with `mailbox_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
+6. Send the opening user-intent message to the group with `waypost_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
 7. Send each participant one personal control message with Action `roundtable_participant_turn`; first turns are parallel by default.
 
 ## User Input Turn
@@ -71,7 +71,7 @@ When the user adds a new thought or question:
 1. Restate the user's intent clearly and compactly.
 2. Ask one clarification only if the next participant turn would otherwise be misdirected.
 3. Drain moderator group unread first if there may be pending participant replies.
-4. Send the clarified intent to the group with `mailbox_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
+4. Send the clarified intent to the group with `waypost_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
 5. Decide who speaks next:
    - default for a new broad user prompt: all participants in parallel
    - default after synthesis: targeted follow-up to the participants needed for the next decision
@@ -82,11 +82,11 @@ When the user adds a new thought or question:
 
 Use this for `Action: group_message_available` personal control mail or when the user asks for updates.
 
-1. Call `mailbox_recv` with:
+1. Call `waypost_recv` with:
    - `addresses = [Group-Address from control mail or group_address]`
    - `as_person = [As-Person from control mail or moderator]`
-2. Repeat group `mailbox_recv` until it returns `no_message`.
-   - This loop is only for group stream draining; do not repeat personal `mailbox_recv`.
+2. Repeat group `waypost_recv` until it returns `no_message`.
+   - This loop is only for group stream draining; do not repeat personal `waypost_recv`.
    - Stop after 100 messages and report that more unread group messages remain.
 3. If no group messages were read, say no roundtable updates are available.
 4. If messages were read, synthesize for the user.

@@ -265,11 +265,11 @@ Mailbox subject (`rework_required`):
 Mailbox body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
-- use `agent_mailbox`
+- use `waypost`
 - first call `agent_deck_require_session` with:
   - `session_id = <requester_session_id>`
   - `workdir = <current workspace>`
-- send it with `mailbox_send`
+- send it with `waypost_send`
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<requester_session_id>`
   - `subject = "rework required: <task_id> r<round>"`
@@ -283,11 +283,11 @@ Mailbox body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
-- use `agent_mailbox`
+- use `waypost`
 - first call `agent_deck_require_session` with:
   - `session_id = <requester_session_id>`
   - `workdir = <current workspace>`
-- send it with `mailbox_send`
+- send it with `waypost_send`
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<requester_session_id>`
   - `subject = "iteration requested: <task_id> r<round>"`
