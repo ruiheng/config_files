@@ -854,6 +854,10 @@ migrate_legacy_waypost_state_if_present() {
         return 0
     fi
 
+    if command -v pgrep &>/dev/null && pgrep -f 'agent-mailbox[[:space:]]+mcp([[:space:]]|$)' >/dev/null 2>&1; then
+        log_warn "Legacy agent-mailbox MCP process detected; stop it before migration to avoid state divergence"
+    fi
+
     log_info "Migrating legacy Waypost state: $legacy_state_dir"
     if ! waypost migrate; then
         log_error "Failed to migrate legacy Waypost state"
