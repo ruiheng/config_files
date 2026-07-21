@@ -1,6 +1,6 @@
 ---
 name: agent-deck-workflow
-description: Shared mailbox transport protocol for Agent Deck workflows.
+description: Shared Waypost message transport protocol for Agent Deck workflows.
 ---
 
 # Agent Deck Workflow

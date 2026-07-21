@@ -5,7 +5,7 @@ description: Generates tech-design review requests from committed docs and defin
 
 # Tech-Design Review Request
 
-Generate a concise mailbox message that asks an architect to review the latest committed tech-design docs on a branch.
+Generate a concise Waypost message that asks an architect to review the latest committed tech-design docs on a branch.
 When reports arrive, drive the architect-review loop until it reaches a deliverable conclusion or a clear user-decision blocker.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
@@ -14,7 +14,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 Modes:
 - request-send mode: use fields below to send `tech_design_review_requested`
-- report-handling mode: provide the mailbox body from `tech_design_review_report` and follow `After Report Handling`
+- report-handling mode: provide the message body from `tech_design_review_report` and follow `After Report Handling`
 
 Common:
 - `task_id`
@@ -51,7 +51,7 @@ Round `>1` to the same architect session:
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox/workflow context -> ask
+- `task_id`: explicit -> message/workflow context -> ask
 - `requester_session_id`: explicit -> current session id -> ask
 - `requester_role`: explicit -> infer from current workflow stage -> default `requester`
 - `architect_session_id`: explicit actual id -> workflow context actual id
@@ -74,10 +74,10 @@ Continuity rule:
 - if the architect session changed or continuity is unknown, fall back to the full body
 - architect feedback is advisory; later rounds may explicitly disagree with earlier architect feedback and explain why
 
-## Mailbox Body
+## Waypost Message Body
 
 The body is a review brief plus committed-doc pointers only.
-Do not paste full design docs into the mailbox body.
+Do not paste full design docs into the message body.
 Provide review intent and authoritative constraints, not a pre-review:
 - Let the architect inspect the committed docs, choose review angles, and derive findings independently.
 - Keep design rationale, alternatives, tradeoffs, risks, and open questions in the committed docs; do not restate them in the request to compensate for missing design content.
@@ -149,7 +149,7 @@ Round: <round>
 - Architect tool cmd: [architect_tool_cmd or `existing-session`]
 ```
 
-## Mailbox Send
+## Waypost Message Send
 
 Subject: `tech-design review: <task_id> r<round>`
 

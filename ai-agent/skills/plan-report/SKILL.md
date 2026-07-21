@@ -11,7 +11,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
-Provide the mailbox body from `plan_report_delivered`.
+Provide the message body from `plan_report_delivered`.
 
 ## Rules
 
@@ -26,7 +26,7 @@ Provide the mailbox body from `plan_report_delivered`.
 - do not clean up the planner-owned structure before supervisor-side integration has actually completed
 - if the cleanup script exits non-zero, report that failure and stop; best-effort subgroup cleanup warnings are non-fatal and should be surfaced as warnings; do not continue with manual `agent-deck remove` or `group delete` commands unless the user explicitly asks
 - do not ask for another workflow step unless the report explicitly says the plan is blocked, follow-up is required, or a concrete merge/cleanup blocker needs user action
-- keep mailbox JSON internal unless the user explicitly asks
+- keep message JSON internal unless the user explicitly asks
 
 ## User-Facing Output
 

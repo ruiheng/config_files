@@ -16,21 +16,21 @@ Required:
   --coder-session-id <id>         Coder target session id
   --coder-session-ref <ref>       Coder session ref/title
   --task-branch <ref>             Task branch
-  --subject <text>                Mailbox subject
+  --subject <text>                Waypost Message subject
   --body-file <path|->            Body source, or "-" for stdin.
                                   Prefer stdin; keep real files under the caller's .agent-artifacts tree.
 
 Optional:
   --artifact-root <path>          Artifact root (default: <workdir>/.agent-artifacts)
-  --content-type <type>           Mailbox content type (default: text/markdown)
-  --schema-version <value>        Mailbox schema version (default: 1)
+  --content-type <type>           Waypost Message content type (default: text/markdown)
+  --schema-version <value>        Waypost Message schema version (default: 1)
   --wake-delay-seconds <n>        Delay before active-session wake send (default: 10)
   --json                          Emit JSON summary
   -h, --help                      Show help
 
 Behavior:
   - Acquires active-task.lock before send.
-  - Rolls the lock back only if mailbox send fails before a delivery is queued.
+  - Rolls the lock back only if message send fails before a delivery is queued.
   - Marks the lock as sent and records delivery_id after send succeeds.
   - Marks send interruptions as send_interrupted_unknown instead of leaving pending_send behind.
   - Keeps the lock if post-delivery wakeup fails.
@@ -60,7 +60,7 @@ wake_fail() {
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 workflow_wake_message() {
-  printf 'NOTICE: There might be new mail in waypost.'
+  printf 'NOTICE: There might be new message in waypost.'
 }
 
 workdir=""

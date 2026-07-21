@@ -1,11 +1,11 @@
 ---
 name: refactor-review-request
-description: Generates and sends a mailbox request for advisory refactor review against a target scope without asking the reviewer to implement changes.
+description: Generates and sends a message request for advisory refactor review against a target scope without asking the reviewer to implement changes.
 ---
 
 # Refactor Review Request
 
-Generate a concise mailbox message that asks a refactor reviewer to inspect code for duplication and simplification opportunities.
+Generate a concise Waypost message that asks a refactor reviewer to inspect code for duplication and simplification opportunities.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
@@ -54,7 +54,7 @@ Skill-specific context resolution:
 - `reviewer_tool_cmd`: explicit full command -> workflow context resolved command -> shared tool-resolution contract for role `reviewer`
 - `round`: explicit -> workflow context -> default `1`
 
-## Mailbox Body
+## Waypost Message Body
 
 Provide scope, review goal, constraints, and observed symptoms, not a diagnosis or candidate solution.
 - Let the reviewer identify causes, opportunities, and sequencing independently.
@@ -125,7 +125,7 @@ Round: <round>
 - Reviewer tool cmd: [reviewer_tool_cmd or `existing-session`]
 ```
 
-## Mailbox Send
+## Waypost Message Send
 
 Recommended subject:
 - `refactor review request: <task_id> r<round>`

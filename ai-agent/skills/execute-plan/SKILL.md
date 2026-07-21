@@ -12,7 +12,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
-Provide the mailbox body from `execute_plan`.
+Provide the message body from `execute_plan`.
 
 ## Core Model
 
@@ -25,7 +25,7 @@ Provide the mailbox body from `execute_plan`.
 - tasks inside that workspace execute serially
 - the planner should auto-advance whenever the next step is clear
 - if a blocker cannot be resolved locally, stop and ask the user directly
-- do not send routine blocker mail to supervisor
+- do not send routine blocker message to supervisor
 - planner should default code-changing work to `delegate-task`; direct planner implementation is the fallback only when that skill's own decision gate says delegation is not justified
 - code-changing tasks are complete only after commit, any required review, closeout merge, and progress recording
 - claiming `execute_plan` does not require planner to implement code personally; dispatch, review, closeout, and final report still count as completing the workflow
@@ -36,20 +36,20 @@ Provide the mailbox body from `execute_plan`.
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `plan_id`: explicit -> mailbox body -> ask
-- `supervisor_session_id`: explicit -> mailbox body `From` header -> ask
-- `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
-- `workspace`: explicit -> mailbox body `Workspace path` -> ask
+- `plan_id`: explicit -> message body -> ask
+- `supervisor_session_id`: explicit -> message body `From` header -> ask
+- `planner_session_id`: explicit -> message body `To` / `Planner` header -> current session id -> ask
+- `workspace`: explicit -> message body `Workspace path` -> ask
 - `planner_workspace`: derive internally from `workspace`
 - `worker_workspace`: derive internally from `workspace`
-- `integration_branch`: explicit -> mailbox body -> ask
+- `integration_branch`: explicit -> message body -> ask
   - this is the already-created planner-owned branch for this dispatched plan, not the supervisor landing branch
-- `per_task_review`: explicit -> mailbox body -> default `required`
-- `final_review`: explicit -> mailbox body -> default `skip`
+- `per_task_review`: explicit -> message body -> default `required`
+- `final_review`: explicit -> message body -> default `skip`
 
 ## Execution Flow
 
-1. read the goal, workspace contract, and review policy from the mailbox body
+1. read the goal, workspace contract, and review policy from the message body
    - set internal `planner_workspace = workspace` and `worker_workspace = workspace`
 2. run `~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh --worker-workspace <worker_workspace> --planner-workspace <planner_workspace> --integration-branch <integration_branch> --planner-session-id <planner_session_id> --supervisor-session-id <supervisor_session_id>`
 3. decompose the goal into the smallest reasonable serial task sequence for this workspace
@@ -63,7 +63,7 @@ Skill-specific context resolution:
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
-8. send one final `plan_report_delivered` message to supervisor; do not treat the plan as complete before this mailbox send succeeds
+8. send one final `plan_report_delivered` message to supervisor; do not treat the plan as complete before this message send succeeds
 9. after the final report is sent, report completion to supervisor
 
 ## Direct Planner Implementation

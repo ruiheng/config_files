@@ -11,7 +11,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
-Provide the mailbox body from `closeout_delivered`.
+Provide the message body from `closeout_delivered`.
 Use this skill only after that closeout message is actually received.
 
 ## Agent Deck Mode
@@ -22,15 +22,15 @@ Use the `agent-deck-workflow` skill for shared protocol:
 - `Error Handling and Diagnostics`
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> ask
-- `planner_session_id`: explicit -> mailbox body `To` / `Planner` header -> current session id -> ask
-- `worker_workspace`: explicit -> mailbox body `Worker workspace` / `Task dir` -> ask
-- `planner_workspace`: explicit -> current session workspace / mailbox body -> ask
-- `reviewer_session_id`: explicit -> mailbox body `Accepted Review By` header -> ask
-- `start_branch`: explicit -> mailbox body -> ask
-- `integration_branch`: explicit -> mailbox body -> ask
-- `task_branch`: explicit -> mailbox body -> ask
-- `task_dir`: explicit -> mailbox body `Task dir` / `Worker dir` -> ask
+- `task_id`: explicit -> message body -> ask
+- `planner_session_id`: explicit -> message body `To` / `Planner` header -> current session id -> ask
+- `worker_workspace`: explicit -> message body `Worker workspace` / `Task dir` -> ask
+- `planner_workspace`: explicit -> current session workspace / message body -> ask
+- `reviewer_session_id`: explicit -> message body `Accepted Review By` header -> ask
+- `start_branch`: explicit -> message body -> ask
+- `integration_branch`: explicit -> message body -> ask
+- `task_branch`: explicit -> message body -> ask
+- `task_dir`: explicit -> message body `Task dir` / `Worker dir` -> ask
 - `delivery_id` (optional): explicit leased delivery context -> omit when unavailable
 - `lease_token` (optional): explicit leased delivery context -> omit when unavailable
 
@@ -77,7 +77,7 @@ Optional command additions:
 - do not dispatch another planner lane into the same workspace merely because the reservation record was released; let the supervisor/dispatcher schedule lanes
 - if the shared workspace still shows active coder changes when closeout starts, stop and report the blocker instead of altering workspace state around those changes
 - if planner closeout fails, report the blocker and the exact manual action from the script output
-- keep mailbox JSON internal unless the user explicitly asks
+- keep message JSON internal unless the user explicitly asks
 - do not naturally end after deciding what to do; this turn is complete only after planner closeout succeeds or a concrete blocker is reported
 
 ## User-Facing Output
@@ -85,5 +85,5 @@ Optional command additions:
 After planner closeout:
 - report whether required closeout actions succeeded
 - include the recorded branch pair and task id
-- include whether mailbox ack ran
+- include whether message ack ran
 - include any manual unblock step when closeout or cleanup failed

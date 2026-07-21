@@ -30,7 +30,7 @@ Provide the accepted full review report text.
 - output directly in response
 - Agent Deck mode: also deliver the closeout summary to planner through the workflow transport
 - keep output compact and copy/paste friendly
-- keep closeout in mailbox body instead of a generated Markdown handoff file
+- keep closeout in message body instead of a generated Markdown handoff file
 
 ## Agent Deck Mode
 
@@ -75,9 +75,9 @@ If required values are resolved:
    - `from_address = agent-deck/<closeout_sender_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "closeout delivered: <task_id>"`
-   - `body = <closeout mailbox body>`
+   - `body = <closeout message body>`
 
-Recommended mailbox subject:
+Recommended message subject:
 - `closeout delivered: <task_id>`
 
 ## Extraction Rules

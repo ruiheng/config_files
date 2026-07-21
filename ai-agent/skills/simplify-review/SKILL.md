@@ -14,10 +14,10 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 ## Input
 
 Use one of:
-1. mailbox body from `simplify_review_requested`
+1. message body from `simplify_review_requested`
 2. direct scope + simplification goal + behavior constraints
 
-Before reviewing, ensure scope and behavior/compatibility boundaries are explicit or safely inferable. If one critical fact is missing, ask one short question in direct-use mode; in mailbox mode, continue and list it under `Scope Gaps`.
+Before reviewing, ensure scope and behavior/compatibility boundaries are explicit or safely inferable. If one critical fact is missing, ask one short question in direct-use mode; in message mode, continue and list it under `Scope Gaps`.
 
 ## Review Method
 
@@ -65,7 +65,7 @@ Before reviewing, ensure scope and behavior/compatibility boundaries are explici
 
 ## Output Format
 
-Mailbox mode uses the full structure below:
+Message mode uses the full structure below:
 
 ```markdown
 Task: <task_id_or_N/A>
@@ -118,19 +118,19 @@ If none, write: `- None.`
 If none, write: `- None.`
 ```
 
-Direct-use mode skips the mailbox header block and starts at `## Simplification Assessment`.
+Direct-use mode skips the message header block and starts at `## Simplification Assessment`.
 
 ## Agent Deck Mode
 
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> default `N/A`
-- `planner_session_id`: explicit -> mailbox body -> default `N/A`
-- `simplify_reviewer_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `requester_session_id`: explicit -> mailbox body `From` header -> ask
-- `requester_role`: explicit -> mailbox body `From` header -> default `requester`
-- `round`: explicit -> mailbox body `Round` header -> default `1`
+- `task_id`: explicit -> message body -> default `N/A`
+- `planner_session_id`: explicit -> message body -> default `N/A`
+- `simplify_reviewer_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
+- `requester_session_id`: explicit -> message body `From` header -> ask
+- `requester_role`: explicit -> message body `From` header -> default `requester`
+- `round`: explicit -> message body `Round` header -> default `1`
 
 Execution flow in Agent Deck mode:
 1. review the requested scope

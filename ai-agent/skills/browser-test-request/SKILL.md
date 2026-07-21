@@ -1,11 +1,11 @@
 ---
 name: browser-test-request
-description: Generates a browser-check mailbox message for runtime page validation and sends it to a browser-tester session.
+description: Generates a browser-check Waypost message for runtime page validation and sends it to a browser-tester session.
 ---
 
 # Browser Test Request
 
-Generate a concise mailbox message that asks a browser-tester to validate one coherent browser test batch with `agent-browser`.
+Generate a concise Waypost message that asks a browser-tester to validate one coherent browser test batch with `agent-browser`.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
@@ -37,23 +37,23 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox/review context -> ask
-- `planner_session_id`: explicit -> mailbox/review context -> omit when not available
-- `requester_session_id`: explicit -> mailbox/review context -> current session id -> ask
+- `task_id`: explicit -> message/review context -> ask
+- `planner_session_id`: explicit -> message/review context -> omit when not available
+- `requester_session_id`: explicit -> message/review context -> current session id -> ask
 - `requester_workspace`: explicit -> current workspace -> ask
-- `requester_role`: explicit -> mailbox/review context -> infer from current workflow stage -> default `requester`
+- `requester_role`: explicit -> message/review context -> infer from current workflow stage -> default `requester`
 - `browser_tester_session_id`: explicit actual id -> workflow context actual id -> omit
 - `browser_tester_session_ref`: explicit -> workflow context -> default `browser-tester`
-- `browser_tester_workspace`: explicit -> mailbox/review context -> current workspace
-- `browser_tester_tool_profile`: explicit -> mailbox/review context -> omit when `browser_tester_tool` is already a full command -> default resolver role default `browser_tester` only when creating a new browser-tester session
-- `browser_tester_tool_cmd`: explicit full command -> mailbox/review context resolved command -> existing session metadata on require paths -> shared tool-resolution contract for role `browser_tester` only on create path
+- `browser_tester_workspace`: explicit -> message/review context -> current workspace
+- `browser_tester_tool_profile`: explicit -> message/review context -> omit when `browser_tester_tool` is already a full command -> default resolver role default `browser_tester` only when creating a new browser-tester session
+- `browser_tester_tool_cmd`: explicit full command -> message/review context resolved command -> existing session metadata on require paths -> shared tool-resolution contract for role `browser_tester` only on create path
 - `round`: explicit -> context -> default `1`
 
 Identity rules:
 - `browser_check_requested` sender must use the resolved `requester_session_id`
-- current session id is only a final fallback and diagnostic source; review workflows must preserve the original requester from mailbox/review context
+- current session id is only a final fallback and diagnostic source; review workflows must preserve the original requester from message/review context
 
-## Mailbox Body
+## Waypost Message Body
 
 Use this exact structure:
 
@@ -108,7 +108,7 @@ Round: <round>
 - Browser tester tool cmd: [browser_tester_tool_cmd]
 ```
 
-## Mailbox Send
+## Waypost Message Send
 
 Recommended subject:
 - `browser check: <task_id> r<round>`
@@ -135,29 +135,29 @@ Use the `waypost` MCP tools:
     - `workdir = <browser_tester_workspace>`
     - `no_parent_link = true`
 - use the returned `session_id` as the authoritative `browser_tester_session_id`
-- fill `{{TO_SESSION_ID}}` in the mailbox body before sending
+- fill `{{TO_SESSION_ID}}` in the message body before sending
 - call `waypost_send` with:
   - `from_address = agent-deck/<requester_session_id>`
   - `to_address = agent-deck/<browser_tester_session_id>`
   - `subject = "browser check: <task_id> r<round>"`
-  - `body = <browser-check mailbox body>`
+  - `body = <browser-check message body>`
 
 ## Rules
 
 - keep the request focused on one page, feature area, or one coherent validation batch
-- include all related test points for that batch in one request instead of splitting them into many tiny mailbox tasks
+- include all related test points for that batch in one request instead of splitting them into many tiny message tasks
 - prefer a compact test matrix of related scenarios, states, and regressions over a module-style task breakdown
 - specify assertions, not just exploration goals
 - keep the body self-contained; browser-tester should not need workflow files
 - prefer reusing the long-lived `browser-tester` session for this environment
 - if a resolved `browser-tester` ref points at a different workspace, ignore that hit and create a workspace-local browser tester instead
 - if no reusable `browser-tester` session exists in the requested workspace, create it from this request flow and continue
-- carry both requester and browser-tester workspaces in the mailbox body so later `agent_deck_require_session` calls can verify the correct worktree
+- carry both requester and browser-tester workspaces in the message body so later `agent_deck_require_session` calls can verify the correct worktree
 - on require paths, preserve existing session tool metadata
-- once this request resolves or creates the target, use the returned real `browser_tester_session_id` for the actual mailbox send
+- once this request resolves or creates the target, use the returned real `browser_tester_session_id` for the actual message send
 - the report returns to the requester session, not to a fixed reviewer session
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code
 - follow the shared Async sender rule for the browser check report
 - requester should provide required login, auth, environment, and test-data context whenever possible
-- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-mailbox startup instruction
+- leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-message startup instruction

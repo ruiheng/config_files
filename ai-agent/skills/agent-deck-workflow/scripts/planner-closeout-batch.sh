@@ -10,7 +10,7 @@ Required actions (hard-fail):
 2) update planner progress record
 
 Optional actions (soft-fail):
-- mailbox ack
+- message ack
 - release workspace active-task lock
 - release mirrored workspace planner records
 - prune stale task branches
@@ -46,8 +46,8 @@ Options:
   --prune-apply                    Apply deletion when --run-prune is set (default: dry-run)
   --run-health-gate                Run closeout-health-gate.sh after required actions
   --skip-health-gate               Skip closeout-health-gate.sh
-  --ack-delivery-id <id>           Optional mailbox delivery id to ack after required closeout state write
-  --ack-lease-token <token>        Optional mailbox lease token paired with --ack-delivery-id
+  --ack-delivery-id <id>           Optional Waypost message delivery id to ack after required closeout state write
+  --ack-lease-token <token>        Optional message lease token paired with --ack-delivery-id
   -h, --help                       Show help
 
 State/outputs:
@@ -55,7 +55,7 @@ State/outputs:
   - Appends one json line to progress file when required actions complete.
   - Writes per-task idempotency state:
       <planner-artifact-root>/workflow-progress/closeout-state-<task_id>.json
-  - When ack args are provided, records mailbox ack state in the per-task state file.
+  - When ack args are provided, records message ack state in the per-task state file.
 
 Exit codes:
   0: required actions completed (optional actions may fail but are reported)
@@ -75,7 +75,7 @@ required_fail() {
 }
 
 ack_fail() {
-  echo "MAILBOX_ACK_FAILED: $*" >&2
+  echo "MESSAGE_ACK_FAILED: $*" >&2
 }
 
 warn() {
@@ -538,12 +538,12 @@ write_state_file() {
     --arg task_workspace_lock_status "$task_workspace_lock_status" \
     --arg workspace_record_status "$workspace_record_status" \
     --arg ack_delivery_id "$ack_delivery_id" \
-    --arg ack_status "$mailbox_ack_status" \
+    --arg ack_status "$message_ack_status" \
     --argjson switched_integration_branch "$switched_integration_branch" \
     --argjson task_scoped_integration_branch "$task_scoped_integration_branch" \
     --argjson optional_fail_count "$optional_fail_count" \
-    --argjson mailbox_ack_requested "$mailbox_ack_requested" \
-    --argjson mailbox_ack_completed "$mailbox_ack_completed" \
+    --argjson message_ack_requested "$message_ack_requested" \
+    --argjson message_ack_completed "$message_ack_completed" \
     '{
       task_id: $task_id,
       updated_at: $updated_at,
@@ -552,7 +552,7 @@ write_state_file() {
       task_branch: $task_branch,
       integration_branch_source: $integration_branch_source,
       task_scoped_integration_branch: $task_scoped_integration_branch,
-      closeout_source: "mailbox_message",
+      closeout_source: "waypost_message",
       progress_file: $progress_file,
       required_actions: {
         switched_integration_branch: $switched_integration_branch,
@@ -560,10 +560,10 @@ write_state_file() {
         merge_completed: true,
         merged_sha: $merged_sha,
         progress_updated: true,
-        mailbox_ack_requested: $mailbox_ack_requested,
-        mailbox_ack_completed: $mailbox_ack_completed,
-        mailbox_ack: (
-          if $mailbox_ack_requested then
+        message_ack_requested: ($message_ack_requested == 1),
+        message_ack_completed: ($message_ack_completed == 1),
+        message_ack: (
+          if $message_ack_requested then
             {
               delivery_id: $ack_delivery_id,
               status: $ack_status,
@@ -637,7 +637,7 @@ progress_record="$(jq -nc \
     integration_branch_source: $integration_branch_source,
     task_scoped_integration_branch: $task_scoped_integration_branch,
     merged_sha: $merged_sha,
-    closeout_source: "mailbox_message",
+    closeout_source: "waypost_message",
     switched_integration_branch: $switched_integration_branch
   }'
 )"
@@ -654,40 +654,55 @@ workspace_lock_status="not_checked"
 task_workspace_lock_status="not_checked"
 workspace_record_status="not_checked"
 optional_fail_count=0
-mailbox_ack_requested=0
-mailbox_ack_completed=0
-mailbox_ack_status="not_requested"
+message_ack_requested=0
+message_ack_completed=0
+message_ack_status="not_requested"
 
 if [[ -n "$ack_delivery_id" ]]; then
-  mailbox_ack_requested=1
-  mailbox_ack_status="pending"
-  if [[ -f "$state_file" ]] && jq -e --arg delivery_id "$ack_delivery_id" '.required_actions.mailbox_ack_completed == true and .required_actions.mailbox_ack.delivery_id == $delivery_id' "$state_file" >/dev/null 2>&1; then
-    mailbox_ack_completed=1
-    mailbox_ack_status="already_recorded"
+  message_ack_requested=1
+  message_ack_status="pending"
+  if [[ -f "$state_file" ]] && jq -e --arg delivery_id "$ack_delivery_id" '
+    (
+      (
+        .required_actions.message_ack_completed == true
+        or .required_actions.message_ack_completed == 1
+      )
+      and .required_actions.message_ack.delivery_id == $delivery_id
+    )
+    or (
+      (
+        .required_actions.mailbox_ack_completed == true
+        or .required_actions.mailbox_ack_completed == 1
+      )
+      and .required_actions.mailbox_ack.delivery_id == $delivery_id
+    )
+  ' "$state_file" >/dev/null 2>&1; then
+    message_ack_completed=1
+    message_ack_status="already_recorded"
   fi
 fi
 
 write_state_file
 
-if (( mailbox_ack_requested == 1 && mailbox_ack_completed == 0 )); then
+if (( message_ack_requested == 1 && message_ack_completed == 0 )); then
   set +e
   ack_output="$(waypost ack --delivery "$ack_delivery_id" --lease-token "$ack_lease_token" 2>&1)"
   ack_rc=$?
   set -e
   if (( ack_rc != 0 )); then
     notify_event \
-      "planner_closeout_mailbox_ack_fail" \
+      "planner_closeout_message_ack_fail" \
       "error" \
       "Planner closeout ack failed: ${task_id}" \
-      "Required closeout actions succeeded, but mailbox ack failed for delivery ${ack_delivery_id}."
+      "Required closeout actions succeeded, but message ack failed for delivery ${ack_delivery_id}."
     echo "$ack_output" >&2
-    mailbox_ack_status="failed"
+    message_ack_status="failed"
     optional_fail_count=$((optional_fail_count + 1))
     write_state_file
     ack_fail "ack failed delivery='${ack_delivery_id}'"
   else
-    mailbox_ack_completed=1
-    mailbox_ack_status="ok"
+    message_ack_completed=1
+    message_ack_status="ok"
     write_state_file
     echo "$ack_output"
   fi

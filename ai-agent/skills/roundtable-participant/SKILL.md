@@ -1,6 +1,6 @@
 ---
 name: roundtable-participant
-description: Participate in a roundtable discussion from a personal mailbox control message. Use when a received workflow message has Action `roundtable_participant_turn` or asks this agent to read a roundtable group mailbox and respond as a named participant.
+description: Participate in a roundtable discussion from a personal control message. Use when a received workflow message has Action `roundtable_participant_turn` or asks this agent to read a Waypost group and respond as a named participant.
 ---
 
 # Roundtable Participant
@@ -11,7 +11,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Inputs
 
-Read the personal mailbox body first. Resolve:
+Read the personal message body first. Resolve:
 
 - `roundtable_id`: `Task:` header
 - `group_address`: `Group:` in body
@@ -20,7 +20,7 @@ Read the personal mailbox body first. Resolve:
 - `round`: `Round:` header
 - `moderator_request`: `Moderator Request` section
 
-If `group_address`, `participant_person`, or `role` is missing, do not guess. Ask the sender by leaving the personal delivery unacked and using the appropriate mailbox lifecycle step.
+If `group_address`, `participant_person`, or `role` is missing, do not guess. Ask the sender by leaving the personal delivery unacked and using the appropriate message lifecycle step.
 
 ## Steps
 

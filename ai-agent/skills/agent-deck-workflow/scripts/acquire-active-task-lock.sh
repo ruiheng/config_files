@@ -18,7 +18,7 @@ Options:
   --task-branch <ref>            Optional task branch for metadata only
   --from-address <address>       Optional sender address (default: agent-deck/<planner-session-id>)
   --to-address <address>         Optional recipient address (default: agent-deck/<coder-session-id> when provided)
-  --subject <text>               Optional mailbox subject for metadata
+  --subject <text>               Optional message subject for metadata
   --artifact-root <path>         Optional artifact root (default: <workdir>/.agent-artifacts)
   -h, --help                     Show help
 
@@ -85,11 +85,11 @@ lock_block_reason() {
     send_interrupted_unknown)
       signal_name="$(read_lock_value "$file" "interrupted_by_signal")"
       interrupted_at="$(read_lock_value "$file" "interrupted_at")"
-      printf 'prior delegate send was interrupted during mailbox send (state=%s signal=%s interrupted_at=%s); inspect mailbox delivery before deleting this lock' \
+      printf 'prior delegate send was interrupted during message send (state=%s signal=%s interrupted_at=%s); inspect Waypost message delivery before deleting this lock' \
         "$state" "${signal_name:-unknown}" "${interrupted_at:-unknown}"
       ;;
     queued_receipt_unknown)
-      printf 'prior delegate send succeeded but receipt could not be parsed (state=%s); inspect mailbox delivery before deleting this lock' "$state"
+      printf 'prior delegate send succeeded but receipt could not be parsed (state=%s); inspect Waypost message delivery before deleting this lock' "$state"
       ;;
     *)
       printf 'delete this directory manually after verifying the prior task is finished'

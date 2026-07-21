@@ -38,11 +38,11 @@ Do not use this skill for:
 ## Input
 
 Provide one of:
-1. the mailbox body from `code_health_review_requested`
+1. the message body from `code_health_review_requested`
 2. direct scope + review goal + known pain signals + constraints
 
 Direct-use mode is valid.
-This skill may be run without mailbox workflow when the user wants an immediate advisory review.
+This skill may be run without Waypost message workflow when the user wants an immediate advisory review.
 
 Useful pain signals include:
 - repeated bugs in the same area
@@ -66,7 +66,7 @@ Before reviewing, verify:
 
 If critical context is missing:
 - in direct-use mode, ask one short clarification question
-- in mailbox mode, continue and mark the missing items in `Scope Gaps`
+- in message mode, continue and mark the missing items in `Scope Gaps`
 - if no clarification arrives, continue best-effort and mark the missing assumptions in `Scope Gaps`
 
 When asking a clarification question, prioritize the missing fact that most affects whether the problem is local or systemic, usually:
@@ -152,7 +152,7 @@ Highest-signal patterns under those lenses:
 
 ## Output Format
 
-Mailbox mode uses the full structure below:
+Message mode uses the full structure below:
 
 ```markdown
 Task: <task_id_or_N/A>
@@ -215,9 +215,9 @@ Direct-use mode skips the header block and starts at `## Code Health Assessment`
 
 ## Direct-Use Mode
 
-When invoked directly by the user instead of mailbox workflow:
+When invoked directly by the user instead of Waypost message workflow:
 
-- skip the mailbox header block
+- skip the message header block
 - return the report directly in the conversation
 
 ## Agent Deck Mode
@@ -225,12 +225,12 @@ When invoked directly by the user instead of mailbox workflow:
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> default `N/A`
-- `planner_session_id`: explicit -> mailbox body -> default `N/A`
-- `code_health_reviewer_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `requester_session_id`: explicit -> mailbox body `From` header -> ask
-- `requester_role`: explicit -> mailbox body `From` header -> default `requester`
-- `round`: explicit -> mailbox body `Round` header -> default `1`
+- `task_id`: explicit -> message body -> default `N/A`
+- `planner_session_id`: explicit -> message body -> default `N/A`
+- `code_health_reviewer_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
+- `requester_session_id`: explicit -> message body `From` header -> ask
+- `requester_role`: explicit -> message body `From` header -> default `requester`
+- `round`: explicit -> message body `Round` header -> default `1`
 
 Execution flow in Agent Deck mode:
 1. review the requested scope

@@ -1,11 +1,11 @@
 ---
 name: review-request
-description: Generates a review-request mailbox message for code review from uncommitted changes, a specific short commit ref, or a branch.
+description: Generates a review-request Waypost message for code review from uncommitted changes, a specific short commit ref, or a branch.
 ---
 
 # Review Request
 
-Generate a copy/paste-friendly mailbox message for code review.
+Generate a copy/paste-friendly Waypost message for code review.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
@@ -134,19 +134,19 @@ Review-request continuity rule:
 
 Identity rules:
 - `review_requested` sender must be the active requester session id for this review lane
-- use the bound mailbox sender context for sender validation
+- use the bound Waypost sender context for sender validation
 - If an existing reviewer session tool differs from requested `reviewer_tool_cmd` or the requested `reviewer_tool_profile` policy, ask user to choose:
   1. keep existing reviewer session/tool
   2. ask planner to replace reviewer assignment with a different reviewer session/tool
 
 Commit reference rule:
-- in mailbox content, use a short commit ref, not a full 40-char hash
+- in message content, use a short commit ref, not a full 40-char hash
 
 ## Output Template
 
 Round `1` or new reviewer session: use the full body below.
 
-Use this structure as the mailbox body. Omit sections marked optional when empty.
+Use this structure as the message body. Omit sections marked optional when empty.
 
 ```markdown
 Task: <task_id>
@@ -265,7 +265,7 @@ Round: <round>
 [Current non-exhaustive author notes]
 ```
 
-## Mailbox Send + Wakeup
+## Waypost Message Send + Wakeup
 
 Recommended subject:
 - `review request: <task_id> r<round>`
@@ -291,10 +291,10 @@ Workflow send sequence:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
-   - `body = <review-request mailbox body>`
+   - `body = <review-request message body>`
 
 Rules:
-- round `1` sends the full review request in mailbox body
+- round `1` sends the full review request in message body
 - later rounds to the same reviewer send delta only
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
@@ -303,7 +303,7 @@ Rules:
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
 - treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
 - coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>` plus `group_path = <planner session group; empty string for root>`; never create reviewer as a child of coder/requester
-- `waypost_send` may trigger a best-effort non-local reviewer nudge; correctness relies on mailbox delivery
+- `waypost_send` may trigger a best-effort non-local reviewer nudge; correctness relies on Waypost message delivery
 - follow the shared Async sender rule for the review reply
 
 ## Quality Bar
@@ -312,7 +312,7 @@ Rules:
 2. Keep wording concise and direct
 3. Changed paths summary is enough for routing; reviewer should use the git target for exact file details
 4. Prefer facts over speculation
-5. Keep raw mailbox JSON internal unless user asks
+5. Keep raw message JSON internal unless user asks
 6. Always include `Checks Already Run`; include `Optional Review Focus` only when the requester explicitly provides useful emphasis
 7. Preserve `workflow_policy` unchanged when present
 8. Preserve `special_requirements` unchanged when present

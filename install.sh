@@ -34,11 +34,40 @@ ALL_REPLACE=0
 
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
-AGENT_MAILBOX_MCP_AVAILABLE=0
+WAYPOST_MCP_AVAILABLE=0
 CODEX_CLI_COMMAND="codext"
-# Keep the MCP client deadline above the 10m mailbox_wait long-poll timeout.
-AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC=660
-AGENT_MAILBOX_MCP_TOOL_TIMEOUT_MS=660000
+# Keep the MCP client deadline above the 10m Waypost message wait long-poll timeout.
+WAYPOST_MCP_TOOL_TIMEOUT_SEC=660
+WAYPOST_MCP_TOOL_TIMEOUT_MS=660000
+
+WAYPOST_MCP_TOOL_NAMES=(
+    agent_deck_create_session
+    agent_deck_require_session
+    agent_deck_resolve_session
+    waypost_ack
+    waypost_address_inspect
+    waypost_bind
+    waypost_claim_history
+    waypost_debug
+    waypost_defer
+    waypost_fail
+    waypost_forward
+    waypost_group_add_member
+    waypost_group_add_subscriber
+    waypost_group_create
+    waypost_group_members
+    waypost_group_remove_member
+    waypost_group_remove_subscriber
+    waypost_group_subscribers
+    waypost_list
+    waypost_read
+    waypost_recv
+    waypost_release
+    waypost_send
+    waypost_status
+    waypost_undefer
+    waypost_wait
+)
 
 # Colors for output
 RED='\033[0;31m'
@@ -787,29 +816,63 @@ ensure_toml_literal_key() {
     return 0
 }
 
-ensure_agent_mailbox_mcp_command() {
-    if [[ $AGENT_MAILBOX_MCP_AVAILABLE -eq 1 ]]; then
-        log_ok "agent_mailbox MCP command already available"
+ensure_waypost_mcp_command() {
+    if [[ $WAYPOST_MCP_AVAILABLE -eq 1 ]]; then
+        log_ok "waypost MCP command already available"
         return 0
     fi
 
-    log_info "Checking built-in agent_mailbox MCP command..."
+    log_info "Checking built-in waypost MCP command..."
 
-    if ! command -v agent-mailbox &>/dev/null; then
-        log_error "Missing required command: agent-mailbox"
-        log_info "Install or update agent-mailbox so 'agent-mailbox mcp' is available, then rerun the installer"
+    if ! command -v waypost &>/dev/null; then
+        log_error "Missing required command: waypost"
+        log_info "Install or update waypost so 'waypost mcp' is available, then rerun the installer"
         return 1
     fi
 
-    if ! agent-mailbox mcp --help >/dev/null 2>&1; then
-        log_error "Installed agent-mailbox does not expose the built-in MCP server"
-        log_info "Update agent-mailbox so 'agent-mailbox mcp' is supported, then rerun the installer"
+    if ! waypost mcp --help >/dev/null 2>&1; then
+        log_error "Installed waypost does not expose the built-in MCP server"
+        log_info "Update waypost so 'waypost mcp' is supported, then rerun the installer"
         return 1
     fi
 
-    AGENT_MAILBOX_MCP_AVAILABLE=1
-    log_ok "Found built-in agent_mailbox MCP server: agent-mailbox mcp"
+    WAYPOST_MCP_AVAILABLE=1
+    log_ok "Found built-in waypost MCP server: waypost mcp"
     return 0
+}
+
+migrate_legacy_waypost_state_if_present() {
+    local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+    local legacy_state_dir="$state_home/ai-agent/mailbox"
+
+    if [[ ! -e "$legacy_state_dir" ]] && [[ ! -L "$legacy_state_dir" ]]; then
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: waypost migrate"
+        return 0
+    fi
+
+    log_info "Migrating legacy Waypost state: $legacy_state_dir"
+    if ! waypost migrate; then
+        log_error "Failed to migrate legacy Waypost state"
+        return 1
+    fi
+
+    log_ok "Migrated legacy Waypost state"
+    return 0
+}
+
+waypost_mcp_permissions_json() {
+    local prefix="$1"
+    local suffix="$2"
+
+    printf '%s\n' "${WAYPOST_MCP_TOOL_NAMES[@]}" \
+        | jq -Rsc --arg prefix "$prefix" --arg suffix "$suffix" '
+            split("\n")
+            | map(select(length > 0) | ($prefix + . + $suffix))
+        '
 }
 
 ensure_top_level_mcp_stdio_server() {
@@ -835,7 +898,7 @@ ensure_top_level_mcp_stdio_server() {
     if [[ -s "$config_file" ]]; then
         if ! MCP_SERVER_NAME="$server_name" MCP_COMMAND="$command_name" MCP_ARGS_JSON="$args_json" jq '
             .mcpServers = ((.mcpServers // {})
-                | del(.workflow_mailbox, .agent_mailbox)
+                | del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
                 | .[$ENV.MCP_SERVER_NAME] = ((.[$ENV.MCP_SERVER_NAME] // {})
                     | . + {
                         "command": $ENV.MCP_COMMAND,
@@ -872,7 +935,7 @@ ensure_top_level_mcp_stdio_server() {
     return 1
 }
 
-rewrite_gemini_agent_mailbox_config() {
+rewrite_gemini_waypost_config() {
     local gemini_config="$HOME/.gemini/settings.json"
     local tmp_file
 
@@ -897,10 +960,10 @@ rewrite_gemini_agent_mailbox_config() {
                 | .disableAlwaysAllow = false)
             | .mcpServers as $mcpServers
             | .mcpServers = (($mcpServers // {})
-                | del(.workflow_mailbox, .agent_mailbox)
-                | ."agent-mailbox" = ((($mcpServers // {})["agent-mailbox"] // {})
+                | del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
+                | ."waypost" = ((($mcpServers // {})["waypost"] // {})
                   | . + {
-                    "command": "agent-mailbox",
+                    "command": "waypost",
                     "args": ["mcp"],
                     "env": {
                       "TMUX": "$TMUX",
@@ -923,8 +986,8 @@ rewrite_gemini_agent_mailbox_config() {
             "disableAlwaysAllow": false
           },
           "mcpServers": {
-            "agent-mailbox": {
-              "command": "agent-mailbox",
+            "waypost": {
+              "command": "waypost",
               "args": ["mcp"],
               "env": {
                 "TMUX": "$TMUX",
@@ -941,7 +1004,7 @@ rewrite_gemini_agent_mailbox_config() {
     fi
 
     if mv "$tmp_file" "$gemini_config"; then
-        log_ok "Rewrote Gemini MCP config: agent-mailbox"
+        log_ok "Rewrote Gemini MCP config: waypost"
         return 0
     fi
 
@@ -950,66 +1013,46 @@ rewrite_gemini_agent_mailbox_config() {
     return 1
 }
 
-remove_gemini_stale_agent_mailbox_mcps() {
+remove_gemini_stale_waypost_mcps() {
+    local legacy_server
+    local -a legacy_servers=(workflow_mailbox agent_mailbox agent-mailbox adwf-mailbox)
+
     if ! command -v gemini &>/dev/null; then
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: gemini mcp remove workflow_mailbox"
-        log_dry "Would run: gemini mcp remove agent_mailbox"
-        log_dry "Would run: gemini mcp remove agent-mailbox"
+        for legacy_server in "${legacy_servers[@]}"; do
+            log_dry "Would run: gemini mcp remove $legacy_server"
+        done
         return 0
     fi
 
-    gemini mcp remove workflow_mailbox >/dev/null 2>&1 || true
-    gemini mcp remove agent_mailbox >/dev/null 2>&1 || true
-    gemini mcp remove agent-mailbox >/dev/null 2>&1 || true
+    for legacy_server in "${legacy_servers[@]}"; do
+        gemini mcp remove "$legacy_server" >/dev/null 2>&1 || true
+    done
 }
 
-install_gemini_agent_mailbox_mcp() {
-    remove_gemini_stale_agent_mailbox_mcps
-    rewrite_gemini_agent_mailbox_config || return 1
+install_gemini_waypost_mcp() {
+    remove_gemini_stale_waypost_mcps
+    rewrite_gemini_waypost_config || return 1
 }
 
-rewrite_antigravity_agent_mailbox_config() {
+rewrite_antigravity_waypost_config() {
     local antigravity_mcp_config="$HOME/.gemini/config/mcp_config.json"
     local antigravity_settings="$HOME/.gemini/antigravity-cli/settings.json"
     local antigravity_permissions_json
     local tmp_file
 
-    antigravity_permissions_json='[
-        "mcp(agent-mailbox/agent_deck_create_session)",
-        "mcp(agent-mailbox/agent_deck_require_session)",
-        "mcp(agent-mailbox/agent_deck_resolve_session)",
-        "mcp(agent-mailbox/mailbox_ack)",
-        "mcp(agent-mailbox/mailbox_address_inspect)",
-        "mcp(agent-mailbox/mailbox_bind)",
-        "mcp(agent-mailbox/mailbox_claim_history)",
-        "mcp(agent-mailbox/mailbox_debug)",
-        "mcp(agent-mailbox/mailbox_defer)",
-        "mcp(agent-mailbox/mailbox_fail)",
-        "mcp(agent-mailbox/mailbox_forward)",
-        "mcp(agent-mailbox/mailbox_group_add_member)",
-        "mcp(agent-mailbox/mailbox_group_add_subscriber)",
-        "mcp(agent-mailbox/mailbox_group_create)",
-        "mcp(agent-mailbox/mailbox_group_members)",
-        "mcp(agent-mailbox/mailbox_group_remove_member)",
-        "mcp(agent-mailbox/mailbox_group_remove_subscriber)",
-        "mcp(agent-mailbox/mailbox_group_subscribers)",
-        "mcp(agent-mailbox/mailbox_list)",
-        "mcp(agent-mailbox/mailbox_read)",
-        "mcp(agent-mailbox/mailbox_recv)",
-        "mcp(agent-mailbox/mailbox_release)",
-        "mcp(agent-mailbox/mailbox_send)",
-        "mcp(agent-mailbox/mailbox_status)",
-        "mcp(agent-mailbox/mailbox_wait)"
-    ]'
+    antigravity_permissions_json="$(waypost_mcp_permissions_json 'mcp(waypost/' ')')" || {
+        log_error "Failed to build Antigravity Waypost MCP permissions"
+        return 1
+    }
 
-    ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "agent-mailbox" "agent-mailbox" '["mcp"]' || return 1
+    ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "waypost" "waypost" '["mcp"]' || return 1
 
     if [[ $DRY_RUN -eq 1 && ! -s "$antigravity_settings" ]]; then
-        log_dry "Would create Antigravity settings file and merge mailbox permissions into: $antigravity_settings"
+        log_dry "Would create Antigravity settings file and merge Waypost MCP permissions into: $antigravity_settings"
     fi
 
     if [[ $DRY_RUN -eq 0 ]]; then
@@ -1027,7 +1070,7 @@ rewrite_antigravity_agent_mailbox_config() {
 
     if [[ -s "$antigravity_settings" ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would clean legacy Antigravity MCP entries and merge mailbox permissions into: $antigravity_settings"
+            log_dry "Would clean legacy Antigravity MCP entries and merge Waypost MCP permissions into: $antigravity_settings"
             return 0
         fi
 
@@ -1037,13 +1080,28 @@ rewrite_antigravity_agent_mailbox_config() {
         }
 
         if ! jq --argjson perms "$antigravity_permissions_json" '
+            def is_legacy_waypost_permission:
+                if type != "string" then
+                    false
+                else
+                    startswith("mcp(workflow_mailbox/")
+                    or startswith("mcp(agent_mailbox/")
+                    or startswith("mcp(agent-mailbox/")
+                    or startswith("mcp(adwf-mailbox/")
+                    or startswith("mcp(waypost/")
+                end;
             if (.mcpServers | type) == "object" then
-                .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox")
+                .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
                 | if (.mcpServers == {}) then del(.mcpServers) else . end
             else
                 .
             end
-            | .permissions.allow = ((.permissions.allow // []) + $perms | unique)
+            | .permissions.allow = (
+                (.permissions.allow // [])
+                | map(select(is_legacy_waypost_permission | not))
+                | . + $perms
+                | unique
+            )
         ' "$antigravity_settings" > "$tmp_file"; then
             rm -f "$tmp_file"
             log_error "Failed to clean legacy Antigravity MCP config: $antigravity_settings"
@@ -1057,66 +1115,73 @@ rewrite_antigravity_agent_mailbox_config() {
         fi
     fi
 
-    log_ok "Rewrote Antigravity MCP config and permissions: agent-mailbox"
+    log_ok "Rewrote Antigravity MCP config and permissions: waypost"
     return 0
 }
 
-install_antigravity_agent_mailbox_mcp() {
-    rewrite_antigravity_agent_mailbox_config || return 1
+install_antigravity_waypost_mcp() {
+    rewrite_antigravity_waypost_config || return 1
 }
 
-install_kiro_agent_mailbox_mcp() {
-    ensure_top_level_mcp_stdio_server "Kiro CLI" "$HOME/.kiro/settings/mcp.json" "agent-mailbox" "agent-mailbox" '["mcp"]'
+install_kiro_waypost_mcp() {
+    ensure_top_level_mcp_stdio_server "Kiro CLI" "$HOME/.kiro/settings/mcp.json" "waypost" "waypost" '["mcp"]'
 }
 
-remove_codex_legacy_workflow_mailbox_mcp() {
+remove_codex_legacy_waypost_mcps() {
+    local legacy_server
+    local -a legacy_servers=(workflow_mailbox agent_mailbox agent-mailbox adwf-mailbox)
+
     if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: $CODEX_CLI_COMMAND mcp remove workflow_mailbox"
+        for legacy_server in "${legacy_servers[@]}"; do
+            log_dry "Would run: $CODEX_CLI_COMMAND mcp remove $legacy_server"
+        done
         return 0
     fi
 
-    "$CODEX_CLI_COMMAND" mcp remove workflow_mailbox >/dev/null 2>&1 || true
+    for legacy_server in "${legacy_servers[@]}"; do
+        "$CODEX_CLI_COMMAND" mcp remove "$legacy_server" >/dev/null 2>&1 || true
+    done
 }
 
-codex_agent_mailbox_uses_builtin_command() {
+codex_waypost_uses_builtin_command() {
     local mcp_config
 
-    mcp_config="$("$CODEX_CLI_COMMAND" mcp get agent_mailbox 2>/dev/null)" || return 1
-    [[ "$mcp_config" == *"command: agent-mailbox"* ]] && [[ "$mcp_config" == *"args: mcp"* ]]
+    mcp_config="$("$CODEX_CLI_COMMAND" mcp get waypost 2>/dev/null)" || return 1
+    [[ "$mcp_config" == *"command: waypost"* ]] && [[ "$mcp_config" == *"args: mcp"* ]]
 }
 
-install_codex_agent_mailbox_mcp() {
+install_codex_waypost_mcp() {
     if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
         log_warn "Skipping Codex MCP install ($CODEX_CLI_COMMAND not found)"
         return 0
     fi
 
-    remove_codex_legacy_workflow_mailbox_mcp
+    remove_codex_legacy_waypost_mcps
 
-    if codex_agent_mailbox_uses_builtin_command; then
-        log_ok "Codex MCP already configured: agent_mailbox"
+    if codex_waypost_uses_builtin_command; then
+        log_ok "Codex MCP already configured: waypost"
     else
-        if "$CODEX_CLI_COMMAND" mcp get agent_mailbox >/dev/null 2>&1; then
+        if "$CODEX_CLI_COMMAND" mcp get waypost >/dev/null 2>&1; then
             if [[ $DRY_RUN -eq 1 ]]; then
-                log_dry "Would run: $CODEX_CLI_COMMAND mcp remove agent_mailbox"
+                log_dry "Would run: $CODEX_CLI_COMMAND mcp remove waypost"
             else
-                "$CODEX_CLI_COMMAND" mcp remove agent_mailbox >/dev/null 2>&1 || true
+                "$CODEX_CLI_COMMAND" mcp remove waypost >/dev/null 2>&1 || true
             fi
         fi
 
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would run: $CODEX_CLI_COMMAND mcp add agent_mailbox -- agent-mailbox mcp"
-        elif ! "$CODEX_CLI_COMMAND" mcp add agent_mailbox -- agent-mailbox mcp; then
-            log_error "Failed to configure Codex MCP: agent_mailbox"
+            log_dry "Would run: $CODEX_CLI_COMMAND mcp add waypost -- waypost mcp"
+        elif ! "$CODEX_CLI_COMMAND" mcp add waypost -- waypost mcp; then
+            log_error "Failed to configure Codex MCP: waypost"
             return 1
         fi
 
         if [[ $DRY_RUN -ne 1 ]]; then
-            log_ok "Configured Codex MCP: agent_mailbox"
+            log_ok "Configured Codex MCP: waypost"
         fi
     fi
 
@@ -1135,8 +1200,8 @@ install_codex_agent_mailbox_mcp() {
         return 0
     fi
 
-    if AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC="$AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC" perl -0pi -e '
-        my $tool_timeout_sec = $ENV{AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC};
+    if WAYPOST_MCP_TOOL_TIMEOUT_SEC="$WAYPOST_MCP_TOOL_TIMEOUT_SEC" perl -0pi -e '
+        my $tool_timeout_sec = $ENV{WAYPOST_MCP_TOOL_TIMEOUT_SEC};
         my $env_vars_line = q{env_vars = [ "TMUX", "AGENTDECK_INSTANCE_ID", "CODEX_SESSION_ID" ]};
         my $tool_timeout_line = "tool_timeout_sec = $tool_timeout_sec";
         my @lines = split /\n/, $_, -1;
@@ -1146,7 +1211,7 @@ install_codex_agent_mailbox_mcp() {
         my $inserted = 0;
 
         for my $line (@lines) {
-          if ($line =~ /^\[mcp_servers\.agent_mailbox\]$/) {
+          if ($line =~ /^\[mcp_servers\.waypost\]$/) {
             $found = 1;
             $in_section = 1;
             $inserted = 0;
@@ -1170,62 +1235,39 @@ install_codex_agent_mailbox_mcp() {
           push @out, $env_vars_line;
         }
 
-        die "agent_mailbox section not found\n" unless $found;
+        die "waypost section not found\n" unless $found;
 
         $_ = join("\n", @out);
         $_ .= "\n" unless $_ =~ /\n\z/;
-    ' "$codex_config" && AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC="$AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC" perl -0ne '
-        my $tool_timeout_sec = quotemeta $ENV{AGENT_MAILBOX_MCP_TOOL_TIMEOUT_SEC};
+    ' "$codex_config" && WAYPOST_MCP_TOOL_TIMEOUT_SEC="$WAYPOST_MCP_TOOL_TIMEOUT_SEC" perl -0ne '
+        my $tool_timeout_sec = quotemeta $ENV{WAYPOST_MCP_TOOL_TIMEOUT_SEC};
         exit(
-          /\[mcp_servers\.agent_mailbox\][\s\S]*?^env_vars\s*=\s*\[\s*"TMUX"\s*,\s*"AGENTDECK_INSTANCE_ID"\s*,\s*"CODEX_SESSION_ID"\s*\]/m
-          && /\[mcp_servers\.agent_mailbox\][\s\S]*?^tool_timeout_sec\s*=\s*$tool_timeout_sec\s*$/m
+          /\[mcp_servers\.waypost\][\s\S]*?^env_vars\s*=\s*\[\s*"TMUX"\s*,\s*"AGENTDECK_INSTANCE_ID"\s*,\s*"CODEX_SESSION_ID"\s*\]/m
+          && /\[mcp_servers\.waypost\][\s\S]*?^tool_timeout_sec\s*=\s*$tool_timeout_sec\s*$/m
             ? 0
             : 1
         );
     ' "$codex_config"; then
-        log_ok "Ensured Codex MCP env passthrough and 11-minute tool timeout: agent_mailbox"
+        log_ok "Ensured Codex MCP env passthrough and 11-minute tool timeout: waypost"
         return 0
     fi
 
-    log_error "Failed to update Codex MCP env passthrough and 11-minute tool timeout: agent_mailbox"
+    log_error "Failed to update Codex MCP env passthrough and 11-minute tool timeout: waypost"
     return 1
 }
 
-ensure_claude_agent_mailbox_permissions() {
+ensure_claude_waypost_permissions() {
     local claude_settings="$HOME/.claude/settings.json"
     local claude_permissions_json
     local tmp_file
 
-    claude_permissions_json='[
-        "mcp__agent_mailbox__agent_deck_create_session",
-        "mcp__agent_mailbox__agent_deck_require_session",
-        "mcp__agent_mailbox__agent_deck_resolve_session",
-        "mcp__agent_mailbox__mailbox_ack",
-        "mcp__agent_mailbox__mailbox_address_inspect",
-        "mcp__agent_mailbox__mailbox_bind",
-        "mcp__agent_mailbox__mailbox_claim_history",
-        "mcp__agent_mailbox__mailbox_debug",
-        "mcp__agent_mailbox__mailbox_defer",
-        "mcp__agent_mailbox__mailbox_fail",
-        "mcp__agent_mailbox__mailbox_forward",
-        "mcp__agent_mailbox__mailbox_group_add_member",
-        "mcp__agent_mailbox__mailbox_group_add_subscriber",
-        "mcp__agent_mailbox__mailbox_group_create",
-        "mcp__agent_mailbox__mailbox_group_members",
-        "mcp__agent_mailbox__mailbox_group_remove_member",
-        "mcp__agent_mailbox__mailbox_group_remove_subscriber",
-        "mcp__agent_mailbox__mailbox_group_subscribers",
-        "mcp__agent_mailbox__mailbox_list",
-        "mcp__agent_mailbox__mailbox_read",
-        "mcp__agent_mailbox__mailbox_recv",
-        "mcp__agent_mailbox__mailbox_release",
-        "mcp__agent_mailbox__mailbox_send",
-        "mcp__agent_mailbox__mailbox_status",
-        "mcp__agent_mailbox__mailbox_wait"
-    ]'
+    claude_permissions_json="$(waypost_mcp_permissions_json 'mcp__waypost__' '')" || {
+        log_error "Failed to build Claude Waypost MCP permissions"
+        return 1
+    }
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would merge Claude agent_mailbox MCP tool permissions into: $claude_settings"
+        log_dry "Would merge Claude waypost MCP tool permissions into: $claude_settings"
         return 0
     fi
 
@@ -1247,7 +1289,21 @@ ensure_claude_agent_mailbox_permissions() {
     }
 
     if ! jq --argjson perms "$claude_permissions_json" '
-        .permissions.allow = ((.permissions.allow // []) + $perms | unique)
+        def is_legacy_waypost_permission:
+            if type != "string" then
+                false
+            else
+                startswith("mcp__workflow_mailbox__")
+                or startswith("mcp__agent_mailbox__")
+                or startswith("mcp__adwf_mailbox__")
+                or startswith("mcp__waypost__")
+            end;
+        .permissions.allow = (
+            (.permissions.allow // [])
+            | map(select(is_legacy_waypost_permission | not))
+            | . + $perms
+            | unique
+        )
     ' "$claude_settings" > "$tmp_file"; then
         rm -f "$tmp_file"
         log_error "Failed to merge Claude permissions: $claude_settings"
@@ -1255,7 +1311,7 @@ ensure_claude_agent_mailbox_permissions() {
     fi
 
     if mv "$tmp_file" "$claude_settings"; then
-        log_ok "Merged Claude agent_mailbox MCP tool permissions"
+        log_ok "Merged Claude waypost MCP tool permissions"
         return 0
     fi
 
@@ -1264,7 +1320,7 @@ ensure_claude_agent_mailbox_permissions() {
     return 1
 }
 
-rewrite_claude_agent_mailbox_config() {
+rewrite_claude_waypost_config() {
     local claude_config="$HOME/.claude.json"
     local tmp_file
 
@@ -1282,14 +1338,13 @@ rewrite_claude_agent_mailbox_config() {
         return 1
     }
 
-    if ! jq --argjson timeout "$AGENT_MAILBOX_MCP_TOOL_TIMEOUT_MS" '
+    if ! jq --argjson timeout "$WAYPOST_MCP_TOOL_TIMEOUT_MS" '
         .mcpServers = ((.mcpServers // {})
-            | del(.workflow_mailbox)
-            | del(.["adwf-mailbox"])
-            | .agent_mailbox = (
-                (.agent_mailbox // {})
+            | del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
+            | .waypost = (
+                (.waypost // {})
                 | .type = (.type // "stdio")
-                | .command = "agent-mailbox"
+                | .command = "waypost"
                 | .args = ["mcp"]
                 | .timeout = $timeout
                 | .env = {}
@@ -1301,7 +1356,7 @@ rewrite_claude_agent_mailbox_config() {
     fi
 
     if mv "$tmp_file" "$claude_config"; then
-        log_ok "Rewrote Claude MCP config with 11-minute tool timeout: agent_mailbox"
+        log_ok "Rewrote Claude MCP config with 11-minute tool timeout: waypost"
         return 0
     fi
 
@@ -1310,25 +1365,30 @@ rewrite_claude_agent_mailbox_config() {
     return 1
 }
 
-remove_claude_stale_agent_mailbox_mcps() {
+remove_claude_stale_waypost_mcps() {
+    local legacy_server
+    local -a legacy_servers=(workflow_mailbox agent_mailbox agent-mailbox adwf-mailbox)
+
     if ! command -v claude &>/dev/null; then
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: claude mcp remove -s user workflow_mailbox"
-        log_dry "Would run: claude mcp remove -s user agent_mailbox"
+        for legacy_server in "${legacy_servers[@]}"; do
+            log_dry "Would run: claude mcp remove -s user $legacy_server"
+        done
         return 0
     fi
 
-    claude mcp remove -s user workflow_mailbox >/dev/null 2>&1 || true
-    claude mcp remove -s user agent_mailbox >/dev/null 2>&1 || true
+    for legacy_server in "${legacy_servers[@]}"; do
+        claude mcp remove -s user "$legacy_server" >/dev/null 2>&1 || true
+    done
 }
 
-install_claude_agent_mailbox_mcp() {
+install_claude_waypost_mcp() {
     if [[ -f "$HOME/.claude.json" ]]; then
-        rewrite_claude_agent_mailbox_config || return 1
-        ensure_claude_agent_mailbox_permissions || return 1
+        rewrite_claude_waypost_config || return 1
+        ensure_claude_waypost_permissions || return 1
         return 0
     fi
 
@@ -1337,25 +1397,25 @@ install_claude_agent_mailbox_mcp() {
         return 0
     fi
 
-    remove_claude_stale_agent_mailbox_mcps
+    remove_claude_stale_waypost_mcps
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: claude mcp add -s user agent_mailbox -- agent-mailbox mcp"
+        log_dry "Would run: claude mcp add -s user waypost -- waypost mcp"
         return 0
     fi
 
-    if claude mcp add -s user agent_mailbox -- agent-mailbox mcp; then
-        log_ok "Configured Claude MCP: agent_mailbox"
-        rewrite_claude_agent_mailbox_config || return 1
-        ensure_claude_agent_mailbox_permissions || return 1
+    if claude mcp add -s user waypost -- waypost mcp; then
+        log_ok "Configured Claude MCP: waypost"
+        rewrite_claude_waypost_config || return 1
+        ensure_claude_waypost_permissions || return 1
         return 0
     fi
 
-    log_error "Failed to configure Claude MCP: agent_mailbox"
+    log_error "Failed to configure Claude MCP: waypost"
     return 1
 }
 
-remove_obsolete_agent_mailbox_launchers() {
+remove_obsolete_waypost_launchers() {
     local legacy_launchers=(
         "$HOME/.local/bin/adwf-mailbox-mcp"
         "$HOME/.local/bin/agent-mailbox-mcp"
@@ -1845,21 +1905,35 @@ cleanup_dead_skill_links() {
 install_skills_individually() {
     local tool_name="$1"
     local tool_skills_dir="$2"
+    local missing_only="${3:-0}"
     local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
 
-    log_info "Installing $tool_name skills (individually)..."
+    if [[ $missing_only -eq 1 ]]; then
+        log_info "Installing missing $tool_name skills..."
+        if [[ ! -d "$tool_skills_dir" ]] && [[ ! -L "$tool_skills_dir" ]]; then
+            log_error "$tool_name skills path is missing: $tool_skills_dir"
+            return 1
+        fi
+    else
+        log_info "Installing $tool_name skills (individually)..."
 
-    if ! prepare_skills_target_dir "$tool_name" "$tool_skills_dir"; then
-        return 0
+        if ! prepare_skills_target_dir "$tool_name" "$tool_skills_dir"; then
+            return 0
+        fi
     fi
 
-    cleanup_dead_skill_links "$tool_name" "$tool_skills_dir"
+    # The shared Gemini directory can contain user-managed skills and links.
+    # Missing-only sync must not alter its existing entries.
+    if [[ $missing_only -ne 1 ]]; then
+        cleanup_dead_skill_links "$tool_name" "$tool_skills_dir"
+    fi
 
     if [[ -d "$src_skills_dir" ]]; then
         for skill_dir in "$src_skills_dir"/*; do
             if [[ -d "$skill_dir" ]]; then
                 local skill_name
                 skill_name=$(basename "$skill_dir")
+                local target_skill="$tool_skills_dir/$skill_name"
 
                 if is_agent_deck_related_skill "$skill_name" && [[ $AGENT_DECK_AVAILABLE -eq 0 ]]; then
                     log_warn "Skipping $tool_name skill '$skill_name' (agent-deck not installed)"
@@ -1867,7 +1941,11 @@ install_skills_individually() {
                     continue
                 fi
 
-                link_file "ai-agent/skills/$skill_name" "$tool_skills_dir/$skill_name"
+                if [[ $missing_only -eq 1 ]] && [[ -e "$target_skill" || -L "$target_skill" ]]; then
+                    continue
+                fi
+
+                link_file "ai-agent/skills/$skill_name" "$target_skill"
             fi
         done
     fi
@@ -1904,12 +1982,12 @@ install_claude_config() {
     local bin_dir="$HOME/.local/bin"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
-    remove_obsolete_agent_mailbox_launchers
-    if ! ensure_agent_mailbox_mcp_command; then
-        log_error "Failed to verify built-in agent_mailbox MCP command for Claude"
+    remove_obsolete_waypost_launchers
+    if ! ensure_waypost_mcp_command; then
+        log_error "Failed to verify built-in waypost MCP command for Claude"
         return 1
     fi
-    install_claude_agent_mailbox_mcp
+    install_claude_waypost_mcp
 
     # Link statusline script
     link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
@@ -1973,6 +2051,7 @@ install_gemini_skills() {
     # Installing duplicates in ~/.gemini/skills triggers skill conflict warnings.
     if has_shared_gemini_skill_conflicts "$agents_skills_dir"; then
         log_info "Detected shared Gemini skills path: $agents_skills_dir"
+        install_skills_individually "Gemini shared" "$agents_skills_dir" 1 || return 1
         log_warn "Skipping Gemini skill links under $gemini_skills_dir to avoid duplicate skill conflicts"
         cleanup_gemini_duplicate_skill_links "$gemini_skills_dir"
         return 0
@@ -1990,12 +2069,12 @@ install_antigravity_config() {
 
     install_antigravity_skills
 
-    if ! ensure_agent_mailbox_mcp_command; then
-        log_error "Failed to verify built-in agent_mailbox MCP command for Antigravity"
+    if ! ensure_waypost_mcp_command; then
+        log_error "Failed to verify built-in waypost MCP command for Antigravity"
         return 1
     fi
 
-    install_antigravity_agent_mailbox_mcp
+    install_antigravity_waypost_mcp
 }
 
 install_kiro_skills() {
@@ -2013,12 +2092,12 @@ install_kiro_config() {
 
     install_kiro_skills
 
-    if ! ensure_agent_mailbox_mcp_command; then
-        log_error "Failed to verify built-in agent_mailbox MCP command for Kiro CLI"
+    if ! ensure_waypost_mcp_command; then
+        log_error "Failed to verify built-in waypost MCP command for Kiro CLI"
         return 1
     fi
 
-    install_kiro_agent_mailbox_mcp
+    install_kiro_waypost_mcp
 }
 
 install_gemini_config() {
@@ -2051,12 +2130,12 @@ install_gemini_config() {
         log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
     fi
 
-    if ! ensure_agent_mailbox_mcp_command; then
-        log_error "Failed to verify built-in agent_mailbox MCP command for Gemini"
+    if ! ensure_waypost_mcp_command; then
+        log_error "Failed to verify built-in waypost MCP command for Gemini"
         return 1
     fi
 
-    install_gemini_agent_mailbox_mcp
+    install_gemini_waypost_mcp
 }
 
 install_codex_skills() {
@@ -2115,15 +2194,15 @@ install_codex_config() {
         log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
     fi
 
-    if ! ensure_agent_mailbox_mcp_command; then
-        log_error "Failed to verify built-in agent_mailbox MCP command for Codex"
+    if ! ensure_waypost_mcp_command; then
+        log_error "Failed to verify built-in waypost MCP command for Codex"
         return 1
     fi
 
-    install_codex_agent_mailbox_mcp
+    install_codex_waypost_mcp
 }
 
-install_opencode_agent_mailbox_mcp() {
+install_opencode_waypost_mcp() {
     local opencode_dir="$HOME/.config/opencode"
     local config_file
     local tmp_file
@@ -2144,10 +2223,10 @@ install_opencode_agent_mailbox_mcp() {
         if ! jq '
             .["$schema"] //= "https://opencode.ai/config.json"
             | .mcp = ((.mcp // {})
-                | del(.workflow_mailbox)
-                | .agent_mailbox = {
+                | del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
+                | .waypost = {
                     type: "local",
-                    command: ["agent-mailbox", "mcp"],
+                    command: ["waypost", "mcp"],
                     environment: {
                         AGENTDECK_INSTANCE_ID: "{env:AGENTDECK_INSTANCE_ID}",
                         TMUX: "{env:TMUX}"
@@ -2162,9 +2241,9 @@ install_opencode_agent_mailbox_mcp() {
         {
             "$schema": "https://opencode.ai/config.json",
             mcp: {
-                agent_mailbox: {
+                waypost: {
                     type: "local",
-                    command: ["agent-mailbox", "mcp"],
+                    command: ["waypost", "mcp"],
                     environment: {
                         AGENTDECK_INSTANCE_ID: "{env:AGENTDECK_INSTANCE_ID}",
                         TMUX: "{env:TMUX}"
@@ -2179,7 +2258,7 @@ install_opencode_agent_mailbox_mcp() {
     fi
 
     if mv "$tmp_file" "$config_file"; then
-        log_ok "Ensured OpenCode MCP config: agent_mailbox"
+        log_ok "Ensured OpenCode MCP config: waypost"
         return 0
     fi
 
@@ -2210,12 +2289,12 @@ install_opencode_config() {
     # Link skills individually for OpenCode
     install_opencode_skills
 
-    if ! ensure_agent_mailbox_mcp_command; then
-        log_error "Failed to verify built-in agent_mailbox MCP command for OpenCode"
+    if ! ensure_waypost_mcp_command; then
+        log_error "Failed to verify built-in waypost MCP command for OpenCode"
         return 1
     fi
 
-    install_opencode_agent_mailbox_mcp
+    install_opencode_waypost_mcp
 }
 
 install_serena_config() {
@@ -2472,6 +2551,14 @@ main() {
     fi
 
     if ! install_codegraph; then
+        exit 1
+    fi
+
+    if ! ensure_waypost_mcp_command; then
+        exit 1
+    fi
+
+    if ! migrate_legacy_waypost_state_if_present; then
         exit 1
     fi
 

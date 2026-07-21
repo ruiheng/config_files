@@ -12,8 +12,8 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 ## Input
 
 Provide one of:
-1. the mailbox body from `review_requested`
-2. the mailbox body from `browser_check_report` plus current review context
+1. the message body from `review_requested`
+2. the message body from `browser_check_report` plus current review context
 3. original task + code changes, with optional author intent or notes
 
 ## Input Completeness Gate (Required)
@@ -135,7 +135,7 @@ Policy rules:
 
 ## Output Format
 
-Use this exact structure as the full review report. When reviewer sends follow-up mail, the `Action:` line must match the outbound workflow action.
+Use this exact structure as the full review report. When reviewer sends follow-up message, the `Action:` line must match the outbound workflow action.
 
 ```markdown
 Task: <task_id>
@@ -208,23 +208,23 @@ Use the `agent-deck-workflow` skill for shared protocol:
 - `Error Handling and Diagnostics`
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> ask
-- `planner_session_id`: explicit -> mailbox body -> ask
-- `planner_workspace`: explicit -> mailbox body `Planner workspace` -> default `N/A`
-- `reviewer_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `requester_role`: explicit -> mailbox body `From` header label -> default `coder`
-- `requester_session_id`: explicit -> mailbox body `From` header -> ask
-- `review_lane`: explicit -> mailbox body -> default `task`
-- `browser_tester_session_id` (optional): explicit actual id -> mailbox/review context -> omit
-- `browser_tester_session_ref` (optional): explicit -> mailbox/review context -> default `browser-tester`
-- `browser_tester_workspace` (optional): explicit -> mailbox/review context -> current workspace
-- `round`: explicit -> mailbox body `Round` header -> default `1`
-- `start_branch`: explicit -> mailbox body -> ask
-- `integration_branch`: explicit -> mailbox body -> ask
-- `task_branch`: explicit -> mailbox body -> ask
+- `task_id`: explicit -> message body -> ask
+- `planner_session_id`: explicit -> message body -> ask
+- `planner_workspace`: explicit -> message body `Planner workspace` -> default `N/A`
+- `reviewer_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
+- `requester_role`: explicit -> message body `From` header label -> default `coder`
+- `requester_session_id`: explicit -> message body `From` header -> ask
+- `review_lane`: explicit -> message body -> default `task`
+- `browser_tester_session_id` (optional): explicit actual id -> message/review context -> omit
+- `browser_tester_session_ref` (optional): explicit -> message/review context -> default `browser-tester`
+- `browser_tester_workspace` (optional): explicit -> message/review context -> current workspace
+- `round`: explicit -> message body `Round` header -> default `1`
+- `start_branch`: explicit -> message body -> ask
+- `integration_branch`: explicit -> message body -> ask
+- `task_branch`: explicit -> message body -> ask
 - `workflow_policy` (optional): explicit -> request context -> unattended defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
-- `checks_already_run` (optional): explicit -> mailbox body -> use for rerun decisions
+- `checks_already_run` (optional): explicit -> message body -> use for rerun decisions
 
 Branch-plan guard:
 - `integration_branch` must be the non-task landing branch; if it looks like `task/*`, treat branch plan continuity as FAIL and ask for the real integration branch before approval/closeout
@@ -259,10 +259,10 @@ Execution flow in Agent Deck mode:
    - after explicit acceptance in human-gated flow, run `review-closeout` for task-lane review, or finish the integration review for `integration_final`
    - request human UI confirmation before acceptance/closeout only when `ui_manual_confirmation=required`, or when `ui_manual_confirmation=auto` and explicit policy wants heuristic UI gating
 
-Mailbox subject (`rework_required`):
+Waypost Message subject (`rework_required`):
 - `rework required: <task_id> r<round>`
 
-Mailbox body rules (`rework_required`):
+Waypost Message body rules (`rework_required`):
 - use the full review report above as the body
 - set `Action: rework_required`
 - use `waypost`
@@ -274,12 +274,12 @@ Mailbox body rules (`rework_required`):
   - `to_address = agent-deck/<requester_session_id>`
   - `subject = "rework required: <task_id> r<round>"`
   - `body = <full review report>`
-- include enough evidence and fix guidance that the requester can continue from the mailbox body alone
+- include enough evidence and fix guidance that the requester can continue from the message body alone
 
-Mailbox subject (`user_requested_iteration` after user chooses iterate):
+Waypost Message subject (`user_requested_iteration` after user chooses iterate):
 - `iteration requested: <task_id> r<round>`
 
-Mailbox body rules (`user_requested_iteration`):
+Waypost Message body rules (`user_requested_iteration`):
 - restate the user decision and the required follow-ups in the body
 - keep `Action: user_requested_iteration`
 - include enough of the prior review findings that coder can continue without opening external workflow files
@@ -291,7 +291,7 @@ Mailbox body rules (`user_requested_iteration`):
   - `from_address = agent-deck/<reviewer_session_id>`
   - `to_address = agent-deck/<requester_session_id>`
   - `subject = "iteration requested: <task_id> r<round>"`
-  - `body = <iteration mailbox body>`
+  - `body = <iteration message body>`
 
 User-facing output requirement for `stop_recommended`:
 1. `### Review Decision`
@@ -310,7 +310,7 @@ Required interaction behavior:
 - In unattended flow, accepted `integration_final` reports return directly to planner/requester; do not route them into `review-closeout`
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
-- Keep mailbox JSON internal unless user explicitly asks
+- Keep message JSON internal unless user explicitly asks
 - Do not naturally end after writing the review report; if this action requires `rework_required`, `user_requested_iteration`, or `review-closeout`, complete that workflow step before ending the turn
 
 Sender identity rule:

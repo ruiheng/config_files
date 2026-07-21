@@ -5,7 +5,7 @@ description: Use for non-trivial implementation tasks that require meaningful co
 
 # Delegate Task
 
-Create one concise, outcome-oriented mailbox message for another AI agent.
+Create one concise, outcome-oriented Waypost message for another AI agent.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
@@ -24,7 +24,7 @@ Execution mode: strict serial; do not send the next delegated task before closeo
 
 ## 2) Output Mode
 
-Keep the delegate brief directly in the mailbox body.
+Keep the delegate brief directly in the message body.
 Keep it locally actionable, but include enough upstream context that coder can optimize for the parent goal instead of only the local wording.
 
 Delegate the outcome, not a solution recipe:
@@ -38,7 +38,7 @@ Delegate the outcome, not a solution recipe:
 Agent Deck mode:
 - Use the `agent-deck-workflow` skill for shared rules
 - delegate creator is planner sender
-- This delegation is Agent Deck mailbox/session workflow, not a host built-in subagent call.
+- This delegation is Agent Deck message/session workflow, not a host built-in subagent call.
 
 Branch-plan terms:
 - `integration_branch` is the existing non-task branch that should receive the completed task at closeout
@@ -48,7 +48,7 @@ Branch-plan terms:
 
 Resolve by priority:
 - `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
-- `planner_session_id`: explicit -> context -> bound mailbox sender context -> ask
+- `planner_session_id`: explicit -> context -> bound Waypost sender context -> ask
 - `planner_workspace`: explicit -> workflow context -> current workspace -> ask
 - `worker_workspace`: explicit -> workflow context -> `planner_workspace`
   - do not silently infer, create, or switch to a different worker workspace
@@ -84,7 +84,7 @@ Workflow policy inference:
 - unless user says otherwise, unattended keeps `ui_manual_confirmation = "skip"`
 - write inferred automation choices into `## Workflow Policy`
 
-## 3) Mailbox Body Template
+## 3) Waypost Message Body Template
 
 Use this structure:
 
@@ -170,7 +170,7 @@ Tool-routing rule:
 - preserve full coder/reviewer commands when the user gives them
 - otherwise resolve profile defaults through the shared resolver instead of hardcoding model/version defaults here
 
-## 4) Mailbox Send + Wakeup (When Agent Deck Mode Is On)
+## 4) Waypost Message Send + Wakeup (When Agent Deck Mode Is On)
 
 Preferred path: use the `waypost` MCP tools.
 
@@ -205,16 +205,16 @@ Workflow send sequence:
    - `--coder-session-ref <coder_session_ref>`
    - `--task-branch <task_branch>`
    - `--subject "delegate: <task_id> -> coder"`
-   - `--body-file <delegate mailbox body file or "-">`
+   - `--body-file <delegate message body file or "-">`
      - prefer `-` and pipe the body through stdin
-     - if a real file is needed, write it under this agent's `.agent-artifacts/mailbox/`
+     - if a real file is needed, write it under this agent's `.agent-artifacts/message/`
    - use the wrapper for active-task lock acquisition, delegate send, send failure rollback, and target wakeup
 
 Recommended subject:
 - `delegate: <task_id> -> coder`
 
 Rules:
-- keep the full delegate brief in mailbox body
+- keep the full delegate brief in message body
 - do not replace this path with host subagent tools; use `agent_deck_create_session` only for lifecycle allocation, and let `send-delegate-with-active-task-lock.sh` own delegate send and wakeup
 - include enough big-picture context that coder can judge whether the delegated task still serves the parent goal during execution
 - if the delegated task is based on a tech-design review, cite the reviewed branch, commit, and design-doc paths under `Starting Context` -> `Read before starting`
@@ -228,7 +228,7 @@ Rules:
 - do not pre-create reviewer sessions during delegate dispatch; when review is required, `review-request` creates or reuses `reviewer-<task_id>` on demand with `parent_session_id = <planner_session_id>` and `group_path = <planner session group; empty string for root>`
 - ensure coder and reviewer sessions use the same `<worker_workspace>` passed to `send-delegate-with-active-task-lock.sh`
 - `worker_workspace` may be the same path as `planner_workspace`; when they are the same, treat that as an explicit shared-workspace choice, not a workflow error
-- send delegated work through `send-delegate-with-active-task-lock.sh`; mailbox transport itself must stay workflow-agnostic
+- send delegated work through `send-delegate-with-active-task-lock.sh`; Waypost message transport itself must stay workflow-agnostic
 - do not split active-task lock acquisition and delegate send into separate workflow/tool steps
 - when `Per-task review: required`, coder should receive enough reviewer routing policy to create/reuse the reviewer later through `review-request`; reviewer must be planner-scoped, never coder-scoped
 - report target readiness only after the resolve/create/send path that applies has completed
@@ -243,7 +243,7 @@ Rules:
 
 After sending:
 - Return short confirmation with:
-  - mailbox subject
+  - message subject
   - one-line objective summary
   - `task_branch` / `integration_branch`
   - `coder_session_id` / `reviewer_session_ref` and any known `reviewer_session_id`
@@ -252,5 +252,5 @@ After sending:
   - temporary worktree path/cleanup, if created
   - recipient inbox address
   - listener/send summary, including any best-effort nudge if reported
-- Keep raw mailbox JSON internal unless user explicitly asks
+- Keep raw message JSON internal unless user explicitly asks
 - If listener/send fails, report stderr summary and include the shared diagnostics checklist from the `agent-deck-workflow` skill

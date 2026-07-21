@@ -34,11 +34,11 @@ reference to them.
 - Agent 1, **Planner** (`delegate-task`, `execute-plan`, `planner-closeout`): planning agent, prepares execution briefs, can execute a supervisor-assigned task list inside one workspace, and completes planner-side closeout
 - Supervisor: generic upstream report target; may dispatch a plan to a planner and receive one final plan report back
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
-- Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in mailbox body
+- Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in message body
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
 - Agent 5, **Browser Tester** (`browser-test`): usually a reusable long-lived runtime validation agent, keeps browser state warm when available, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - Refactor Reviewer (`refactor-review`): advisory reviewer that inspects existing code for duplication and simplification opportunities without making changes
-- Roundtable Moderator (`roundtable`): user-facing discussion controller; creates mailbox groups, selects participants, drains group updates, and presents synthesis
+- Roundtable Moderator (`roundtable`): user-facing discussion controller; creates Waypost group, selects participants, drains group updates, and presents synthesis
 - Roundtable Participant (`roundtable-participant`): agent-deck session that reads a group stream as one participant and posts concise role-specific replies
 - User: makes acceptance decisions only when the workflow explicitly requires human gating
 
@@ -48,8 +48,8 @@ reference to them.
 - `agent-deck` is used to start or require target sessions
 - `agent-deck-workflow/references/internal-protocol/shared-protocol.md` owns recv/wait, async sender, and target-status rules
 - `waypost` MCP is the default transport interface for agents
-- Workflow messages live in mailbox `subject` + `body`
-- use mailbox tools directly; use `waypost_bind` only when custom addresses are needed or mailbox context is missing
+- Workflow messages live in message `subject` + `body`
+- use Waypost MCP tools directly; use `waypost_bind` only when custom addresses are needed or Waypost message context is missing
 - The workflow does not generate Markdown handoff files by default
 
 ## End-to-End Loop
@@ -66,7 +66,7 @@ reference to them.
 7. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
 8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
 9. Repeat until quality is acceptable under workflow policy; unattended mode auto-accepts no-must-fix results by default unless the user or policy explicitly requires a human gate.
-10. After acceptance, Reviewer runs `review-closeout` and sends one closeout mailbox message to Planner.
+10. After acceptance, Reviewer runs `review-closeout` and sends one closeout Waypost message to Planner.
 11. Planner runs `planner-closeout` from that `closeout_delivered` body and batches merge/progress/next-task work.
 12. Coder, Reviewer, and Architect can be fully exited; Browser Tester stays long-lived.
 
@@ -85,33 +85,33 @@ reference to them.
 Use `roundtable` when the user wants a multi-agent discussion, brainstorm, critique, or advisory panel.
 
 1. User talks only to the moderator.
-2. Moderator clarifies intent, proposes participants, and creates a `group/roundtable-...` mailbox group.
+2. Moderator clarifies intent, proposes participants, and creates a `group/roundtable-...` Waypost group.
 3. Moderator registers itself as group notification subscriber with `waypost_group_add_subscriber`.
 4. Participants are real child agent-deck sessions of the moderator, with tool commands resolved through role `roundtable_participant`.
-5. Moderator sends clarified user intent to the group and nudges selected participants with personal mailbox control messages; the first turn is parallel by default, later turns are targeted unless the user asks for sequential round-robin.
+5. Moderator sends clarified user intent to the group and nudges selected participants with personal control messages; the first turn is parallel by default, later turns are targeted unless the user asks for sequential round-robin.
 6. Participants read group unread messages with `waypost_recv` plus `as_person`, then post one group reply.
-7. Group subscriber updates arrive as normal personal `group_message_available` deliveries, so the moderator uses normal `check-agent-mail` pickup and then runs `roundtable` Moderator Group Check.
+7. Group subscriber updates arrive as normal personal `group_message_available` deliveries, so the moderator uses normal `check-waypost-messages` pickup and then runs `roundtable` Moderator Group Check.
 8. Moderator presents synthesis to the user with per-participant `message_id` traceability; raw group history remains the source of truth.
-9. Ending keeps sessions and mailbox history by default; explicit cleanup removes participant sessions and the Agent Deck participant group after final synthesis.
+9. Ending keeps sessions and Waypost message history by default; explicit cleanup removes participant sessions and the Agent Deck participant group after final synthesis.
 
 ## Flow Diagram
 
 ```mermaid
 flowchart TD
-    P[Planner] -->|mailbox: execute_delegate_task| C[Coder]
-    P -->|mailbox: tech_design_review_requested| A[Architect]
-    C -->|mailbox: tech_design_review_requested| A
-    A -->|mailbox: tech_design_review_report| P
-    A -->|mailbox: tech_design_review_report| C
+    P[Planner] -->|message: execute_delegate_task| C[Coder]
+    P -->|message: tech_design_review_requested| A[Architect]
+    C -->|message: tech_design_review_requested| A
+    A -->|message: tech_design_review_report| P
+    A -->|message: tech_design_review_report| C
     C -. creates/reuses planner-scoped reviewer .-> R[Reviewer]
-    C -->|mailbox: review_requested| R
-    R -->|mailbox: browser_check_requested| B[Browser Tester]
-    X[Requester] -->|mailbox: browser_check_requested| B
-    B -->|mailbox: browser_check_report| X
+    C -->|message: review_requested| R
+    R -->|message: browser_check_requested| B[Browser Tester]
+    X[Requester] -->|message: browser_check_requested| B
+    B -->|message: browser_check_report| X
     R -->|review result| DEC{Accepted By Policy/User?}
     DEC -- No --> C
     DEC -- Yes --> R
-    R -->|mailbox: closeout_delivered| P
+    R -->|message: closeout_delivered| P
 
     style DEC fill:#fff3cd,stroke:#b58900,stroke-width:1px
 ```
@@ -129,15 +129,15 @@ flowchart TD
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
-- `check-agent-mail` routes `group/roundtable-*` `group_message_available` control mail to `roundtable`; replace this name-pattern rule with an explicit mapping if another group workflow is added
+- `check-waypost-messages` routes `group/roundtable-*` `group_message_available` control message to `roundtable`; replace this name-pattern rule with an explicit mapping if another group workflow is added
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session` with explicit parent group; root group is empty and valid
 - delegated coder flow creates or reuses reviewer only through `review-request`; reviewer must be parented to planner, not coder
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.
 - Current agent-deck session hierarchy cannot always express deeper workflow ownership once a planner is already a child; keep any subgroup/group-path fallback inside the session manager rather than the workflow contract.
-- The receiver should always read mailbox `body` first
-- A received workflow mail is executable work, not a notification to acknowledge and ignore
-- Use `check-agent-mail` as the receiver-side wake handler
+- The receiver should always read message `body` first
+- A received workflow message is executable work, not a notification to acknowledge and ignore
+- Use `check-waypost-messages` as the receiver-side wake handler
 - cross-session progress is asynchronous; follow the shared Async sender rule after dispatch
 - in a shared workspace, the active task worktree state is coder-owned until planner closeout begins; planner must not alter that workspace state while other agents may still be working there
 - when planner self-implements a trivial code task, it must create an explicit task branch from the planner-owned integration branch, commit without routine user confirmation, run any required review, close out the task, and still send `plan_report_delivered`
@@ -151,10 +151,10 @@ Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
 2. Create `coder-<task_id>` and `architect-<task_id>` per task as needed; create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
-3. Queue mail first. Best-effort nudges may wake non-local targets, but correctness comes from receiver-side mailbox pickup, not sender-side waiting.
-   Newly created or restarted targets should use the same mailbox recv-first pickup path as any other target.
+3. Queue message first. Best-effort nudges may wake non-local targets, but correctness comes from receiver-side message pickup, not sender-side waiting.
+   Newly created or restarted targets should use the same message recv-first pickup path as any other target.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
-5. Keep workflow content in mailbox body instead of generated Markdown files.
+5. Keep workflow content in message body instead of generated Markdown files.
 6. Keep planner closeout actions batched after acceptance.
 7. When supervisor finishes integrating a planner lane result, clean up the planner-owned structure that was actually used for that run.
 8. Supervisor-side integration uses `git merge`; do not switch to `cherry-pick`, `rebase`, or manual history surgery unless the user explicitly asks.
@@ -162,7 +162,7 @@ Current recommended operating mode:
 Use skills:
 
 - Project workflow skill: `agent-deck-workflow`
-- Receiver wake handler: `check-agent-mail`
+- Receiver wake handler: `check-waypost-messages`
 - Planner closeout: `planner-closeout`
 - Plan dispatch: `dispatch-plan`
 - Plan execution: `execute-plan`

@@ -339,7 +339,7 @@ prefix_rule(
 prefix_rule(
     pattern = ["waypost"],
     decision = "allow",
-    justification = "Mailbox workflow transport commands",
+    justification = "Waypost message transport commands",
 )
 
 # Allow shell formatting helper used in workflow wrappers

@@ -7,7 +7,7 @@ description: Local operating rules and references for using agent-deck sessions 
 
 Use this skill when the task is specifically about `agent-deck` session management, CLI usage, or local helper scripts in this directory.
 
-For normal mailbox workflow, follow `agent-deck-workflow` and the current action skill.
+For normal Waypost message workflow, follow `agent-deck-workflow` and the current action skill.
 Those paths use `agent_deck_create_session` / `agent_deck_require_session` through MCP for workflow session lifecycle.
 Use the CLI rules below for manual `agent-deck` operations, local troubleshooting, or explicit shell fallback.
 

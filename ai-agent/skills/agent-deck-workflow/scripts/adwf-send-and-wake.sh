@@ -9,7 +9,7 @@ Usage:
 
 Required:
   --from-session-id <id>         Sender session id
-  --subject <text>               Mailbox subject
+  --subject <text>               Waypost Message subject
   --body-file <path|->           Body source, or "-" for stdin.
                                   Prefer stdin; keep real files under the caller's .agent-artifacts tree.
 
@@ -24,8 +24,8 @@ Optional target creation:
   --workdir <path>               Workdir for `agent-deck launch` (default: cwd)
 
 Optional:
-  --content-type <type>          Mailbox content type (default: text/markdown)
-  --schema-version <value>       Mailbox schema version (default: 1)
+  --content-type <type>          Waypost Message content type (default: text/markdown)
+  --schema-version <value>       Waypost Message schema version (default: 1)
   --listener-message <text>      Rare bootstrap-only session-start instruction; leave empty for normal workflow
   --wake-message <text>          Ignored; active-session wake instruction is fixed
   --wake-delay-seconds <n>       Delay before active-session wake send (default: 10)
@@ -97,7 +97,7 @@ wake_delay_seconds="10"
 json_output=0
 
 workflow_wake_message() {
-  printf 'NOTICE: There might be new mail in waypost.'
+  printf 'NOTICE: There might be new message in waypost.'
 }
 
 while [[ $# -gt 0 ]]; do

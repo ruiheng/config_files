@@ -24,7 +24,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 ## Input
 
 Provide one of:
-1. the mailbox body from `refactor_review_requested`
+1. the message body from `refactor_review_requested`
 2. direct scope + refactoring goal + constraints
 
 Direct-use mode is valid.
@@ -38,7 +38,7 @@ Before reviewing, verify:
 
 If critical context is missing:
 - in direct-use mode, ask one short clarification question
-- in mailbox mode, continue and mark the missing items in `Scope Gaps`
+- in message mode, continue and mark the missing items in `Scope Gaps`
 
 ## Review Discipline
 
@@ -74,7 +74,7 @@ Prefer:
 
 ## Output Format
 
-Use this exact structure for both direct-use output and mailbox report body:
+Use this exact structure for both direct-use output and message report body:
 
 ```markdown
 Task: <task_id_or_N/A>
@@ -121,7 +121,7 @@ If none, write: `- None.`
 
 ## Direct-Use Mode
 
-When invoked directly by the user instead of mailbox workflow:
+When invoked directly by the user instead of Waypost message workflow:
 
 - use `Task: N/A`
 - use `From: refactor-reviewer N/A`
@@ -135,12 +135,12 @@ When invoked directly by the user instead of mailbox workflow:
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> default `N/A`
-- `planner_session_id`: explicit -> mailbox body -> default `N/A`
-- `refactor_reviewer_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `requester_session_id`: explicit -> mailbox body `From` header -> ask
-- `requester_role`: explicit -> mailbox body `From` header -> default `requester`
-- `round`: explicit -> mailbox body `Round` header -> default `1`
+- `task_id`: explicit -> message body -> default `N/A`
+- `planner_session_id`: explicit -> message body -> default `N/A`
+- `refactor_reviewer_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
+- `requester_session_id`: explicit -> message body `From` header -> ask
+- `requester_role`: explicit -> message body `From` header -> default `requester`
+- `round`: explicit -> message body `Round` header -> default `1`
 
 Execution flow in Agent Deck mode:
 1. review the requested scope

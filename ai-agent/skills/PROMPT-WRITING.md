@@ -53,7 +53,7 @@ That wording is shorter than a full rule, but too vague to execute safely.
 
 - shared protocol files define transport, envelope, lifecycle, and common sequencing
 - action skills define role-specific business behavior
-- requester mailbox bodies should carry task facts and constraints, not the receiver's own prompt
+- requester message bodies should carry task facts and constraints, not the receiver's own prompt
 
 ### 4. Do not leak another role's implementation details
 
@@ -69,7 +69,7 @@ That wording is shorter than a full rule, but too vague to execute safely.
 
 Good:
 - require target session through MCP
-- send mailbox
+- send message
 - stop
 
 Bad:
@@ -94,7 +94,7 @@ Do not leave room for the agent to improvise between several "possible" options.
 ### 8. Be precise about completion and `ack`
 
 - default rule: `waypost_ack` only after the message's required workflow action is complete
-- when you mean mailbox lifecycle, say `ack claimed inbound delivery`, not just `ack`
+- when you mean message lifecycle, say `ack claimed inbound delivery`, not just `ack`
 - never imply a sender-side `ack` after `waypost_send`; sender-side completion is `waypost_send` success
 - do not use vague wording such as:
   - "incorporated into working state"
@@ -136,7 +136,7 @@ That includes:
 ### 12. Avoid duplicated guidance
 
 - one rule should have one owner
-- repeated wording across protocol, action skill, mailbox template, and README will drift
+- repeated wording across protocol, action skill, message template, and README will drift
 - if a rule must be repeated, keep one source authoritative and keep the repeat minimal
 
 Repeated near-duplicates are dangerous because the model may synthesize a third meaning.
@@ -165,7 +165,7 @@ Before landing a prompt change, check for these:
 - Did we tell the receiver how another role works internally?
 - Did we imply a reply should arrive within a short timeout?
 - Did we make idle waits bounded and non-polling?
-- Did we let a sender cross the mailbox/nudge boundary to manage receiver execution?
+- Did we let a sender cross the message/nudge boundary to manage receiver execution?
 - Did we allow the agent to mutate shared workspace state while another agent may still own it?
 - Did we describe manual steps where a script/tool should be authoritative?
 - Did we make `ack` happen before the workflow action is actually complete?

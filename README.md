@@ -161,7 +161,7 @@ Options:
 | Source | Target | Description |
 |--------|--------|-------------|
 | `ai-agent/skills/<skill>/` | `~/.gemini/antigravity-cli/skills/<skill>/` | **Each skill linked individually** |
-| `agent-mailbox mcp` | `~/.gemini/config/mcp_config.json` | Antigravity CLI MCP server config |
+| `waypost mcp` | `~/.gemini/config/mcp_config.json` | Antigravity CLI MCP server config |
 
 **Note**: Antigravity MCP servers inherit the parent process environment. The installer does not write an `env` block for Antigravity.
 
@@ -170,7 +170,7 @@ Options:
 | Source | Target | Description |
 |--------|--------|-------------|
 | `ai-agent/skills/<skill>/` | `~/.kiro/skills/<skill>/` | **Each skill linked individually** |
-| `agent-mailbox mcp` | `~/.kiro/settings/mcp.json` | Kiro CLI MCP server config |
+| `waypost mcp` | `~/.kiro/settings/mcp.json` | Kiro CLI MCP server config |
 
 ### Other Special Configurations
 

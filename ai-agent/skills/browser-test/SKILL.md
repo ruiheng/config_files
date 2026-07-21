@@ -5,13 +5,13 @@ description: Validates browser behavior with agent-browser and sends a browser-c
 
 # Browser Test
 
-Run browser validation from a `browser_check_requested` mailbox body and report the result back to the requester session.
+Run browser validation from a `browser_check_requested` message body and report the result back to the requester session.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
-Provide the mailbox body from `browser_check_requested`.
+Provide the message body from `browser_check_requested`.
 
 ## Primary Tool
 
@@ -80,7 +80,7 @@ Before the first browser action in a workflow turn, run a minimal environment ch
 
 ## Output Format
 
-Use this exact structure as the mailbox body:
+Use this exact structure as the message body:
 
 ```markdown
 Task: <task_id>
@@ -124,13 +124,13 @@ PASS / FAIL / UNKNOWN
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> ask
-- `planner_session_id`: explicit -> mailbox body -> ask
-- `browser_tester_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `requester_session_id`: explicit -> mailbox body `From` header -> ask
-- `requester_workspace`: explicit -> mailbox body -> ask
-- `requester_role`: explicit -> mailbox body `From` header -> default `requester`
-- `round`: explicit -> mailbox body `Round` header -> default `1`
+- `task_id`: explicit -> message body -> ask
+- `planner_session_id`: explicit -> message body -> ask
+- `browser_tester_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
+- `requester_session_id`: explicit -> message body `From` header -> ask
+- `requester_workspace`: explicit -> message body -> ask
+- `requester_role`: explicit -> message body `From` header -> default `requester`
+- `round`: explicit -> message body `Round` header -> default `1`
 
 Execution flow:
 1. run the first-use environment check
@@ -156,10 +156,10 @@ Execution flow:
 - prefer the shortest path that still covers the requested scenarios, assertions, and regression checks
 - when the request includes multiple related test points, report which ones were covered, which failed, and which remained unverified
 - return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
-- if `agent-browser` is missing, or required session identity cannot be resolved from explicit metadata plus bound mailbox sender context, state that explicitly in the report or blocker message
+- if `agent-browser` is missing, or required session identity cannot be resolved from explicit metadata plus bound Waypost sender context, state that explicitly in the report or blocker message
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
 - prefer requester-provided login/auth/setup context over re-discovering it from scratch
-- use the requester workspace from the mailbox body for reply-path session verification; do not substitute the browser-tester's current workspace
+- use the requester workspace from the message body for reply-path session verification; do not substitute the browser-tester's current workspace
 - Do not naturally end after writing the report; this workflow turn is complete only after the required `waypost_send` back to the requester has succeeded

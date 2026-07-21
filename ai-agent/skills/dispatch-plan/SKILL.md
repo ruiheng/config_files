@@ -44,7 +44,7 @@ When allocating a new planner lane:
 - when deeper nesting needs subgroup fallback, keep that inside the session manager; do not expose it in the workflow contract
 - when creating a new planner session and no planner title/ref is provided, use `planner-YYYYMMDD-HHMM-<slug>`; do not use bare `planner`
 - `integration_branch` is the planner-owned branch for this dispatched plan, not the supervisor landing branch
-- for a new plan dispatch, create a fresh `integration_branch` from the current supervisor branch before sending the mailbox body
+- for a new plan dispatch, create a fresh `integration_branch` from the current supervisor branch before sending the message body
 - do not silently reuse an existing planner integration branch from an earlier run; reuse is allowed only when the user explicitly says this dispatch is resuming that same unfinished plan
 - if the requested or derived `integration_branch` already exists and resume was not explicit, choose a new branch name or ask; do not dispatch onto an old branch tip
 - create the planner integration branch without switching the supervisor worktree; use the current supervisor branch as the start-point
@@ -52,12 +52,12 @@ When allocating a new planner lane:
 - when `planner_session_id` is already known, treat the planner session as existing and carry forward its recorded `planner_tool_profile` / `planner_tool_cmd`; do not resolve a fresh planner command
 - default `per_task_review = required`
 - default `final_review = skip`
-- blockers stop with a user question; do not add blocker mail to supervisor
+- blockers stop with a user question; do not add blocker message to supervisor
 - planner is not done when implementation is done; planner is done only after the assigned goal is complete or blocked and the required final report has been sent to supervisor
-- normal path is direct execution: resolve required inputs, create or require the planner session through MCP, then send the mailbox body
+- normal path is direct execution: resolve required inputs, create or require the planner session through MCP, then send the message body
 - do not inspect `--help`, environment variables, or repo docs first unless the MCP create/require or send step actually fails
 
-## Mailbox Body Template
+## Waypost Message Body Template
 
 ```markdown
 Task: <plan_id>
@@ -104,7 +104,7 @@ Round: 1
 [only when present]
 ```
 
-## Mailbox Send
+## Waypost Message Send
 
 1. resolve the current supervisor branch; if the worktree is detached or the landing branch is unclear, stop and ask instead of guessing
 2. resolve `workspace`
@@ -141,7 +141,7 @@ Round: 1
    - `from_address = agent-deck/<supervisor_session_id>`
    - `to_address = agent-deck/<planner_session_id>`
    - `subject = "plan dispatch: <plan_id>"`
-   - `body = <execute-plan mailbox body>`
+   - `body = <execute-plan message body>`
 14. follow the shared Async sender rule for planner reports
 
 Rules:
@@ -149,5 +149,5 @@ Rules:
 - new planner lanes must pass `group_path = <supervisor session group; empty string for root>` with `parent_session_id`; do not rely on path-derived default grouping
 - after a planner lane is created, later workflow turns must reuse the real `planner_session_id`; do not resume a normal workflow turn by `planner_session_ref`
 - do not create planner sessions through direct `agent-deck` CLI in the normal path
-- treat MCP session create/require as a synchronous step; wait for it to return before composing or sending mailbox content
+- treat MCP session create/require as a synchronous step; wait for it to return before composing or sending message content
 - record both `planner_tool_profile` and `planner_tool_cmd` in workflow context; use the command for session creation and the profile as policy metadata

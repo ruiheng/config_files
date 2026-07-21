@@ -5,7 +5,7 @@ description: Run a real multi-agent roundtable or brainstorming discussion with 
 
 # Roundtable
 
-Moderate a group discussion. The user talks to you; participants talk in the mailbox group.
+Moderate a group discussion. The user talks to you; participants talk in the Waypost group.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
@@ -14,11 +14,11 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 - You are the moderator, not a domain expert participant.
 - Do not contribute substantive expert opinions as yourself.
 - Clarify the user's intent, choose and steer participants, keep records, and present results.
-- Preserve the raw discussion in the group mailbox; do not replace it with local notes.
+- Preserve the raw discussion in the group message; do not replace it with local notes.
 
 ## Context Fields
 
-Resolve by priority: explicit input -> current roundtable context -> mailbox body -> ask.
+Resolve by priority: explicit input -> current roundtable context -> message body -> ask.
 
 - `roundtable_id`: stable id, default `rt-YYYYMMDD-HHMM-<slug>`
 - `group_address`: `Group-Address` control header -> current context -> default `group/roundtable-<roundtable_id>`
@@ -60,7 +60,7 @@ Resolve by priority: explicit input -> current roundtable context -> mailbox bod
    - `parent_session_id = <moderator_session_id>`
    - `group_path = <participant_group_path>`
    - `no_parent_link = false`
-   - leave `startup_instruction` / `listener_message` empty; control mail is the bootstrap path and wakeup is best-effort
+   - leave `startup_instruction` / `listener_message` empty; control message is the bootstrap path and wakeup is best-effort
 6. Send the opening user-intent message to the group with `waypost_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
 7. Send each participant one personal control message with Action `roundtable_participant_turn`; first turns are parallel by default.
 
@@ -80,11 +80,11 @@ When the user adds a new thought or question:
 
 ## Moderator Group Check
 
-Use this for `Action: group_message_available` personal control mail or when the user asks for updates.
+Use this for `Action: group_message_available` personal control message or when the user asks for updates.
 
 1. Call `waypost_recv` with:
-   - `addresses = [Group-Address from control mail or group_address]`
-   - `as_person = [As-Person from control mail or moderator]`
+   - `addresses = [Group-Address from control message or group_address]`
+   - `as_person = [As-Person from control message or moderator]`
 2. Repeat group `waypost_recv` until it returns `no_message`.
    - This loop is only for group stream draining; do not repeat personal `waypost_recv`.
    - Stop after 100 messages and report that more unread group messages remain.
@@ -106,7 +106,7 @@ Do not paste long raw discussion by default. Do not hide dissent in a single con
 
 ## Participant Control Message
 
-Use this body for participant personal mail:
+Use this body for participant personal message:
 
 ```markdown
 Task: <roundtable_id>
@@ -135,7 +135,7 @@ Round: <round>
 - Keep the answer concise and assume the moderator will translate for the user.
 ```
 
-After participant control mail is sent, do independent moderator work when available. If no visible local work remains, use normal `check-agent-mail`; group subscriber updates arrive as durable personal `group_message_available` deliveries, while external wake notification is only best-effort acceleration.
+After participant control message is sent, do independent moderator work when available. If no visible local work remains, use normal `check-waypost-messages`; group subscriber updates arrive as durable personal `group_message_available` deliveries, while external wake notification is only best-effort acceleration.
 
 ## Ending
 
@@ -156,4 +156,4 @@ When the user explicitly asks to clean up or archive:
 2. Produce the final synthesis before deleting anything.
 3. Remove participant sessions with `agent-deck remove <participant_session_id>`.
 4. Delete the participant Agent Deck group with `agent-deck group delete <participant_group_path>` only after participant sessions are gone.
-5. Do not delete the mailbox group unless the user explicitly asks to delete the raw discussion history.
+5. Do not delete the Waypost group unless the user explicitly asks to delete the raw discussion history.

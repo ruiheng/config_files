@@ -12,11 +12,11 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 ## Input
 
 Provide one of:
-1. the mailbox body from `tech_design_review_requested`
+1. the message body from `tech_design_review_requested`
 2. direct scope + committed design docs + base branch + problem/goals/constraints
 
 Direct-use mode is valid.
-In mailbox mode, treat the body as a review brief and committed-doc pointer, not as the full design source.
+In message mode, treat the body as a review brief and committed-doc pointer, not as the full design source.
 Inspect the latest committed docs on the stated branch before judging the design.
 
 ## Review Dimensions
@@ -69,7 +69,7 @@ Before reviewing quality, verify:
 
 Hard block:
 - if problem statement or in-scope design docs are missing, ask one short clarification question in direct-use mode
-- in mailbox mode, continue but mark the report as `NEEDS_REVISION` and list the missing critical items under `Major Risks`
+- in message mode, continue but mark the report as `NEEDS_REVISION` and list the missing critical items under `Major Risks`
 
 Soft gaps:
 - if tech-design base branch, alternatives/rejected options, or major constraints are missing, continue the review
@@ -81,7 +81,7 @@ If critical context is still missing after one clarification in direct-use mode:
 
 ## Output Format
 
-Mailbox mode uses the full structure below:
+Message mode uses the full structure below:
 
 ```markdown
 Task: <task_id>
@@ -134,8 +134,8 @@ Decision guidance:
 
 ## Direct-Use Mode
 
-When invoked directly by the user instead of mailbox workflow:
-- skip the mailbox header block
+When invoked directly by the user instead of Waypost message workflow:
+- skip the message header block
 - keep the same review sections starting at `## Summary`
 - return the report directly in the conversation
 
@@ -144,19 +144,19 @@ When invoked directly by the user instead of mailbox workflow:
 Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
-- `task_id`: explicit -> mailbox body -> ask
-- `architect_session_id`: explicit -> mailbox body `To` header -> bound mailbox sender context -> ask
-- `requester_session_id`: explicit -> mailbox body `From` header -> ask
-- `requester_role`: explicit -> mailbox body `From` header -> default `requester`
-- `tech_design_base_branch`: explicit -> mailbox body `Base branch` -> ask
-- `architect_tool_cmd`: explicit -> mailbox body `Tool Context`; if missing, use the shared tool-resolution contract for role `architect`
-- `architect_tool_profile`: explicit -> mailbox body `Tool Context` -> resolver `tool_profile`
-- `round`: explicit -> mailbox body `Round` header -> default `1`
+- `task_id`: explicit -> message body -> ask
+- `architect_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
+- `requester_session_id`: explicit -> message body `From` header -> ask
+- `requester_role`: explicit -> message body `From` header -> default `requester`
+- `tech_design_base_branch`: explicit -> message body `Base branch` -> ask
+- `architect_tool_cmd`: explicit -> message body `Tool Context`; if missing, use the shared tool-resolution contract for role `architect`
+- `architect_tool_profile`: explicit -> message body `Tool Context` -> resolver `tool_profile`
+- `round`: explicit -> message body `Round` header -> default `1`
 
 Execution flow:
 1. preserve or resolve `architect_tool_profile` / `architect_tool_cmd`
 2. review the latest committed tech-design docs on the referenced branch
-   - for round `>1` in the same architect session, compare current branch `HEAD` against the previous reviewed commit from the prior report/mailbox context
+   - for round `>1` in the same architect session, compare current branch `HEAD` against the previous reviewed commit from the prior report/Waypost message context
    - if the previous reviewed commit is unavailable, use git history for the in-scope docs and state the baseline uncertainty under `Residual Risk`
 3. produce one `tech_design_review_report`
 
