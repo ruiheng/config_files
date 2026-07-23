@@ -1074,7 +1074,7 @@ rewrite_antigravity_waypost_config() {
 
     if [[ -s "$antigravity_settings" ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would clean legacy Antigravity MCP entries and merge Waypost MCP permissions into: $antigravity_settings"
+            log_dry "Would migrate Antigravity MCP permissions to waypost in: $antigravity_settings"
             return 0
         fi
 
@@ -1084,37 +1084,36 @@ rewrite_antigravity_waypost_config() {
         }
 
         if ! jq --argjson perms "$antigravity_permissions_json" '
-            def is_legacy_waypost_permission:
-                if type != "string" then
-                    false
+            def migrate_permission:
+                if type == "string" then
+                    sub("^mcp\\((workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)/"; "mcp(waypost/")
+                    | sub("^mcp\\(waypost/mailbox_"; "mcp(waypost/waypost_")
                 else
-                    startswith("mcp(workflow_mailbox/")
-                    or startswith("mcp(agent_mailbox/")
-                    or startswith("mcp(agent-mailbox/")
-                    or startswith("mcp(adwf-mailbox/")
-                    or startswith("mcp(waypost/")
+                    .
                 end;
+            def is_waypost_permission:
+                type == "string" and startswith("mcp(waypost/");
             if (.mcpServers | type) == "object" then
-                .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
+                .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", .adwf_mailbox, ."adwf-mailbox")
                 | if (.mcpServers == {}) then del(.mcpServers) else . end
             else
                 .
             end
             | .permissions.allow = (
                 (.permissions.allow // [])
-                | map(select(is_legacy_waypost_permission | not))
-                | . + $perms
+                | map(migrate_permission)
+                | if any(.[]?; is_waypost_permission) then . else . + $perms end
                 | unique
             )
         ' "$antigravity_settings" > "$tmp_file"; then
             rm -f "$tmp_file"
-            log_error "Failed to clean legacy Antigravity MCP config: $antigravity_settings"
+            log_error "Failed to migrate Antigravity MCP permissions: $antigravity_settings"
             return 1
         fi
 
         if ! mv "$tmp_file" "$antigravity_settings"; then
             rm -f "$tmp_file"
-            log_error "Failed to write Antigravity settings cleanup: $antigravity_settings"
+            log_error "Failed to write Antigravity MCP permissions: $antigravity_settings"
             return 1
         fi
     fi
@@ -1129,6 +1128,65 @@ install_antigravity_waypost_mcp() {
 
 install_kiro_waypost_mcp() {
     ensure_top_level_mcp_stdio_server "Kiro CLI" "$HOME/.kiro/settings/mcp.json" "waypost" "waypost" '["mcp"]'
+}
+
+migrate_codex_legacy_waypost_tool_permissions() {
+    local codex_config="$HOME/.codex/config.toml"
+
+    if [[ ! -f "$codex_config" ]]; then
+        return 0
+    fi
+
+    if ! perl -0ne '
+        exit(/\[mcp_servers\.("?(?:workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)"?)\.tools\./m ? 0 : 1);
+    ' "$codex_config"; then
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would migrate Codex MCP tool approvals to waypost in: $codex_config"
+        return 0
+    fi
+
+    if ! perl -0pi -e '
+        my @lines = split /\n/, $_, -1;
+        my $legacy_server = qr/(?:"(?:workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)"|(?:workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox))/;
+        my %waypost_tools;
+
+        for my $line (@lines) {
+          if ($line =~ /^\[mcp_servers\.waypost\.tools\.(?:"?([A-Za-z0-9_-]+)"?)\]\s*(?:\#.*)?$/) {
+            $waypost_tools{$1} = 1;
+          }
+        }
+
+        my @out;
+        my $skip_section = 0;
+        for my $line (@lines) {
+          if ($line =~ /^\[/) {
+            $skip_section = 0;
+            if ($line =~ /^\[mcp_servers\.$legacy_server\.tools\.(?:"?([A-Za-z0-9_-]+)"?)\](\s*(?:\#.*)?)$/) {
+              my $target_tool = $1;
+              my $trailing_comment = $2;
+              $target_tool =~ s/^mailbox_/waypost_/;
+              if ($waypost_tools{$target_tool}) {
+                $skip_section = 1;
+                next;
+              }
+              $waypost_tools{$target_tool} = 1;
+              $line = "[mcp_servers.waypost.tools.$target_tool]$trailing_comment";
+            }
+          }
+          push @out, $line unless $skip_section;
+        }
+
+        $_ = join "\n", @out;
+    ' "$codex_config"; then
+        log_error "Failed to migrate Codex MCP tool approvals: $codex_config"
+        return 1
+    fi
+
+    log_ok "Migrated Codex MCP tool approvals to waypost"
+    return 0
 }
 
 remove_codex_legacy_waypost_mcps() {
@@ -1164,8 +1222,6 @@ install_codex_waypost_mcp() {
         return 0
     fi
 
-    remove_codex_legacy_waypost_mcps
-
     if codex_waypost_uses_builtin_command; then
         log_ok "Codex MCP already configured: waypost"
     else
@@ -1188,6 +1244,9 @@ install_codex_waypost_mcp() {
             log_ok "Configured Codex MCP: waypost"
         fi
     fi
+
+    migrate_codex_legacy_waypost_tool_permissions || return 1
+    remove_codex_legacy_waypost_mcps
 
     local codex_config="$HOME/.codex/config.toml"
     if [[ ! -f "$codex_config" ]]; then
@@ -1271,7 +1330,7 @@ ensure_claude_waypost_permissions() {
     }
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would merge Claude waypost MCP tool permissions into: $claude_settings"
+        log_dry "Would migrate Claude MCP permissions to waypost in: $claude_settings"
         return 0
     fi
 
@@ -1293,34 +1352,34 @@ ensure_claude_waypost_permissions() {
     }
 
     if ! jq --argjson perms "$claude_permissions_json" '
-        def is_legacy_waypost_permission:
-            if type != "string" then
-                false
+        def migrate_permission:
+            if type == "string" then
+                sub("^mcp__(workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)__"; "mcp__waypost__")
+                | sub("^mcp__waypost__mailbox_"; "mcp__waypost__waypost_")
             else
-                startswith("mcp__workflow_mailbox__")
-                or startswith("mcp__agent_mailbox__")
-                or startswith("mcp__adwf_mailbox__")
-                or startswith("mcp__waypost__")
+                .
             end;
+        def is_waypost_permission:
+            type == "string" and startswith("mcp__waypost__");
         .permissions.allow = (
             (.permissions.allow // [])
-            | map(select(is_legacy_waypost_permission | not))
-            | . + $perms
+            | map(migrate_permission)
+            | if any(.[]?; is_waypost_permission) then . else . + $perms end
             | unique
         )
     ' "$claude_settings" > "$tmp_file"; then
         rm -f "$tmp_file"
-        log_error "Failed to merge Claude permissions: $claude_settings"
+        log_error "Failed to migrate Claude MCP permissions: $claude_settings"
         return 1
     fi
 
     if mv "$tmp_file" "$claude_settings"; then
-        log_ok "Merged Claude waypost MCP tool permissions"
+        log_ok "Migrated Claude MCP permissions to waypost"
         return 0
     fi
 
     rm -f "$tmp_file"
-    log_error "Failed to write Claude settings: $claude_settings"
+    log_error "Failed to write Claude MCP permissions: $claude_settings"
     return 1
 }
 
