@@ -673,6 +673,87 @@ install_ast_grep_skill() {
     return 1
 }
 
+tree_sitter_cli_version() {
+    local version_output
+
+    version_output="$(tree-sitter --version 2>/dev/null)" || return 1
+    if [[ "$version_output" =~ ^tree-sitter[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        return 0
+    fi
+
+    return 1
+}
+
+tree_sitter_version_is_supported() {
+    local actual_version="$1"
+    local required_version="$2"
+    local actual_major actual_minor actual_patch
+    local required_major required_minor required_patch
+    local IFS='.'
+
+    read -r actual_major actual_minor actual_patch <<< "$actual_version"
+    read -r required_major required_minor required_patch <<< "$required_version"
+
+    [[ "$actual_major" =~ ^[0-9]+$ && "$actual_minor" =~ ^[0-9]+$ && "$actual_patch" =~ ^[0-9]+$ ]] || return 1
+    [[ "$required_major" =~ ^[0-9]+$ && "$required_minor" =~ ^[0-9]+$ && "$required_patch" =~ ^[0-9]+$ ]] || return 1
+
+    if (( 10#$actual_major != 10#$required_major )); then
+        (( 10#$actual_major > 10#$required_major ))
+        return
+    fi
+    if (( 10#$actual_minor != 10#$required_minor )); then
+        (( 10#$actual_minor > 10#$required_minor ))
+        return
+    fi
+
+    (( 10#$actual_patch >= 10#$required_patch ))
+}
+
+install_tree_sitter_cli() {
+    local required_version="0.26.1"
+    local current_version=""
+
+    log_info "Checking tree-sitter CLI..."
+
+    if current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
+        log_ok "Found supported tree-sitter CLI: $current_version"
+        return 0
+    fi
+
+    if [[ -n "$current_version" ]]; then
+        log_warn "tree-sitter CLI $current_version is unsupported; requires $required_version or newer"
+    fi
+
+    if ! command -v npm &>/dev/null; then
+        log_error "tree-sitter CLI requires npm; load NVM and rerun"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: npm install -g tree-sitter-cli (requires $required_version or newer)"
+        return 0
+    fi
+
+    log_info "Running: npm install -g tree-sitter-cli"
+    if ! npm install -g tree-sitter-cli; then
+        log_error "Failed to install tree-sitter CLI with npm"
+        return 1
+    fi
+
+    if current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
+        log_ok "Installed supported tree-sitter CLI: $current_version"
+        return 0
+    fi
+
+    if [[ -n "$current_version" ]]; then
+        log_error "Installed tree-sitter CLI $current_version is unsupported; requires $required_version or newer"
+    else
+        log_error "Command still unavailable after install: tree-sitter"
+    fi
+    return 1
+}
+
 install_codegraph() {
     log_info "Checking codegraph..."
 
@@ -2675,6 +2756,10 @@ main() {
     fi
 
     if ! install_codegraph; then
+        exit 1
+    fi
+
+    if ! install_tree_sitter_cli; then
         exit 1
     fi
 

@@ -208,7 +208,7 @@ vim.api.nvim_create_autocmd('FileType', {
     vim.opt_local.syntax = 'ON'
 
     opt_local.foldmethod = 'expr'
-    opt_local.foldexpr = 'nvim_treesitter#foldexpr()'
+    opt_local.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
     opt_local.foldenable = false
 
     my_set_local_tab_stop(2)
@@ -229,7 +229,7 @@ vim.api.nvim_create_autocmd('FileType', {
     vim.opt_local.syntax = 'ON'
 
     -- opt_local.foldmethod = 'expr'
-    -- opt_local.foldexpr = 'nvim_treesitter#foldexpr()'
+    -- opt_local.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
     opt_local.foldenable = false
 
     my_set_local_tab_stop(4)

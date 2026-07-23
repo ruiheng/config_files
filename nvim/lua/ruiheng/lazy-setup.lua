@@ -727,74 +727,96 @@ require("lazy").setup({
     },
 
     { "nvim-treesitter/nvim-treesitter",
-      lazy = true,
-      event = { "User LazyLoadProgramming" },
-      branch = 'main',
-      build = ':TSUpdate', -- We recommend updating the parsers on update
+      lazy = false,
+      branch = "main",
+      build = ":TSUpdate",
       config = function()
-        local configs = require("nvim-treesitter")
-        configs.setup {
-          ensure_installed = { "c", "cpp", "haskell", "python", "javascript", "css", "html", "markdown", "markdown_inline", "git_rebase", "gitcommit", "gitignore", "json", "lua", "make", "toml", "yaml", "vim", "vimdoc", "zig" },
-          highlight = {
-            enable = true,
-            additional_vim_regex_highlighting = false,
-          },
-          injections = {
-            enable = true,
-          },
-
-          indent = {
-            enable = true,
-          },
-
-          textobjects = {
-            select = {
-              enable = true,
-
-              -- Automatically jump forward to textobj, similar to targets.vim
-              lookahead = true,
-
-              keymaps = {
-                -- You can use the capture groups defined in textobjects.scm
-                ["af"] = "@function.outer",
-                ["if"] = "@function.inner",
-                ["ac"] = "@class.outer",
-                -- You can optionally set descriptions to the mappings (used in the desc parameter of
-                -- nvim_buf_set_keymap) which plugins like which-key display
-                ["ic"] = { query = "@class.inner", desc = "Select inner part of a class region" },
-                -- You can also use captures from other query groups like `locals.scm`
-                ["as"] = { query = "@scope", query_group = "locals", desc = "Select language scope" },
-              },
-              -- You can choose the select mode (default is charwise 'v')
-              --
-              -- Can also be a function which gets passed a table with the keys
-              -- * query_string: eg '@function.inner'
-              -- * method: eg 'v' or 'o'
-              -- and should return the mode ('v', 'V', or '<c-v>') or a table
-              -- mapping query_strings to modes.
-              selection_modes = {
-                ['@parameter.outer'] = 'v', -- charwise
-                ['@function.outer'] = 'V', -- linewise
-                ['@class.outer'] = '<c-v>', -- blockwise
-              },
-              -- If you set this to `true` (default is `false`) then any textobject is
-              -- extended to include preceding or succeeding whitespace. Succeeding
-              -- whitespace has priority in order to act similarly to eg the built-in
-              -- `ap`.
-              --
-              -- Can also be a function which gets passed a table with the keys
-              -- * query_string: eg '@function.inner'
-              -- * selection_mode: eg 'v'
-              -- and should return true of false
-              include_surrounding_whitespace = true,
-            },
-          },
+        local treesitter = require("nvim-treesitter")
+        local languages = {
+          "c", "cpp", "haskell", "python", "javascript", "css", "html",
+          "markdown", "markdown_inline", "git_rebase", "gitcommit", "gitignore",
+          "json", "lua", "make", "toml", "yaml", "vim", "vimdoc", "zig",
         }
+        local group = vim.api.nvim_create_augroup("ruiheng_treesitter", { clear = true })
 
-        -- vim.o.foldmethod = 'expr'
-        -- vim.o.foldexpr = 'nvim_treesitter#foldexpr()'
-        -- vim.o.foldenable = false
-     end
+        local function enable_treesitter(bufnr)
+          if not vim.api.nvim_buf_is_valid(bufnr) then
+            return
+          end
+
+          if pcall(vim.treesitter.start, bufnr) then
+            vim.bo[bufnr].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+          end
+        end
+
+        local function enable_loaded_buffers()
+          for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_loaded(bufnr) then
+              enable_treesitter(bufnr)
+            end
+          end
+        end
+
+        local function supported_tree_sitter_cli()
+          if vim.fn.executable("tree-sitter") ~= 1 then
+            return false
+          end
+
+          local result = vim.system({ "tree-sitter", "--version" }):wait()
+          local major, minor, patch = (result.stdout or ""):match("tree%-sitter%s+(%d+)%.(%d+)%.(%d+)")
+          if result.code ~= 0 or not major then
+            return false
+          end
+
+          local version = { tonumber(major), tonumber(minor), tonumber(patch) }
+          local required = { 0, 26, 1 }
+          for index = 1, #required do
+            if version[index] ~= required[index] then
+              return version[index] > required[index]
+            end
+          end
+          return true
+        end
+
+        treesitter.setup()
+
+        vim.api.nvim_create_autocmd("FileType", {
+          group = group,
+          callback = function(args)
+            enable_treesitter(args.buf)
+          end,
+        })
+        vim.api.nvim_create_autocmd("User", {
+          group = group,
+          pattern = "TSUpdate",
+          callback = function()
+            vim.schedule(enable_loaded_buffers)
+          end,
+        })
+
+        enable_loaded_buffers()
+
+        local installed = {}
+        for _, language in ipairs(treesitter.get_installed()) do
+          installed[language] = true
+        end
+        local missing = vim.tbl_filter(function(language)
+          return not installed[language]
+        end, languages)
+
+        if #missing > 0 then
+          if supported_tree_sitter_cli() then
+            treesitter.install(missing):await(function()
+              vim.schedule(enable_loaded_buffers)
+            end)
+          else
+            vim.notify_once(
+              "nvim-treesitter parser installation requires tree-sitter-cli >= 0.26.1",
+              vim.log.levels.WARN
+            )
+          end
+        end
+      end,
     },
 
     { 'nvim-treesitter/nvim-treesitter-context',
@@ -878,7 +900,41 @@ require("lazy").setup({
     },
 
     { "nvim-treesitter/nvim-treesitter-textobjects",
-      dependencies =  "nvim-treesitter/nvim-treesitter",
+      branch = "main",
+      dependencies = "nvim-treesitter/nvim-treesitter",
+      config = function()
+        local textobjects = require("nvim-treesitter-textobjects")
+        local select = require("nvim-treesitter-textobjects.select")
+
+        textobjects.setup({
+          select = {
+            lookahead = true,
+            selection_modes = {
+              ["@parameter.outer"] = "v",
+              ["@function.outer"] = "V",
+              ["@class.outer"] = "<c-v>",
+            },
+            include_surrounding_whitespace = true,
+          },
+        })
+
+        local modes = { "x", "o" }
+        vim.keymap.set(modes, "af", function()
+          select.select_textobject("@function.outer", "textobjects")
+        end, { desc = "Select outer function" })
+        vim.keymap.set(modes, "if", function()
+          select.select_textobject("@function.inner", "textobjects")
+        end, { desc = "Select inner function" })
+        vim.keymap.set(modes, "ac", function()
+          select.select_textobject("@class.outer", "textobjects")
+        end, { desc = "Select outer class" })
+        vim.keymap.set(modes, "ic", function()
+          select.select_textobject("@class.inner", "textobjects")
+        end, { desc = "Select inner class" })
+        vim.keymap.set(modes, "as", function()
+          select.select_textobject("@local.scope", "locals")
+        end, { desc = "Select language scope" })
+      end,
     },
 
     { 'machakann/vim-textobj-delimited',

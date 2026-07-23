@@ -68,7 +68,7 @@ M.config = function ()
 
   -- Option 3: treesitter as a main provider instead
   -- Only depend on `nvim-treesitter/queries/filetype/folds.scm`,
-  -- performance and stability are better than `foldmethod=nvim_treesitter#foldexpr()`
+  -- performance and stability are better than `foldmethod=expr` with `vim.treesitter.foldexpr()`
   -- require('ufo').setup({
   --   open_fold_hl_timeout = 100,
   --   provider_selector = function(bufnr, filetype, method)
