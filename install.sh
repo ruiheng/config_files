@@ -35,7 +35,8 @@ ALL_REPLACE=0
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
 WAYPOST_MCP_AVAILABLE=0
-CODEX_CLI_COMMAND="codext"
+CODEX_SKILLS_DIR_READY=0
+CODEX_CLI_COMMAND="codex"
 # Keep the MCP client deadline above the 10m Waypost message wait long-poll timeout.
 WAYPOST_MCP_TOOL_TIMEOUT_SEC=660
 WAYPOST_MCP_TOOL_TIMEOUT_MS=660000
@@ -587,39 +588,88 @@ install_agent_browser() {
     return 1
 }
 
-install_codext() {
-    log_info "Checking codext..."
+install_ast_grep() {
+    log_info "Checking ast-grep..."
 
     if ! ensure_required_command "npm"; then
-        log_error "codext requires npm"
+        log_error "ast-grep requires npm"
         return 1
     fi
 
-    if command -v codext &>/dev/null; then
-        CODEX_CLI_COMMAND="codext"
-        log_ok "Found codext"
+    if command -v ast-grep &>/dev/null; then
+        log_ok "Found ast-grep"
         return 0
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g @loongphy/codext"
-        CODEX_CLI_COMMAND="codext"
+        log_dry "Would run: npm install -g @ast-grep/cli"
         return 0
     fi
 
-    log_info "Running: npm install -g @loongphy/codext"
-    if ! npm install -g @loongphy/codext; then
-        log_error "Failed to install codext with npm"
+    log_info "Running: npm install -g @ast-grep/cli"
+    if ! npm install -g @ast-grep/cli; then
+        log_error "Failed to install ast-grep with npm"
         return 1
     fi
 
-    if command -v codext &>/dev/null; then
-        CODEX_CLI_COMMAND="codext"
-        log_ok "Installed codext"
+    if command -v ast-grep &>/dev/null; then
+        log_ok "Installed ast-grep"
         return 0
     fi
 
-    log_error "Command still unavailable after install: codext"
+    log_error "Command still unavailable after install: ast-grep"
+    return 1
+}
+
+install_ast_grep_skill() {
+    # skills uses the shared directory as Codex's global canonical path.
+    local shared_skills_dir="$HOME/.agents/skills"
+    local shared_skill_file="$shared_skills_dir/ast-grep/SKILL.md"
+    local codex_skill_file="$HOME/.codex/skills/ast-grep/SKILL.md"
+    local -a skill_cmd=(
+        npx --yes skills add https://github.com/ast-grep/agent-skill
+        --global --agent codex --yes
+    )
+
+    log_info "Checking ast-grep skill..."
+
+    if [[ $CODEX_SKILLS_DIR_READY -ne 1 ]]; then
+        log_warn "Skipping ast-grep skill install; Codex skills directory was not prepared"
+        return 0
+    fi
+
+    if [[ -f "$shared_skill_file" || -f "$codex_skill_file" ]]; then
+        log_ok "Found ast-grep skill"
+        return 0
+    fi
+
+    if ! prepare_skills_target_dir "Shared agent" "$shared_skills_dir"; then
+        log_warn "Skipping ast-grep skill install; shared agent skills directory was not prepared"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${skill_cmd[*]}"
+        return 0
+    fi
+
+    if ! command -v npx &>/dev/null; then
+        log_error "ast-grep skill requires npx (provided by npm)"
+        return 1
+    fi
+
+    log_info "Running: ${skill_cmd[*]}"
+    if ! "${skill_cmd[@]}"; then
+        log_error "Failed to install ast-grep skill"
+        return 1
+    fi
+
+    if [[ -f "$shared_skill_file" || -f "$codex_skill_file" ]]; then
+        log_ok "Installed ast-grep skill"
+        return 0
+    fi
+
+    log_error "Skill still unavailable after install: ast-grep"
     return 1
 }
 
@@ -1969,6 +2019,7 @@ install_skills_individually() {
     local tool_name="$1"
     local tool_skills_dir="$2"
     local missing_only="${3:-0}"
+    local target_prepared="${4:-0}"
     local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
 
     if [[ $missing_only -eq 1 ]]; then
@@ -1980,8 +2031,10 @@ install_skills_individually() {
     else
         log_info "Installing $tool_name skills (individually)..."
 
-        if ! prepare_skills_target_dir "$tool_name" "$tool_skills_dir"; then
-            return 0
+        if [[ $target_prepared -eq 0 ]]; then
+            if ! prepare_skills_target_dir "$tool_name" "$tool_skills_dir"; then
+                return 0
+            fi
         fi
     fi
 
@@ -2202,7 +2255,15 @@ install_gemini_config() {
 }
 
 install_codex_skills() {
-    install_skills_individually "Codex" "$HOME/.codex/skills"
+    local codex_skills_dir="$HOME/.codex/skills"
+
+    CODEX_SKILLS_DIR_READY=0
+    if ! prepare_skills_target_dir "Codex" "$codex_skills_dir"; then
+        return 0
+    fi
+
+    CODEX_SKILLS_DIR_READY=1
+    install_skills_individually "Codex" "$codex_skills_dir" 0 1
 }
 
 ensure_codex_tui_usage_limit_resume_prompt() {
@@ -2609,7 +2670,7 @@ main() {
         exit 1
     fi
 
-    if ! install_codext; then
+    if ! install_ast_grep; then
         exit 1
     fi
 
@@ -2641,6 +2702,9 @@ main() {
     install_antigravity_config
     install_kiro_config
     install_codex_config
+    if ! install_ast_grep_skill; then
+        exit 1
+    fi
     install_opencode_config
     install_serena_config
 
