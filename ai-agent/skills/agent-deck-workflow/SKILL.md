@@ -20,14 +20,14 @@ Interpret references to the shared workflow protocol as:
 
 Use `agent-deck/<agent-deck-session-id>` as the default waypost sender.
 
-## Agent Deck Mode Detection
+## Shared Context
 
-Use the corresponding section in `references/internal-protocol/shared-protocol.md`.
+Use the protocol's Agent Deck Mode Detection and Context Resolution Priority sections.
 
-## Context Resolution Priority
+## Tool Resolution
 
-Use the corresponding section in `references/internal-protocol/shared-protocol.md`.
+Use `references/tool-resolution.md` for the shared tool-resolution contract before creating a new session.
 
 ## Error Handling and Diagnostics
 
-Use the corresponding section in `references/internal-protocol/shared-protocol.md`.
+Use `references/diagnostics.md` for the shared diagnostics checklist.

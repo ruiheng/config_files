@@ -47,9 +47,7 @@ Resolve by priority: explicit input -> current roundtable context -> message bod
    - `waypost_group_add_member` for `moderator`
    - `waypost_group_add_subscriber` with `notify_address = agent-deck/<moderator_session_id>` and `person = moderator`
    - `waypost_group_add_member` for each `participant/<slug>`
-4. Resolve every participant tool with:
-   - `node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --role roundtable_participant --profile <participant_tool_profile> --format json`
-   - omit `--profile` when no explicit profile is set
+4. Resolve every new participant tool through the shared tool-resolution contract for role `roundtable_participant`.
 5. Resolve each participant session.
    - First try `agent_deck_resolve_session` for an explicit existing `participant_session_id` or known `participant_session_ref`.
    - If an existing session is found, use `agent_deck_require_session` with the explicit workdir.

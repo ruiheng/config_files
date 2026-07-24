@@ -9,8 +9,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 1. Start the shared Receiver Contract by running `waypost_recv` first to claim one personal delivery.
 2. If no personal message is returned:
-   - if no visible local work remains, finish the shared Receiver Contract's single idle wait path
-   - if still no message, report no pending agent messages and stop until a later nudge or explicit check
+   - report no pending agent messages and stop until a later nudge or explicit check
 3. If a message is returned:
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
@@ -22,7 +21,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Rules
 
-- Use the shared Receiver Contract for recv-first, binding recovery, bounded idle wait, and personal-delivery lifecycle limits
+- Use the shared Receiver Contract for recv-first, binding recovery, and personal-delivery lifecycle limits
 - Ask the user for the next step only when the message body explicitly requires a user decision
 - Read external files only when the message body explicitly says they are needed
 - The current session owns only the delivery lifecycle of the inbound message it claimed with `waypost_recv`

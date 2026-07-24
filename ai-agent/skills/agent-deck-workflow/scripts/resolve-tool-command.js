@@ -273,13 +273,61 @@ function parseToolProfilesToml(text) {
   return config;
 }
 
+const CANDIDATE_MERGE_MODES = new Set(["replace", "prepend", "append"]);
+
+function mergeProfile(baseProfile = {}, overrideProfile = {}) {
+  const baseCandidates = baseProfile.candidates;
+  const baseFields = { ...baseProfile };
+  delete baseFields.merge;
+  delete baseFields.candidates;
+  const {
+    merge: candidateMerge,
+    candidates: overrideCandidates,
+    ...overrideFields
+  } = overrideProfile;
+  const merged = { ...baseFields, ...overrideFields };
+
+  if (candidateMerge !== undefined && !CANDIDATE_MERGE_MODES.has(candidateMerge)) {
+    throw new Error(`unsupported candidate merge mode: ${candidateMerge}`);
+  }
+  if (candidateMerge !== undefined && overrideCandidates === undefined) {
+    throw new Error("candidate merge mode requires candidates");
+  }
+  if (overrideCandidates === undefined) {
+    if (baseCandidates !== undefined) {
+      if (!Array.isArray(baseCandidates)) {
+        throw new Error("profile candidates must be an array");
+      }
+      merged.candidates = [...baseCandidates];
+    }
+    return merged;
+  }
+  if (!Array.isArray(overrideCandidates)) {
+    throw new Error("profile candidates must be an array");
+  }
+
+  const priorCandidates = Array.isArray(baseCandidates) ? baseCandidates : [];
+  const mergeMode = candidateMerge || "replace";
+  if (mergeMode === "prepend") {
+    merged.candidates = [...overrideCandidates, ...priorCandidates];
+  } else if (mergeMode === "append") {
+    merged.candidates = [...priorCandidates, ...overrideCandidates];
+  } else {
+    merged.candidates = [...overrideCandidates];
+  }
+  return merged;
+}
+
 function mergeToolConfigs(baseConfig, overrideConfig) {
   if (!overrideConfig) {
     return {
       version: baseConfig.version,
       roles: { ...baseConfig.roles },
       profiles: Object.fromEntries(
-        Object.entries(baseConfig.profiles).map(([name, profile]) => [name, { ...profile }])
+        Object.entries(baseConfig.profiles).map(([name, profile]) => [
+          name,
+          mergeProfile({}, profile),
+        ])
       ),
     };
   }
@@ -291,15 +339,15 @@ function mergeToolConfigs(baseConfig, overrideConfig) {
       ...overrideConfig.roles,
     },
     profiles: Object.fromEntries(
-      Object.entries(baseConfig.profiles).map(([name, profile]) => [name, { ...profile }])
+      Object.entries(baseConfig.profiles).map(([name, profile]) => [
+        name,
+        mergeProfile({}, profile),
+      ])
     ),
   };
 
   for (const [name, profile] of Object.entries(overrideConfig.profiles || {})) {
-    merged.profiles[name] = {
-      ...(merged.profiles[name] || {}),
-      ...profile,
-    };
+    merged.profiles[name] = mergeProfile(merged.profiles[name], profile);
   }
 
   return merged;
@@ -328,6 +376,248 @@ function loadToolConfig(
   return mergedConfig;
 }
 
+function splitCommandLine(commandLine) {
+  const words = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+  let hasWord = false;
+
+  for (let i = 0; i < commandLine.length; i += 1) {
+    const ch = commandLine[i];
+    if (escaped) {
+      current += ch;
+      hasWord = true;
+      escaped = false;
+      continue;
+    }
+    if (quote === "'") {
+      if (ch === "'") {
+        quote = "";
+      } else {
+        current += ch;
+      }
+      hasWord = true;
+      continue;
+    }
+    if (quote === '"') {
+      if (ch === '"') {
+        quote = "";
+      } else if (ch === "\\") {
+        escaped = true;
+      } else {
+        current += ch;
+      }
+      hasWord = true;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      hasWord = true;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      hasWord = true;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (hasWord) {
+        words.push(current);
+        current = "";
+        hasWord = false;
+      }
+      continue;
+    }
+    current += ch;
+    hasWord = true;
+  }
+
+  if (quote || escaped) {
+    return null;
+  }
+  if (hasWord) {
+    words.push(current);
+  }
+  return words;
+}
+
+function parseEnvironmentAssignment(word) {
+  const match = word.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s);
+  return match ? { name: match[1], value: match[2] } : null;
+}
+
+function skipCommandOptions(words, startIndex, environment) {
+  let index = startIndex;
+  while (index < words.length) {
+    const word = words[index];
+    if (word === "--") {
+      return index + 1;
+    }
+    const assignment = parseEnvironmentAssignment(word);
+    if (assignment) {
+      environment[assignment.name] = assignment.value;
+      index += 1;
+      continue;
+    }
+    if (word === "-u" || word === "--unset") {
+      index += 2;
+      continue;
+    }
+    if (word.startsWith("-")) {
+      index += 1;
+      continue;
+    }
+    return index;
+  }
+  return index;
+}
+
+function extractCommandExecutable(commandLine) {
+  const words = splitCommandLine(commandLine);
+  if (!words || !words.length) {
+    return { reason: "command_not_parseable" };
+  }
+
+  const environment = {};
+  let index = 0;
+  while (index < words.length) {
+    const assignment = parseEnvironmentAssignment(words[index]);
+    if (!assignment) {
+      break;
+    }
+    environment[assignment.name] = assignment.value;
+    index += 1;
+  }
+  while (words[index] === "env" || words[index] === "command" || words[index] === "exec") {
+    index = skipCommandOptions(words, index + 1, environment);
+  }
+
+  const executable = words[index];
+  if (!executable) {
+    return { reason: "executable_not_detectable" };
+  }
+  if (/[$`*?\[\]{}]/.test(executable) || executable.startsWith("~")) {
+    return { reason: "executable_not_static" };
+  }
+  return {
+    executable,
+    path_env: Object.prototype.hasOwnProperty.call(environment, "PATH")
+      ? environment.PATH
+      : undefined,
+  };
+}
+
+function inspectToolCommand(
+  toolCmd,
+  {
+    pathEnv = process.env.PATH,
+    cwd = process.cwd(),
+    pathTrusted = false,
+    cwdTrusted = false,
+  } = {}
+) {
+  const extracted = extractCommandExecutable(toolCmd);
+  if (!extracted.executable) {
+    return {
+      availability: "unverified",
+      tool_cmd: toolCmd,
+      reason: extracted.reason,
+    };
+  }
+
+  const executable = extracted.executable;
+  const executableIsPath = executable.includes("/");
+  if (executableIsPath && !path.isAbsolute(executable) && !cwdTrusted) {
+    return {
+      availability: "unverified",
+      tool_cmd: toolCmd,
+      executable,
+      reason: "target_workdir_unknown",
+    };
+  }
+
+  const commandPathIsStatic =
+    extracted.path_env !== undefined &&
+    !/[$`*?\[\]{}~]/.test(extracted.path_env);
+  if (extracted.path_env !== undefined && !commandPathIsStatic) {
+    return {
+      availability: "unverified",
+      tool_cmd: toolCmd,
+      executable,
+      reason: "command_path_not_static",
+    };
+  }
+  const effectivePath = commandPathIsStatic ? extracted.path_env : pathEnv;
+  const candidatePaths = executableIsPath
+    ? [path.resolve(cwd, executable)]
+    : String(effectivePath || "")
+        .split(path.delimiter)
+        .map((directory) => path.resolve(directory || cwd, executable));
+  let foundNonExecutable = false;
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      if (!fs.statSync(candidatePath).isFile()) {
+        foundNonExecutable = true;
+        continue;
+      }
+      fs.accessSync(candidatePath, fs.constants.X_OK);
+      return {
+        availability: "available",
+        tool_cmd: toolCmd,
+        executable,
+      };
+    } catch {
+      if (fs.existsSync(candidatePath)) {
+        foundNonExecutable = true;
+      }
+    }
+  }
+
+  const contextIsTrusted = executableIsPath
+    ? cwdTrusted
+    : pathTrusted && extracted.path_env === undefined;
+  const reason = foundNonExecutable
+    ? "not_executable"
+    : executableIsPath
+      ? "not_found_at_path"
+      : extracted.path_env !== undefined
+        ? "not_found_on_command_path"
+        : pathTrusted
+          ? "not_found_on_target_path"
+          : "not_found_on_dispatcher_path";
+  return {
+    availability: contextIsTrusted ? "unavailable" : "unverified",
+    tool_cmd: toolCmd,
+    executable,
+    reason,
+  };
+}
+
+function toolCommandDiagnostic(inspection, candidateIndex) {
+  const diagnostic = {
+    tool_cmd: inspection.tool_cmd,
+    reason: inspection.reason,
+    candidate_index: candidateIndex,
+  };
+  if (inspection.executable) {
+    diagnostic.executable = inspection.executable;
+  }
+  return diagnostic;
+}
+
+function noUsableToolCommandsError(profileName, unavailableToolCmds) {
+  const details = unavailableToolCmds
+    .map(({ tool_cmd, executable, reason }) =>
+      executable ? `${executable}: ${reason} (${tool_cmd})` : `${reason} (${tool_cmd})`
+    )
+    .join("; ");
+  const error = new Error(`no usable tool commands for profile ${profileName}: ${details}`);
+  error.unavailable_tool_cmds = unavailableToolCmds;
+  return error;
+}
+
 function resolveProfileName(config, role, explicitProfile) {
   if (explicitProfile) {
     return explicitProfile;
@@ -338,7 +628,15 @@ function resolveProfileName(config, role, explicitProfile) {
   return "";
 }
 
-function resolveProfileCommand(config, profileName, resolutionSource, excludedCommands = []) {
+function resolveProfileCommand(
+  config,
+  profileName,
+  resolutionSource,
+  excludedCommands = [],
+  showList = false,
+  inspectCommand = inspectToolCommand,
+  inspectionOptions = {}
+) {
   const profileConfig = config.profiles[profileName];
   if (!profileConfig) {
     throw new Error(`unknown tool profile: ${profileName}`);
@@ -349,19 +647,77 @@ function resolveProfileCommand(config, profileName, resolutionSource, excludedCo
   const candidates = Array.isArray(profileConfig.candidates)
     ? profileConfig.candidates
     : [];
-  const selectedIndex = candidates.findIndex(
-    (candidate) => !excludedCommands.includes(candidate)
-  );
-  if (selectedIndex === -1) {
+  const unavailableToolCmds = [];
+  const unverifiedToolCmds = [];
+  const usableToolCmds = [];
+  for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+    const toolCmd = candidates[candidateIndex];
+    if (excludedCommands.includes(toolCmd)) {
+      continue;
+    }
+    const inspection = inspectCommand(toolCmd, inspectionOptions);
+    if (inspection.availability === "unavailable") {
+      unavailableToolCmds.push(toolCommandDiagnostic(inspection, candidateIndex));
+      continue;
+    }
+    if (inspection.availability === "unverified") {
+      unverifiedToolCmds.push(toolCommandDiagnostic(inspection, candidateIndex));
+    }
+    usableToolCmds.push({ toolCmd, candidateIndex });
+  }
+  const toolCmds = usableToolCmds.map(({ toolCmd }) => toolCmd);
+  if (!toolCmds.length) {
+    if (unavailableToolCmds.length) {
+      throw noUsableToolCommandsError(profileName, unavailableToolCmds);
+    }
     throw new Error(`no remaining candidates for tool profile: ${profileName}`);
   }
-  return {
+  const selectedIndex = usableToolCmds[0].candidateIndex;
+  const resolved = {
     tool_profile: profileName,
-    resolved_tool_cmd: candidates[selectedIndex],
+    resolved_tool_cmd: toolCmds[0],
     resolution_source: resolutionSource,
     fallback_index: selectedIndex,
     candidate_count: candidates.length,
   };
+  if (unavailableToolCmds.length) {
+    resolved.unavailable_tool_cmds = unavailableToolCmds;
+  }
+  if (unverifiedToolCmds.length) {
+    resolved.unverified_tool_cmds = unverifiedToolCmds;
+  }
+  if (showList) {
+    resolved.tool_cmds = toolCmds;
+  }
+  return resolved;
+}
+
+function resolveSingleToolCommand(
+  toolCmd,
+  toolProfile,
+  resolutionSource,
+  showList,
+  inspectCommand,
+  inspectionOptions
+) {
+  const inspection = inspectCommand(toolCmd, inspectionOptions);
+  if (inspection.availability === "unavailable") {
+    throw noUsableToolCommandsError(toolProfile, [toolCommandDiagnostic(inspection, 0)]);
+  }
+  const resolved = {
+    tool_profile: toolProfile,
+    resolved_tool_cmd: toolCmd,
+    resolution_source: resolutionSource,
+    fallback_index: 0,
+    candidate_count: 1,
+  };
+  if (inspection.availability === "unverified") {
+    resolved.unverified_tool_cmds = [toolCommandDiagnostic(inspection, 0)];
+  }
+  if (showList) {
+    resolved.tool_cmds = [toolCmd];
+  }
+  return resolved;
 }
 
 function resolveToolCommand(options = {}) {
@@ -371,17 +727,21 @@ function resolveToolCommand(options = {}) {
     command = "",
     inheritCommand = "",
     excludedCommands = [],
+    showList = false,
+    inspectCommand = inspectToolCommand,
+    inspectionOptions = {},
     config = loadToolConfig(),
   } = options;
 
   if (command) {
-    return {
-      tool_profile: profile || "explicit",
-      resolved_tool_cmd: command,
-      resolution_source: "explicit_command",
-      fallback_index: 0,
-      candidate_count: 1,
-    };
+    return resolveSingleToolCommand(
+      command,
+      profile || "explicit",
+      "explicit_command",
+      showList,
+      inspectCommand,
+      inspectionOptions
+    );
   }
 
   const resolvedProfile = resolveProfileName(config, "", profile);
@@ -390,18 +750,22 @@ function resolveToolCommand(options = {}) {
       config,
       resolvedProfile,
       "explicit_profile",
-      excludedCommands
+      excludedCommands,
+      showList,
+      inspectCommand,
+      inspectionOptions
     );
   }
 
   if (inheritCommand) {
-    return {
-      tool_profile: "inherited",
-      resolved_tool_cmd: inheritCommand,
-      resolution_source: "inherit_command",
-      fallback_index: 0,
-      candidate_count: 1,
-    };
+    return resolveSingleToolCommand(
+      inheritCommand,
+      "inherited",
+      "inherit_command",
+      showList,
+      inspectCommand,
+      inspectionOptions
+    );
   }
 
   const roleDefaultProfile = resolveProfileName(config, role, "");
@@ -410,7 +774,10 @@ function resolveToolCommand(options = {}) {
       config,
       roleDefaultProfile,
       "role_default_profile",
-      excludedCommands
+      excludedCommands,
+      showList,
+      inspectCommand,
+      inspectionOptions
     );
   }
 
@@ -424,6 +791,9 @@ function parseArgs(argv) {
     command: "",
     inheritCommand: "",
     excludedCommands: [],
+    showList: false,
+    workdir: "",
+    targetPath: "",
     configPath: DEFAULT_CONFIG_PATH,
     localConfigPaths: resolveDefaultLocalConfigPaths(),
     format: "json",
@@ -441,6 +811,12 @@ function parseArgs(argv) {
       options.inheritCommand = argv[++i] || "";
     } else if (arg === "--exclude-command") {
       options.excludedCommands.push(argv[++i] || "");
+    } else if (arg === "--show-list") {
+      options.showList = true;
+    } else if (arg === "--workdir") {
+      options.workdir = argv[++i] || "";
+    } else if (arg === "--target-path") {
+      options.targetPath = argv[++i] || "";
     } else if (arg === "--config") {
       options.configPath = argv[++i] || "";
     } else if (arg === "--local-config") {
@@ -460,17 +836,30 @@ function parseArgs(argv) {
 function runCli(argv) {
   const options = parseArgs(argv);
   const config = loadToolConfig(options.configPath, options.localConfigPaths);
+  const inspectionOptions = {
+    cwd: options.workdir || process.cwd(),
+    cwdTrusted: Boolean(options.workdir),
+  };
+  if (options.targetPath) {
+    inspectionOptions.pathEnv = options.targetPath;
+    inspectionOptions.pathTrusted = true;
+  }
   const resolved = resolveToolCommand({
     role: options.role,
     profile: options.profile,
     command: options.command,
     inheritCommand: options.inheritCommand,
     excludedCommands: options.excludedCommands,
+    showList: options.showList,
+    inspectionOptions,
     config,
   });
 
   if (options.format === "text") {
-    process.stdout.write(`${resolved.resolved_tool_cmd}\n`);
+    const output = options.showList
+      ? resolved.tool_cmds.join("\n")
+      : resolved.resolved_tool_cmd;
+    process.stdout.write(`${output}\n`);
     return;
   }
   if (options.format !== "json") {
@@ -492,6 +881,7 @@ module.exports = {
   DEFAULT_CONFIG_PATH,
   DEFAULT_LOCAL_CONFIG_PATH,
   DEFAULT_LOCAL_CONFIG_PATHS,
+  inspectToolCommand,
   loadToolConfig,
   mergeToolConfigs,
   parseToolProfilesToml,

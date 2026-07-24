@@ -151,7 +151,7 @@ Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
 2. Create `coder-<task_id>` and `architect-<task_id>` per task as needed; create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
-3. Queue message first. Best-effort nudges may wake non-local targets, but correctness comes from receiver-side message pickup, not sender-side waiting.
+3. Queue message first. Best-effort nudges may wake non-local targets; correctness comes from receiver-side message pickup.
    Newly created or restarted targets should use the same message recv-first pickup path as any other target.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep workflow content in message body instead of generated Markdown files.

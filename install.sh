@@ -37,7 +37,7 @@ AGENT_DECK_AVAILABLE=0
 WAYPOST_MCP_AVAILABLE=0
 CODEX_SKILLS_DIR_READY=0
 CODEX_CLI_COMMAND="codex"
-# Keep the MCP client deadline above the 10m Waypost message wait long-poll timeout.
+# Keep enough MCP time for Waypost operations.
 WAYPOST_MCP_TOOL_TIMEOUT_SEC=660
 WAYPOST_MCP_TOOL_TIMEOUT_MS=660000
 
@@ -1394,7 +1394,7 @@ install_codex_waypost_mcp() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would ensure TMUX, AGENTDECK_INSTANCE_ID, CODEX_SESSION_ID passthrough and 11-minute tool timeout in: $codex_config"
+        log_dry "Would ensure TMUX, AGENTDECK_INSTANCE_ID, CODEX_SESSION_ID passthrough and Waypost tool timeout in: $codex_config"
         return 0
     fi
 
@@ -1446,11 +1446,11 @@ install_codex_waypost_mcp() {
             : 1
         );
     ' "$codex_config"; then
-        log_ok "Ensured Codex MCP env passthrough and 11-minute tool timeout: waypost"
+        log_ok "Ensured Codex MCP env passthrough and Waypost tool timeout: waypost"
         return 0
     fi
 
-    log_error "Failed to update Codex MCP env passthrough and 11-minute tool timeout: waypost"
+    log_error "Failed to update Codex MCP env passthrough and Waypost tool timeout"
     return 1
 }
 
@@ -1527,7 +1527,7 @@ rewrite_claude_waypost_config() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would rewrite Claude MCP config with 11-minute tool timeout in: $claude_config"
+        log_dry "Would rewrite Claude MCP config with Waypost tool timeout in: $claude_config"
         return 0
     fi
 
@@ -1554,7 +1554,7 @@ rewrite_claude_waypost_config() {
     fi
 
     if mv "$tmp_file" "$claude_config"; then
-        log_ok "Rewrote Claude MCP config with 11-minute tool timeout: waypost"
+        log_ok "Rewrote Claude MCP config with Waypost tool timeout"
         return 0
     fi
 
