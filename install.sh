@@ -493,6 +493,9 @@ package_name_for_command() {
         npm:brew)
             echo "node"
             ;;
+        sqlite3:brew|sqlite3:dnf|sqlite3:pacman)
+            echo "sqlite"
+            ;;
         *)
             echo "$command_name"
             ;;
@@ -531,6 +534,7 @@ install_required_tools() {
     local required_tools=(
         tmux
         jq
+        sqlite3
     )
     local tool_name
 
