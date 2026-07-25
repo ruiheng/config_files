@@ -73,8 +73,9 @@ New architect sessions:
 Resolve `round`: explicit input or inbound message -> latest persisted workflow context -> `1` only for a clearly new lane.
 
 - after `NEEDS_REVISION` or a decision/constraint delta, use the prior round plus one
-- after interruption, resume the inbound round and exact target; do not allocate another round
-- never infer round solely from filenames or reuse a dispatched file; stop on conflicting history
+- after `NEEDS_INPUT`, correct the reported input; keep the round for the same valid snapshot, and use the next round for a replacement target
+- after interruption, resume the inbound round and target when still valid; do not allocate a round merely for interruption
+- never infer round solely from filenames or reuse a dispatched file as a revised round; stop on conflicting history
 
 ## Draft-Review Start
 
@@ -198,7 +199,7 @@ or
 - [explicit emphasis; never narrow the full review]
 ```
 
-Later rounds to the same reviewer send only:
+Later rounds to the same reviewer normally use:
 
 ```markdown
 Task: <task_id>
@@ -211,7 +212,7 @@ Round: <round>
 [Exact new artifact path, or committed branch/commit/docs]
 
 ## Context Delta
-- [only changed constraints or disagreement rationale]
+- [changed context; restore any context needed for recovery]
 ```
 
 Do not paste or summarize the design, or hand-write a diff. Send from `agent-deck/<review_sender_session_id>` to `agent-deck/<reviewer_session_id>` with subject `tech-design review: <task_id> r<round>`, then follow the shared Async sender rule.
@@ -220,6 +221,7 @@ Do not paste or summarize the design, or hand-write a diff. Send from `agent-dec
 
 The session that sent the request handles the report.
 
+- `NEEDS_INPUT`: correct the reported input and resend with enough context; never mutate a valid dispatched artifact/commit
 - `NEEDS_REVISION`: revise and request the next round
   - draft: create the next numbered artifact; never edit the reviewed one
   - existing: update and commit the docs on the same design branch
