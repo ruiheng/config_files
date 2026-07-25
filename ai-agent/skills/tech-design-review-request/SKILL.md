@@ -1,102 +1,178 @@
 ---
 name: tech-design-review-request
-description: Generates tech-design review requests from committed docs and defines requester-side handling of review reports.
+description: Orchestrates tech-design drafting and independent review through Agent Deck. Use when separate architect sessions should draft or review a design, or when handling the resulting Waypost actions. Do not use for direct in-session design review.
 ---
 
 # Tech-Design Review Request
 
-Generate a concise Waypost message that asks an architect to review the latest committed tech-design docs on a branch.
-When reports arrive, drive the architect-review loop until it reaches a deliverable conclusion or a clear user-decision blocker.
+Use `agent-deck-workflow` for shared transport and session protocol.
 
-Workflow protocol baseline: use the `agent-deck-workflow` skill.
+## Route First
 
-## Inputs
+Route inbound actions before starting a new lane:
 
-Modes:
-- request-send mode: use fields below to send `tech_design_review_requested`
-- report-handling mode: provide the message body from `tech_design_review_report` and follow `After Report Handling`
+- `tech_design_draft_requested` -> `Author Execution`
+- `tech_design_review_report` -> `Report Handling`
+- `tech_design_decision_requested` or `tech_design_delivered` -> `Original Requester Handling`
+
+For a new request, select:
+
+- `draft-review` when no defensible committed proposal exists or material requirements, interfaces, constraints, or tradeoffs remain unresolved
+- `review-existing` only when the requester already has committed docs, their branch/base, and enough context to defend the proposal
+
+Do not make the requester invent a proposal merely to obtain review.
+
+## Roles
+
+- original requester: owns the user conversation; archives and commits an accepted draft
+- architect-author: inspects the repository, writes draft rounds, handles reviewer dialogue, and sends the final pointer
+- architect-reviewer: independently reviews exact snapshots and never edits them
+
+In `draft-review`, author and reviewer are separate sibling sessions. The reviewer replies to the author. Escalate only user-owned product or strategic decisions to the original requester.
+
+## Immutable Draft Contract
+
+Write rounds under `.agent-artifacts/tech-design/<author_session_id>/rNNN.md`.
+
+- only the author writes this directory
+- a round may be edited until its review request is sent; after sending, never modify or replace that file
+- each revision uses the next monotonically numbered file; never reuse a round, and review only the exact named path
+- drafting must not change Git state or workspace ownership
+
+`.agent-artifacts/` must remain ignored. Stop if it is tracked or the artifact path is outside the shared workspace.
+
+## Start Inputs
 
 Common:
+
 - `task_id`
-- `requester_session_id`
-- `requester_role`
-- `tech_design_branch`
-- `tech_design_base_branch`
-- `design_docs_in_scope`
-- optional `feedback_requested`
-- optional `architect_tool`
-- optional `architect_tool_profile`
-- optional `round`
+- requester session id/role
+- `problem`, `goals`, `constraints`
+- optional `known_context`, `open_questions`, `feedback_requested`, `round`
 
-Later rounds / existing architect lane:
-- `architect_session_id`
+New architect sessions:
 
-Round `1` or new architect session:
-- optional `architect_session_ref`
-- `problem`
-- `goals`
-- `constraints`
+- optional shared `architect_tool` / `architect_tool_profile`
+- optional `architect_author_tool` / `architect_author_tool_profile`
+- optional `architect_reviewer_tool` / `architect_reviewer_tool_profile`
+- resolve each target independently: target-specific -> shared -> role `architect` defaults
 
-Round `>1` to the same architect session:
-- optional `requester_notes` for non-git context only
+`draft-review` additionally uses:
 
-## Required Git State
+- `archive_branch`: explicit -> current branch only when it is clearly the formal-doc landing branch -> ask
+- optional refs; default `architect-author-<task_id>` and `architect-reviewer-<task_id>`
+- existing real author/reviewer session ids when resuming
 
-- the review target is the latest committed state on a tech-design branch
-- the tech-design branch has a known base branch
-- if the base branch is unclear, ask instead of guessing
+`review-existing` additionally requires:
 
-## Agent Deck Mode
+- `tech_design_branch`, `tech_design_base_branch`, committed `design_docs_in_scope` listing every reviewed doc and design asset
+- existing `architect_session_id`, or optional new `architect_session_ref` defaulting to `architect-<task_id>`
 
-Use the `agent-deck-workflow` skill for shared protocol.
+## Round Resolution
 
-Skill-specific context resolution:
-- `task_id`: explicit -> message/workflow context -> ask
-- `requester_session_id`: explicit -> current session id -> ask
-- `requester_role`: explicit -> infer from current workflow stage -> default `requester`
-- `architect_session_id`: explicit actual id -> workflow context actual id
-  - create only for round `1` or an explicitly new architect lane
-  - for later rounds to an existing architect lane, missing id is workflow context loss; recover the real session id instead of creating a new session
-- `architect_session_ref`: explicit -> workflow context -> default `architect-<task_id>`
-  - use only when allocating a new architect session before the first send
-- `tech_design_branch`: explicit -> workflow context -> default `tech-design/<task_id>`
-- `tech_design_base_branch`: explicit -> branch creation record -> workflow context -> high-confidence merge target -> ask
-  - this is the branch the tech-design branch started from and must merge back into after accepted review
-  - never assume `main`/`master`; branch names are evidence, not truth
-- `architect_tool_cmd`: explicit full `architect_tool` -> workflow context resolved command -> shared tool-resolution contract for role `architect`
-- `architect_tool_profile`: explicit -> workflow context -> resolver `tool_profile`
-- `round`: explicit -> workflow context -> default `1`
+Resolve `round`: explicit input or inbound message -> latest persisted workflow context -> `1` only for a clearly new lane.
 
-Continuity rule:
-- round `1` uses the full body below
-- later rounds to the same architect session send only the minimal review pointer
-- do not hand-write doc diffs in the request body; the architect derives changes from git
-- if the architect session changed or continuity is unknown, fall back to the full body
-- architect feedback is advisory; later rounds may explicitly disagree with earlier architect feedback and explain why
+- after `NEEDS_REVISION` or a decision/constraint delta, use the prior round plus one
+- after interruption, resume the inbound round and exact target; do not allocate another round
+- never infer round solely from filenames or reuse a dispatched file; stop on conflicting history
 
-## Waypost Message Body
+## Draft-Review Start
 
-The body is a review brief plus committed-doc pointers only.
-Do not paste full design docs into the message body.
-Provide review intent and authoritative constraints, not a pre-review:
-- Let the architect inspect the committed docs, choose review angles, and derive findings independently.
-- Keep design rationale, alternatives, tradeoffs, risks, and open questions in the committed docs; do not restate them in the request to compensate for missing design content.
-- Use `feedback_requested` only as optional emphasis. It must not narrow the full review or imply expected findings or a verdict.
+Resolve requester identity from explicit input, then current session context. Resolve `archive_branch` by the rule above; stop on detached `HEAD` or an unclear landing branch.
 
-Round `1` or new architect session: use the full body below.
+Resolve both deterministic refs with `agent_deck_resolve_session`. For each target:
+
+- found: verify its workdir and group, then call `agent_deck_require_session` with its real id and expected workdir
+- not found: resolve its command by the input order above as `<target_architect_tool_cmd>`, then call `agent_deck_create_session` with:
+  - `ensure_title = <deterministic ref for this target>`
+  - `ensure_cmd = <target_architect_tool_cmd>`
+  - `workdir = <current workspace>`
+  - `parent_session_id = <requester_session_id>`
+  - `group_path = <requester session group; empty string for root>`
+  - `no_parent_link = false`
+
+Require distinct author and reviewer real ids; stop if they match. Record both ids and derive the artifact directory from the author id. After interrupted setup, repeat this resolve-first flow; never create a target that resolves. After review history exists, recover missing real ids from Agent Deck or Waypost history and stop if recovery fails.
+
+Send only the author. Omit empty optional sections:
+
+```markdown
+Task: <task_id>
+Action: tech_design_draft_requested
+From: <requester_role> <requester_session_id>
+To: architect_author <author_session_id>
+Reviewer: architect_reviewer <reviewer_session_id>
+Round: <round>
+
+## Goal
+[Problem and desired outcome; state uncertainty plainly]
+
+## Constraints
+- [constraint]
+
+## Known Context
+- [fact]
+
+## Open Questions
+- [question]
+
+## Optional Review Focus
+- [feedback_requested]
+
+## Artifact
+- Target: <exact `.agent-artifacts/tech-design/<author_session_id>/rNNN.md` path>
+
+## Archive Target
+- Branch: <archive_branch>
+```
+
+Send once from the requester address to the author address with subject `tech-design draft: <task_id> r<round>`, then follow the shared Async sender rule.
+
+## Author Execution
+
+On `tech_design_draft_requested`:
+
+1. recover the original requester, reviewer, round, artifact path, archive branch, and optional review focus from the message
+2. inspect relevant repository state and user-aligned context
+3. write a proportional, implementation-ready design to the named round file
+4. ensure accepted constraints and rationale live in the artifact, not only in messages
+5. send the exact artifact to the recorded reviewer, stop editing it, then return under the Async sender rule
+6. handle later `tech_design_review_report` deliveries until accepted or a user-owned decision is required
+7. after acceptance, send the terse final notification; do not archive or commit the design
+
+Do not ask the original requester to supply technical design content that repository inspection and engineering judgment can resolve.
+
+Treat a later `tech_design_draft_requested` as a decision/constraint delta. Reuse both sessions, preserve the archive branch, and create the next immutable round.
+
+## Review-Existing Start
+
+Require committed docs, their design branch, and the recorded base branch. Never guess the base.
+
+Resolve the reviewer id from explicit input, workflow context, then persisted Waypost history. If prior-review context exists but the real id remains missing, stop; do not create a context-free replacement. Create a reviewer only for a clearly new lane, using the shared role `architect` resolver and the same parent/workdir settings as above.
+
+Before each review request, resolve `<reviewed_commit> = git rev-parse <tech_design_branch>`, then apply the review-existing path gate:
+
+1. inspect `git diff --no-renames --name-only <tech_design_base_branch>...<reviewed_commit>`
+2. require every changed path to be covered by the explicit `design_docs_in_scope`
+3. stop if any implementation or unrelated path appears; branch naming is not proof of scope
+
+## Review Request
+
+Resolve the review sender by lane; that sender owns the returned report:
+
+- `draft-review`: `review_sender_role = architect_author`, `review_sender_session_id = author_session_id`
+- `review-existing`: `review_sender_role = requester_role`, `review_sender_session_id = requester_session_id`
+
+For the first round with a reviewer, send the applicable target form and omit empty optional sections:
 
 ```markdown
 Task: <task_id>
 Action: tech_design_review_requested
-From: <requester_role> <requester_session_id>
-To: architect {{TO_SESSION_ID}}
+From: <review_sender_role> <review_sender_session_id>
+To: architect_reviewer <reviewer_session_id>
 Round: <round>
 
-## Summary
-[One-line tech-design review summary]
-
 ## Problem
-[What problem this tech design is meant to solve]
+[Problem the design solves]
 
 ## Goals
 - [goal]
@@ -104,97 +180,135 @@ Round: <round>
 ## Constraints
 - [constraint]
 
-## Tech Design Snapshot
-- Base branch: [branch the tech-design branch started from]
-- Branch: [tech-design branch]
-- Design docs in scope:
-  - `path/to/doc1.md`
-  - `path/to/doc2.md`
+## Review Target
+[Use exactly one form]
+- Mode: immutable-artifact
+- Artifact: <exact `.agent-artifacts/tech-design/<author_session_id>/rNNN.md` path>
+
+or
+
+- Mode: committed-docs
+- Base branch: <tech_design_base_branch>
+- Branch: <tech_design_branch>
+- Commit: <reviewed commit>
+- Docs:
+  - `path/to/doc.md`
 
 ## Optional Review Focus
-- [optional emphasis or `None`; do not limit the architect's full independent review]
-
-## Tool Context
-- Architect tool profile: [architect_tool_profile or `explicit`]
-- Architect tool cmd: [architect_tool_cmd]
+- [explicit emphasis; never narrow the full review]
 ```
 
-Round `>1` to the same architect session: send only a minimal pointer.
+Later rounds to the same reviewer send only:
 
 ```markdown
 Task: <task_id>
 Action: tech_design_review_requested
-From: <requester_role> <requester_session_id>
-To: architect {{TO_SESSION_ID}}
+From: <review_sender_role> <review_sender_session_id>
+To: architect_reviewer <reviewer_session_id>
 Round: <round>
 
-## Summary
-[One-line review request]
+## Updated Review Target
+[Exact new artifact path, or committed branch/commit/docs]
 
-## Updated Tech Design Snapshot
-- Base branch: [branch the tech-design branch started from]
-- Branch: [tech-design branch]
-- Design docs in scope:
-  - `path/to/doc1.md`
-  - `path/to/doc2.md`
-
-## Optional Review Focus
-- [what remains unresolved in this round or `None`; do not limit independent review]
-
-## Requester Notes
-- [Optional non-git context, feedback disagreement, or `None`]
-
-## Tool Context
-- Architect tool profile: [architect_tool_profile or `existing-session`]
-- Architect tool cmd: [architect_tool_cmd or `existing-session`]
+## Context Delta
+- [only changed constraints or disagreement rationale]
 ```
 
-## Waypost Message Send
+Do not paste or summarize the design, or hand-write a diff. Send from `agent-deck/<review_sender_session_id>` to `agent-deck/<reviewer_session_id>` with subject `tech-design review: <task_id> r<round>`, then follow the shared Async sender rule.
 
-Subject: `tech-design review: <task_id> r<round>`
+## Report Handling
 
-Before sending:
-1. compose the body with `{{TO_SESSION_ID}}` as a placeholder
-2. if round `>1` targets an existing architect lane and `architect_session_id` is missing, stop and recover the real session id
-3. if allocating a new architect session, resolve `architect_tool_profile` / `architect_tool_cmd` by the shared tool-resolution contract for role `architect`
-   - preserve explicit full `architect_tool` unchanged when provided
-   - otherwise resolve the role `architect` command
-4. if allocating a new architect session, call `agent_deck_create_session`
-   - `ensure_title = <architect_session_ref>`
-   - `ensure_cmd = <architect_tool_cmd>`
-   - `workdir = <current workspace>`
-   - `parent_session_id = <requester_session_id>`
-   - `group_path = <requester session group; empty string for root>`
-   - `no_parent_link = false`
-5. otherwise require the existing `architect_session_id`
-6. use the returned session id as authoritative
-7. fill the final body and send it with `waypost_send`
-   - `from_address = agent-deck/<requester_session_id>`
-   - `to_address = agent-deck/<architect_session_id>`
-   - `subject = "tech-design review: <task_id> r<round>"`
-   - `body = <tech-design review request body>`
+The session that sent the request handles the report.
 
-After sending:
-- follow the shared Async sender rule for the architect report
+- `NEEDS_REVISION`: revise and request the next round
+  - draft: create the next numbered artifact; never edit the reviewed one
+  - existing: update and commit the docs on the same design branch
+- `SOUND`: accept
+- `SOUND_WITH_CAVEATS`: accept only if every accepted caveat is non-blocking and already recorded in the reviewed artifact/commit; otherwise revise and re-review
+- disagreement: send concise rationale to the same reviewer; never silently discard findings
 
-## After Report Handling
+If the same dispute repeats or requires a subjective/strategic choice:
 
-When the requester receives `tech_design_review_report`:
-- treat this as a convergence loop, not a one-off advisory exchange
-- the loop ends only when one of these is true:
-  - `Decision` is `SOUND`
-  - `Decision` is `SOUND_WITH_CAVEATS` and requester explicitly accepts the caveats as non-blocking or records the required follow-up plan
-  - requester or architect escalates a subjective, strategic, or stuck disagreement to the user
-- if `Decision` is `NEEDS_REVISION`, update and commit docs on `tech_design_branch`; request the next round; do not merge yet
-- if `Decision` is `SOUND`, treat the design as deliverable and merge `tech_design_branch` into `tech_design_base_branch`
-- if `Decision` is `SOUND_WITH_CAVEATS`:
-  - if caveats are blocking, update and commit docs on `tech_design_branch`; request the next round; do not merge yet
-  - if caveats are accepted as non-blocking or captured in a follow-up plan, treat the design as deliverable and merge `tech_design_branch` into `tech_design_base_branch`
-- use normal `git merge`; do not squash, rebase, cherry-pick, or copy files manually
-- preserve the design-doc commits as product history on the base branch
-- do not merge merely because the report arrived; merge only after the loop reaches a deliverable conclusion
-- merge target is always the recorded `tech_design_base_branch`, not "current branch" unless current branch is explicitly that recorded base branch
-- do not merge an implementation task branch here; this lane merges the reviewed `tech_design_branch` only
-- if repeated rounds stop converging, or the disagreement becomes subjective/strategic, stop the auto-loop and ask the user to decide
-- if later generating implementation work with `delegate-task` from this review, cite the reviewed design docs in the delegate brief
-- if merge conflicts, uncommitted changes, or base-branch uncertainty appear, stop and report the blocker instead of guessing
+- architect-author sends `tech_design_decision_requested` to the original requester
+- a `review-existing` requester asks the user directly
+
+After acceptance:
+
+- draft: author sends `tech_design_delivered`; original requester archives and commits it
+- existing:
+  1. read the accepted commit from the report's `Reviewed Scope`
+  2. require `git rev-parse <tech_design_branch>` to equal that commit; if it differs, stop and review the new tip
+  3. rerun the review-existing path gate against the accepted commit
+  4. verify the final docs are committed, switch to the recorded base branch, require it as current, then merge the design branch with normal `git merge`
+
+For `review-existing`, do not squash, rebase, cherry-pick, or guess through dirty state, conflicts, detached `HEAD`, or base uncertainty.
+
+## Decision Request
+
+Use only from architect-author to original requester:
+
+```markdown
+Task: <task_id>
+Action: tech_design_decision_requested
+From: architect_author <author_session_id>
+To: <requester_role> <requester_session_id>
+Round: <round>
+
+## Decision Needed
+[One precise user-owned decision]
+
+## Options
+- [option]: [material consequence]
+
+## Recommendation
+[author recommendation and reviewer position]
+
+## Current Artifact
+- <exact `.agent-artifacts/tech-design/<author_session_id>/rNNN.md` path>
+```
+
+### Decision Response
+
+After the user answers, send the same author a `tech_design_draft_requested` delta containing only the decision, changed constraints, next artifact path, and unchanged archive branch.
+
+## Final Notification
+
+Do not repeat the design, decisions, caveats, or implementation advice.
+
+```markdown
+Task: <task_id>
+Action: tech_design_delivered
+From: architect_author <author_session_id>
+To: <requester_role> <requester_session_id>
+Round: final
+
+## Delivered
+- Artifact: <accepted `.agent-artifacts/tech-design/<author_session_id>/rNNN.md` path>
+- Archive branch: <archive_branch>
+- Review: <SOUND | SOUND_WITH_CAVEATS>
+- Report: <review message id>
+```
+
+Send with subject `tech-design delivered: <task_id>`.
+
+## Original Requester Handling
+
+On `tech_design_decision_requested`, follow `Decision Response`; do not edit the artifact.
+
+On `tech_design_delivered`:
+
+1. verify the artifact exists and the report pointer records acceptance of that exact path
+2. if a committed formal doc on the archive branch already represents the accepted design, reuse it and continue with session cleanup and completion
+3. require the current branch to equal the delivered archive branch; stop on mismatch or detached `HEAD` and do not switch automatically
+4. require a clean index and no merge, rebase, or conflict state; do not clean unrelated worktree changes
+5. read the artifact and choose the formal tracked docs path; stop if that path has unrelated uncommitted changes, then copy without substantive design changes
+6. if substantive changes are needed, return them to the author for a new reviewed round
+7. stage and commit only the archived design doc; this delivery authorizes that archive commit without another routine confirmation
+8. after the archive commit succeeds, remove both architect sessions
+9. treat the tracked committed doc as authoritative and cite it in later implementation work
+
+Keep the user-facing completion concise: report the tracked doc path and commit, not the design itself.
+
+## Rule
+
+Treat every Waypost send as fire-and-forget; never auto-resend outside explicit troubleshooting.

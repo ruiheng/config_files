@@ -22,7 +22,7 @@ Enter Agent Deck mode when any condition matches:
 ## Target Lifecycle Gate
 
 - At first dispatch, or when target identity/workdir is uncertain, create or require the target session.
-- Otherwise send to the confirmed session id.
+- Later, require a confirmed target only when it is known not to be running; otherwise send to its real id.
 - The action skill owns target-specific creation and reuse; follow the shared tool-resolution contract before creating a session without a full command.
 - Creating an Agent Deck session is workflow lifecycle, not a host-subagent API call.
 
@@ -63,9 +63,12 @@ On a wakeup nudge or explicit user message check:
 1. Call `waypost_recv` first.
 2. If no personal message is returned, report no message and end.
 3. Use `body` as the primary input, parse `Action:`, and run the matching action skill.
-4. After the action completes, settle the claimed delivery with `waypost_ack`, `waypost_release`, `waypost_defer`, or `waypost_fail`.
-5. After `waypost_ack`, return to step 1; process one delivery at a time. After another lifecycle result, follow the action skill's continuation policy.
+4. Settle each claimed delivery according to its current state:
+   - `waypost_ack` when its immediate required action is complete, including handing a required decision to the user
+   - `waypost_release` or `waypost_defer` only when the delivery itself cannot be handled now
+   - `waypost_fail` when it cannot be completed
+5. Continue receiving other useful work when appropriate. One claim is not a global receive lock; do not hold an unprocessable delivery merely to preserve ordering.
 
 ## Natural End Gate
 
-End only after required handoff and lifecycle steps are settled. If message context is lost, recover it with `waypost_read`; if work is blocked, use the appropriate lifecycle or reporting step first.
+Before ending, settle every delivery still claimed by this session. Queued, released, or deferred work may remain pending. If message context is lost, recover it with `waypost_read`.

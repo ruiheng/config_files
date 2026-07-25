@@ -35,7 +35,7 @@ reference to them.
 - Supervisor: generic upstream report target; may dispatch a plan to a planner and receive one final plan report back
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in message body
-- Agent 4, **Architect** (`tech-design-review`): per-topic tech-design review agent, reviews the latest committed design docs on a branch and reports advice back to the requester session
+- Agent 4, **Architect** (`tech-design-review`): per-topic tech-design reviewer for an exact immutable draft artifact or committed design snapshot
 - Agent 5, **Browser Tester** (`browser-test`): usually a reusable long-lived runtime validation agent, keeps browser state warm when available, checks behavior with `agent-browser`, and reports evidence back to the requester session
 - Refactor Reviewer (`refactor-review`): advisory reviewer that inspects existing code for duplication and simplification opportunities without making changes
 - Roundtable Moderator (`roundtable`): user-facing discussion controller; creates Waypost group, selects participants, drains group updates, and presents synthesis
@@ -56,7 +56,7 @@ reference to them.
 
 1. User asks Planner to prepare work.
 2. Planner runs `delegate-task` and sends one delegate workflow message.
-3. Planner or Coder may request architect review for the latest committed tech-design docs on `tech-design/<task_id>`.
+3. Planner or Coder may start two-architect drafting for an unresolved goal, or request direct review of mature committed tech-design docs.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
 5. Task-level review is planner-controlled: when per-task review is required, coder runs `review-request`; that skill creates or reuses the reviewer on demand as a child of planner, or returns control to planner without reviewer involvement when review is skipped.
 6. Reviewer runs `review-code` and sends either:
@@ -99,8 +99,13 @@ Use `roundtable` when the user wants a multi-agent discussion, brainstorm, criti
 ```mermaid
 flowchart TD
     P[Planner] -->|message: execute_delegate_task| C[Coder]
-    P -->|message: tech_design_review_requested| A[Architect]
-    C -->|message: tech_design_review_requested| A
+    X[Original Requester] -->|vague goal: tech_design_draft_requested| DA[Architect Author]
+    DA -->|message: tech_design_review_requested| A[Architect Reviewer]
+    A -->|message: tech_design_review_report| DA
+    DA -->|terse message: tech_design_delivered| X
+    X -->|archives and commits accepted artifact| D[Tracked Design Doc]
+    P -->|mature committed design: tech_design_review_requested| A
+    C -->|mature committed design: tech_design_review_requested| A
     A -->|message: tech_design_review_report| P
     A -->|message: tech_design_review_report| C
     C -. creates/reuses planner-scoped reviewer .-> R[Reviewer]
@@ -119,9 +124,12 @@ flowchart TD
 ## Operational Notes
 
 - `review-code` remains the authoritative full review output
-- `tech-design-review` is a separate advisory lane for committed design docs; it does not replace code review
-- `tech-design-review-request` is a requester-owned convergence loop: keep iterating with committed doc updates until the design is deliverable or explicitly escalated to the user
-- Accepted tech-design docs are product artifacts: merge the tech-design branch back into its recorded base branch with `git merge`; do not squash, rebase, cherry-pick, or copy the docs manually
+- `tech-design-review` is a separate advisory lane for immutable draft artifacts or committed design docs; it does not replace code review
+- `tech-design-review-request` selects by design maturity: vague or undrafted work uses separate architect-author and architect-reviewer sessions; mature committed proposals may go directly to one reviewer
+- in the two-architect lane, the author writes immutable rounds under `.agent-artifacts/tech-design/<author_session_id>/`; each reviewed file stays unchanged and the reviewer is read-only
+- the author sends only the accepted artifact pointer and review decision; the original requester archives that artifact to the formal docs path and commits it
+- draft-review does not transfer workspace ownership, switch branches, or commit intermediate rounds
+- review-existing keeps committed branch history; after acceptance, merge the recorded design branch into its recorded base with normal `git merge`
 - `review-request` should record coder-run lint / build / compile / test results so reviewer can usually reuse them instead of rerunning the same slow checks
 - `browser-test` is primarily runtime evidence; when explicitly allowed, Browser Tester may directly adjust display-adjacent code on its own branch before reporting back
 - requester should provide browser-test login/auth/setup context whenever possible; Browser Tester may ask requester or user for missing access details
@@ -150,11 +158,11 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `coder-<task_id>` and `architect-<task_id>` per task as needed; create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent; prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
+2. Create `coder-<task_id>` as needed. For unresolved design, create or reuse `architect-author-<task_id>` and `architect-reviewer-<task_id>`; for mature committed design, use `architect-<task_id>`. Create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent. Prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
 3. Queue message first. Best-effort nudges may wake non-local targets; correctness comes from receiver-side message pickup.
    Newly created or restarted targets should use the same message recv-first pickup path as any other target.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
-5. Keep workflow content in message body instead of generated Markdown files.
+5. Keep transport content in message bodies. Immutable tech-design rounds are product artifacts, not message substitutes.
 6. Keep planner closeout actions batched after acceptance.
 7. When supervisor finishes integrating a planner lane result, clean up the planner-owned structure that was actually used for that run.
 8. Supervisor-side integration uses `git merge`; do not switch to `cherry-pick`, `rebase`, or manual history surgery unless the user explicitly asks.

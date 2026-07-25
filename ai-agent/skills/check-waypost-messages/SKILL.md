@@ -1,6 +1,6 @@
 ---
 name: check-waypost-messages
-description: Claim and process pending Waypost messages one delivery at a time with `waypost_recv`.
+description: Claim and process pending Waypost messages with `waypost_recv`, allowing independent deliveries to progress without holding blocked claims.
 ---
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
@@ -15,25 +15,19 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
    - parse the `Action:` header
    - if `Action: group_message_available`, run the group handler for `Group-Address` and `As-Person`; for `group/roundtable-*`, use `roundtable` Moderator Group Check
    - otherwise execute that workflow stage immediately
-4. Only `waypost_ack` the currently claimed inbound delivery, and only after the message's required workflow action is complete
-5. If the message cannot be acted on yet, use `waypost_release`, `waypost_defer`, or `waypost_fail` instead of silently dropping it
-6. After a delivery is completed and `waypost_ack` succeeds, return to step 1. Process messages strictly as `recv one → act → settle → recv next`; do not pre-claim a batch
+4. Settle the claim when its current disposition is clear:
+   - `waypost_ack` after its immediate required action completes, including handing a required decision to the user
+   - `waypost_release` or `waypost_defer` only when the delivery itself cannot be handled now
+   - `waypost_fail` when it cannot be completed
+5. Continue receiving other useful messages; independent deliveries do not need to wait for each other
 
 ## Rules
 
-- Use the shared Receiver Contract for recv-first, binding recovery, and personal-delivery lifecycle limits
-- Ask the user for the next step only when the message body explicitly requires a user decision
-- Read external files only when the message body explicitly says they are needed
-- The current session owns only the delivery lifecycle of the inbound message it claimed with `waypost_recv`
-- Do not call `waypost_recv` again while a personal delivery remains claimed
-- After a successful `waypost_ack`, immediately call `waypost_recv` again; stop the serial receive cycle only when it returns no personal messages
-- After `waypost_release`, `waypost_defer`, or `waypost_fail`, follow the action skill's continuation policy; do not blindly re-claim the released delivery
+- Use the shared Receiver Contract for claim ownership, recovery, and lifecycle limits
+- The current session owns only deliveries it claimed with `waypost_recv`
+- A claim is not a global receive lock; receive independent work when useful
+- Do not keep a claim open while waiting for the user's answer; continue later from that answer or acknowledged history
+- Do not immediately reclaim released or deferred work unless its blocker changed
 - Do not `waypost_ack` / `waypost_release` / `waypost_defer` / `waypost_fail` outbound messages that this session sent, or a delivery claimed by another session
-- The action skill decides the exact serialized completion point for `waypost_ack` or the alternate lifecycle step
-- Determine workflow behavior from this message input plus the current action skill; you do not need to inspect another role's implementation details
-- Treat `waypost_ack` as durable persistence, not as losing the message forever
-- If you need to recover the latest acknowledged workflow input after `waypost_ack`, use `waypost_read` on the latest `acked` delivery for this session
-- If you need an older acknowledged delivery, use `waypost_list` with `state: acked`, then `waypost_read` by delivery id
-- After `waypost_recv` returns a workflow message, do not naturally end this turn until the message's required workflow action is complete
-- Before ending, explicitly check whether this action still requires `waypost_send`, `waypost_ack`, `waypost_release`, `waypost_defer`, or `waypost_fail`
-- If compaction or interruption made the workflow obligation unclear, reread the current workflow input from the message body or recover it with `waypost_read` before deciding to stop
+- The action skill decides when each delivery is complete or should be returned
+- Before ending, settle every delivery still claimed by this session

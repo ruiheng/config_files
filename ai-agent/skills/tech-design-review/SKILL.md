@@ -1,92 +1,70 @@
 ---
 name: tech-design-review
-description: Reviews the latest committed tech-design docs on a branch and sends an advisory report back to the requester session.
+description: Reviews an exact tech-design snapshot and returns an advisory report. Use for immutable draft artifacts produced by an architect-author, mature committed design docs on a branch, or direct user-requested design review. In Waypost mode, reply only to the inbound requester.
 ---
 
 # Tech-Design Review
 
-Review committed tech-design docs and return an advisory report.
+Use `agent-deck-workflow` for shared transport protocol.
 
-Workflow protocol baseline: use the `agent-deck-workflow` skill.
+## Input Mode
 
-## Input
+Determine mode from the input, not session metadata:
 
-Provide one of:
-1. the message body from `tech_design_review_requested`
-2. direct scope + committed design docs + base branch + problem/goals/constraints
+- message mode: a Waypost body with `Action: tech_design_review_requested`
+- direct-use mode: every other invocation, including a user request inside Agent Deck
 
-Direct-use mode is valid.
-In message mode, treat the body as a review brief and committed-doc pointer, not as the full design source.
-Inspect the latest committed docs on the stated branch before judging the design.
+Review one exact source:
 
-## Review Dimensions
+- `immutable-artifact`: the exact `.agent-artifacts/.../rNNN.md` path in the request
+- `committed-docs`: the stated docs at the stated branch commit
 
-Review the requested tech-design snapshot using these dimensions:
-- problem framing and scope
-- constraints, assumptions, and success criteria
-- decision quality and tradeoffs
-- simplicity, coupling, and change surface
-- compatibility, migration, and rollback
-- operational readiness, observability, and failure handling
-- security, privacy, and data boundary risks
+In direct-use mode, accept either source plus available problem/goals/constraints.
+
+## Review
+
+Review as a skeptical senior engineer. Prioritize:
+
+- problem framing, scope, constraints, and success criteria
+- decision quality, alternatives, tradeoffs, simplicity, coupling, and change surface
+- compatibility, migration, rollout, rollback, and failure handling
+- operations, observability, security, privacy, and data boundaries
 - unresolved questions that block implementation confidence
 
-This is not code review.
+This is not code review. Distinguish missing evidence from a wrong design and focus on the few findings most likely to change implementation confidence.
 
-## Architect Role
+## Baseline Gate
 
-Review this like a senior engineer in a mature production environment:
-- skeptical of hand-wavy claims
-- protective of compatibility and operational clarity
-- intolerant of unclear ownership, hidden coupling, and weak migration stories
+Require a readable exact review target and enough problem framing to judge it.
 
-## Inspection Order
+- direct-use mode: ask one short clarification question when either is missing
+- message mode: return `NEEDS_REVISION` and list missing critical input under `Findings`; never bypass the requester to ask the user
 
-1. Validate the problem and scope first.
-- Is this solving a real problem?
-- Are non-goals, constraints, and success conditions clear enough to judge the proposal?
+Treat missing alternatives, constraints, or operational detail as design gaps unless they make the proposal unjudgeable.
 
-2. Review the proposed design through the dimensions above.
-- Focus first on decision quality, coupling, and change surface.
-- Then review migration, operations, and security.
+## Snapshot Inspection
 
-3. Distinguish missing evidence from design failure.
-- A weakly justified claim is not automatically a wrong design, but it is still a reviewable gap.
-- Call out when the proposal direction looks sound but the support, constraints, or rollout detail is too thin.
+For `immutable-artifact`:
 
-4. Produce one advisory report.
-- Prioritize the few objections or caveats most likely to change implementation confidence.
+- review only the named file as the authoritative design round
+- do not edit it or substitute a newer file
+- repository inspection may validate claims, but must not change the reviewed target
+- on later rounds, compare against the prior artifact path from this session's report/Waypost history when useful
 
-## Required Baseline
+For `committed-docs`:
 
-Before reviewing quality, verify:
-- problem statement is stated
-- tech-design branch is stated
-- tech-design base branch is stated
-- in-scope design docs are stated
-- alternatives or rejected options are stated
-- major constraints are stated
+- inspect the named docs at the stated commit; do not silently review a moving worktree snapshot
+- on later rounds, compare against the previous reviewed commit when available
+- if the prior baseline is unavailable, state that under `Residual Risk`
 
-Hard block:
-- if problem statement or in-scope design docs are missing, ask one short clarification question in direct-use mode
-- in message mode, continue but mark the report as `NEEDS_REVISION` and list the missing critical items under `Major Risks`
+## Output
 
-Soft gaps:
-- if tech-design base branch, alternatives/rejected options, or major constraints are missing, continue the review
-- record the missing items under `Design Gaps`
-
-If critical context is still missing after one clarification in direct-use mode:
-- mark the report as `NEEDS_REVISION`
-- list the missing items under `Major Risks`
-
-## Output Format
-
-Message mode uses the full structure below:
+Message mode uses:
 
 ```markdown
 Task: <task_id>
 Action: tech_design_review_report
-From: architect <architect_session_id>
+From: architect_reviewer <architect_session_id>
 To: <requester_role> <requester_session_id>
 Round: <round>
 
@@ -94,80 +72,59 @@ Round: <round>
 [One-line architect summary]
 
 ## Reviewed Scope
-- Base branch: [branch the tech-design branch started from]
-- Branch: [tech-design branch]
-- Commit: [reviewed branch HEAD]
-- Docs reviewed:
-  - `path/to/doc1.md`
-  - `path/to/doc2.md`
+[Use exactly one form]
+- Mode: immutable-artifact
+- Artifact: `.agent-artifacts/.../rNNN.md`
+
+or
+
+- Mode: committed-docs
+- Base branch: <base branch>
+- Branch: <design branch>
+- Commit: <reviewed commit>
+- Docs:
+  - `path/to/doc.md`
 
 ## Decision
 SOUND | SOUND_WITH_CAVEATS | NEEDS_REVISION
 
-## Major Risks
-- [risk or `None`]
-
-## Design Gaps
-- [gap or `None`]
-
-## Alternatives
-- [alternative or `None`]
+## Findings
+- [prioritized finding, consequence, and recommended direction, or `None`]
 
 ## Questions To Resolve
-- [question or `None`]
-
-## What Looks Good
-- [strength or `None`]
-
-## Tool Context
-- Architect tool profile: [architect_tool_profile or `explicit`]
-- Architect tool cmd: [architect_tool_cmd]
+- [requester-owned decision or blocker, or `None`]
 
 ## Residual Risk
-[What remains uncertain after this review]
+[remaining uncertainty or `None`]
 ```
 
 Decision guidance:
-- `SOUND`: the design is coherent and implementation-ready with no material blockers
-- `SOUND_WITH_CAVEATS`: the core direction is sound and deliverable, but non-blocking caveats or tracked follow-up work should be recorded before or during implementation
-- `NEEDS_REVISION`: the current design is missing critical framing, contains a material flaw, or is too incomplete to trust as the implementation basis
 
-## Direct-Use Mode
+- `SOUND`: coherent and implementation-ready with no material blockers
+- `SOUND_WITH_CAVEATS`: deliverable, with only non-blocking caveats already recorded in the reviewed snapshot
+- `NEEDS_REVISION`: another reviewed snapshot is required before handoff
 
-When invoked directly by the user instead of Waypost message workflow:
-- skip the message header block
-- keep the same review sections starting at `## Summary`
-- return the report directly in the conversation
+In direct-use mode, omit the message header and return the same sections directly in the conversation.
 
-## Agent Deck Mode
+## Message Delivery
 
-Use the `agent-deck-workflow` skill for shared protocol.
+In message mode only:
 
-Skill-specific context resolution:
-- `task_id`: explicit -> message body -> ask
-- `architect_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
-- `requester_session_id`: explicit -> message body `From` header -> ask
-- `requester_role`: explicit -> message body `From` header -> default `requester`
-- `tech_design_base_branch`: explicit -> message body `Base branch` -> ask
-- `architect_tool_cmd`: explicit -> message body `Tool Context`; if missing, use the shared tool-resolution contract for role `architect`
-- `architect_tool_profile`: explicit -> message body `Tool Context` -> resolver `tool_profile`
-- `round`: explicit -> message body `Round` header -> default `1`
+1. resolve `task_id`, round, reviewer id, and requester identity from explicit input then message headers/context
+2. produce one report against the exact target
+3. send it to the inbound `From` session:
+   - `from_address = agent-deck/<architect_session_id>`
+   - `to_address = agent-deck/<requester_session_id>`
+   - `subject = "tech-design review report: <task_id> r<round>"`
+   - `body = <report>`
+4. follow the shared Async sender rule
 
-Execution flow:
-1. preserve or resolve `architect_tool_profile` / `architect_tool_cmd`
-2. review the latest committed tech-design docs on the referenced branch
-   - for round `>1` in the same architect session, compare current branch `HEAD` against the previous reviewed commit from the prior report/Waypost message context
-   - if the previous reviewed commit is unavailable, use git history for the in-scope docs and state the baseline uncertainty under `Residual Risk`
-3. produce one `tech_design_review_report`
+In direct-use mode, do not send Waypost.
 
 ## Rules
 
-- architect is review-only in this lane
-- review docs and design rationale only
-- keep feedback advisory, skeptical, and evidence-based
-- do not use `SOUND_WITH_CAVEATS` for unresolved blocking issues; use `NEEDS_REVISION` when the next doc revision is required before the design is deliverable
-- do not treat your own feedback as final authority; the requester may disagree and argue the design tradeoff
-- ask the user to decide when the disagreement becomes subjective, strategic, or stuck
-- prefer concrete design objections over generic taste comments
-- focus on the highest-leverage risks first: wrong problem, bad tradeoff, hidden coupling, broken migration, weak operational story
-- acknowledge design strengths that should be preserved during implementation, especially when they create useful constraints or simplify the solution space
+- remain review-only
+- keep findings concrete, skeptical, evidence-based, and advisory
+- do not use `SOUND_WITH_CAVEATS` when a doc revision is still required
+- return subjective, strategic, or stuck decisions to the requester in message mode; ask the user only in direct-use mode
+- do not treat optional review focus as a limit on independent review
