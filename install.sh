@@ -36,7 +36,19 @@ ALL_REPLACE=0
 AGENT_DECK_AVAILABLE=0
 WAYPOST_MCP_AVAILABLE=0
 CODEX_SKILLS_DIR_READY=0
+CLAUDE_CODE_AVAILABLE=0
+CODEX_CLI_AVAILABLE=0
+NVM_NODE_AVAILABLE=0
 CODEX_CLI_COMMAND="codex"
+NVM_VERSION="v0.40.3"
+NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh"
+CLAUDE_CODE_INSTALL_URL="https://claude.ai/install.sh"
+ANTIGRAVITY_INSTALL_URL="https://antigravity.google/cli/install.sh"
+ANTIGRAVITY_INSTALL_SHA256="ee1ea43ce4e9e56356c4ab6dad907ef357ae4bdfcaadb682735909fb57c9c640"
+AGENT_DECK_VERSION="v1.10.10"
+AGENT_DECK_INSTALL_COMMIT="1e879a189afa1d0803485361432ff12c958b6d56"
+AGENT_DECK_INSTALL_URL="https://raw.githubusercontent.com/asheshgoplani/agent-deck/$AGENT_DECK_INSTALL_COMMIT/install.sh"
+AGENT_DECK_INSTALL_SHA256="ea85297639d0c02ec61a89ac80d40f507a0c9096331c28b777c5ac0123001b11"
 # Keep enough MCP time for Waypost operations.
 WAYPOST_MCP_TOOL_TIMEOUT_SEC=660
 WAYPOST_MCP_TOOL_TIMEOUT_MS=660000
@@ -172,10 +184,8 @@ ensure_path_contains_local_bin() {
             ;;
     esac
 
-    log_warn "PATH does not include: $local_bin"
-    log_info "Add it to your shell config so helper commands like 'adwf-send-and-wake' are directly runnable"
-    log_info "Suggested line:"
-    echo '  export PATH="$HOME/.local/bin:$PATH"'
+    export PATH="$local_bin:$PATH"
+    log_info "Added to installer PATH: $local_bin"
     return 0
 }
 
@@ -258,9 +268,11 @@ backup_item() {
 # Create a symbolic link
 # $1: source (relative to SCRIPT_DIR)
 # $2: target (absolute path)
+# $3: replace existing target without requiring --force (optional, default: 0)
 link_file() {
     local src="$SCRIPT_DIR/$1"
     local dst="$2"
+    local replace_existing="${3:-0}"
 
     # Check if source exists
     if [[ ! -e "$src" ]]; then
@@ -300,7 +312,7 @@ link_file() {
                 return 0
             else
                 # Different symlink - handle based on mode
-                if [[ $FORCE -eq 1 ]]; then
+                if [[ $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
                     if [[ $DRY_RUN -eq 1 ]]; then
                         log_dry "Would replace symlink: $dst"
                     else
@@ -339,7 +351,7 @@ link_file() {
             fi
         else
             # It's a regular file or directory
-            if [[ $FORCE -eq 1 ]]; then
+            if [[ $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
                 if ! backup_item "$dst"; then
                     failed=$((failed + 1))
                     return 1
@@ -511,6 +523,11 @@ ensure_required_command() {
         return 0
     fi
 
+    if [[ $DRY_RUN -eq 1 && "$command_name" == "npm" && $NVM_NODE_AVAILABLE -eq 1 ]]; then
+        log_dry "Would use required command from NVM: npm"
+        return 0
+    fi
+
     log_warn "Missing required command: $command_name"
     if ! install_package "$package_name"; then
         log_error "Please install '$package_name' manually and rerun the installer"
@@ -532,9 +549,13 @@ ensure_required_command() {
 
 install_required_tools() {
     local required_tools=(
+        curl
         tmux
+        lsof
         jq
         sqlite3
+        yq
+        zsh
     )
     local tool_name
 
@@ -545,6 +566,285 @@ install_required_tools() {
     done
 
     return 0
+}
+
+bash_profile_loads_nvm() {
+    local profile="$1"
+
+    grep -Fq 'NVM_DIR' "$profile" 2>/dev/null && grep -Fq 'nvm.sh' "$profile" 2>/dev/null
+}
+
+ensure_nvm_bash_profile() {
+    local profile="$HOME/.bashrc"
+
+    if [[ ! -e "$profile" && ! -L "$profile" ]]; then
+        log_info "Bash NVM setup will be provided by the linked bashrc"
+        return 0
+    fi
+
+    if [[ ! -f "$profile" ]]; then
+        log_error "Bash profile is not a regular file: $profile"
+        return 1
+    fi
+
+    if bash_profile_loads_nvm "$profile"; then
+        log_ok "Bash profile loads NVM: $profile"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would append NVM initialization to: $profile"
+        return 0
+    fi
+
+    if printf '\n# NVM managed by config_files\nexport NVM_DIR="$HOME/.nvm"\n[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"\n' >> "$profile"; then
+        log_ok "Added NVM initialization to: $profile"
+        return 0
+    fi
+
+    log_error "Failed to update Bash profile: $profile"
+    return 1
+}
+
+install_nodejs_with_nvm() {
+    local nvm_dir="$HOME/.nvm"
+    local nvm_script="$nvm_dir/nvm.sh"
+    local tmp_file
+
+    log_info "Checking Node.js via NVM..."
+
+    if [[ -s "$nvm_script" ]]; then
+        log_ok "Found NVM"
+    else
+        if [[ -e "$nvm_dir" ]]; then
+            log_error "NVM directory exists but is incomplete: $nvm_dir"
+            return 1
+        fi
+
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would install NVM $NVM_VERSION from: $NVM_INSTALL_URL"
+        else
+            tmp_file="$(mktemp "${TMPDIR:-/tmp}/nvm-install.XXXXXX")" || {
+                log_error "Failed to create temporary NVM installer"
+                return 1
+            }
+
+            if ! curl -fsSL "$NVM_INSTALL_URL" -o "$tmp_file"; then
+                rm -f "$tmp_file"
+                log_error "Failed to download NVM installer"
+                return 1
+            fi
+
+            if ! PROFILE=/dev/null NVM_DIR="$nvm_dir" bash "$tmp_file"; then
+                rm -f "$tmp_file"
+                log_error "Failed to install NVM"
+                return 1
+            fi
+            rm -f "$tmp_file"
+
+            if [[ ! -s "$nvm_script" ]]; then
+                log_error "NVM is unavailable after install: $nvm_script"
+                return 1
+            fi
+            log_ok "Installed NVM $NVM_VERSION"
+        fi
+    fi
+
+    ensure_nvm_bash_profile || return 1
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: nvm install --lts"
+        log_dry "Would run: nvm alias default lts/*"
+        log_dry "Would run: nvm use default"
+        NVM_NODE_AVAILABLE=1
+        return 0
+    fi
+
+    # shellcheck source=/dev/null
+    source "$nvm_script"
+
+    if ! command -v nvm &>/dev/null; then
+        log_error "NVM is unavailable after loading: $nvm_script"
+        return 1
+    fi
+
+    if ! nvm install --lts; then
+        log_error "Failed to install the latest Node.js LTS release"
+        return 1
+    fi
+    if ! nvm alias default 'lts/*'; then
+        log_error "Failed to set the default Node.js version"
+        return 1
+    fi
+    if ! nvm use default; then
+        log_error "Failed to activate the default Node.js version"
+        return 1
+    fi
+
+    if command -v node &>/dev/null && command -v npm &>/dev/null; then
+        NVM_NODE_AVAILABLE=1
+        log_ok "Node.js and npm are available through NVM"
+        return 0
+    fi
+
+    log_error "Node.js or npm is unavailable after NVM setup"
+    return 1
+}
+
+install_codex_cli() {
+    log_info "Checking Codex CLI..."
+
+    if command -v codex &>/dev/null; then
+        log_ok "Found Codex CLI"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: npm install -g @openai/codex"
+        return 0
+    fi
+
+    if ! command -v npm &>/dev/null; then
+        log_error "Codex CLI requires npm"
+        return 1
+    fi
+
+    log_info "Running: npm install -g @openai/codex"
+    if ! npm install -g @openai/codex; then
+        log_error "Failed to install Codex CLI"
+        return 1
+    fi
+
+    if command -v codex &>/dev/null; then
+        log_ok "Installed Codex CLI"
+        return 0
+    fi
+
+    log_error "Codex CLI is unavailable after install"
+    return 1
+}
+
+install_remote_cli() {
+    local display_name="$1"
+    local command_name="$2"
+    local install_url="$3"
+    local expected_sha256="$4"
+    shift 4
+    local -a installer_args=("$@")
+    local tmp_file
+    local actual_sha256
+
+    log_info "Checking $display_name..."
+
+    if command -v "$command_name" &>/dev/null; then
+        log_ok "Found $display_name"
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        if [[ ${#installer_args[@]} -gt 0 ]]; then
+            log_dry "Would install $display_name from: $install_url ${installer_args[*]}"
+        else
+            log_dry "Would install $display_name from: $install_url"
+        fi
+        if [[ -n "$expected_sha256" ]]; then
+            log_dry "Would verify $display_name installer SHA-256: $expected_sha256"
+        fi
+        return 0
+    fi
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/${command_name}-install.XXXXXX")" || {
+        log_error "Failed to create temporary installer for $display_name"
+        return 1
+    }
+
+    if ! curl -fsSL "$install_url" -o "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to download installer for $display_name"
+        return 1
+    fi
+
+    if [[ -n "$expected_sha256" ]]; then
+        if command -v sha256sum &>/dev/null; then
+            actual_sha256="$(sha256sum "$tmp_file" | cut -d ' ' -f 1)"
+        elif command -v shasum &>/dev/null; then
+            actual_sha256="$(shasum -a 256 "$tmp_file" | cut -d ' ' -f 1)"
+        else
+            rm -f "$tmp_file"
+            log_error "No SHA-256 tool available for $display_name installer verification"
+            return 1
+        fi
+
+        if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+            rm -f "$tmp_file"
+            log_error "$display_name installer SHA-256 mismatch"
+            return 1
+        fi
+        log_ok "Verified $display_name installer SHA-256"
+    fi
+
+    if ! bash "$tmp_file" "${installer_args[@]}"; then
+        rm -f "$tmp_file"
+        log_error "Failed to install $display_name"
+        return 1
+    fi
+    rm -f "$tmp_file"
+    hash -r
+
+    if command -v "$command_name" &>/dev/null; then
+        log_ok "Installed $display_name"
+        return 0
+    fi
+
+    log_error "$display_name is unavailable after install: $command_name"
+    return 1
+}
+
+install_oh_my_zsh() {
+    local install_dir="$HOME/.oh-my-zsh"
+    local entrypoint="$install_dir/oh-my-zsh.sh"
+
+    log_info "Checking Oh My Zsh..."
+
+    if [[ -f "$entrypoint" ]]; then
+        log_ok "Found Oh My Zsh"
+        return 0
+    fi
+
+    if [[ -e "$install_dir" ]]; then
+        log_error "Oh My Zsh directory exists but is incomplete: $install_dir"
+        return 1
+    fi
+
+    if ! ensure_required_command "git"; then
+        log_error "Oh My Zsh requires git"
+        return 1
+    fi
+
+    local -a install_cmd=(
+        git clone --depth=1
+        https://github.com/ohmyzsh/ohmyzsh.git
+        "$install_dir"
+    )
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${install_cmd[*]}"
+        return 0
+    fi
+
+    log_info "Running: ${install_cmd[*]}"
+    if ! "${install_cmd[@]}"; then
+        log_error "Failed to install Oh My Zsh"
+        return 1
+    fi
+
+    if [[ -f "$entrypoint" ]]; then
+        log_ok "Installed Oh My Zsh"
+        return 0
+    fi
+
+    log_error "Oh My Zsh is incomplete after install: $install_dir"
+    return 1
 }
 
 install_agent_browser() {
@@ -1328,7 +1628,7 @@ remove_codex_legacy_waypost_mcps() {
     local legacy_server
     local -a legacy_servers=(workflow_mailbox agent_mailbox agent-mailbox adwf-mailbox)
 
-    if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
+    if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null && [[ $CODEX_CLI_AVAILABLE -ne 1 ]]; then
         return 0
     fi
 
@@ -1352,7 +1652,7 @@ codex_waypost_uses_builtin_command() {
 }
 
 install_codex_waypost_mcp() {
-    if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null; then
+    if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null && [[ $CODEX_CLI_AVAILABLE -ne 1 ]]; then
         log_warn "Skipping Codex MCP install ($CODEX_CLI_COMMAND not found)"
         return 0
     fi
@@ -1567,7 +1867,7 @@ remove_claude_stale_waypost_mcps() {
     local legacy_server
     local -a legacy_servers=(workflow_mailbox agent_mailbox agent-mailbox adwf-mailbox)
 
-    if ! command -v claude &>/dev/null; then
+    if ! command -v claude &>/dev/null && [[ $CLAUDE_CODE_AVAILABLE -ne 1 ]]; then
         return 0
     fi
 
@@ -1590,7 +1890,7 @@ install_claude_waypost_mcp() {
         return 0
     fi
 
-    if ! command -v claude &>/dev/null; then
+    if ! command -v claude &>/dev/null && [[ $CLAUDE_CODE_AVAILABLE -ne 1 ]]; then
         log_warn "Skipping Claude MCP install (claude not found)"
         return 0
     fi
@@ -1662,6 +1962,10 @@ check_agent_deck_prerequisites() {
     case "$OS" in
         linux|wsl|macos)
             if ! command -v lsof &>/dev/null; then
+                if [[ $DRY_RUN -eq 1 ]]; then
+                    log_dry "Would use lsof installed with required CLI tools"
+                    return 0
+                fi
                 log_error "Missing required command: lsof"
                 suggest_lsof_install
                 return 1
@@ -1679,7 +1983,7 @@ check_agent_deck_prerequisites() {
 remove_agent_deck_codext_command() {
     local agent_deck_config="$HOME/.agent-deck/config.toml"
 
-    if ! command -v agent-deck &>/dev/null; then
+    if ! command -v agent-deck &>/dev/null && [[ $AGENT_DECK_AVAILABLE -ne 1 ]]; then
         return 0
     fi
 
@@ -1731,10 +2035,6 @@ remove_agent_deck_codext_command() {
 configure_agent_deck_updates() {
     local agent_deck_config="$HOME/.agent-deck/config.toml"
 
-    if ! command -v agent-deck &>/dev/null; then
-        return 0
-    fi
-
     ensure_toml_literal_key "$agent_deck_config" "updates" "auto_update" "false" || return 1
     ensure_toml_literal_key "$agent_deck_config" "updates" "check_enabled" "false" || return 1
     ensure_toml_literal_key "$agent_deck_config" "updates" "notify_in_cli" "false" || return 1
@@ -1742,10 +2042,6 @@ configure_agent_deck_updates() {
 
 configure_agent_deck_kiro_tool() {
     local agent_deck_config="$HOME/.agent-deck/config.toml"
-
-    if ! command -v agent-deck &>/dev/null; then
-        return 0
-    fi
 
     ensure_toml_string_key "$agent_deck_config" "tools.kiro" "command" "kiro-cli" || return 1
     ensure_toml_literal_key "$agent_deck_config" "tools.kiro" "busy_patterns" '["thinking...", "processing..."]' || return 1
@@ -1764,14 +2060,21 @@ is_agent_deck_related_skill() {
 }
 
 setup_agent_deck_integration() {
-    if ! command -v agent-deck &>/dev/null; then
-        AGENT_DECK_AVAILABLE=0
-        log_warn "agent-deck not found; skipping agent-deck related skills and policy/rule links"
-        return 0
-    fi
+    local agent_deck_planned=0
 
-    AGENT_DECK_AVAILABLE=1
-    log_ok "Found agent-deck"
+    if ! command -v agent-deck &>/dev/null; then
+        if [[ $DRY_RUN -eq 1 && $AGENT_DECK_AVAILABLE -eq 1 ]]; then
+            agent_deck_planned=1
+            log_dry "Would use newly installed agent-deck"
+        else
+            AGENT_DECK_AVAILABLE=0
+            log_warn "agent-deck not found; skipping agent-deck related skills and policy/rule links"
+            return 0
+        fi
+    else
+        AGENT_DECK_AVAILABLE=1
+        log_ok "Found agent-deck"
+    fi
 
     if ! check_agent_deck_prerequisites; then
         return 1
@@ -1790,12 +2093,14 @@ setup_agent_deck_integration() {
     fi
 
     local has_hooks_cmd=0
-    if agent-deck hooks status >/dev/null 2>&1; then
+    if [[ $agent_deck_planned -eq 0 ]] && agent-deck hooks status >/dev/null 2>&1; then
         has_hooks_cmd=1
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        if [[ $has_hooks_cmd -eq 1 ]]; then
+        if [[ $agent_deck_planned -eq 1 ]]; then
+            log_dry "Would run: agent-deck hooks install if supported"
+        elif [[ $has_hooks_cmd -eq 1 ]]; then
             log_dry "Would run: agent-deck hooks install"
         else
             log_warn "agent-deck hooks command not available; skipping Claude hook install"
@@ -1867,7 +2172,7 @@ install_home_configs() {
 
     # Shell configs
     link_file "bashrc" "$HOME/.bashrc"
-    link_file "zshrc" "$HOME/.zshrc"
+    link_file "zshrc" "$HOME/.zshrc" 1
 
     # Screen config
     link_file "screenrc" "$HOME/.screenrc"
@@ -2750,6 +3055,33 @@ main() {
     fi
 
     ensure_path_contains_local_bin
+
+    if ! install_oh_my_zsh; then
+        exit 1
+    fi
+
+    if ! install_nodejs_with_nvm; then
+        exit 1
+    fi
+
+    if ! install_codex_cli; then
+        exit 1
+    fi
+    CODEX_CLI_AVAILABLE=1
+
+    if ! install_remote_cli "Claude Code" "claude" "$CLAUDE_CODE_INSTALL_URL" ""; then
+        exit 1
+    fi
+    CLAUDE_CODE_AVAILABLE=1
+
+    if ! install_remote_cli "Antigravity CLI" "agy" "$ANTIGRAVITY_INSTALL_URL" "$ANTIGRAVITY_INSTALL_SHA256"; then
+        exit 1
+    fi
+
+    if ! install_remote_cli "agent-deck" "agent-deck" "$AGENT_DECK_INSTALL_URL" "$AGENT_DECK_INSTALL_SHA256" --version "$AGENT_DECK_VERSION" --skip-tmux-config --non-interactive; then
+        exit 1
+    fi
+    AGENT_DECK_AVAILABLE=1
 
     if ! install_agent_browser; then
         exit 1
