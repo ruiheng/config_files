@@ -60,7 +60,7 @@ Options:
   --help, -h        Show help message
 ```
 
-`install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone.
+`install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. It also installs [`mq`](https://mqlang.org), a jq-like Markdown processor: pinned official binaries on supported Linux and Apple Silicon macOS, Homebrew when available, and a pinned Cargo build on Intel macOS. If neither Homebrew nor a working Cargo is available on Intel macOS, it reports the prerequisite and continues without mq. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone.
 
 For copied paths, including the stable shared agent assets under `~/.local/share/config_files/ai-agent`, the installer keeps the previous source snapshot under `~/.local/state/config_files/managed-copies`. Updates use that snapshot to remove files deleted from the repository while preserving target-only files, local modifications, and local deletions. Concurrent changes to the same entry, including delete/modify conflicts, are reported; `--force` backs up the target before applying the repository version.
 

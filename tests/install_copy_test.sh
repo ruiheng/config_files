@@ -747,6 +747,219 @@ test_macos_path_mode_uses_bsd_stat() {
     [[ "$mode" == 600 ]] || fail_test "macOS mode lookup used the wrong stat format: $mode"
 }
 
+test_mq_release_selection() {
+    local linux_gnu
+    local linux_musl
+    local linux_arm
+    local macos_arm
+
+    linux_gnu="$(
+        OSTYPE=linux-gnu \
+        bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" x86_64; }
+            ldd() { printf "%s\\n" "ldd (GNU libc)"; }
+            mq_release_info
+        ' _ "$REPO_ROOT"
+    )" || fail_test "mq Linux GNU release selection failed"
+    [[ "$linux_gnu" == $'mq-x86_64-unknown-linux-gnu\t88ac9db1a62e3cc5213224a4cbe75ab8924dbca6cc6a988ecb9cafa538ed02cf' ]] \
+        || fail_test "mq Linux GNU release selection was incorrect"
+
+    linux_musl="$(
+        OSTYPE=linux-musl \
+        bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" x86_64; }
+            ldd() { printf "%s\\n" "musl libc"; }
+            mq_release_info
+        ' _ "$REPO_ROOT"
+    )" || fail_test "mq Linux musl release selection failed"
+    [[ "$linux_musl" == $'mq-x86_64-unknown-linux-musl\t55078ec75f6be6092a3cd72d9bcb5a88ad700c98465b2907a3d146c600e02227' ]] \
+        || fail_test "mq Linux musl release selection was incorrect"
+
+    linux_arm="$(
+        OSTYPE=linux-gnu \
+        bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" aarch64; }
+            ldd() { printf "%s\\n" "ldd (GNU libc)"; }
+            mq_release_info
+        ' _ "$REPO_ROOT"
+    )" || fail_test "mq Linux ARM release selection failed"
+    [[ "$linux_arm" == $'mq-aarch64-unknown-linux-gnu\t8b567fd2a0360de8ce8c82397d2ee260ff1fa5c73535a07cf75aac43588660ff' ]] \
+        || fail_test "mq Linux ARM release selection was incorrect"
+
+    macos_arm="$(
+        OSTYPE=darwin23 \
+        bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" arm64; }
+            mq_release_info
+        ' _ "$REPO_ROOT"
+    )" || fail_test "mq macOS release selection failed"
+    [[ "$macos_arm" == $'mq-aarch64-apple-darwin\tee11cee3d6855a8d23005a56d77013b14738838abe4a656bd82aeb884ee06645' ]] \
+        || fail_test "mq macOS release selection was incorrect"
+}
+
+test_mq_dry_run_plans_pinned_binary() {
+    local case_dir="$TEST_ROOT/mq-dry-run"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        OSTYPE=linux-gnu \
+        bash -c '
+            source "$1/install.sh"
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "mq" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            uname() { printf "%s\\n" x86_64; }
+            DRY_RUN=1
+            install_mq
+        ' _ "$REPO_ROOT"
+    )" || fail_test "mq dry-run plan failed"
+
+    [[ "$output" == *"mq-x86_64-unknown-linux-gnu"* ]] \
+        || fail_test "mq dry-run did not select the pinned Linux binary"
+    [[ "$output" == *"88ac9db1a62e3cc5213224a4cbe75ab8924dbca6cc6a988ecb9cafa538ed02cf"* ]] \
+        || fail_test "mq dry-run did not show the binary checksum"
+    [[ ! -e "$case_dir/home/.local/bin/mq" ]] \
+        || fail_test "mq dry-run created the binary target"
+}
+
+test_mq_intel_macos_uses_pinned_cargo_install() {
+    local case_dir="$TEST_ROOT/mq-intel-macos-cargo"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        OSTYPE=darwin23 \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            [[ "$OS" == "macos" ]] || exit 10
+            uname() { printf "%s\\n" x86_64; }
+            curl() { return 99; }
+            cargo() {
+                local root=""
+                local expected
+
+                if [[ "$1" == "--version" ]]; then
+                    printf "%s\\n" "cargo 1.0.0"
+                    return 0
+                fi
+
+                printf "%s\\n" "$*" > "$HOME/cargo-args"
+                while [[ $# -gt 0 ]]; do
+                    if [[ "$1" == "--root" ]]; then
+                        root="$2"
+                        shift 2
+                    else
+                        shift
+                    fi
+                done
+                [[ -n "$root" ]] || return 1
+                mkdir -p "$root/bin"
+                printf "%s\\n" "#!/bin/sh" "exit 0" > "$root/bin/mq"
+                chmod +x "$root/bin/mq"
+                expected="install --root $HOME/.local mq-run --version 0.7.0 --locked"
+                [[ "$(<"$HOME/cargo-args")" == "$expected" ]]
+            }
+
+            ensure_path_contains_local_bin
+            DRY_RUN=1
+            install_mq
+            [[ ! -e "$HOME/.local/bin/mq" ]]
+            [[ ! -e "$HOME/cargo-args" ]]
+            DRY_RUN=0
+            install_mq
+            [[ -x "$HOME/.local/bin/mq" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "mq Intel macOS Cargo install failed"
+}
+
+test_mq_intel_macos_without_cargo_skips_cleanly() {
+    local case_dir="$TEST_ROOT/mq-intel-macos-no-cargo"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        OSTYPE=darwin23 \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            [[ "$OS" == "macos" ]] || exit 10
+            command() {
+                if [[ "$1" == "-v" && ( "${2:-}" == "cargo" || "${2:-}" == "mq" ) ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            uname() { printf "%s\\n" x86_64; }
+            install_mq
+            [[ ! -e "$HOME/.local/bin/mq" ]]
+        ' _ "$REPO_ROOT"
+    )" || fail_test "mq Intel macOS missing-Cargo path did not skip cleanly"
+
+    [[ "$output" == *"Cargo is unavailable"* ]] \
+        || fail_test "mq Intel macOS missing-Cargo path did not explain the prerequisite"
+}
+
+test_mq_failed_binary_is_removed_and_retryable() {
+    local case_dir="$TEST_ROOT/mq-invalid-binary"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            uname() { printf "%s\\n" x86_64; }
+            ldd() { printf "%s\\n" "ldd (GNU libc)"; }
+            curl_calls=0
+            curl() {
+                local output="${!#}"
+
+                curl_calls=$((curl_calls + 1))
+                if [[ $curl_calls -eq 1 ]]; then
+                    printf "%s\\n" "#!/bin/sh" "exit 1" > "$output"
+                else
+                    printf "%s\\n" "#!/bin/sh" "exit 0" > "$output"
+                fi
+            }
+            sha256_file() {
+                printf "%s\\n" "88ac9db1a62e3cc5213224a4cbe75ab8924dbca6cc6a988ecb9cafa538ed02cf"
+            }
+
+            ensure_path_contains_local_bin
+            if install_mq; then
+                exit 10
+            fi
+            [[ ! -e "$HOME/.local/bin/mq" ]] || exit 11
+            install_mq
+            [[ $curl_calls -eq 2 ]] || exit 12
+            [[ -x "$HOME/.local/bin/mq" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "mq invalid binary was not cleaned up for retry"
+}
+
 test_shared_agent_snapshot_preserves_local_content
 test_zshrc_uses_managed_copy_merge
 test_managed_copy_dry_run_is_read_only
@@ -774,6 +987,11 @@ test_executable_mode_update
 test_non_executable_mode_update
 test_local_directory_mode_is_preserved_with_upstream_update
 test_macos_path_mode_uses_bsd_stat
+test_mq_release_selection
+test_mq_dry_run_plans_pinned_binary
+test_mq_intel_macos_uses_pinned_cargo_install
+test_mq_intel_macos_without_cargo_skips_cleanly
+test_mq_failed_binary_is_removed_and_retryable
 test_known_legacy_links_are_migrated
 test_platform_specific_configs_skip_cleanly
 test_systemd_bridge_uses_stable_executable

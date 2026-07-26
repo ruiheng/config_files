@@ -48,6 +48,8 @@ SHARED_AI_AGENT_READY=0
 CODEX_CLI_COMMAND="codex"
 NVM_VERSION="v0.40.3"
 NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh"
+MQ_VERSION="v0.7.0"
+MQ_RELEASE_BASE_URL="https://github.com/harehare/mq/releases/download/$MQ_VERSION"
 CLAUDE_CODE_INSTALL_URL="https://claude.ai/install.sh"
 ANTIGRAVITY_INSTALL_URL="https://antigravity.google/cli/install.sh"
 ANTIGRAVITY_INSTALL_SHA256="ee1ea43ce4e9e56356c4ab6dad907ef357ae4bdfcaadb682735909fb57c9c640"
@@ -1614,7 +1616,7 @@ link_shared_ai_agent_item() {
 detect_os() {
     local os="unknown"
 
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if [[ "$OSTYPE" == linux-* ]]; then
         os="linux"
         # Check for WSL
         if [[ -f /proc/version ]] && grep -qi microsoft /proc/version 2>/dev/null; then
@@ -1761,6 +1763,256 @@ install_required_tools() {
     done
 
     return 0
+}
+
+sha256_file() {
+    local file_path="$1"
+    local hash_output
+
+    if command -v sha256sum &>/dev/null; then
+        hash_output="$(sha256sum "$file_path")" || return 1
+    elif command -v shasum &>/dev/null; then
+        hash_output="$(shasum -a 256 "$file_path")" || return 1
+    else
+        return 1
+    fi
+
+    printf '%s\n' "${hash_output%% *}"
+}
+
+mq_is_runnable() {
+    command -v mq &>/dev/null && mq --version >/dev/null 2>&1
+}
+
+mq_install_target_is_free() {
+    local target="$1"
+
+    if [[ -e "$target" || -L "$target" ]]; then
+        log_error "mq install target already exists but is not runnable: $target"
+        return 1
+    fi
+
+    return 0
+}
+
+finish_mq_target_install() {
+    local target="$1"
+
+    if "$target" --version >/dev/null 2>&1; then
+        log_ok "Installed mq $MQ_VERSION"
+        return 0
+    fi
+
+    if [[ -e "$target" || -L "$target" ]]; then
+        if ! rm -f "$target"; then
+            log_error "mq is unavailable after install and could not remove: $target"
+            return 1
+        fi
+    fi
+    hash -r
+
+    log_error "mq is unavailable after install: $target"
+    return 1
+}
+
+mq_linux_libc() {
+    local ldd_output
+
+    if command -v ldd &>/dev/null; then
+        ldd_output="$(ldd --version 2>&1 || true)"
+        if [[ "$ldd_output" == *musl* || "$ldd_output" == *Musl* ]]; then
+            printf '%s\n' "musl"
+            return 0
+        fi
+    fi
+
+    printf '%s\n' "gnu"
+}
+
+# Prints: <release asset><TAB><SHA-256>
+mq_release_info() {
+    local architecture
+    local libc
+
+    architecture="$(uname -m)"
+    case "$OS:$architecture" in
+        linux:x86_64|linux:amd64|wsl:x86_64|wsl:amd64)
+            libc="$(mq_linux_libc)"
+            if [[ "$libc" == "musl" ]]; then
+                printf '%s\t%s\n' \
+                    "mq-x86_64-unknown-linux-musl" \
+                    "55078ec75f6be6092a3cd72d9bcb5a88ad700c98465b2907a3d146c600e02227"
+            else
+                printf '%s\t%s\n' \
+                    "mq-x86_64-unknown-linux-gnu" \
+                    "88ac9db1a62e3cc5213224a4cbe75ab8924dbca6cc6a988ecb9cafa538ed02cf"
+            fi
+            ;;
+        linux:aarch64|linux:arm64|wsl:aarch64|wsl:arm64)
+            libc="$(mq_linux_libc)"
+            if [[ "$libc" == "musl" ]]; then
+                printf '%s\t%s\n' \
+                    "mq-aarch64-unknown-linux-musl" \
+                    "f8abfa7238ff4a322cbd90b5f00843e9c8939d98dac0064b484498607137fb22"
+            else
+                printf '%s\t%s\n' \
+                    "mq-aarch64-unknown-linux-gnu" \
+                    "8b567fd2a0360de8ce8c82397d2ee260ff1fa5c73535a07cf75aac43588660ff"
+            fi
+            ;;
+        macos:arm64|macos:aarch64)
+            printf '%s\t%s\n' \
+                "mq-aarch64-apple-darwin" \
+                "ee11cee3d6855a8d23005a56d77013b14738838abe4a656bd82aeb884ee06645"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+install_mq_with_cargo() {
+    local target="$1"
+    local cargo_root="$HOME/.local"
+    local -a install_cmd=(
+        cargo install
+        --root "$cargo_root"
+        mq-run
+        --version "${MQ_VERSION#v}"
+        --locked
+    )
+
+    if ! command -v cargo &>/dev/null || ! cargo --version >/dev/null 2>&1; then
+        log_warn "mq $MQ_VERSION has no official Intel macOS binary and Cargo is unavailable"
+        log_info "Install Homebrew or Cargo, then rerun the installer"
+        return 0
+    fi
+
+    if ! mq_install_target_is_free "$target"; then
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${install_cmd[*]}"
+        return 0
+    fi
+
+    log_info "Running: ${install_cmd[*]}"
+    if ! "${install_cmd[@]}"; then
+        log_error "Failed to install mq with Cargo"
+        return 1
+    fi
+    hash -r
+
+    finish_mq_target_install "$target"
+}
+
+install_mq() {
+    local release_info
+    local asset_name
+    local expected_sha256
+    local download_url
+    local architecture
+    local local_bin="$HOME/.local/bin"
+    local target="$local_bin/mq"
+    local tmp_file
+    local actual_sha256
+
+    log_info "Checking mq Markdown processor..."
+
+    if mq_is_runnable; then
+        log_ok "Found mq"
+        return 0
+    fi
+
+    if command -v mq &>/dev/null; then
+        log_warn "Found mq but it is not runnable: $(command -v mq)"
+    fi
+
+    # Homebrew ships mq for both Apple Silicon and Intel macOS.
+    if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
+        log_info "Installing mq with Homebrew"
+        if ! install_package "mq"; then
+            return 1
+        fi
+
+        if [[ $DRY_RUN -eq 1 ]]; then
+            return 0
+        fi
+
+        hash -r
+        if mq_is_runnable; then
+            log_ok "Installed mq with Homebrew"
+            return 0
+        fi
+
+        log_error "mq is unavailable after Homebrew install"
+        return 1
+    fi
+
+    architecture="$(uname -m)"
+    if ! release_info="$(mq_release_info)"; then
+        case "$OS:$architecture" in
+            macos:x86_64|macos:amd64)
+                install_mq_with_cargo "$target"
+                return $?
+                ;;
+        esac
+
+        log_warn "mq automatic install is unavailable on: $OS/$architecture"
+        log_info "Install manually: cargo install mq-run --version ${MQ_VERSION#v} --locked --root $HOME/.local"
+        return 0
+    fi
+    IFS=$'\t' read -r asset_name expected_sha256 <<< "$release_info"
+    download_url="$MQ_RELEASE_BASE_URL/$asset_name"
+
+    if ! mq_install_target_is_free "$target"; then
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would download mq $MQ_VERSION from: $download_url"
+        log_dry "Would verify mq SHA-256: $expected_sha256"
+        log_dry "Would install: $target"
+        return 0
+    fi
+
+    if ! mkdir -p "$local_bin"; then
+        log_error "Failed to create mq install directory: $local_bin"
+        return 1
+    fi
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/mq-install.XXXXXX")" || {
+        log_error "Failed to create temporary mq download"
+        return 1
+    }
+
+    if ! curl -fsSL "$download_url" -o "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to download mq $MQ_VERSION"
+        return 1
+    fi
+
+    actual_sha256="$(sha256_file "$tmp_file")" || {
+        rm -f "$tmp_file"
+        log_error "No SHA-256 tool available for mq verification"
+        return 1
+    }
+    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+        rm -f "$tmp_file"
+        log_error "mq binary SHA-256 mismatch"
+        return 1
+    fi
+
+    if ! install -m 0755 "$tmp_file" "$target"; then
+        rm -f "$tmp_file"
+        log_error "Failed to install mq to: $target"
+        return 1
+    fi
+    rm -f "$tmp_file"
+    hash -r
+
+    finish_mq_target_install "$target"
 }
 
 bash_profile_loads_nvm() {
@@ -1960,15 +2212,11 @@ install_remote_cli() {
     fi
 
     if [[ -n "$expected_sha256" ]]; then
-        if command -v sha256sum &>/dev/null; then
-            actual_sha256="$(sha256sum "$tmp_file" | cut -d ' ' -f 1)"
-        elif command -v shasum &>/dev/null; then
-            actual_sha256="$(shasum -a 256 "$tmp_file" | cut -d ' ' -f 1)"
-        else
+        actual_sha256="$(sha256_file "$tmp_file")" || {
             rm -f "$tmp_file"
             log_error "No SHA-256 tool available for $display_name installer verification"
             return 1
-        fi
+        }
 
         if [[ "$actual_sha256" != "$expected_sha256" ]]; then
             rm -f "$tmp_file"
@@ -4242,6 +4490,10 @@ main() {
     fi
 
     ensure_path_contains_local_bin
+
+    if ! install_mq; then
+        exit 1
+    fi
 
     if ! install_oh_my_zsh; then
         exit 1
