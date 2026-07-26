@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Config Files Installation Script
-# Creates symbolic links for all configuration files
+# Copies configuration files and links shared agent assets from a stable install path
 #
 # Usage: ./install.sh [OPTIONS]
 #
@@ -20,6 +20,11 @@ set -uo pipefail
 
 # Script directory (where this script resides)
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly CONFIG_FILES_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/config_files"
+readonly MANAGED_PATHS_FILE="$CONFIG_FILES_STATE_DIR/managed-paths"
+readonly MANAGED_COPIES_DIR="$CONFIG_FILES_STATE_DIR/managed-copies"
+readonly SHARED_INSTALL_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/config_files"
+readonly SHARED_AI_AGENT_DIR="$SHARED_INSTALL_ROOT/ai-agent"
 
 # Command line flags
 DRY_RUN=0
@@ -39,6 +44,7 @@ CODEX_SKILLS_DIR_READY=0
 CLAUDE_CODE_AVAILABLE=0
 CODEX_CLI_AVAILABLE=0
 NVM_NODE_AVAILABLE=0
+SHARED_AI_AGENT_READY=0
 CODEX_CLI_COMMAND="codex"
 NVM_VERSION="v0.40.3"
 NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh"
@@ -90,7 +96,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Counters for summary
-declare -i linked=0 skipped=0 failed=0 backed_up=0
+declare -i copied=0 linked=0 skipped=0 failed=0 backed_up=0
 
 # =============================================================================
 # Command Line Parsing
@@ -261,140 +267,1302 @@ backup_item() {
         return 0
     else
         log_error "Failed to backup: $item"
+        failed=$((failed + 1))
         return 1
     fi
 }
 
-# Create a symbolic link
+resolve_symlink_target_path() {
+    local link_path="$1"
+    local target
+    local candidate
+    local candidate_dir
+
+    target="$(readlink "$link_path")" || return 1
+    if [[ "$target" == /* ]]; then
+        candidate="$target"
+    else
+        candidate="$(dirname "$link_path")/$target"
+    fi
+
+    candidate_dir="$(dirname "$candidate")"
+    if [[ -d "$candidate_dir" ]]; then
+        printf '%s/%s\n' "$(cd "$candidate_dir" && pwd -P)" "$(basename "$candidate")"
+    else
+        printf '%s\n' "$candidate"
+    fi
+}
+
+normalize_path() {
+    local path="$1"
+    local path_dir
+
+    path_dir="$(dirname "$path")"
+    if [[ -d "$path_dir" ]]; then
+        printf '%s/%s\n' "$(cd "$path_dir" && pwd -P)" "$(basename "$path")"
+    else
+        printf '%s\n' "$path"
+    fi
+}
+
+symlink_points_to() {
+    local link_path="$1"
+    local expected_path="$2"
+    local actual_target
+    local expected_target
+
+    [[ -L "$link_path" ]] || return 1
+    actual_target="$(resolve_symlink_target_path "$link_path")" || return 1
+    expected_target="$(normalize_path "$expected_path")" || return 1
+    [[ "$actual_target" == "$expected_target" ]]
+}
+
+symlink_points_to_any() {
+    local link_path="$1"
+    local expected_path
+
+    shift
+    for expected_path in "$@"; do
+        if symlink_points_to "$link_path" "$expected_path"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+normalize_absolute_path_lexically() {
+    local path="$1"
+    local component
+    local last_index
+    local result=""
+    local -a components=()
+    local -a normalized_parts=()
+
+    [[ "$path" == /* ]] || return 1
+    IFS='/' read -r -a components <<< "${path#/}"
+    for component in "${components[@]}"; do
+        case "$component" in
+            ''|.)
+                ;;
+            ..)
+                if [[ ${#normalized_parts[@]} -gt 0 ]]; then
+                    last_index=$((${#normalized_parts[@]} - 1))
+                    unset "normalized_parts[$last_index]"
+                fi
+                ;;
+            *)
+                normalized_parts+=("$component")
+                ;;
+        esac
+    done
+
+    for component in "${normalized_parts[@]}"; do
+        result="$result/$component"
+    done
+    printf '%s\n' "${result:-/}"
+}
+
+canonicalize_path_allow_missing() {
+    local input_path="$1"
+    local depth="${2:-0}"
+    local path
+    local probe
+    local suffix=""
+    local canonical_root
+    local probe_parent
+    local target
+    local target_path
+
+    if (( depth >= 40 )); then
+        return 1
+    fi
+
+    path="$(normalize_absolute_path_lexically "$input_path")" || return 1
+    probe="$path"
+    while [[ "$probe" != / && ! -e "$probe" && ! -L "$probe" ]]; do
+        suffix="/$(basename "$probe")$suffix"
+        probe="$(dirname "$probe")"
+    done
+
+    if [[ -d "$probe" ]]; then
+        canonical_root="$(cd "$probe" && pwd -P)" || return 1
+    elif [[ -L "$probe" ]]; then
+        target="$(readlink "$probe")" || return 1
+        if [[ "$target" == /* ]]; then
+            target_path="$target"
+        else
+            target_path="$(dirname "$probe")/$target"
+        fi
+        canonical_root="$(canonicalize_path_allow_missing "$target_path" "$((depth + 1))")" \
+            || return 1
+    elif [[ "$probe" == / ]]; then
+        canonical_root=/
+    else
+        probe_parent="$(dirname "$probe")"
+        canonical_root="$(cd "$probe_parent" && pwd -P)/$(basename "$probe")" || return 1
+    fi
+
+    if [[ "$canonical_root" == / ]]; then
+        printf '/%s\n' "${suffix#/}"
+    else
+        printf '%s%s\n' "$canonical_root" "$suffix"
+    fi
+}
+
+projected_symlink_target_path() {
+    local staged_link="$1"
+    local staged_root="$2"
+    local dst_root="$3"
+    local target
+    local projected_link
+    local relative_path
+    local candidate
+
+    target="$(readlink "$staged_link")" || return 1
+    if [[ "$staged_link" == "$staged_root" ]]; then
+        projected_link="$dst_root"
+    else
+        relative_path="${staged_link#"$staged_root"/}"
+        projected_link="$dst_root/$relative_path"
+    fi
+
+    if [[ "$target" == /* ]]; then
+        candidate="$target"
+    else
+        candidate="$(dirname "$projected_link")/$target"
+    fi
+    canonicalize_path_allow_missing "$candidate"
+}
+
+path_is_within() {
+    local path="$1"
+    local root="$2"
+
+    [[ "$path" == "$root" || "$path" == "$root/"* ]]
+}
+
+projected_symlink_points_into() {
+    local staged_link="$1"
+    local staged_root="$2"
+    local dst_root="$3"
+    local root="$4"
+    local target
+    local canonical_root
+
+    [[ -L "$staged_link" ]] || return 1
+    target="$(projected_symlink_target_path "$staged_link" "$staged_root" "$dst_root")" || return 1
+    canonical_root="$(canonicalize_path_allow_missing "$root")" || return 1
+    path_is_within "$target" "$canonical_root"
+}
+
+ensure_parent_directory() {
+    local path="$1"
+    local parent
+
+    parent="$(dirname "$path")"
+    if [[ -d "$parent" ]]; then
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would create directory: $parent"
+        return 0
+    fi
+
+    if mkdir -p "$parent"; then
+        log_info "Created directory: $parent"
+        return 0
+    fi
+
+    log_error "Failed to create directory: $parent"
+    return 1
+}
+
+managed_path_is_recorded() {
+    local path="$1"
+
+    [[ -f "$MANAGED_PATHS_FILE" ]] && grep -Fqx "$path" "$MANAGED_PATHS_FILE"
+}
+
+record_managed_path() {
+    local path="$1"
+
+    if [[ $DRY_RUN -eq 1 ]] || managed_path_is_recorded "$path"; then
+        return 0
+    fi
+
+    if ! mkdir -p "$CONFIG_FILES_STATE_DIR"; then
+        log_error "Failed to create installer state directory: $CONFIG_FILES_STATE_DIR"
+        return 1
+    fi
+
+    if printf '%s\n' "$path" >> "$MANAGED_PATHS_FILE"; then
+        return 0
+    fi
+
+    log_error "Failed to record managed path: $path"
+    return 1
+}
+
+managed_copy_snapshot_path() {
+    local path="$1"
+
+    if [[ "$path" != /* ]]; then
+        log_error "Managed copy path must be absolute: $path"
+        return 1
+    fi
+
+    printf '%s%s\n' "$MANAGED_COPIES_DIR" "$path"
+}
+
+remove_installed_path() {
+    local path="$1"
+
+    if [[ -d "$path" && ! -L "$path" ]]; then
+        rm -rf "$path"
+    else
+        rm -f "$path"
+    fi
+}
+
+path_mode() {
+    local path="$1"
+
+    case "$OS" in
+        macos)
+            stat -f '%Lp' "$path"
+            ;;
+        *)
+            stat -c '%a' "$path"
+            ;;
+    esac
+}
+
+path_mode_matches() {
+    local source_path="$1"
+    local target_path="$2"
+    local source_mode
+    local target_mode
+
+    source_mode="$(path_mode "$source_path")" || return 1
+    target_mode="$(path_mode "$target_path")" || return 1
+    [[ "$source_mode" == "$target_mode" ]]
+}
+
+source_copy_path_is_excluded() {
+    local source_root="$1"
+    local source_path="$2"
+    local relative_path
+
+    [[ -n "$source_root" && "$source_path" == "$source_root/"* ]] || return 1
+    relative_path="${source_path#"$source_root"/}"
+
+    case "/$relative_path/" in
+        */.git/*|*/node_modules/*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+source_copy_path_exists() {
+    local source_root="$1"
+    local source_path="$2"
+
+    ! source_copy_path_is_excluded "$source_root" "$source_path" \
+        && installed_path_exists "$source_path"
+}
+
+# $3: source root used to omit paths excluded by stage_copy_item (optional)
+source_matches_installed_copy() {
+    local src="$1"
+    local dst="$2"
+    local source_root="${3:-}"
+    local src_item
+    local dst_item
+    local relative_path
+    local matches=1
+
+    if [[ -L "$src" ]]; then
+        [[ -L "$dst" ]] && [[ "$(readlink "$src")" == "$(readlink "$dst")" ]]
+        return $?
+    fi
+
+    if [[ -d "$src" && -d "$dst" && ! -L "$dst" ]]; then
+        if ! path_mode_matches "$src" "$dst"; then
+            matches=0
+        fi
+
+        while IFS= read -r -d '' src_item; do
+            if [[ "$src_item" == "$src" ]]; then
+                continue
+            fi
+
+            if source_copy_path_is_excluded "$source_root" "$src_item"; then
+                continue
+            fi
+
+            relative_path="${src_item#"$src"/}"
+            dst_item="$dst/$relative_path"
+
+            if [[ -L "$src_item" ]]; then
+                if [[ ! -L "$dst_item" ]] \
+                    || [[ "$(readlink "$src_item")" != "$(readlink "$dst_item")" ]]; then
+                    matches=0
+                fi
+            elif [[ -d "$src_item" ]]; then
+                if [[ ! -d "$dst_item" || -L "$dst_item" ]] \
+                    || ! path_mode_matches "$src_item" "$dst_item"; then
+                    matches=0
+                fi
+            elif [[ -f "$src_item" ]]; then
+                if [[ ! -f "$dst_item" || -L "$dst_item" ]] \
+                    || ! cmp -s "$src_item" "$dst_item" \
+                    || ! path_mode_matches "$src_item" "$dst_item"; then
+                    matches=0
+                fi
+            fi
+        done < <(find "$src" -print0)
+
+        while IFS= read -r -d '' dst_item; do
+            if [[ "$dst_item" == "$dst" ]]; then
+                continue
+            fi
+
+            relative_path="${dst_item#"$dst"/}"
+            src_item="$src/$relative_path"
+            if source_copy_path_is_excluded "$source_root" "$src_item" \
+                || [[ ! -e "$src_item" && ! -L "$src_item" ]]; then
+                matches=0
+            fi
+        done < <(find "$dst" -print0)
+
+        [[ $matches -eq 1 ]]
+        return
+    fi
+
+    if [[ -f "$src" && -f "$dst" && ! -L "$dst" ]]; then
+        cmp -s "$src" "$dst" && path_mode_matches "$src" "$dst"
+        return $?
+    fi
+
+    return 1
+}
+
+copy_installed_item() {
+    local src="$1"
+    local dst="$2"
+
+    ensure_parent_directory "$dst" || return 1
+    if [[ -e "$dst" || -L "$dst" ]]; then
+        remove_installed_path "$dst"
+    fi
+
+    if cp -pPR "$src" "$dst"; then
+        return 0
+    fi
+
+    log_error "Failed to preserve user-managed path: $src"
+    return 1
+}
+
+MANAGED_COPY_BACKUP_REQUIRED=0
+
+managed_copy_conflict() {
+    local path="$1"
+
+    if [[ $FORCE -eq 1 ]]; then
+        MANAGED_COPY_BACKUP_REQUIRED=1
+        log_warn "Replacing conflicting managed path because --force was used: $path"
+        return 0
+    fi
+
+    log_error "Managed copy conflict: $path"
+    log_error "Both the installed path and repository source changed; rerun with --force to back up and replace the conflict"
+    return 1
+}
+
+merge_managed_directory_mode() {
+    local base="$1"
+    local live="$2"
+    local staged="$3"
+    local display_path="$4"
+    local live_mode
+
+    if path_mode_matches "$base" "$live"; then
+        return 0
+    fi
+
+    if path_mode_matches "$base" "$staged"; then
+        live_mode="$(path_mode "$live")" || return 1
+        chmod "$live_mode" "$staged"
+        return $?
+    fi
+
+    if path_mode_matches "$live" "$staged"; then
+        return 0
+    fi
+
+    managed_copy_conflict "$display_path"
+}
+
+installed_path_exists() {
+    [[ -e "$1" || -L "$1" ]]
+}
+
+find_immediate_children() {
+    find "$1" ! -path "$1" -prune -print0
+}
+
+directory_has_children() {
+    local child
+
+    IFS= read -r -d '' child < <(find_immediate_children "$1")
+}
+
+merge_managed_directory_children() {
+    local base="$1"
+    local live="$2"
+    local staged="$3"
+    local display_path="$4"
+    local child
+    local child_name
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        merge_managed_item \
+            "$child" \
+            "$live/$child_name" \
+            "$staged/$child_name" \
+            "$display_path/$child_name" || return 1
+    done < <(find_immediate_children "$base")
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        if installed_path_exists "$base/$child_name"; then
+            continue
+        fi
+        merge_managed_item \
+            "$base/$child_name" \
+            "$child" \
+            "$staged/$child_name" \
+            "$display_path/$child_name" || return 1
+    done < <(find_immediate_children "$live")
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        if installed_path_exists "$base/$child_name" \
+            || installed_path_exists "$live/$child_name"; then
+            continue
+        fi
+        merge_managed_item \
+            "$base/$child_name" \
+            "$live/$child_name" \
+            "$child" \
+            "$display_path/$child_name" || return 1
+    done < <(find_immediate_children "$staged")
+}
+
+merge_deleted_managed_directory() {
+    local base="$1"
+    local live="$2"
+    local staged="$3"
+    local display_path="$4"
+    local live_mode
+
+    if ! mkdir "$staged"; then
+        log_error "Failed to stage locally retained directory: $display_path"
+        return 1
+    fi
+
+    live_mode="$(path_mode "$live")" || return 1
+    chmod "$live_mode" "$staged" || return 1
+
+    merge_managed_directory_children \
+        "$base" "$live" "$staged" "$display_path" || return 1
+
+    # If no target-only content survived, honor the upstream directory deletion.
+    if ! directory_has_children "$staged"; then
+        if ! rmdir "$staged"; then
+            log_error "Failed to remove empty staged directory: $display_path"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# Three-way merge: previous installed snapshot, live target, current staged source.
+# Presence is part of the state: local and upstream deletions are changes, and
+# conflicting changes require --force just like content or type conflicts.
+merge_managed_item() {
+    local base="$1"
+    local live="$2"
+    local staged="$3"
+    local display_path="$4"
+    local base_exists=0
+    local live_exists=0
+    local staged_exists=0
+
+    installed_path_exists "$base" && base_exists=1
+    installed_path_exists "$live" && live_exists=1
+    installed_path_exists "$staged" && staged_exists=1
+
+    if [[ $base_exists -eq 0 ]]; then
+        if [[ $live_exists -eq 0 ]]; then
+            return 0
+        fi
+        if [[ $staged_exists -eq 0 ]]; then
+            copy_installed_item "$live" "$staged"
+            return $?
+        fi
+        if source_matches_installed_copy "$live" "$staged"; then
+            return 0
+        fi
+        managed_copy_conflict "$display_path"
+        return $?
+    fi
+
+    if [[ $live_exists -eq 0 ]]; then
+        if [[ $staged_exists -eq 0 ]]; then
+            return 0
+        fi
+        if source_matches_installed_copy "$base" "$staged"; then
+            remove_installed_path "$staged"
+            return 0
+        fi
+        managed_copy_conflict "$display_path"
+        return $?
+    fi
+
+    if [[ $staged_exists -eq 0 ]]; then
+        if source_matches_installed_copy "$live" "$base"; then
+            return 0
+        fi
+
+        if [[ -d "$base" && ! -L "$base" \
+            && -d "$live" && ! -L "$live" ]]; then
+            merge_deleted_managed_directory \
+                "$base" "$live" "$staged" "$display_path"
+            return $?
+        fi
+
+        managed_copy_conflict "$display_path"
+        return $?
+    fi
+
+    if source_matches_installed_copy "$live" "$base"; then
+        return 0
+    fi
+
+    if source_matches_installed_copy "$live" "$staged"; then
+        return 0
+    fi
+
+    if source_matches_installed_copy "$base" "$staged"; then
+        copy_installed_item "$live" "$staged"
+        return $?
+    fi
+
+    if [[ -d "$base" && ! -L "$base" \
+        && -d "$live" && ! -L "$live" \
+        && -d "$staged" && ! -L "$staged" ]]; then
+        merge_managed_directory_mode "$base" "$live" "$staged" "$display_path" || return 1
+        merge_managed_directory_children "$base" "$live" "$staged" "$display_path"
+        return $?
+    fi
+
+    managed_copy_conflict "$display_path"
+}
+
+# Dry-run merge analysis mirrors merge_managed_item without creating a staged copy.
+DRY_RUN_MERGE_CHANGED=0
+DRY_RUN_MERGE_ITEM_EXISTS=0
+
+mark_dry_run_merge_change() {
+    DRY_RUN_MERGE_CHANGED=1
+}
+
+dry_run_merge_managed_directory_mode() {
+    local base="$1"
+    local live="$2"
+    local upstream="$3"
+    local display_path="$4"
+
+    if path_mode_matches "$base" "$live"; then
+        if ! path_mode_matches "$live" "$upstream"; then
+            mark_dry_run_merge_change
+        fi
+        return 0
+    fi
+
+    if path_mode_matches "$base" "$upstream" \
+        || path_mode_matches "$live" "$upstream"; then
+        return 0
+    fi
+
+    managed_copy_conflict "$display_path" || return 1
+    mark_dry_run_merge_change
+}
+
+dry_run_merge_directory_children() {
+    local base="$1"
+    local live="$2"
+    local upstream="$3"
+    local display_path="$4"
+    local source_root="$5"
+    local child
+    local child_name
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        dry_run_merge_item \
+            "$child" \
+            "$live/$child_name" \
+            "$upstream/$child_name" \
+            "$display_path/$child_name" \
+            "$source_root" || return 1
+    done < <(find_immediate_children "$base")
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        if installed_path_exists "$base/$child_name"; then
+            continue
+        fi
+        dry_run_merge_item \
+            "$base/$child_name" \
+            "$child" \
+            "$upstream/$child_name" \
+            "$display_path/$child_name" \
+            "$source_root" || return 1
+    done < <(find_immediate_children "$live")
+
+    while IFS= read -r -d '' child; do
+        if source_copy_path_is_excluded "$source_root" "$child"; then
+            continue
+        fi
+        child_name="${child##*/}"
+        if installed_path_exists "$base/$child_name" \
+            || installed_path_exists "$live/$child_name"; then
+            continue
+        fi
+        dry_run_merge_item \
+            "$base/$child_name" \
+            "$live/$child_name" \
+            "$child" \
+            "$display_path/$child_name" \
+            "$source_root" || return 1
+    done < <(find_immediate_children "$upstream")
+}
+
+dry_run_merge_deleted_managed_directory() {
+    local base="$1"
+    local live="$2"
+    local upstream="$3"
+    local display_path="$4"
+    local source_root="$5"
+    local child
+    local child_name
+    local child_exists
+    local retained_child=0
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        dry_run_merge_item \
+            "$child" \
+            "$live/$child_name" \
+            "$upstream/$child_name" \
+            "$display_path/$child_name" \
+            "$source_root" || return 1
+        child_exists=$DRY_RUN_MERGE_ITEM_EXISTS
+        if [[ $child_exists -eq 1 ]]; then
+            retained_child=1
+        fi
+    done < <(find_immediate_children "$base")
+
+    while IFS= read -r -d '' child; do
+        child_name="${child##*/}"
+        if installed_path_exists "$base/$child_name"; then
+            continue
+        fi
+        dry_run_merge_item \
+            "$base/$child_name" \
+            "$child" \
+            "$upstream/$child_name" \
+            "$display_path/$child_name" \
+            "$source_root" || return 1
+        child_exists=$DRY_RUN_MERGE_ITEM_EXISTS
+        if [[ $child_exists -eq 1 ]]; then
+            retained_child=1
+        fi
+    done < <(find_immediate_children "$live")
+
+    if [[ $retained_child -eq 1 ]]; then
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        return 0
+    fi
+
+    DRY_RUN_MERGE_ITEM_EXISTS=0
+    mark_dry_run_merge_change
+}
+
+dry_run_merge_item() {
+    local base="$1"
+    local live="$2"
+    local upstream="$3"
+    local display_path="$4"
+    local source_root="$5"
+    local base_exists=0
+    local live_exists=0
+    local upstream_exists=0
+
+    DRY_RUN_MERGE_ITEM_EXISTS=0
+    installed_path_exists "$base" && base_exists=1
+    installed_path_exists "$live" && live_exists=1
+    source_copy_path_exists "$source_root" "$upstream" && upstream_exists=1
+
+    if [[ $base_exists -eq 0 ]]; then
+        if [[ $live_exists -eq 0 ]]; then
+            if [[ $upstream_exists -eq 1 ]]; then
+                DRY_RUN_MERGE_ITEM_EXISTS=1
+                mark_dry_run_merge_change
+            fi
+            return 0
+        fi
+        if [[ $upstream_exists -eq 0 ]]; then
+            DRY_RUN_MERGE_ITEM_EXISTS=1
+            return 0
+        fi
+        if source_matches_installed_copy "$upstream" "$live" "$source_root"; then
+            DRY_RUN_MERGE_ITEM_EXISTS=1
+            return 0
+        fi
+        managed_copy_conflict "$display_path" || return 1
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        mark_dry_run_merge_change
+        return 0
+    fi
+
+    if [[ $live_exists -eq 0 ]]; then
+        if [[ $upstream_exists -eq 0 ]]; then
+            return 0
+        fi
+        if source_matches_installed_copy "$upstream" "$base" "$source_root"; then
+            return 0
+        fi
+        managed_copy_conflict "$display_path" || return 1
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        mark_dry_run_merge_change
+        return 0
+    fi
+
+    if [[ $upstream_exists -eq 0 ]]; then
+        if source_matches_installed_copy "$base" "$live"; then
+            mark_dry_run_merge_change
+            return 0
+        fi
+
+        if [[ -d "$base" && ! -L "$base" \
+            && -d "$live" && ! -L "$live" ]]; then
+            dry_run_merge_deleted_managed_directory \
+                "$base" "$live" "$upstream" "$display_path" "$source_root"
+            return $?
+        fi
+
+        managed_copy_conflict "$display_path" || return 1
+        mark_dry_run_merge_change
+        return 0
+    fi
+
+    if source_matches_installed_copy "$base" "$live"; then
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        if ! source_matches_installed_copy "$upstream" "$live" "$source_root"; then
+            mark_dry_run_merge_change
+        fi
+        return 0
+    fi
+
+    if source_matches_installed_copy "$upstream" "$live" "$source_root" \
+        || source_matches_installed_copy "$upstream" "$base" "$source_root"; then
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        return 0
+    fi
+
+    if [[ -d "$base" && ! -L "$base" \
+        && -d "$live" && ! -L "$live" \
+        && -d "$upstream" && ! -L "$upstream" ]]; then
+        dry_run_merge_managed_directory_mode \
+            "$base" "$live" "$upstream" "$display_path" || return 1
+        dry_run_merge_directory_children \
+            "$base" "$live" "$upstream" "$display_path" "$source_root" || return 1
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        return 0
+    fi
+
+    managed_copy_conflict "$display_path" || return 1
+    DRY_RUN_MERGE_ITEM_EXISTS=1
+    mark_dry_run_merge_change
+}
+
+plan_copy_deployment() {
+    local src="$1"
+    local dst="$2"
+    local base="${3:-}"
+    local final_exists=1
+
+    MANAGED_COPY_CHANGED=0
+    MANAGED_COPY_BACKUP_REQUIRED=0
+
+    if [[ -n "$base" ]]; then
+        DRY_RUN_MERGE_CHANGED=0
+        dry_run_merge_item "$base" "$dst" "$src" "$dst" "$src" || return 1
+        final_exists=$DRY_RUN_MERGE_ITEM_EXISTS
+        MANAGED_COPY_CHANGED=$DRY_RUN_MERGE_CHANGED
+    elif [[ -e "$dst" || -L "$dst" ]] \
+        && source_matches_installed_copy "$src" "$dst" "$src"; then
+        return 0
+    else
+        MANAGED_COPY_CHANGED=1
+    fi
+
+    if [[ $final_exists -eq 0 ]]; then
+        if ! installed_path_exists "$dst"; then
+            return 0
+        fi
+        if [[ $MANAGED_COPY_BACKUP_REQUIRED -eq 1 ]]; then
+            backup_item "$dst" || return 1
+        fi
+        MANAGED_COPY_CHANGED=1
+        return 0
+    fi
+
+    if [[ $MANAGED_COPY_BACKUP_REQUIRED -eq 1 \
+        && ( -e "$dst" || -L "$dst" ) ]]; then
+        backup_item "$dst" || return 1
+    fi
+
+    return 0
+}
+
+stage_copy_item() {
+    local src="$1"
+    local staged_item="$2"
+    local archive="$3"
+
+    if [[ -d "$src" ]]; then
+        mkdir "$staged_item" \
+            && tar -C "$src" \
+                --exclude='.git' --exclude='*/.git' \
+                --exclude='node_modules' --exclude='*/node_modules' \
+                -cf "$archive" . \
+            && tar -C "$staged_item" -xf "$archive"
+        return $?
+    fi
+
+    cp -pL "$src" "$staged_item"
+}
+
+MANAGED_COPY_CHANGED=0
+
+# $3: previous installed snapshot used for three-way merge (optional)
+# $4: final runtime path used to validate staged symlinks (optional)
+deploy_copy() {
+    local src="$1"
+    local dst="$2"
+    local base="${3:-}"
+    local validation_dst="${4:-$dst}"
+    local dst_dir
+    local staging_dir
+    local staged_item
+    local archive
+    local previous_item
+    local staged_link
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        plan_copy_deployment "$src" "$dst" "$base"
+        return $?
+    fi
+
+    dst_dir="$(dirname "$dst")"
+    staging_dir="$(mktemp -d "$dst_dir/.config-files-install.XXXXXX")" || {
+        log_error "Failed to create staging directory for: $dst"
+        return 1
+    }
+    staged_item="$staging_dir/item"
+    archive="$staging_dir/source.tar"
+    previous_item="$staging_dir/previous"
+    MANAGED_COPY_CHANGED=0
+    MANAGED_COPY_BACKUP_REQUIRED=0
+
+    if ! stage_copy_item "$src" "$staged_item" "$archive"; then
+        rm -rf "$staging_dir"
+        log_error "Failed to stage copy: $src"
+        return 1
+    fi
+    rm -f "$archive"
+
+    if [[ -n "$base" ]]; then
+        if ! merge_managed_item "$base" "$dst" "$staged_item" "$dst"; then
+            rm -rf "$staging_dir"
+            return 1
+        fi
+    fi
+
+    if ! installed_path_exists "$staged_item"; then
+        if ! installed_path_exists "$dst"; then
+            rm -rf "$staging_dir"
+            return 0
+        fi
+
+        if [[ $MANAGED_COPY_BACKUP_REQUIRED -eq 1 ]]; then
+            if ! backup_item "$dst"; then
+                rm -rf "$staging_dir"
+                return 1
+            fi
+        fi
+
+        if installed_path_exists "$dst" && ! mv "$dst" "$previous_item"; then
+            rm -rf "$staging_dir"
+            log_error "Failed to move existing path out of the way: $dst"
+            return 1
+        fi
+        remove_installed_path "$previous_item"
+        rm -rf "$staging_dir"
+        MANAGED_COPY_CHANGED=1
+        return 0
+    fi
+
+    while IFS= read -r -d '' staged_link; do
+        if projected_symlink_points_into \
+            "$staged_link" \
+            "$staged_item" \
+            "$validation_dst" \
+            "$SCRIPT_DIR"; then
+            rm -rf "$staging_dir"
+            log_error "Refusing to install symlink that points into the repository: $staged_link"
+            return 1
+        fi
+    done < <(find "$staged_item" -type l -print0 2>/dev/null)
+
+    if [[ -e "$dst" || -L "$dst" ]] \
+        && source_matches_installed_copy "$staged_item" "$dst"; then
+        rm -rf "$staging_dir"
+        return 0
+    fi
+
+    if [[ $MANAGED_COPY_BACKUP_REQUIRED -eq 1 && ( -e "$dst" || -L "$dst" ) ]]; then
+        if ! backup_item "$dst"; then
+            rm -rf "$staging_dir"
+            return 1
+        fi
+    fi
+
+    if [[ -e "$dst" || -L "$dst" ]]; then
+        if ! mv "$dst" "$previous_item"; then
+            rm -rf "$staging_dir"
+            log_error "Failed to move existing path out of the way: $dst"
+            return 1
+        fi
+    fi
+
+    if mv "$staged_item" "$dst"; then
+        remove_installed_path "$previous_item"
+        rmdir "$staging_dir" 2>/dev/null || true
+        MANAGED_COPY_CHANGED=1
+        return 0
+    fi
+
+    if [[ -e "$previous_item" || -L "$previous_item" ]]; then
+        mv "$previous_item" "$dst" 2>/dev/null || true
+    fi
+    rm -rf "$staging_dir"
+    log_error "Failed to deploy copy: $dst"
+    return 1
+}
+
+record_managed_copy_snapshot() {
+    local src="$1"
+    local dst="$2"
+    local snapshot_path
+    local snapshot_parent
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
+    fi
+
+    snapshot_path="$(managed_copy_snapshot_path "$dst")" || return 1
+    snapshot_parent="$(dirname "$snapshot_path")"
+    if ! mkdir -p "$snapshot_parent"; then
+        log_error "Failed to create managed copy state directory: $snapshot_parent"
+        return 1
+    fi
+
+    if deploy_copy "$src" "$snapshot_path" "" "$dst"; then
+        return 0
+    fi
+
+    log_error "Failed to record managed copy snapshot: $dst"
+    return 1
+}
+
+# Copy a repository path into its runtime location.
 # $1: source (relative to SCRIPT_DIR)
 # $2: target (absolute path)
-# $3: replace existing target without requiring --force (optional, default: 0)
-link_file() {
+# $3: replace existing user path without requiring --force (optional, default: 0)
+# $4+: known legacy symlink sources (optional)
+install_copy() {
     local src="$SCRIPT_DIR/$1"
     local dst="$2"
     local replace_existing="${3:-0}"
+    local -a legacy_sources=()
+    local installer_managed=0
+    local managed_symlink=0
+    local snapshot_path
+    local merge_base=""
+    local copy_changed=0
+    local failed_before=$failed
+    local action
 
-    # Check if source exists
+    if [[ $# -gt 3 ]]; then
+        shift 3
+        legacy_sources=("$@")
+    fi
+
     if [[ ! -e "$src" ]]; then
         log_error "Source does not exist: $src"
         failed=$((failed + 1))
         return 1
     fi
 
-    # Create parent directory if needed
-    local dst_dir
-    dst_dir="$(dirname "$dst")"
-    if [[ ! -d "$dst_dir" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would create directory: $dst_dir"
-        else
-            mkdir -p "$dst_dir"
-            log_info "Created directory: $dst_dir"
+    ensure_parent_directory "$dst" || {
+        failed=$((failed + 1))
+        return 1
+    }
+
+    snapshot_path="$(managed_copy_snapshot_path "$dst")" || {
+        failed=$((failed + 1))
+        return 1
+    }
+
+    if symlink_points_to "$dst" "$src" \
+        || symlink_points_to_any "$dst" "${legacy_sources[@]}"; then
+        managed_symlink=1
+    fi
+
+    if [[ -e "$snapshot_path" || -L "$snapshot_path" ]] \
+        || { managed_path_is_recorded "$dst" && [[ ! -L "$dst" ]]; } \
+        || [[ $managed_symlink -eq 1 ]]; then
+        installer_managed=1
+    fi
+
+    if [[ $installer_managed -eq 1 ]]; then
+        if [[ $managed_symlink -eq 1 ]]; then
+            merge_base=""
+        elif [[ -e "$snapshot_path" || -L "$snapshot_path" ]]; then
+            merge_base="$snapshot_path"
+        elif [[ ! -L "$dst" ]]; then
+            merge_base="$src"
+            log_info "Establishing per-entry state for legacy managed copy: $dst"
         fi
     fi
 
-    # Check if target already exists
-    if [[ -e "$dst" ]] || [[ -L "$dst" ]]; then
-        if [[ -L "$dst" ]]; then
-            # It's already a symlink
-            local current_target
-            current_target="$(readlink "$dst")"
-            # Convert relative target to absolute for comparison
-            if [[ "$current_target" != /* ]]; then
-                current_target="$(cd "$(dirname "$dst")/$current_target" 2>/dev/null && pwd || echo "$current_target")"
+    if [[ -e "$dst" || -L "$dst" ]]; then
+        if [[ $installer_managed -eq 1 ]]; then
+            :
+        elif [[ $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
+            backup_item "$dst" || return 1
+            if [[ $DRY_RUN -eq 1 ]]; then
+                log_dry "Would copy: $src -> $dst"
+                copied=$((copied + 1))
+                return 0
             fi
-            local src_normalized
-            src_normalized="$(cd "$(dirname "$src")" 2>/dev/null && pwd)/$(basename "$src")"
+        elif [[ $INTERACTIVE -eq 1 ]]; then
+            prompt_user "$dst"
+            action=$?
+            case "$action" in
+                0)
+                    skipped=$((skipped + 1))
+                    return 0
+                    ;;
+                1)
+                    backup_item "$dst" || return 1
+                    ;;
+                2)
+                    if [[ $DRY_RUN -eq 1 ]]; then
+                        log_dry "Would remove existing path: $dst"
+                    else
+                        remove_installed_path "$dst"
+                        log_info "Removed existing path: $dst"
+                    fi
+                    ;;
+                3)
+                    log_info "Installation cancelled by user"
+                    exit 0
+                    ;;
+            esac
+            if [[ $DRY_RUN -eq 1 ]]; then
+                log_dry "Would copy: $src -> $dst"
+                copied=$((copied + 1))
+                return 0
+            fi
+        else
+            log_warn "User-managed path exists: $dst"
+            skipped=$((skipped + 1))
+            return 0
+        fi
+    elif [[ $DRY_RUN -eq 1 && $installer_managed -eq 0 ]]; then
+        log_dry "Would copy: $src -> $dst"
+        copied=$((copied + 1))
+        return 0
+    fi
 
-            if [[ "$current_target" == "$src_normalized" ]]; then
+    if ! deploy_copy "$src" "$dst" "$merge_base"; then
+        if [[ $failed -eq $failed_before ]]; then
+            failed=$((failed + 1))
+        fi
+        return 1
+    fi
+    copy_changed=$MANAGED_COPY_CHANGED
+
+    if ! record_managed_copy_snapshot "$src" "$dst" \
+        || ! record_managed_path "$dst"; then
+        if [[ $failed -eq $failed_before ]]; then
+            failed=$((failed + 1))
+        fi
+        return 1
+    fi
+
+    if [[ $copy_changed -eq 0 ]]; then
+        log_warn "Already copied: $dst"
+        skipped=$((skipped + 1))
+    elif [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would copy: $src -> $dst"
+        copied=$((copied + 1))
+    else
+        log_ok "Copied: $src -> $dst"
+        copied=$((copied + 1))
+    fi
+
+    return 0
+}
+
+install_shared_ai_agent_snapshot() {
+    local dst="$SHARED_AI_AGENT_DIR"
+
+    log_info "Installing shared agent assets..."
+    if ! install_copy "ai-agent" "$dst"; then
+        return 1
+    fi
+
+    SHARED_AI_AGENT_READY=1
+    return 0
+}
+
+link_path() {
+    local src="$1"
+    local dst="$2"
+    local replace_existing="${3:-0}"
+    local -a legacy_sources=()
+    local installer_managed=0
+    local action
+
+    if [[ $# -gt 3 ]]; then
+        shift 3
+        legacy_sources=("$@")
+    fi
+
+    if [[ ! -e "$src" ]]; then
+        if [[ $DRY_RUN -ne 1 || $SHARED_AI_AGENT_READY -ne 1 ]]; then
+            log_error "Shared source does not exist: $src"
+            failed=$((failed + 1))
+            return 1
+        fi
+    fi
+
+    ensure_parent_directory "$dst" || {
+        failed=$((failed + 1))
+        return 1
+    }
+
+    if [[ -e "$dst" || -L "$dst" ]]; then
+        if [[ -L "$dst" ]]; then
+            if symlink_points_to "$dst" "$src"; then
                 log_warn "Already linked: $dst"
                 skipped=$((skipped + 1))
                 return 0
-            else
-                # Different symlink - handle based on mode
-                if [[ $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
-                    if [[ $DRY_RUN -eq 1 ]]; then
-                        log_dry "Would replace symlink: $dst"
-                    else
-                        rm "$dst"
-                        log_info "Removed old symlink: $dst"
-                    fi
-                elif [[ $INTERACTIVE -eq 1 ]]; then
-                    local action
-                    prompt_user "$dst"
-                    action=$?
-                    case "$action" in
-                        0) # skip
-                            skipped=$((skipped + 1))
-                            return 0
-                            ;;
-                        1) # backup
-                            if ! backup_item "$dst"; then
-                                failed=$((failed + 1))
-                                return 1
-                            fi
-                            ;;
-                        2) # force replace
-                            rm "$dst"
-                            log_info "Removed old symlink: $dst"
-                            ;;
-                        3) # cancel
-                            log_info "Installation cancelled by user"
-                            exit 0
-                            ;;
-                    esac
-                else
-                    log_warn "Different symlink exists: $dst -> $(readlink "$dst")"
-                    skipped=$((skipped + 1))
-                    return 0
-                fi
             fi
-        else
-            # It's a regular file or directory
-            if [[ $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
-                if ! backup_item "$dst"; then
-                    failed=$((failed + 1))
-                    return 1
-                fi
-                # If dry run, we just logged, don't continue to actual link creation
+
+            if symlink_points_to_any "$dst" "${legacy_sources[@]}"; then
+                installer_managed=1
+            fi
+
+            if [[ $installer_managed -eq 1 || $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
                 if [[ $DRY_RUN -eq 1 ]]; then
-                    log_dry "Would link: $dst -> $src"
-                    linked=$((linked + 1))
-                    return 0
+                    log_dry "Would repoint symlink: $dst -> $src"
+                else
+                    rm -f "$dst"
+                    log_info "Removed old symlink: $dst"
                 fi
             elif [[ $INTERACTIVE -eq 1 ]]; then
-                local action
                 prompt_user "$dst"
                 action=$?
                 case "$action" in
-                    0) # skip
+                    0)
                         skipped=$((skipped + 1))
                         return 0
                         ;;
-                    1) # backup
-                        if ! backup_item "$dst"; then
-                            failed=$((failed + 1))
-                            return 1
+                    1)
+                        backup_item "$dst" || return 1
+                        ;;
+                    2)
+                        if [[ $DRY_RUN -eq 1 ]]; then
+                            log_dry "Would remove existing symlink: $dst"
+                        else
+                            rm -f "$dst"
                         fi
                         ;;
-                    2) # force replace
-                        rm -rf "$dst"
-                        log_info "Removed existing file: $dst"
-                        ;;
-                    3) # cancel
+                    3)
                         log_info "Installation cancelled by user"
                         exit 0
                         ;;
                 esac
             else
-                log_warn "File exists (not a symlink): $dst"
+                log_warn "Different symlink exists: $dst -> $(readlink "$dst")"
                 skipped=$((skipped + 1))
                 return 0
             fi
+        elif [[ $FORCE -eq 1 || $replace_existing -eq 1 ]]; then
+            backup_item "$dst" || return 1
+        elif [[ $INTERACTIVE -eq 1 ]]; then
+            prompt_user "$dst"
+            action=$?
+            case "$action" in
+                0)
+                    skipped=$((skipped + 1))
+                    return 0
+                    ;;
+                1)
+                    backup_item "$dst" || return 1
+                    ;;
+                2)
+                    if [[ $DRY_RUN -eq 1 ]]; then
+                        log_dry "Would remove existing path: $dst"
+                    else
+                        remove_installed_path "$dst"
+                    fi
+                    ;;
+                3)
+                    log_info "Installation cancelled by user"
+                    exit 0
+                    ;;
+            esac
+        else
+            log_warn "User-managed path exists: $dst"
+            skipped=$((skipped + 1))
+            return 0
         fi
     fi
 
-    # Create the symlink
     if [[ $DRY_RUN -eq 1 ]]; then
         log_dry "Would link: $dst -> $src"
         linked=$((linked + 1))
@@ -405,11 +1573,38 @@ link_file() {
         log_ok "Linked: $dst -> $src"
         linked=$((linked + 1))
         return 0
-    else
-        log_error "Failed to link: $dst"
+    fi
+
+    log_error "Failed to link: $dst"
+    failed=$((failed + 1))
+    return 1
+}
+
+link_shared_ai_agent_item() {
+    local relative_path="$1"
+    local dst="$2"
+    local catalog_source="$SCRIPT_DIR/ai-agent/$relative_path"
+    local -a legacy_sources=("$catalog_source")
+    local legacy_relative_path
+
+    if [[ $# -gt 2 ]]; then
+        shift 2
+        for legacy_relative_path in "$@"; do
+            legacy_sources+=("$SCRIPT_DIR/ai-agent/$legacy_relative_path")
+        done
+    fi
+
+    if [[ ! -e "$catalog_source" ]]; then
+        log_error "Shared source does not exist: $catalog_source"
         failed=$((failed + 1))
         return 1
     fi
+
+    link_path \
+        "$SHARED_AI_AGENT_DIR/$relative_path" \
+        "$dst" \
+        0 \
+        "${legacy_sources[@]}"
 }
 
 # =============================================================================
@@ -578,7 +1773,7 @@ ensure_nvm_bash_profile() {
     local profile="$HOME/.bashrc"
 
     if [[ ! -e "$profile" && ! -L "$profile" ]]; then
-        log_info "Bash NVM setup will be provided by the linked bashrc"
+        log_info "Bash NVM setup will be provided by the installed bashrc"
         return 0
     fi
 
@@ -2130,73 +3325,41 @@ setup_agent_deck_integration() {
     return 0
 }
 
-migrate_legacy_symlink_source() {
-    local dst="$1"
-    local legacy_src="$2"
-    local new_src="$3"
-
-    # Only migrate existing symlinks that still point to the old source path.
-    if [[ ! -L "$dst" ]]; then
-        return 0
-    fi
-
-    local current_target
-    current_target="$(readlink "$dst")"
-    if [[ "$current_target" != /* ]]; then
-        current_target="$(cd "$(dirname "$dst")/$current_target" 2>/dev/null && pwd || echo "$current_target")"
-    fi
-
-    local legacy_src_normalized
-    if [[ -e "$legacy_src" ]]; then
-        legacy_src_normalized="$(cd "$(dirname "$legacy_src")" 2>/dev/null && pwd)/$(basename "$legacy_src")"
-    else
-        # Keep absolute legacy path as-is so broken legacy links can still be migrated.
-        legacy_src_normalized="$legacy_src"
-    fi
-
-    if [[ "$current_target" != "$legacy_src_normalized" ]]; then
-        return 0
-    fi
-
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would migrate legacy symlink: $dst -> $new_src"
-        return 0
-    fi
-
-    rm "$dst"
-    log_info "Removed legacy symlink: $dst"
-}
-
 install_home_configs() {
     log_info "Installing home directory dotfiles..."
 
     # Shell configs
-    link_file "bashrc" "$HOME/.bashrc"
-    link_file "zshrc" "$HOME/.zshrc" 1
+    install_copy "bashrc" "$HOME/.bashrc"
+    install_copy "zshrc" "$HOME/.zshrc"
 
     # Screen config
-    link_file "screenrc" "$HOME/.screenrc"
+    install_copy "screenrc" "$HOME/.screenrc"
 
     # Tmux config (file in tmux/ directory)
-    link_file "tmux/tmux.conf" "$HOME/.tmux.conf"
-    link_file "tmux/plugins/tpm" "$HOME/.tmux/plugins/tpm"
+    install_copy "tmux/tmux.conf" "$HOME/.tmux.conf"
+    install_copy "tmux/plugins/tpm" "$HOME/.tmux/plugins/tpm"
 
     # Git config (OS-specific)
     case "$OS" in
         linux|wsl|macos)
-            migrate_legacy_symlink_source "$HOME/.gitconfig" "$SCRIPT_DIR/gitconfig.ruiheng.unix" "$SCRIPT_DIR/gitconfig.unix"
-            link_file "gitconfig.unix" "$HOME/.gitconfig"
+            install_copy \
+                "gitconfig.unix" \
+                "$HOME/.gitconfig" \
+                0 \
+                "$SCRIPT_DIR/gitconfig.ruiheng.unix"
             ;;
         windows)
-            migrate_legacy_symlink_source "$HOME/.gitconfig" "$SCRIPT_DIR/gitconfig.ruiheng.win" "$SCRIPT_DIR/gitconfig.win"
-            link_file "gitconfig.win" "$HOME/.gitconfig"
+            install_copy \
+                "gitconfig.win" \
+                "$HOME/.gitconfig" \
+                0 \
+                "$SCRIPT_DIR/gitconfig.ruiheng.win"
             ;;
     esac
 
     # Global gitignore
-    migrate_legacy_symlink_source "$HOME/.gitignore" "$SCRIPT_DIR/.gitignore" "$SCRIPT_DIR/gitignore"
-    link_file "gitignore" "$HOME/.gitignore"
-    link_file "git-completion.sh" "$HOME/.git-completion.sh"
+    install_copy "gitignore" "$HOME/.gitignore" 0 "$SCRIPT_DIR/.gitignore"
+    install_copy "git-completion.sh" "$HOME/.git-completion.sh"
 }
 
 install_xdg_configs() {
@@ -2204,33 +3367,44 @@ install_xdg_configs() {
 
     local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
 
-    # Window managers and related (whole directories)
-    link_file "i3" "$config_dir/i3"
-    link_file "niri" "$config_dir/niri"
-    link_file "sway" "$config_dir/sway"
-    link_file "waybar" "$config_dir/waybar"
+    if [[ "$OS" == linux ]]; then
+        # Linux desktop configs and user services.
+        install_copy "i3" "$config_dir/i3"
+        install_copy "niri" "$config_dir/niri"
+        install_copy "sway" "$config_dir/sway"
+        install_copy "waybar" "$config_dir/waybar"
+        install_copy "systemd" "$config_dir/systemd"
+    else
+        log_warn "Skipping Linux desktop configs on: $OS"
+        skipped=$((skipped + 5))
+    fi
 
     # Terminal and file manager
-    link_file "ranger" "$config_dir/ranger"
+    install_copy "ranger" "$config_dir/ranger"
 
-    # Application configs (whole directories)
-    link_file "nvim" "$config_dir/nvim"
-    link_file "systemd" "$config_dir/systemd"
+    # Cross-platform application configs.
+    install_copy "nvim" "$config_dir/nvim"
 
     # Individual files
-    link_file "fourmolu.yaml" "$config_dir/fourmolu.yaml"
+    install_copy "fourmolu.yaml" "$config_dir/fourmolu.yaml"
 
     # AI-related configs
-    link_file "ai-agent" "$config_dir/ai-agent"
+    install_copy "ai-agent" "$config_dir/ai-agent"
 
     # GRC (Generic Colouriser)
-    link_file "grc" "$config_dir/grc"
+    install_copy "grc" "$config_dir/grc"
 }
 
 install_local_bin_helpers() {
     log_info "Installing local bin helper scripts..."
 
     local bin_dir="$HOME/.local/bin"
+
+    if [[ "$OS" != linux ]]; then
+        log_warn "Skipping Linux desktop helper scripts on: $OS"
+        skipped=$((skipped + 2))
+        return 0
+    fi
 
     if [[ ! -d "$bin_dir" ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
@@ -2241,7 +3415,10 @@ install_local_bin_helpers() {
         fi
     fi
 
-    link_file "niri/scripts/foot-auto-font" "$bin_dir/foot-auto-font"
+    install_copy "niri/scripts/foot-auto-font" "$bin_dir/foot-auto-font"
+    install_copy \
+        "scripts/x11-wayland-clipboard-bridge" \
+        "$bin_dir/x11-wayland-clipboard-bridge"
 }
 
 prepare_skills_target_dir() {
@@ -2266,7 +3443,15 @@ prepare_skills_target_dir() {
     if [[ -L "$skills_dir" ]]; then
         log_warn "$tool_name skills path is a symlink: $skills_dir -> $(readlink "$skills_dir")"
 
-        if [[ $FORCE -eq 1 ]]; then
+        if symlink_points_to "$skills_dir" "$SCRIPT_DIR/ai-agent/skills" \
+            || symlink_points_to "$skills_dir" "$SHARED_AI_AGENT_DIR/skills"; then
+            if [[ $DRY_RUN -eq 1 ]]; then
+                log_dry "Would migrate installer-managed skills directory: $skills_dir"
+            else
+                rm -f "$skills_dir"
+                log_info "Removed installer-managed skills directory symlink: $skills_dir"
+            fi
+        elif [[ $FORCE -eq 1 ]]; then
             if ! backup_item "$skills_dir"; then
                 return 1
             fi
@@ -2286,7 +3471,7 @@ prepare_skills_target_dir() {
                     if [[ $DRY_RUN -eq 1 ]]; then
                         log_dry "Would remove existing path: $skills_dir"
                     else
-                        rm -rf "$skills_dir"
+                        remove_installed_path "$skills_dir"
                         log_info "Removed existing path: $skills_dir"
                     fi
                     ;;
@@ -2321,7 +3506,7 @@ prepare_skills_target_dir() {
                     if [[ $DRY_RUN -eq 1 ]]; then
                         log_dry "Would remove existing path: $skills_dir"
                     else
-                        rm -rf "$skills_dir"
+                        remove_installed_path "$skills_dir"
                         log_info "Removed existing path: $skills_dir"
                     fi
                     ;;
@@ -2348,21 +3533,6 @@ prepare_skills_target_dir() {
     return 0
 }
 
-resolve_symlink_target_path() {
-    local link_path="$1"
-    local target
-    target="$(readlink "$link_path")" || return 1
-
-    if [[ "$target" == /* ]]; then
-        printf '%s\n' "$target"
-        return 0
-    fi
-
-    local link_dir
-    link_dir="$(cd "$(dirname "$link_path")" 2>/dev/null && pwd -P)" || return 1
-    printf '%s/%s\n' "$link_dir" "$target"
-}
-
 cleanup_dead_skill_links() {
     local tool_name="$1"
     local tool_skills_dir="$2"
@@ -2387,20 +3557,19 @@ cleanup_dead_skill_links() {
             continue
         fi
 
-        local target_path
-        target_path="$(resolve_symlink_target_path "$installed_skill")" || continue
-        if [[ "$target_path" != */ai-agent/skills/* ]]; then
+        if ! symlink_points_to "$installed_skill" "$src_skill_dir" \
+            && ! symlink_points_to "$installed_skill" "$SHARED_AI_AGENT_DIR/skills/$skill_name"; then
             continue
         fi
-        if [[ -e "$target_path" ]]; then
+        if [[ -e "$installed_skill" ]]; then
             continue
         fi
 
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would remove dead $tool_name skill link: $installed_skill -> $target_path"
+            log_dry "Would remove dead $tool_name skill link: $installed_skill -> $(readlink "$installed_skill")"
         else
             rm "$installed_skill"
-            log_info "Removed dead $tool_name skill link: $installed_skill -> $target_path"
+            log_info "Removed dead $tool_name skill link: $installed_skill"
         fi
     done
 }
@@ -2451,7 +3620,7 @@ install_skills_individually() {
                     continue
                 fi
 
-                link_file "ai-agent/skills/$skill_name" "$target_skill"
+                link_shared_ai_agent_item "skills/$skill_name" "$target_skill"
             fi
         done
     fi
@@ -2476,18 +3645,18 @@ install_claude_config() {
         fi
     fi
 
-    # Link the main CLAUDE.md file
-    link_file "ai-agent/CLAUDE.md" "$claude_dir/CLAUDE.md"
+    # Link shared instructions from the stable installed snapshot.
+    link_shared_ai_agent_item "CLAUDE.md" "$claude_dir/CLAUDE.md"
     # CLAUDE.md uses @modules/* relative imports.
-    link_file "ai-agent/modules" "$claude_dir/modules"
+    link_shared_ai_agent_item "modules" "$claude_dir/modules"
 
     # Link skills individually (required by Claude Code)
     install_claude_skills
 
     # Install workflow permission init script to ~/.local/bin
     local bin_dir="$HOME/.local/bin"
-    link_file "ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
-    link_file "ai-agent/skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
+    link_shared_ai_agent_item "skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
+    link_shared_ai_agent_item "skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
     remove_obsolete_waypost_launchers
     if ! ensure_waypost_mcp_command; then
         log_error "Failed to verify built-in waypost MCP command for Claude"
@@ -2496,7 +3665,7 @@ install_claude_config() {
     install_claude_waypost_mcp
 
     # Link statusline script
-    link_file "ai-agent/claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
+    link_shared_ai_agent_item "claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
 }
 
 cleanup_gemini_duplicate_skill_links() {
@@ -2620,18 +3789,20 @@ install_gemini_config() {
         fi
     fi
 
-    # Link the main GEMINI.md file
-    link_file "ai-agent/GEMINI.md" "$gemini_dir/GEMINI.md"
+    # Link shared instructions from the stable installed snapshot.
+    link_shared_ai_agent_item "GEMINI.md" "$gemini_dir/GEMINI.md"
     # GEMINI.md uses @modules/* relative imports.
-    link_file "ai-agent/modules" "$gemini_dir/modules"
+    link_shared_ai_agent_item "modules" "$gemini_dir/modules"
 
     # Link skills individually for reliability
     install_gemini_skills
 
     # Link shell policy rules for workflow automation approvals
     if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
-        migrate_legacy_symlink_source "$gemini_dir/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/.gemini/policies/agent-deck-workflow.toml" "$SCRIPT_DIR/ai-agent/gemini/policies/agent-deck-workflow.toml"
-        link_file "ai-agent/gemini/policies/agent-deck-workflow.toml" "$gemini_dir/policies/agent-deck-workflow.toml"
+        link_shared_ai_agent_item \
+            "gemini/policies/agent-deck-workflow.toml" \
+            "$gemini_dir/policies/agent-deck-workflow.toml" \
+            ".gemini/policies/agent-deck-workflow.toml"
     else
         log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
     fi
@@ -2702,8 +3873,10 @@ install_codex_config() {
 
     # Link Codex escalation rules for workflow automation approvals
     if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
-        migrate_legacy_symlink_source "$codex_dir/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/.codex/rules/agent-deck-workflow.rules" "$SCRIPT_DIR/ai-agent/codex/rules/agent-deck-workflow.rules"
-        link_file "ai-agent/codex/rules/agent-deck-workflow.rules" "$codex_dir/rules/agent-deck-workflow.rules"
+        link_shared_ai_agent_item \
+            "codex/rules/agent-deck-workflow.rules" \
+            "$codex_dir/rules/agent-deck-workflow.rules" \
+            ".codex/rules/agent-deck-workflow.rules"
     else
         log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
     fi
@@ -2795,10 +3968,10 @@ install_opencode_config() {
         fi
     fi
 
-    # Link the main AGENTS.md file (OpenCode uses AGENTS.md natively)
-    link_file "ai-agent/AGENTS.md" "$opencode_dir/AGENTS.md"
+    # Link shared instructions from the stable installed snapshot.
+    link_shared_ai_agent_item "AGENTS.md" "$opencode_dir/AGENTS.md"
     # AGENTS.md uses @modules/* relative imports.
-    link_file "ai-agent/modules" "$opencode_dir/modules"
+    link_shared_ai_agent_item "modules" "$opencode_dir/modules"
 
     # Link skills individually for OpenCode
     install_opencode_skills
@@ -2828,11 +4001,11 @@ install_serena_config() {
 
     # Link project.yml and memories if they exist
     if [[ -d "$SCRIPT_DIR/.serena/memories" ]]; then
-        link_file ".serena/memories" "$serena_dir/memories"
+        install_copy ".serena/memories" "$serena_dir/memories"
     fi
 
     if [[ -f "$SCRIPT_DIR/.serena/project.yml" ]]; then
-        link_file ".serena/project.yml" "$serena_dir/project.yml"
+        install_copy ".serena/project.yml" "$serena_dir/project.yml"
     fi
 }
 
@@ -2884,6 +4057,20 @@ get_nvim_version() {
     nvim --version | head -1 | grep -Eo '[0-9]+\.[0-9]+' | head -1
 }
 
+nvim_version_is_supported() {
+    local version="$1"
+    local major
+    local minor
+
+    major="${version%%.*}"
+    minor="${version#*.}"
+    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    (( 10#$major > 0 || 10#$minor >= 9 ))
+}
+
 install_nvim_prerequisites() {
     log_info "Checking Neovim prerequisites..."
 
@@ -2897,7 +4084,7 @@ install_nvim_prerequisites() {
     log_info "Found Neovim version: $nvim_version"
 
     # Check if version is at least 0.9
-    if [[ "$(printf '%s\n' "0.9" "$nvim_version" | sort -V | head -n1)" != "0.9" ]]; then
+    if ! nvim_version_is_supported "$nvim_version"; then
         log_warn "Neovim version should be 0.9 or higher for this configuration"
     fi
 
@@ -2947,11 +4134,10 @@ setup_nvim() {
         return 1
     fi
 
-    # The nvim config is already linked in install_xdg_configs
-    # Just verify it exists
+    # The nvim config is installed by install_xdg_configs; just verify it exists.
     local nvim_config="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
-    if [[ -L "$nvim_config" ]]; then
-        log_ok "Neovim config linked at: $nvim_config"
+    if [[ -d "$nvim_config" ]]; then
+        log_ok "Neovim config installed at: $nvim_config"
     fi
 
     log_info "Neovim setup complete."
@@ -2984,13 +4170,13 @@ install_linux_specific() {
 install_macos_specific() {
     log_info "Applying macOS-specific configurations..."
 
-    log_info "Note: Some Linux-specific configs (i3, sway, niri) won't apply on macOS"
+    log_info "Linux desktop configs, helper scripts, and systemd services were skipped on macOS"
 }
 
 install_wsl_specific() {
     log_info "Applying WSL-specific configurations..."
 
-    log_info "Note: Window manager configs (i3, sway, niri, waybar) won't work in WSL"
+    log_info "Linux desktop configs, helper scripts, and systemd services were skipped on WSL"
 }
 
 # =============================================================================
@@ -3019,6 +4205,7 @@ print_summary() {
     echo "========================================"
     echo "  Installation Summary"
     echo "========================================"
+    echo -e "  ${GREEN}Copied:${NC}   $copied"
     echo -e "  ${GREEN}Linked:${NC}   $linked"
     echo -e "  ${YELLOW}Skipped:${NC}  $skipped"
     if [[ $backed_up -gt 0 ]]; then
@@ -3114,6 +4301,10 @@ main() {
     # Initialize git submodules first
     init_submodules
 
+    if ! install_shared_ai_agent_snapshot; then
+        exit 1
+    fi
+
     # Install configs
     install_home_configs
     install_xdg_configs
@@ -3148,5 +4339,7 @@ main() {
     print_summary
 }
 
-# Run main function with all arguments
-main "$@"
+# Run only when executed directly; sourcing is useful for focused installer tests.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
