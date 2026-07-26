@@ -26,7 +26,7 @@ Provide the message body from `execute_plan`.
 - the planner should auto-advance whenever the next step is clear
 - if a blocker cannot be resolved locally, stop and ask the user directly
 - do not send routine blocker message to supervisor
-- planner should default code-changing work to `delegate-task`; direct planner implementation is the fallback only when that skill's own decision gate says delegation is not justified
+- planner should use `delegate-task` Selection-Only Use to choose direct execution, a native harness when available, or persistent Agent Deck; when neither external surface fits, use planner-owned nonpersistent delivery. Use `delegate-code-task` only for a Waypost Agent Deck code task
 - code-changing tasks are complete only after commit, any required review, closeout merge, and progress recording
 - claiming `execute_plan` does not require planner to implement code personally; dispatch, review, closeout, and final report still count as completing the workflow
 - planner is not done when implementation is done; planner is done only after one final `plan_report_delivered` message is successfully sent to supervisor
@@ -56,10 +56,14 @@ Skill-specific context resolution:
 4. execute that task sequence serially
 5. for each implementation task:
    - before starting the task, run workspace prepare for the recorded workspace and integration branch
-   - start with `delegate-task` and apply its own decision gate for whether delegation is justified
-   - if `delegate-task` says delegation is justified, send the task and pass the chosen `Per-task review` policy into the delegate brief
-   - if `delegate-task` says the work should be done directly, planner may use `Direct Planner Implementation`
+   - use `delegate-task` in Selection-Only Use; use Direct Planner Implementation only when every condition below passes. Otherwise use a native harness when available, persistent Agent Deck only when independently justified, or Planner-Owned Nonpersistent Fallback; do not run generic Dispatch
+   - for an Agent Deck code task in this plan, choose its Waypost worker mode; a direct user-led session is outside this branch/review/closeout handoff
+   - if it selects a persistent Waypost Agent Deck worker, use `delegate-code-task` and pass the selected `session_reason` and `Per-task review` policy into the code brief
+   - if it selects a native harness subagent, use Native Harness Implementation
+   - if it selects local execution, planner may use `Direct Planner Implementation`
+   - if no native harness is available and Agent Deck is not justified, use Planner-Owned Nonpersistent Fallback
 6. coder/reviewer/architect progress may take unbounded time; after sending asynchronous cross-session work, follow the shared Async sender rule
+   - for a persistent code worker, handle a later `code_delivery_complete` with `planner-closeout` before starting the next task; only skipped review may complete through it, while a blocker retains task state
 7. when the goal is complete:
    - if `Final integration review: required`, run `review-request` against the planner-owned integration branch with `requester_role = planner` and `review_lane = integration_final`
    - if that final review returns serious issues, decide whether to fix locally or spawn a new task; prefer a new task for non-trivial fixes
@@ -68,8 +72,7 @@ Skill-specific context resolution:
 
 ## Direct Planner Implementation
 
-Use this only after checking `delegate-task` and concluding, per that skill's own rules, that delegation is not justified and the work should be done directly.
-Direct planner implementation is allowed only when all of the following hold:
+Use this only after `delegate-task` Selection-Only Use selects local execution. It is eligible only when all of the following hold:
 - single local change
 - no new cross-module behavior
 - no schema, registry, or runtime contract change
@@ -78,35 +81,51 @@ Direct planner implementation is allowed only when all of the following hold:
 - narrow verification is sufficient
 - delegation would be pure coordination overhead
 
-If any item is uncertain, delegate instead.
-Once code is edited, planner is also coder for that task.
+If any condition fails, do not use the direct fast path: use Native Harness Implementation when available; use `delegate-code-task` only when Agent Deck has an independent lifecycle or user-interaction reason; otherwise use Planner-Owned Nonpersistent Fallback.
 
-Required sequence:
+## Native Harness Implementation
+
+Use this only after `delegate-task` Selection-Only Use selects a native harness subagent. Use Planner-Owned Code Delivery with the harness as executor. The harness owns bounded implementation, not branch, commit, review, or closeout ownership.
+
+## Planner-Owned Nonpersistent Fallback
+
+Use this when the task fails the direct gate, no native harness is available, and Agent Deck is not justified. The planner is the executor under Planner-Owned Code Delivery; create no worker session or Waypost task.
+
+## Planner-Owned Code Delivery
+
+Use this after direct, harness, or planner-owned fallback selection. The planner owns the task branch, delivery commit, review, and closeout.
+
 1. use the already-prepared workspace from `Execution Flow`; never commit on detached `HEAD`
 2. create an explicit `task_branch` from `integration_branch`
    - default: `task/<plan_id>-<short-slug>` or `task/<task_id>`
    - `task_branch` must differ from `integration_branch`
-   - reuse an existing `task_branch` only when it is clearly the same unfinished direct task
-3. make the change in `worker_workspace`
-4. verify the change with the narrowest meaningful checks
-5. stage and commit the task change without asking the user for routine commit confirmation
-6. if `Per-task review: required`:
-   - run `review-request` with `requester_role = planner`, `review_lane = task`, the recorded branch plan, and the delivery commit or task branch as scope
+   - reuse an existing `task_branch` only when it is clearly the same unfinished task
+3. run the selected executor:
+   - planner: make the change in `worker_workspace`
+   - harness: give it the recorded task branch, workspace, objective, and acceptance criteria; it may edit and validate, but must not switch branches or commit. Do not alter the shared workspace until it returns.
+4. if a harness ran, confirm the recorded `task_branch` is still checked out
+5. verify the result with the narrowest meaningful checks
+6. stage and commit the task change without asking the user for routine commit confirmation
+7. if `Per-task review: required`:
+   - run `review-request` with `requester_role = planner`, `review_lane = task`, `closeout_contract = workspace-v2`, the recorded branch plan, workspace handoff (`worker_workspace`, `task_dir = worker_workspace`, `workspace_lifecycle = shared; cleanup=none`), and the delivery commit or task branch as scope
    - let `review-request` create or reuse the reviewer on demand with `parent_session_id = <planner_session_id>` and the planner session group, including empty string for root
    - after `review-request` sends the request, follow the shared Async sender rule
    - when a later inbound reviewer acceptance produces `closeout_delivered`, handle it with `planner-closeout` before marking the task done
-7. if `Per-task review: skip`, run workspace prepare for this task, then run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done
-8. record the result under `Tasks Completed`
+8. if `Per-task review: skip`, run workspace prepare for this planner-owned task, then run `planner-closeout-batch.sh` directly with the recorded `task_branch`, `integration_branch`, `worker_workspace`, `planner_workspace`, `task_id`, and task dir before marking the task done; a persistent Waypost coder instead returns `code_delivery_complete` for `planner-closeout`
+9. record the result under `Tasks Completed`
 
-Direct-task git writes, commits, review requests, and closeout are workflow-authorized on this direct-work path.
+Planner-owned git writes, commits, review requests, and closeout are workflow-authorized for either executor.
 Ask the user only for real scope/tradeoff decisions, explicit human gates, dirty-worktree conflicts, or branch ownership blockers.
 
 ## Decision Rules
 
-- `delegate-task` owns the delegate-vs-direct decision rule for code-changing tasks; do not invent a second local classifier here
+- `delegate-task` Selection-Only Use owns execution-surface selection; `delegate-code-task` owns dispatch and lifecycle for persistent Waypost Agent Deck code work
 - understanding the implementation does not by itself authorize direct implementation
-- use direct planner implementation only after `delegate-task` indicates the work should be done directly; for this path, planner still implements in the prepared `worker_workspace`
-- prefer a new delegated task when the fix is substantial, touches multiple components, or would benefit from a focused coder
+- if code fails the direct gate, use a harness when available; use Agent Deck only for an independent lifecycle/user-interaction reason; otherwise use Planner-Owned Nonpersistent Fallback
+- use direct planner implementation only after `delegate-task` Selection-Only Use selects local execution; for this path, planner still implements in the prepared `worker_workspace`
+- native harness code work uses Planner-Owned Code Delivery; the planner retains branch, commit, review, and closeout ownership
+- planner-owned nonpersistent fallback creates no worker/session; it uses the same delivery lifecycle
+- use an Agent Deck code task when durable history, explicit session/workspace control, or user-visible and intervenable execution justifies it; otherwise prefer the lighter selected surface
 - keep the decomposition local to this planner; supervisor assigns the goal, not the internal task breakdown
 - do not treat completed implementation, review, or closeout as plan completion; the plan completes only after `plan_report_delivered` is successfully sent to supervisor
 - if user input is needed for scope, priority, or tradeoff, ask the user directly and stop

@@ -2,6 +2,7 @@ version = 1
 
 [roles]
 planner = "planner_default"
+worker = "coder_default"
 coder = "coder_default"
 reviewer = "reviewer_default"
 architect = "architect_default"

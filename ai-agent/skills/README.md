@@ -31,8 +31,9 @@ reference to them.
 
 ## Roles
 
-- Agent 1, **Planner** (`delegate-task`, `execute-plan`, `planner-closeout`): planning agent, prepares execution briefs, can execute a supervisor-assigned task list inside one workspace, and completes planner-side closeout
+- Agent 1, **Planner** (`delegate-task`, `delegate-code-task`, `execute-plan`, `planner-closeout`): planning agent, chooses an execution surface, prepares execution briefs, can execute a supervisor-assigned task list inside one workspace, and completes planner-side closeout
 - Supervisor: generic upstream report target; may dispatch a plan to a planner and receive one final plan report back
+- Agent Deck Worker: persistent, named session for a bounded outcome when history must survive restarts, explicit control, later coordination, or user-visible/intervenable progress matters
 - Agent 2, **Coder** (implementation): executes tasks and applies code changes
 - Agent 3, **Reviewer** (`review-code`): review agent, produces the full review report directly in message body
 - Agent 4, **Architect** (`tech-design-review`): per-topic tech-design reviewer for an exact immutable draft artifact or committed design snapshot
@@ -41,6 +42,16 @@ reference to them.
 - Roundtable Moderator (`roundtable`): user-facing discussion controller; creates Waypost group, selects participants, drains group updates, and presents synthesis
 - Roundtable Participant (`roundtable-participant`): agent-deck session that reads a group stream as one participant and posts concise role-specific replies
 - User: makes acceptance decisions only when the workflow explicitly requires human gating
+
+## Execution Surfaces
+
+- local execution: immediate work owned by the current session
+- native harness subagent: short, independent parallel work with no durable session or later message coordination
+- Agent Deck worker: a persistent, user-visible session with history across restarts and explicit workspace/tool control; start it directly for user-led work, or attach Waypost when a requester needs later coordination or a result
+
+Choose the lightest surface that preserves the task's lifecycle. Parallelism alone does not justify Agent Deck. Do not use Agent Deck to emulate a native harness subagent.
+
+`delegate-task` is generic; a code plan uses its Selection-Only Use, then enters `delegate-code-task` for a Waypost-backed code lane.
 
 ## Core Transport
 
@@ -55,7 +66,7 @@ reference to them.
 ## End-to-End Loop
 
 1. User asks Planner to prepare work.
-2. Planner runs `delegate-task` and sends one delegate workflow message.
+2. After `delegate-task` Selection-Only Use selects a Waypost worker for a code task, Planner runs `delegate-code-task` and sends one code delegate workflow message.
 3. Planner or Coder may start two-architect drafting for an unresolved goal, or request direct review of mature committed tech-design docs.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
 5. Task-level review is planner-controlled: when per-task review is required, coder runs `review-request`; that skill creates or reuses the reviewer on demand as a child of planner, or returns control to planner without reviewer involvement when review is skipped.
@@ -74,7 +85,7 @@ reference to them.
 
 1. Supervisor runs `dispatch-plan` and sends one `execute_plan` message to a planner.
 2. That planner owns one workspace and the internal task decomposition needed to complete the assigned goal.
-3. Planner delegates non-trivial implementation tasks; for trivial code tasks it may self-implement, but then acts as coder for commit, review, and closeout.
+3. Planner chooses local execution, a native harness subagent when available, or Agent Deck for each implementation task. Persistent Waypost Agent Deck code work uses `delegate-code-task`; local and harness code work use planner-owned branch, commit, review, and closeout.
 4. For each task, planner may choose `Per-task review: required` or `skip`.
 5. After the assigned goal is complete, planner may request one final integrated review from its own integration branch.
 6. Planner sends one `plan_report_delivered` summary back to supervisor.
@@ -98,6 +109,9 @@ Use `roundtable` when the user wants a multi-agent discussion, brainstorm, criti
 
 ```mermaid
 flowchart TD
+    Q[Requester / User] -->|direct startup| W[Agent Deck Worker]
+    Q -->|message: execute_delegated_task| W
+    W -->|message: delegated_task_result| Q
     P[Planner] -->|message: execute_delegate_task| C[Coder]
     X[Original Requester] -->|vague goal: tech_design_draft_requested| DA[Architect Author]
     DA -->|message: tech_design_review_requested| A[Architect Reviewer]
@@ -137,8 +151,9 @@ flowchart TD
 - `planner-closeout` is the planner-side runtime action for `closeout_delivered`
 - `execute-plan` is the planner-side runtime action for a supervisor-assigned task list in one workspace
 - `plan-report` is the supervisor-side runtime action for the final report from that planner
-- `check-waypost-messages` routes `group/roundtable-*` `group_message_available` control message to `roundtable`; replace this name-pattern rule with an explicit mapping if another group workflow is added
+- `check-waypost-messages` routes generic delegation actions to `delegate-task`, code delegation to `delegate-code-task`, and `group/roundtable-*` `group_message_available` to `roundtable`; replace the group name-pattern rule with an explicit mapping if another group workflow is added
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session` with explicit parent group; root group is empty and valid
+- use Agent Deck for work a user may want to observe, steer, resume, or revisit; expose its session id/title in the user-facing dispatch result
 - delegated coder flow creates or reuses reviewer only through `review-request`; reviewer must be parented to planner, not coder
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.

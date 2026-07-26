@@ -14,6 +14,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
    - if `Action: group_message_available`, run the group handler for `Group-Address` and `As-Person`; for `group/roundtable-*`, use `roundtable` Moderator Group Check
+   - route `execute_delegated_task` and `delegated_task_result` to `delegate-task`; `execute_delegate_task` to `delegate-code-task`; `closeout_delivered`, `review_completed`, and `code_delivery_complete` to `planner-closeout`
    - otherwise execute that workflow stage immediately
 4. Settle the claim when its current disposition is clear:
    - `waypost_ack` after its immediate required action completes, including handing a required decision to the user

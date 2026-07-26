@@ -144,6 +144,7 @@ From: reviewer <reviewer_session_id>
 To: <requester_role> <requester_session_id>
 Planner: <planner_session_id>
 Planner workspace: <planner_workspace_or_N/A>
+Closeout contract: <workspace-v2 | review-only-v2 | legacy-v1 | N/A>
 Round: <round>
 
 ### Summary
@@ -200,6 +201,17 @@ For the implementer/author:
 - Notes: [optional, no screenshot/recording required]
 ```
 
+When a complete Workspace Handoff is supplied, append it unchanged after `Recorded Branch Plan`:
+
+```markdown
+### Workspace Handoff
+- Worker workspace: [worker_workspace]
+- Task dir: [task_dir]
+- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual]
+```
+
+Omit the contract for `integration_final`. Preserve the task-lane contract and Handoff unchanged. An unmarked task review is `legacy-v1`, not review-only.
+
 ## Agent Deck Mode
 
 Use the `agent-deck-workflow` skill for shared protocol:
@@ -222,6 +234,8 @@ Skill-specific context resolution:
 - `start_branch`: explicit -> message body -> ask
 - `integration_branch`: explicit -> message body -> ask
 - `task_branch`: explicit -> message body -> ask
+- `closeout_contract` (task lane): explicit -> message body -> `legacy-v1` when unmarked
+- `workspace_handoff` (optional): preserve explicit/message values unchanged; do not infer, default, or ask for it
 - `workflow_policy` (optional): explicit -> request context -> unattended defaults
 - `special_requirements` (optional fallback): explicit -> request context -> omit
 - `checks_already_run` (optional): explicit -> message body -> use for rerun decisions
@@ -241,7 +255,7 @@ Default policy when missing:
 
 Execution flow in Agent Deck mode:
 1. Produce the full review report in the format above
-   - preserve the recorded branch plan from `review_requested` unchanged in the review report
+   - preserve the recorded branch plan, `Closeout contract`, and Workspace Handoff from `review_requested` unchanged
 2. Choose action:
    - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL, unless the non-convergence stop rule below applies
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
@@ -258,6 +272,7 @@ Execution flow in Agent Deck mode:
    - only when `auto_accept_if_no_must_fix=false`, present user decision summary and wait for explicit acceptance or iteration decision
    - after explicit acceptance in human-gated flow, run `review-closeout` for task-lane review, or finish the integration review for `integration_final`
    - request human UI confirmation before acceptance/closeout only when `ui_manual_confirmation=required`, or when `ui_manual_confirmation=auto` and explicit policy wants heuristic UI gating
+   - only `review-only-v2` without a Handoff sends `review_completed`; `workspace-v2` needs a full Handoff and `legacy-v1` migrates before closeout
 
 Waypost Message subject (`rework_required`):
 - `rework required: <task_id> r<round>`
@@ -315,4 +330,4 @@ Required interaction behavior:
 
 Sender identity rule:
 - reviewer-originated actions (`rework_required`, `user_requested_iteration`) use `from_session_id = reviewer_session_id`
-- `closeout_delivered` uses the session id of the agent that actually executes `review-closeout`; preserve `reviewer_session_id` in the closeout body as the source of the accepted review
+- `closeout_delivered` / `review_completed` use the session id of the agent that executes `review-closeout`; preserve `reviewer_session_id` as the source of the accepted review

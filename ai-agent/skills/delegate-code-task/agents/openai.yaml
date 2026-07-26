@@ -1,0 +1,4 @@
+interface:
+  display_name: "Delegate Code Task"
+  short_description: "Dispatch a durable code task through Agent Deck"
+  default_prompt: "Use $delegate-code-task to delegate a code change to a persistent Agent Deck worker."

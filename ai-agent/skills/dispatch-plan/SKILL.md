@@ -92,9 +92,10 @@ Round: 1
 - Planner owns task decomposition and sequencing inside this workspace
 - Keep task execution serial in this workspace
 - Do not rely on workspace reservation records as cross-task locks; prepare the workspace again for each task closeout path
-- Default to `delegate-task` for code-changing implementation tasks
-- Let `delegate-task` own the delegate-vs-direct decision; do not restate a separate trivial/non-trivial test here
-- Planner may self-implement only when `delegate-task`'s own instructions say delegation is not justified and the work should be done directly
+- Use `delegate-task` in Selection-Only Use to choose direct execution, a native harness when available, or Agent Deck before code-changing work; otherwise use planner-owned nonpersistent delivery. Do not dispatch its generic worker
+- Use `delegate-code-task` only when `delegate-task` Selection-Only Use selects a persistent Waypost Agent Deck worker; do not restate its execution-surface rule here
+- Planner may use Direct Planner Implementation only after its eligibility passes; if no native harness is available and Agent Deck is not justified, use planner-owned nonpersistent delivery instead
+- Native harness code work uses planner-owned branch, commit, review, and closeout
 - Planner-local execution and any later delegated work both stay in the one workspace recorded above
 - Any self-implemented code change still requires workspace prep, explicit task branch from `integration_branch`, commit, any required review, closeout merge, and final supervisor report
 - Routine branch, commit, review-request, closeout, and final-report actions are workflow-authorized; ask the user only for real scope/tradeoff decisions or explicit human gates

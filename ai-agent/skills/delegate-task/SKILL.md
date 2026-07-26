@@ -1,190 +1,204 @@
 ---
 name: delegate-task
-description: Delegate non-trivial implementation work to an Agent Deck coder session through Waypost. Use when meaningful code changes should be assigned to another agent rather than completed in the current session.
+description: Create one bounded persistent Agent Deck worker, directly or through Waypost. Use when history must survive restarts, explicit tool or workspace control, later coordination, or user-visible and steerable work justifies its cost; use a native harness subagent for short disposable parallel work.
 ---
 
 # Delegate Task
 
-Use `agent-deck-workflow` for shared transport, lifecycle, and tool resolution.
+Use `agent-deck-workflow` for Waypost transport, lifecycle, and tool resolution.
 
-Create one concise `execute_delegate_task` message. The planner owns framing and dispatch; the coder owns delegated implementation.
+Create a controlled session for one bounded outcome. Do not infer a code-delivery lifecycle, branches, commits, review, or closeout.
 
-## Delegation Gate
+## Code Gate
 
-- Do not delegate pure docs, wording, summarization, inspection, or other non-code work.
-- Delegate non-trivial implementation work by default.
-- For a small, local, obvious code change, use `Direct Planner Implementation` when called from `execute-plan`; otherwise handle it locally only if this session owns implementation, or return it to the requester.
-- Dispatch one task at a time. Ask the requester before splitting one requested outcome into multiple delegated tasks.
+Classify before selecting a transport or dispatching.
 
-## Brief Quality
+- A task is code-changing when it changes repository code, runtime/build configuration, schema, or a programmatic contract.
+- Never send a code-changing task as generic `execute_delegated_task`. Before creating a generic worker, transfer a workflow-owned code task to `delegate-code-task`.
+- Allow a direct Deck code session only when the user explicitly asks for it and takes delivery ownership. Record `user-owned direct`; do not infer it from user visibility alone.
+- A user-owned direct code session has no automatic branch, commit, review, merge, or closeout contract. If that ownership is not explicit, use the code lane or ask.
 
-Delegate the outcome, not a solution recipe.
+## Choose Execution Surface
 
-- Give the coder the parent goal, why this task exists, hard boundaries, known evidence, fixed decisions with provenance, and testable acceptance criteria.
-- Let the coder investigate, decompose, choose the implementation, and validate it.
-- Keep reviewer context neutral; do not seed expected findings or verdicts.
-- Optimize for the smallest conflict surface that still completes the task; exclude unrelated refactors, renames, moves, and cleanup.
-- Put relevant repository paths under `Starting Context`; use `None` when no document is required. Do not pin a commit unless an exact historical snapshot is explicitly required.
-- Treat an unusually long brief as a framing smell. Remove detail that does not change the outcome, boundary, risk, or acceptance criteria.
+Use the lightest surface that preserves the task's lifecycle:
 
-## Workflow Context
+- Work locally for an immediate task this session can complete.
+- Use a native harness subagent, when available, for short independent parallel work. It is disposable: the harness owns bounded execution and its result; the caller owns any code delivery. Do not create or address an Agent Deck session for it.
+- Use Agent Deck for a named persistent worker when history must survive restarts, explicit tool or workspace control, later Waypost coordination, or user-visible work the user may inspect, steer, or resume matters.
+- Difficulty or parallelism alone is not an Agent Deck reason. State one concrete lifecycle or user-interaction reason before creating a session.
 
-Use the shared context priority. Resolve before dispatch:
+## Selection-Only Use
 
-- `task_id`: explicit -> context -> generate `YYYYMMDD-HHMM-<slug>`
-- `planner_session_id`: explicit -> context -> bound Waypost sender -> ask
-- `planner_workspace`: explicit -> workflow context -> current workspace -> ask
-- `worker_workspace`: explicit -> workflow context -> `planner_workspace`
+When another action owns dispatch, use the selection rules above and stop before `Context` or `Dispatch`.
+
+- Record the selected surface and, for Agent Deck, its concrete `session_reason` for the owning action.
+- If the owning action has a stricter direct-execution gate, use it only for that fast path. It may retain a planner-owned nonpersistent fallback without creating a worker.
+- Do not resolve sessions, compose a task contract, create a worker, or send `execute_delegated_task`.
+- For workflow-owned code that selects an Agent Deck worker, hand off directly to `delegate-code-task`; generic Waypost dispatch is prohibited.
+- A direct user-owned code session is a separate surface. Record that ownership; do not turn it into a generic Waypost task.
+
+## Scope and Brief
+
+Delegate one outcome, not a solution recipe.
+
+- Let the worker investigate, decompose, choose local implementation, and validate within scope.
+- Give only decision-relevant context: parent goal when it changes choices, hard boundaries, established evidence, non-obvious fixed decisions with source, and testable completion criteria.
+- List required reading and useful references only. Omit empty sections and detail that does not change the outcome, boundary, risk, or done condition.
+- Ask before splitting only when it changes scope, priority, or tradeoffs.
+
+## Select Transport
+
+- **Direct session:** no addressable requester session, or the user wants to work with the session directly. Start a fresh worker with its task contract as `startup_instruction`. The user observes and steers it in Agent Deck; no automatic Waypost return is expected. Code is allowed only for explicit user-owned direct delivery.
+- **Waypost worker:** an addressable requester session exists and later coordination or a returned result is needed. Send `execute_delegated_task`; the worker returns `delegated_task_result`. This is non-code only.
+
+Do not invent a requester address. For a direct continuation, surface the existing session and let the user steer it there rather than injecting a second task from this session.
+
+## Context
+
+Use shared context priority; resolve only fields for the selected transport.
+
+- `task_id`: explicit -> context -> `YYYYMMDD-HHMM-<slug>`
+- `task_kind`: explicit -> task/context -> `generic` (`generic | code-changing`); ask if unclear
+- Direct code only: `user_owned_code_delivery`: explicit user decision -> `true`; otherwise absent
+- `worker_workspace`: explicit -> workflow/current workspace -> ask
   - do not invent a separate workspace
-  - from `execute-plan`, keep `worker_workspace = planner_workspace`
-  - otherwise, a new temporary worktree requires explicit user confirmation; record cleanup ownership
-- branch plan:
-  - `integration_branch`: the existing non-task landing branch; never `task/*`
-  - `start_branch`: explicit/context; ask when the starting line is unclear
-  - `task_branch`: reuse `start_branch` when it is already the intended topic branch; otherwise `task/<task_id>` from `integration_branch`
-  - normal merge flow requires `task_branch != integration_branch`; never guess through ambiguity
-- session refs: `coder-<task_id>`, `reviewer-<task_id>`
-- review policy: `per_task_review = required`, `final_review = skip` unless explicitly changed
-- workflow policy: unattended with automatic acceptance when no must-fix finding; use a human gate only when explicitly requested
+- `workspace_lifecycle`: explicit -> `shared; cleanup=none`
+  - a temporary worktree is Waypost-only; require explicit user confirmation, `temporary; cleanup=requester`, and `cleanup_workspace`; requester owns closeout
+- Waypost temporary only: `cleanup_workspace`: explicit -> requester workspace that owns the worktree -> ask
+- `session_reason`: explicit -> infer one concrete reason -> ask
+- `worker_session_ref`: explicit -> context -> `worker-<task_id>`
+- `worker_session_id`: explicit real id -> workflow context -> omit
+- Waypost only: `requester_session_id`: explicit -> live Agent Deck/Waypost context -> ask; `requester_role`: explicit -> workflow role -> `requester`
 - `special_requirements`: explicit -> delegated context; preserve verbatim; omit when absent
 
-Resolve tool commands only for sessions being created:
+Resolve a command only when creating a worker: explicit full command -> intended current-tool continuity -> shared `worker` role. Preserve an existing session's recorded command.
 
-- coder: explicit full command -> intended current-tool continuity -> shared role `coder`
-- reviewer, when per-task review is required: explicit full command -> shared role `reviewer`
-- preserve existing session tool metadata
-- do not create the reviewer during delegate dispatch; pass its ref/tool metadata for `review-request`
+## Task Contract
 
-## Message Body
-
-Use this structure. Keep concise; write `None` rather than inventing empty context.
+Use this for a direct `startup_instruction`; prepend the Waypost envelope below for a Waypost worker. For a temporary worktree, include its cleanup owner and workspace.
 
 ```markdown
-Task: <task_id>
-Action: execute_delegate_task
-From: planner <planner_session_id>
-To: coder {{TO_SESSION_ID}}
-Planner: <planner_session_id>
-Planner workspace: <planner_workspace>
-Round: 1
-
-## Summary
-[One-line objective]
-
-## Big Picture
-- Parent goal: [larger outcome]
-- Why this task exists: [reason for delegation]
-- Must not break: [upstream invariant or `None`]
-
 ## Objective
 [One sentence]
 
-## Known Evidence
-- [established facts or `None`]
+## Session Contract
+- Why Agent Deck: <session_reason>
+- Task kind: <generic | code-changing>
+- Code delivery: <N/A | user-owned direct>
+- Worker workspace: <worker_workspace>
+- Workspace lifecycle: <shared; cleanup=none | temporary; cleanup=requester>
+- Cleanup owner: <requester; temporary only>
+- Cleanup workspace: <cleanup_workspace; temporary only>
+- The user may inspect or steer this session; make material choices and blockers legible.
 
-## Branch Plan
-- Start branch: <start_branch>
-- Integration branch: <integration_branch>
-- Task branch: <task_branch>
-- Rationale: [reuse or dedicated branch reason]
+## Context
+- Parent goal: [only if it affects local choices]
+- Must preserve: [upstream invariant]
+- Established facts: [facts the worker can rely on]
+- Read first: [required repository paths]
+- Optional references: [useful supporting paths]
 
-## Constraints & Risks
-- [fixed constraint with provenance, material risk, or `None`]
+## Boundaries
+- [fixed decision or hard constraint]
+- Watch for: [material risk]
 
-## Starting Context
-- Read before starting: [required repository paths or `None`]
-- Reference as needed: [supporting paths or `None`]
-- Know it exists: [discovery pointers or `None`]
-
-## Execution Guardrails
-- Own investigation, local decomposition, implementation choices, and validation within this scope
-- Make the smallest complete change; keep unrelated work out
-- Ask planner before changing scope, parent intent, or branch plan; resolve local implementation uncertainty independently
-
-## Acceptance Criteria
+## Done When
 - [testable outcome]
-
-## Review & Handoff
-- Per-task review: [required | skip]
-- Final integration review: [planner-managed | required | skip]
-- If per-task review is required, run `review-request` after the delivery commit and follow its async return rule
-- Coder git writes and the delivery commit are pre-authorized; keep the recorded branch plan unless planner updates it
-
-## Agent Deck Context
-- Workspaces: planner=<planner_workspace> worker=<worker_workspace>
-- Workspace lifecycle: [shared/existing | temp path=<path> cleanup=<owner>]
-- Coder tool: profile=<profile or explicit> cmd=<coder_tool_cmd>
-- Reviewer: ref=<reviewer_session_ref or N/A> id=<reviewer_session_id or N/A>
-- Reviewer tool: profile=<profile or N/A> cmd=<reviewer_tool_cmd or N/A>
-
-## Workflow Policy
-<resolved workflow policy>
+- Report: [result, evidence, and open items]
 
 ## Special Requirements
-[only when present]
+[verbatim; only when present]
+```
+
+Waypost envelope:
+
+```markdown
+Task: <task_id>
+Action: execute_delegated_task
+From: <requester_role> <requester_session_id>
+To: worker {{TO_SESSION_ID}}
+Task kind: generic
+Round: 1
+
+<task contract>
 ```
 
 ## Dispatch
 
-1. Prepare workspace records:
+Before dispatch, apply the Code Gate:
 
-   ```bash
-   ~/.config/ai-agent/skills/agent-deck-workflow/scripts/prepare-workspaces.sh \
-     --worker-workspace <worker_workspace> \
-     --planner-workspace <planner_workspace> \
-     --integration-branch <integration_branch> \
-     --planner-session-id <planner_session_id>
-   ```
+- if `task_kind` is code-changing and transport is Waypost, stop generic dispatch and run `delegate-code-task`
+- if `task_kind` is code-changing and transport is direct, require `user_owned_code_delivery = true`; otherwise ask or transfer
 
-   Stop on workspace or integration-branch mismatch. Use `--override-workspaces` only after explicit user confirmation.
+1. Resolve the worker by real id or ref with `agent_deck_resolve_session`.
 
-2. Resolve the coder id/ref:
+2. For a direct session:
 
-   - found: `agent_deck_require_session` with its real id and `worker_workspace`
-   - not found: resolve its tool command, then call `agent_deck_create_session` with:
-     - `ensure_title = <coder_session_ref>`
-     - `ensure_cmd = <coder_tool_cmd>`
-     - `workdir = <worker_workspace>`
-     - `parent_session_id = <planner_session_id>`
-     - `group_path = <planner group; empty for root>`
-     - `no_parent_link = false`
+   - require `shared; cleanup=none`; a temporary lifecycle must use a Waypost worker
+   - found: call `agent_deck_require_session` with its real id and workspace; report it for the user to continue
+   - absent: resolve its tool command, then call `agent_deck_create_session` with `ensure_title`, `ensure_cmd`, `workdir`, `no_parent_link = true`, and `startup_instruction = <task contract>`
 
-   Use the returned real id. If review is required, resolve reviewer tool metadata but do not create the reviewer.
+3. For a Waypost worker:
 
-3. Fill `{{TO_SESSION_ID}}`, then send through the lock-owning wrapper:
+   - found: call `agent_deck_require_session` with its real id and workspace
+   - absent: resolve its tool command, then call `agent_deck_create_session` with `ensure_title`, `ensure_cmd`, `workdir`, `parent_session_id = <requester_session_id>`, `group_path = <requester group; empty for root>`, and `no_parent_link = false`; leave `startup_instruction` empty
+   - fill `{{TO_SESSION_ID}}`, then call `waypost_send` from `agent-deck/<requester_session_id>` to `agent-deck/<worker_session_id>`, subject `delegate: <task_id> -> worker`
+   - follow the shared Async sender rule
 
-   ```bash
-   ~/.config/ai-agent/skills/agent-deck-workflow/scripts/send-delegate-with-active-task-lock.sh \
-     --workdir <worker_workspace> \
-     --task-id <task_id> \
-     --integration-branch <integration_branch> \
-     --planner-session-id <planner_session_id> \
-     --coder-session-id <coder_session_id> \
-     --coder-session-ref <coder_session_ref> \
-     --task-branch <task_branch> \
-     --subject "delegate: <task_id> -> coder" \
-     --body-file -
-   ```
+Keep the session available for user inspection, intervention, and later follow-up. Until completion or explicit transfer, do not alter a worker-owned shared workspace; temporary cleanup is best-effort after terminal delivery.
 
-   Prefer stdin. If a body file is necessary, place it under the caller's `.agent-artifacts/message/`.
+## Worker Receive
 
-The wrapper owns active-task lock acquisition, send rollback, delivery, and wakeup. Do not split or duplicate those operations. If it reports an existing active task, surface that state instead of retrying another send path.
+On `Action: execute_delegated_task`:
 
-After dispatch:
+- treat the body as the task contract and own local execution within it
+- this action is generic/non-code. If it requires code changes, return it for `delegate-code-task`; do not edit the repository under this contract
+- follow user steering within scope; report a material scope conflict to the requester
+- preserve the recorded workspace lifecycle in the terminal result
+- for a temporary workspace, also preserve its cleanup owner and workspace
+- when complete or blocked, send this result through Waypost:
 
-- follow the shared Async sender rule
-- treat the worker worktree as coder-owned until closeout, even when planner and worker paths are equal
-- keep any reviewer planner-scoped and in the same worker workspace
-- remove planner-created temporary worktrees after closeout
+```markdown
+Task: <task_id>
+Action: delegated_task_result
+From: worker <worker_session_id>
+To: <requester_role> <requester_session_id>
+Worker workspace: <worker_workspace>
+Workspace lifecycle: <workspace_lifecycle>
+Cleanup owner: <requester; temporary only>
+Cleanup workspace: <cleanup_workspace; temporary only>
+Round: final
+
+## Outcome
+[completed | blocked summary]
+
+## Evidence
+- [result, checks, or artifact pointers]
+
+## Open Items
+- [item or `None`]
+```
+
+- Call `waypost_send` from `agent-deck/<worker_session_id>` to `agent-deck/<requester_session_id>`, subject `delegated task result: <task_id>`; ack the claimed input only after it succeeds. On failure, do not ack; settle it under the shared Receiver Contract.
+
+For direct user-owned code sessions only:
+
+- user owns branch, commit, review, merge, and closeout decisions
+- make code progress and blockers legible, but do not claim workflow delivery or invent a Waypost result
+
+## Requester Receive
+
+On `delegated_task_result`, treat it as the worker's terminal update and continue requester-owned work. Do not infer a code, review, commit, or closeout workflow.
+
+- For `temporary; cleanup=requester`, record and ACK the terminal result, then try to remove or rehome sessions using `Worker workspace`; remove the listed non-primary worktree only when none remains. Report `cleanup=complete` on success; on failure retain it and report `cleanup=pending`. Do not delay or reopen delivery.
 
 ## User-Facing Result
 
 Return only:
 
-- delegated objective
-- task and integration branches
-- coder session id
-- temporary workspace and cleanup owner, when applicable
+- delegated objective and Agent Deck reason
+- worker session id, title, and workspace
+- temporary-workspace cleanup status, when applicable
 - any blocker or send failure
 
-Keep tool commands, addresses, raw JSON, and routine wakeup details internal. Use shared diagnostics internally; report only the concise failure cause.
+Keep tool commands, addresses, raw JSON, and routine wakeup details internal.

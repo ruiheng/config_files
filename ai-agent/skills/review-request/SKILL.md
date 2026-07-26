@@ -49,6 +49,8 @@ Branch plan continuity rule:
   - `start_branch`
   - `integration_branch`
   - `task_branch`
+  - `closeout_contract`
+  - complete `Workspace Handoff`: `worker_workspace`, `task_dir`, `workspace_lifecycle` (optional)
 
 ## Original Task Source (Required)
 
@@ -115,6 +117,13 @@ Skill-specific context resolution:
 - `start_branch`: explicit -> delegated context -> ask
 - `integration_branch`: explicit -> delegated context -> ask
 - `task_branch`: explicit -> delegated context -> ask
+- `closeout_contract` (task lane): explicit -> delegated context -> `workspace-v2` for a fresh full Handoff -> `review-only-v2` for a fresh direct review with no active/delegated task -> `legacy-v1` for unmarked existing task work
+- `workspace_handoff`: `workspace-v2` preserves explicit/delegated values without filling gaps; `legacy-v1` recovers it under the gate below
+
+Closeout contract gate:
+- `workspace-v2`: require a complete Handoff; ask when partial
+- `review-only-v2`: require no Handoff
+- `legacy-v1`: recover worker/task from old task context; if exactly one path exists, use it for both; use `legacy; cleanup=manual` when lifecycle is absent; ask before sending if neither path exists. Never classify unmarked existing work as review-only.
 
 Branch-plan guard:
 - `integration_branch` must be the non-task landing branch; if it looks like `task/*`, ask for the real integration branch instead of sending the review request
@@ -126,6 +135,8 @@ Review-request continuity rule:
 - round `1` uses the full review-request body
 - round `>1` to the same reviewer session uses a delta-only body
 - if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
+- repeat `Closeout contract` in every task-lane request
+- repeat a complete Handoff in `workspace-v2`; preserve recovered legacy context in `legacy-v1`
 - delta-only means terse:
   - do not repeat the original task, branch plan, file list, or unchanged verification
   - summarize only changed scope, responses to prior findings, and new verification evidence; let the reviewer decide what to re-check
@@ -146,7 +157,7 @@ Commit reference rule:
 
 Round `1` or new reviewer session: use the full body below.
 
-Use this structure as the message body. Omit sections marked optional when empty.
+Use this structure as the message body. Omit `Closeout contract` for `integration_final`; include `Workspace Handoff` only for `workspace-v2` or recovered `legacy-v1`.
 
 ```markdown
 Task: <task_id>
@@ -155,6 +166,7 @@ From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Planner workspace: <planner_workspace>
+Closeout contract: <workspace-v2 | review-only-v2 | legacy-v1>
 Round: <round>
 
 ## Summary
@@ -173,6 +185,12 @@ Round: <round>
 - Integration branch: [integration_branch]
 - Task branch: [task_branch]
 - Stability rule: treat this recorded branch plan as immutable task context unless the user explicitly changes it
+
+## Workspace Handoff
+[workspace-v2 or legacy-v1 only]
+- Worker workspace: [worker_workspace]
+- Task dir: [task_dir]
+- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual]
 
 ## Review Context
 - Lane: [task | integration_final]
@@ -214,11 +232,11 @@ Round: <round>
 Round `>1` to the same reviewer session: send only delta.
 Keep the body as short as possible:
 - include only sections that changed
-- omit unchanged sections entirely
+- omit unchanged sections except `Closeout contract`, Branch Plan, and Handoff when its contract carries one
 - do not fill the template just because it exists
 - if the only meaningful update is "I addressed the prior findings, please re-review", use a one-line body
 
-Use this structure:
+Use this structure. Omit `Closeout contract` for `integration_final`; include `Workspace Handoff` only for `workspace-v2` or recovered `legacy-v1`.
 
 ```markdown
 Task: <task_id>
@@ -227,6 +245,7 @@ From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
 Planner: <planner_session_id>
 Planner workspace: <planner_workspace>
+Closeout contract: <workspace-v2 | review-only-v2 | legacy-v1>
 Round: <round>
 
 ## Summary
@@ -243,6 +262,12 @@ Round: <round>
 - Integration branch: [integration_branch]
 - Task branch: [task_branch]
 - Change status: [unchanged | explicitly updated this round]
+
+## Workspace Handoff
+[workspace-v2 or legacy-v1 only]
+- Worker workspace: [worker_workspace]
+- Task dir: [task_dir]
+- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual]
 
 ## Review Context
 - Lane: [task | integration_final]
