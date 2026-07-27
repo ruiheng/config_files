@@ -99,6 +99,13 @@ test_zshrc_uses_managed_copy_merge() {
     assert_file_content "$zshrc" "local zsh config"
 }
 
+test_zshrc_avoids_machine_specific_local_bin_path() {
+    grep -Fqx 'export PATH="$HOME/.local/bin:$PATH"' "$REPO_ROOT/zshrc" \
+        || fail_test "zshrc does not use the home-relative local bin path"
+    ! grep -Fq '/home/ruiheng/.local/bin' "$REPO_ROOT/zshrc" \
+        || fail_test "zshrc contains a machine-specific local bin path"
+}
+
 test_managed_copy_dry_run_is_read_only() {
     local case_dir="$TEST_ROOT/dry-run-managed-copy"
     local dst="$case_dir/bashrc"
@@ -960,8 +967,185 @@ test_mq_failed_binary_is_removed_and_retryable() {
         || fail_test "mq invalid binary was not cleaned up for retry"
 }
 
+test_tree_sitter_allows_npm_install_script_and_falls_back_to_cargo() {
+    local case_dir="$TEST_ROOT/tree-sitter-approval"
+    local fake_bin="$case_dir/bin"
+    local fake_lib_dir="$case_dir/libclang"
+
+    mkdir -p "$fake_bin" "$fake_lib_dir"
+    touch "$fake_lib_dir/libclang.so.1"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1 $2" in' \
+        '  "install -g")' \
+        '    case " $* " in *" --allow-scripts=tree-sitter-cli "*) ;; *) exit 1 ;; esac' \
+        '    touch "$TREE_SITTER_INSTALLED" ;;' \
+        '  "rebuild -g")' \
+        '    case " $* " in *" --allow-scripts=tree-sitter-cli "*) ;; *) exit 1 ;; esac' \
+        '    test -f "$TREE_SITTER_INSTALLED" || exit 1' \
+        '    ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/npm"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  --version) printf "%s\n" "cargo 1.85.0" ;;' \
+        '  install)' \
+        '    case " $* " in *" --root $HOME/.local "*) ;; *) exit 1 ;; esac' \
+        '    case " $* " in *" tree-sitter-cli --locked --force "*) ;; *) exit 1 ;; esac' \
+        '    mkdir -p "$HOME/.local/bin"' \
+        '    printf "%s\n" "#!/bin/sh" "printf '\''tree-sitter 0.26.11\\n'\''" > "$TREE_SITTER_BIN"' \
+        '    chmod +x "$TREE_SITTER_BIN"' \
+        '    touch "$TREE_SITTER_CARGO_INSTALLED" ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/cargo"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  --version) printf "%s\n" "rustup 1.28.2" ;;' \
+        '  toolchain)' \
+        '    [ "$2 $3 $4 $5" = "install stable --profile minimal" ] || exit 1' \
+        '    touch "$RUSTUP_TOOLCHAIN_INSTALLED" ;;' \
+        '  run)' \
+        '    [ "$2 $3" = "stable cargo" ] || exit 1' \
+        '    shift 3' \
+        '    exec cargo "$@" ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/rustup"
+    chmod +x "$fake_bin/npm" "$fake_bin/cargo" "$fake_bin/rustup"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        LIBCLANG_PATH="$fake_lib_dir" \
+        TREE_SITTER_INSTALLED="$case_dir/installed" \
+        TREE_SITTER_BIN="$case_dir/home/.local/bin/tree-sitter" \
+        TREE_SITTER_CARGO_INSTALLED="$case_dir/cargo-installed" \
+        RUSTUP_TOOLCHAIN_INSTALLED="$case_dir/rustup-toolchain-installed" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            install_tree_sitter_cli
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "tree-sitter CLI install did not fall back to Cargo"
+    [[ -f "$case_dir/cargo-installed" ]] \
+        || fail_test "tree-sitter CLI Cargo fallback was not used"
+    [[ -f "$case_dir/rustup-toolchain-installed" ]] \
+        || fail_test "tree-sitter CLI did not ensure the Rust stable toolchain"
+}
+
+test_rustup_is_installed_when_only_cargo_exists() {
+    local case_dir="$TEST_ROOT/rustup-install"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  --version) printf "%s\n" "cargo 1.85.0" ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/cargo-template"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'printf "%s\n" "cargo 1.63.0"' > "$fake_bin/cargo"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  --version) printf "%s\n" "rustup 1.28.2" ;;' \
+        '  toolchain)' \
+        '    [ "$2 $3 $4 $5" = "install stable --profile minimal" ] || exit 1' \
+        '    touch "$RUSTUP_TOOLCHAIN_INSTALLED" ;;' \
+        '  run)' \
+        '    [ "$2 $3" = "stable cargo" ] || exit 1' \
+        '    shift 3' \
+        '    exec cargo "$@" ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/rustup-template"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'target=""' \
+        'while [ "$#" -gt 0 ]; do' \
+        '  case "$1" in' \
+        '    -o) target="$2"; shift 2 ;;' \
+        '    *) shift ;;' \
+        '  esac' \
+        'done' \
+        'test -n "$target" || exit 1' \
+        'touch "$RUSTUP_CURL_CALLED"' \
+        'printf "%s\n" "#!/bin/sh" "mkdir -p \"\$HOME/.cargo/bin\"" "cp \"\$RUSTUP_FAKE_CARGO\" \"\$HOME/.cargo/bin/cargo\"" "cp \"\$RUSTUP_FAKE_RUSTUP\" \"\$HOME/.cargo/bin/rustup\"" "chmod +x \"\$HOME/.cargo/bin/cargo\" \"\$HOME/.cargo/bin/rustup\"" > "$target"' \
+        'chmod +x "$target"' > "$fake_bin/curl"
+    chmod +x "$fake_bin/cargo" "$fake_bin/curl"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        RUSTUP_CURL_CALLED="$case_dir/rustup-curl-called" \
+        RUSTUP_FAKE_CARGO="$fake_bin/cargo-template" \
+        RUSTUP_FAKE_RUSTUP="$fake_bin/rustup-template" \
+        RUSTUP_TOOLCHAIN_INSTALLED="$case_dir/rustup-toolchain-installed" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_rust_cargo
+            cargo --version | grep -Fqx "cargo 1.85.0"
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "rustup was not installed when only Cargo existed"
+    [[ -f "$case_dir/rustup-curl-called" ]] \
+        || fail_test "Rust installer was not downloaded"
+    [[ -f "$case_dir/rustup-toolchain-installed" ]] \
+        || fail_test "Rust stable toolchain was not installed"
+}
+
+test_libclang_is_installed_when_missing() {
+    local case_dir="$TEST_ROOT/libclang-install"
+    local fake_bin="$case_dir/bin"
+    local fake_lib_dir="$case_dir/libclang"
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ "$1" = "/usr/lib" ] && [ -f "$LIBCLANG_INSTALLED" ]; then' \
+        '    printf "%s\n" "$LIBCLANG_TEST_DIR/libclang.so.1"' \
+        'fi' > "$fake_bin/find"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'exec "$@"' > "$fake_bin/sudo"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ "$1 $2 $3" = "install -y libclang-dev" ]; then' \
+        '    mkdir -p "$LIBCLANG_TEST_DIR"' \
+        '    touch "$LIBCLANG_TEST_DIR/libclang.so.1" "$LIBCLANG_INSTALLED"' \
+        '    exit 0' \
+        'fi' \
+        'exit 1' > "$fake_bin/apt-get"
+    chmod +x "$fake_bin/find" "$fake_bin/sudo" "$fake_bin/apt-get"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        LIBCLANG_INSTALLED="$case_dir/installed" \
+        LIBCLANG_TEST_DIR="$fake_lib_dir" \
+        bash -c '
+            unset LIBCLANG_PATH
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_libclang
+            [[ "$LIBCLANG_PATH" == "$LIBCLANG_TEST_DIR" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "libclang was not installed when missing"
+    [[ -f "$case_dir/installed" ]] \
+        || fail_test "libclang package installation was not attempted"
+}
+
 test_shared_agent_snapshot_preserves_local_content
 test_zshrc_uses_managed_copy_merge
+test_zshrc_avoids_machine_specific_local_bin_path
 test_managed_copy_dry_run_is_read_only
 test_managed_copy_dry_run_plans_updates_without_staging
 test_unrelated_repository_symlink_is_preserved
@@ -992,6 +1176,9 @@ test_mq_dry_run_plans_pinned_binary
 test_mq_intel_macos_uses_pinned_cargo_install
 test_mq_intel_macos_without_cargo_skips_cleanly
 test_mq_failed_binary_is_removed_and_retryable
+test_tree_sitter_allows_npm_install_script_and_falls_back_to_cargo
+test_rustup_is_installed_when_only_cargo_exists
+test_libclang_is_installed_when_missing
 test_known_legacy_links_are_migrated
 test_platform_specific_configs_skip_cleanly
 test_systemd_bridge_uses_stable_executable

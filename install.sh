@@ -48,6 +48,7 @@ SHARED_AI_AGENT_READY=0
 CODEX_CLI_COMMAND="codex"
 NVM_VERSION="v0.40.3"
 NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh"
+RUSTUP_INSTALL_URL="https://sh.rustup.rs"
 MQ_VERSION="v0.7.0"
 MQ_RELEASE_BASE_URL="https://github.com/harehare/mq/releases/download/$MQ_VERSION"
 CLAUDE_CODE_INSTALL_URL="https://claude.ai/install.sh"
@@ -2457,6 +2458,216 @@ tree_sitter_version_is_supported() {
     (( 10#$actual_patch >= 10#$required_patch ))
 }
 
+load_cargo_environment() {
+    local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+    local cargo_env="$cargo_home/env"
+
+    if [[ -f "$cargo_env" ]]; then
+        # shellcheck source=/dev/null
+        source "$cargo_env"
+    else
+        export PATH="$cargo_home/bin:$PATH"
+    fi
+}
+
+ensure_rust_cargo() {
+    local tmp_file
+
+    log_info "Checking Rust/Cargo..."
+    load_cargo_environment
+
+    if ! command -v rustup &>/dev/null || ! rustup --version >/dev/null 2>&1; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Would install the minimal Rust toolchain from: $RUSTUP_INSTALL_URL"
+            return 0
+        fi
+
+        if ! command -v curl &>/dev/null; then
+            log_error "Rust/Cargo installation requires curl"
+            return 1
+        fi
+
+        tmp_file="$(mktemp "${TMPDIR:-/tmp}/rustup-init.XXXXXX")" || {
+            log_error "Failed to create temporary Rust installer"
+            return 1
+        }
+
+        log_info "Installing minimal Rust toolchain..."
+        if ! curl --proto '=https' --tlsv1.2 -fsSL "$RUSTUP_INSTALL_URL" -o "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to download Rust installer"
+            return 1
+        fi
+
+        if ! bash "$tmp_file" -y --profile minimal --default-toolchain stable; then
+            rm -f "$tmp_file"
+            log_error "Failed to install Rust toolchain"
+            return 1
+        fi
+        rm -f "$tmp_file"
+
+        load_cargo_environment
+        hash -r
+    fi
+
+    if ! command -v rustup &>/dev/null || ! rustup --version >/dev/null 2>&1; then
+        log_error "rustup is unavailable after Rust installation"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: rustup toolchain install stable --profile minimal"
+        return 0
+    fi
+
+    log_info "Ensuring current Rust stable toolchain..."
+    if ! rustup toolchain install stable --profile minimal; then
+        log_error "Failed to install the Rust stable toolchain"
+        return 1
+    fi
+
+    if rustup run stable cargo --version >/dev/null 2>&1; then
+        log_ok "Rust stable toolchain is available"
+        return 0
+    fi
+
+    log_error "Cargo is unavailable from the Rust stable toolchain"
+    return 1
+}
+
+find_libclang_dir() {
+    local -a search_dirs=()
+    local search_dir
+    local libclang_file
+
+    if [[ -n "${LIBCLANG_PATH:-}" ]]; then
+        search_dirs+=("$LIBCLANG_PATH")
+    fi
+
+    case "$OS" in
+        macos)
+            search_dirs+=(
+                /opt/homebrew/opt/llvm/lib
+                /usr/local/opt/llvm/lib
+                /Library/Developer/CommandLineTools/usr/lib
+                /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib
+            )
+            ;;
+        *)
+            search_dirs+=(/usr/lib /usr/local/lib /usr/lib64 /usr/local/lib64 /lib /lib64)
+            ;;
+    esac
+
+    for search_dir in "${search_dirs[@]}"; do
+        [[ -d "$search_dir" ]] || continue
+        libclang_file="$(find "$search_dir" -maxdepth 4 \( -type f -o -type l \) \( -name 'libclang.so*' -o -name 'libclang.dylib' \) -print -quit 2>/dev/null)"
+        if [[ -n "$libclang_file" ]]; then
+            dirname "$libclang_file"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+libclang_package_name() {
+    case "$PACKAGE_MANAGER" in
+        apt-get)
+            printf '%s\n' "libclang-dev"
+            ;;
+        brew)
+            printf '%s\n' "llvm"
+            ;;
+        dnf|zypper)
+            printf '%s\n' "clang-devel"
+            ;;
+        pacman)
+            printf '%s\n' "clang"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+ensure_libclang() {
+    local libclang_dir
+    local package_name
+
+    log_info "Checking libclang..."
+    if libclang_dir="$(find_libclang_dir)"; then
+        export LIBCLANG_PATH="$libclang_dir"
+        log_ok "Found libclang: $libclang_dir"
+        return 0
+    fi
+
+    if ! package_name="$(libclang_package_name)"; then
+        log_error "No supported package is known for libclang"
+        return 1
+    fi
+
+    log_info "Installing libclang package: $package_name"
+    if ! install_package "$package_name"; then
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
+    fi
+
+    if libclang_dir="$(find_libclang_dir)"; then
+        export LIBCLANG_PATH="$libclang_dir"
+        log_ok "Installed libclang: $libclang_dir"
+        return 0
+    fi
+
+    log_error "libclang is unavailable after installation"
+    return 1
+}
+
+install_tree_sitter_cli_with_cargo() {
+    local required_version="$1"
+    local cargo_root="$HOME/.local"
+    local current_version=""
+    local -a install_cmd=(
+        rustup run stable cargo install
+        --root "$cargo_root"
+        tree-sitter-cli
+        --locked
+        --force
+    )
+
+    if ! ensure_rust_cargo; then
+        return 1
+    fi
+
+    if ! ensure_libclang; then
+        return 1
+    fi
+
+    ensure_path_contains_local_bin
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${install_cmd[*]}"
+        return 0
+    fi
+
+    log_info "Building tree-sitter CLI from source: ${install_cmd[*]}"
+    if ! "${install_cmd[@]}"; then
+        log_error "Failed to build tree-sitter CLI with Cargo"
+        return 1
+    fi
+    hash -r
+
+    if current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
+        log_ok "Built supported tree-sitter CLI: $current_version"
+        return 0
+    fi
+
+    log_error "tree-sitter CLI is unavailable after Cargo build"
+    return 1
+}
+
 install_tree_sitter_cli() {
     local required_version="0.26.1"
     local current_version=""
@@ -2473,32 +2684,38 @@ install_tree_sitter_cli() {
     fi
 
     if ! command -v npm &>/dev/null; then
-        log_error "tree-sitter CLI requires npm; load NVM and rerun"
-        return 1
+        log_warn "npm is unavailable; building tree-sitter CLI from source with Cargo"
+        install_tree_sitter_cli_with_cargo "$required_version"
+        return
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g tree-sitter-cli (requires $required_version or newer)"
+        log_dry "Would run: npm install -g --allow-scripts=tree-sitter-cli tree-sitter-cli (requires $required_version or newer)"
+        log_dry "Would install Rust/Cargo and libclang, then build tree-sitter-cli from source if the npm binary is unusable"
         return 0
     fi
 
-    log_info "Running: npm install -g tree-sitter-cli"
-    if ! npm install -g tree-sitter-cli; then
-        log_error "Failed to install tree-sitter CLI with npm"
-        return 1
-    fi
-
-    if current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
+    # tree-sitter-cli needs install.js to download the actual CLI. npm 11's
+    # script policy allows this known package through the per-command flag.
+    log_info "Running: npm install -g --allow-scripts=tree-sitter-cli tree-sitter-cli"
+    if ! npm install -g --allow-scripts=tree-sitter-cli tree-sitter-cli; then
+        log_warn "npm install did not provide a runnable tree-sitter CLI; trying Cargo"
+    elif current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
         log_ok "Installed supported tree-sitter CLI: $current_version"
         return 0
     fi
 
-    if [[ -n "$current_version" ]]; then
-        log_error "Installed tree-sitter CLI $current_version is unsupported; requires $required_version or newer"
-    else
-        log_error "Command still unavailable after install: tree-sitter"
+    # A prior install may have added the package while its lifecycle script was
+    # blocked. Rebuild only this package to run its now-allowed install script.
+    log_info "Re-running tree-sitter-cli install script"
+    if ! npm rebuild -g --allow-scripts=tree-sitter-cli tree-sitter-cli; then
+        log_warn "npm rebuild did not provide a runnable tree-sitter CLI; trying Cargo"
+    elif current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
+        log_ok "Installed supported tree-sitter CLI: $current_version"
+        return 0
     fi
-    return 1
+
+    install_tree_sitter_cli_with_cargo "$required_version"
 }
 
 install_codegraph() {
