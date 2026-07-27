@@ -303,9 +303,9 @@ On `tech_design_delivered`:
 2. if a committed formal doc on the archive branch already represents the accepted design, reuse it and continue with session cleanup and completion
 3. require the current branch to equal the delivered archive branch; stop on mismatch or detached `HEAD` and do not switch automatically
 4. require a clean index and no merge, rebase, or conflict state; do not clean unrelated worktree changes
-5. read the artifact and choose the formal tracked docs path; stop if that path has unrelated uncommitted changes, then copy without substantive design changes
+5. choose the formal tracked docs path; stop if it has unrelated uncommitted changes
 6. if substantive changes are needed, return them to the author for a new reviewed round
-7. stage and commit only the archived design doc; this delivery authorizes that archive commit without another routine confirmation
+7. Copy the accepted artifact unchanged to the formal tracked docs path and commit that file only
 8. after the archive commit succeeds, remove both architect sessions
 9. treat the tracked committed doc as authoritative and cite it in later implementation work
 
