@@ -37,7 +37,6 @@ Use the shared context priority. Resolve before dispatch:
   - for `temporary; cleanup=planner`, it must resolve to the same path as `worker_workspace`; stop on mismatch
 - `workspace_lifecycle`: explicit -> `shared; cleanup=none`
   - a temporary worktree needs explicit user confirmation and `temporary; cleanup=planner`
-- `closeout_contract`: `workspace-v2`
 - `session_reason`: explicit -> infer one concrete persistence, control, or user-interaction reason -> ask
 - branch plan:
   - `integration_branch`: the existing non-task landing branch; never `task/*`
@@ -73,7 +72,6 @@ Planner workspace: <planner_workspace>
 Worker workspace: <worker_workspace>
 Task dir: <task_dir>
 Workspace lifecycle: <shared; cleanup=none | temporary; cleanup=planner>
-Closeout contract: workspace-v2
 Round: 1
 
 ## Task
@@ -112,7 +110,7 @@ Round: 1
 ## Review & Handoff
 - Per-task review: [required | skip]
 - Coder git writes and the delivery commit are pre-authorized
-- If required: after commit and validation, run `review-request`, preserve `Closeout contract` and `Workspace Handoff`, then follow the shared Async sender rule
+- If required: after commit and validation, run `review-request` with `review_lane = task`; preserve the recorded Branch Plan and Workspace Handoff, then follow the shared Async sender rule
 - If skipped: after commit and validation, send `code_delivery_complete` to planner, then follow the shared Async sender rule
 - On a blocker before an accepted task review: send `code_delivery_complete` to planner under either policy, then follow the shared Async sender rule
 - Reviewer routing: ref=<reviewer_session_ref>; id=<reviewer_session_id>; profile=<reviewer_tool_profile>; cmd=<reviewer_tool_cmd> [required only; omit absent values]
@@ -182,7 +180,7 @@ After dispatch:
 
 On `Action: execute_delegate_task`, treat the body as the code-task contract. Own the recorded branch, implementation, validation, and commit; keep the session legible for user steering.
 
-For an unmarked legacy instruction, set `Closeout contract: legacy-v1` before review/closeout. Recover workspace data from its old `Agent Deck Context`; if either `Worker workspace` or `Task dir` is absent, use the other; if lifecycle is absent, use `legacy; cleanup=manual`. Do not guess when both paths are missing.
+The contract must include `Worker workspace`, `Task dir`, and `Workspace lifecycle`; if any is missing, report a blocker instead of inferring it.
 
 - After a delivery commit, run `review-request` when per-task review is required.
 - Send this terminal handoff after commit and validation when review is skipped, or on a blocker before an accepted task review:
@@ -197,7 +195,6 @@ Planner workspace: <planner_workspace>
 Worker workspace: <worker_workspace>
 Task dir: <task_dir>
 Workspace lifecycle: <workspace_lifecycle>
-Closeout contract: <workspace-v2 | legacy-v1>
 Per-task review: <required | skip>
 Delivery commit: <short_commit | `None` when blocked>
 Round: final

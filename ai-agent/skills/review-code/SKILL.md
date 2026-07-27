@@ -13,17 +13,19 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 Provide one of:
 1. the message body from `review_requested`
-2. the message body from `browser_check_report` plus current review context
+2. the message body from `browser_check_report` plus matching review context
 3. original task + code changes, with optional author intent or notes
 
 ## Input Completeness Gate (Required)
 
 Before reviewing quality, verify:
 - scope is explicit (uncommitted / commit / branch and target)
-- branch plan is explicit (`start_branch`, `integration_branch`, `task_branch`)
+- task carries complete Workspace Handoff and Branch Plan (`start_branch`, `integration_branch`, `task_branch`)
+- `integration_final` carries branch target and base
 - implementation intent is explicit (what change is meant to accomplish)
 - behavior/compatibility constraints are explicit (what must not change)
 - verification evidence is present (tests, results, known gaps)
+- `integration_final` / `standalone` carry neither Handoff nor task Branch Plan
 
 If critical context is missing:
 - mark as `NEEDS_REVISION`
@@ -90,16 +92,9 @@ If non-convergence is visible:
 - if repeated rounds appear to be preserving unnecessary self-imposed constraints, say so explicitly and challenge those constraints directly
 - if `round >= review_round_hard_stop_threshold` and the work is still not converging, stop iterating with coder and escalate to the user instead of sending another normal rework loop
 
-## What to Review
+## Review Focus
 
-- logic correctness
-- design quality and coupling
-- security boundaries
-- edge-case handling
-- maintainability
-- compatibility/regression risk
-- verification coverage quality
-- convergence across rounds when this is not round `1`
+Correctness, design, security, regressions, verification, and—after round `1`—convergence.
 
 ## UI-Change Detection and Confirmation Policy
 
@@ -112,7 +107,7 @@ Heuristics:
 - browser-tool validation required
 
 Policy rules:
-- default: record UI impact in the report, but do not require human UI confirmation before closeout
+- default: record detected UI impact; do not require human confirmation before closeout
 - override via `workflow_policy.ui_manual_confirmation`:
   - `skip` (default)
   - `required`
@@ -135,16 +130,14 @@ Policy rules:
 
 ## Output Format
 
-Use this exact structure as the full review report. When reviewer sends follow-up message, the `Action:` line must match the outbound workflow action.
+Use this structure as the full review report. When reviewer sends follow-up message, the `Action:` line must match the outbound workflow action.
 
 ```markdown
 Task: <task_id>
 Action: <rework_required | stop_recommended>
 From: reviewer <reviewer_session_id>
 To: <requester_role> <requester_session_id>
-Planner: <planner_session_id>
-Planner workspace: <planner_workspace_or_N/A>
-Closeout contract: <workspace-v2 | review-only-v2 | legacy-v1 | N/A>
+Review lane: <task | integration_final | standalone>
 Round: <round>
 
 ### Summary
@@ -152,7 +145,7 @@ Round: <round>
 
 ### Request Completeness Check
 - Scope clarity: [PASS / FAIL]
-- Branch plan continuity: [PASS / FAIL]
+- Branch plan / Handoff: [PASS / FAIL / N/A]
 - Intent clarity: [PASS / FAIL]
 - Behavior/compatibility constraints: [PASS / FAIL]
 - Verification evidence: [PASS / FAIL]
@@ -163,26 +156,17 @@ If any FAIL, explain why in `Critical Issues`.
 - Must-preserve behavior: [summary]
 - Non-goals / out-of-scope: [summary or `None`]
 
-### Recorded Branch Plan
-- Start branch: [start_branch]
-- Integration branch: [integration_branch]
-- Task branch: [task_branch]
-- Stability rule: preserve this branch plan unchanged through closeout unless the user explicitly changes it
-
 ### Critical Issues
 Must fix before merge:
 - [ ] **[CATEGORY]**: Description | Suggestion: How to fix
-If none, write: `- None.`
 
 ### Design Concerns
 Architecture/decision questions:
 - **[Concern]**: Description | Suggestion: Alternative approach
-If none, write: `- None.`
 
 ### Minor Suggestions
 Optional improvements:
 - [ ] Description
-If none, write: `- None.`
 
 ### Security Check
 - Injection risks: [PASS / FAIL / UNKNOWN] - [brief basis]
@@ -193,24 +177,54 @@ If none, write: `- None.`
 For the implementer/author:
 - [Q1] Question
 
+```
+
+When UI impact is detected or a human UI gate applies, append:
+
+```markdown
 ### UI Manual Confirmation Package
-- UI impact: [none detected | detected]
+- UI impact: [detected]
 - Changed UI surfaces: [routes/pages/components]
 - Manual check steps (human-run): [short checklist]
 - Expected visible outcomes: [what user should see]
-- Notes: [optional, no screenshot/recording required]
+- Notes: [optional]
 ```
 
-When a complete Workspace Handoff is supplied, append it unchanged after `Recorded Branch Plan`:
+For `task` / `integration_final`, insert after `To`:
+
+```markdown
+Planner: <planner_session_id>
+Planner workspace: <planner_workspace>
+```
+
+For task, insert this after `Intent And Constraints`:
+
+```markdown
+### Recorded Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Stability rule: preserve this branch plan unchanged through closeout unless the user explicitly changes it
+```
+
+For task, append its Handoff unchanged after `Recorded Branch Plan`:
 
 ```markdown
 ### Workspace Handoff
 - Worker workspace: [worker_workspace]
 - Task dir: [task_dir]
-- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual]
+- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner]
 ```
 
-Omit the contract for `integration_final`. Preserve the task-lane contract and Handoff unchanged. An unmarked task review is `legacy-v1`, not review-only.
+For `integration_final` / `standalone`, omit Workspace Handoff and task Branch Plan.
+
+For `integration_final`, insert after `Intent And Constraints`:
+
+```markdown
+### Final Review Scope
+- Integration branch: [scope target]
+- Review base: [scope base]
+```
 
 ## Agent Deck Mode
 
@@ -220,31 +234,46 @@ Use the `agent-deck-workflow` skill for shared protocol:
 - `Error Handling and Diagnostics`
 
 Skill-specific context resolution:
+Review continuity:
+- new/full `review_requested`: body starts a review; never use saved context
+- confirmed delta: `round >1` and task/requester/reviewer/lane match current review. Body owns routing; use matching context only for omitted review frame
+- unconfirmed delta: require full body, then treat it as new
+- `browser_check_report`: match `Browser Check` to the sent check; its review frame owns requester routing. If context is lost, recover that check from history, then rebuild from full request + matching deltas.
+- Miss/ambiguity: defer; require full request; never infer frame from report.
+
+For `review_requested`, routing fields (`review_lane`, planner/requester, Branch Plan, Handoff) resolve `explicit -> body -> gate/default`; never saved context.
+For a confirmed delta, review frame (scope, original task, unchanged intent/constraints, policy, requirements, checks) resolves `explicit -> body -> matching context`.
+Run the completeness gate on resolved context, not the delta alone.
+
+For `browser_check_report`, `explicit -> matching/recovered frame` owns all review routing/frame. Body supplies only envelope identity and browser evidence; never default lane or derive review context from it.
+
 - `task_id`: explicit -> message body -> ask
-- `planner_session_id`: explicit -> message body -> ask
-- `planner_workspace`: explicit -> message body `Planner workspace` -> default `N/A`
+- `browser_check_id` (browser report): required header -> matching sent check; never infer from task/round
 - `reviewer_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
-- `requester_role`: explicit -> message body `From` header label -> default `coder`
-- `requester_session_id`: explicit -> message body `From` header -> ask
-- `review_lane`: explicit -> message body -> default `task`
 - `browser_tester_session_id` (optional): explicit actual id -> message/review context -> omit
 - `browser_tester_session_ref` (optional): explicit -> message/review context -> default `browser-tester`
 - `browser_tester_workspace` (optional): explicit -> message/review context -> current workspace
 - `round`: explicit -> message body `Round` header -> default `1`
-- `start_branch`: explicit -> message body -> ask
-- `integration_branch`: explicit -> message body -> ask
-- `task_branch`: explicit -> message body -> ask
-- `closeout_contract` (task lane): explicit -> message body -> `legacy-v1` when unmarked
-- `workspace_handoff` (optional): preserve explicit/message values unchanged; do not infer, default, or ask for it
-- `workflow_policy` (optional): explicit -> request context -> unattended defaults
-- `special_requirements` (optional fallback): explicit -> request context -> omit
-- `checks_already_run` (optional): explicit -> message body -> use for rerun decisions
 
-Branch-plan guard:
+For non-browser inputs:
+- `review_lane`: explicit -> message body -> `task` for an active delegated task -> `standalone`
+- `planner_session_id`: `task` / `integration_final` -> explicit -> message body -> ask; `standalone` -> omit
+- `planner_workspace`: `task` / `integration_final` -> explicit -> message body `Planner workspace` -> ask; `standalone` -> omit
+- `requester_role`: explicit -> message body `From` -> default `coder`
+- `requester_session_id`: explicit -> message body `From` -> ask
+- `setup_contact_workspace` (browser): task -> Worker workspace; `integration_final` -> Planner workspace; standalone -> current workspace
+- `workspace_handoff`: task -> explicit/message body complete -> preserve; missing/partial -> completeness FAIL; `integration_final` / `standalone` -> omit
+- `start_branch`, `integration_branch`, `task_branch` (task only): explicit -> message body -> ask; otherwise omit
+- `integration_branch`, `review_base` (`integration_final`): explicit -> message Scope target/base -> matching delta context -> ask; otherwise omit
+- `workflow_policy` (optional): explicit -> message body -> matching delta context -> unattended defaults
+- `special_requirements` (optional fallback): explicit -> message body -> matching delta context -> omit
+- `checks_already_run` (optional): explicit -> message body -> matching delta context -> use for rerun decisions
+
+Task branch-plan guard:
 - `integration_branch` must be the non-task landing branch; if it looks like `task/*`, treat branch plan continuity as FAIL and ask for the real integration branch before approval/closeout
 
 Important identity clarification:
-- `planner_session_id` must come from explicit/context workflow metadata
+- `task` / `integration_final` require planner metadata; `standalone` requires only requester identity
 
 Default policy when missing:
 - `mode = "unattended"`
@@ -255,24 +284,24 @@ Default policy when missing:
 
 Execution flow in Agent Deck mode:
 1. Produce the full review report in the format above
-   - preserve the recorded branch plan, `Closeout contract`, and Workspace Handoff from `review_requested` unchanged
+   - for task, preserve supplied Branch Plan and Workspace Handoff unchanged
+   - for `integration_final`, preserve Final Review Scope in every report
 2. Choose action:
-   - `rework_required` if `NEEDS_REVISION`, must-fix exists, or completeness FAIL, unless the non-convergence stop rule below applies
+   - `rework_required` if `NEEDS_REVISION`, must-fix exists, completeness FAIL, or a browser report says `Code changed: yes`, unless the non-convergence stop rule below applies
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
    - `stop_recommended` if no must-fix remains and browser validation is not required or already passed
    - if `round >= review_round_hard_stop_threshold` and similar issues are still recurring or progress is clearly non-converging, do not send another routine `rework_required`; present the situation to the user and wait for a decision
 3. For `rework_required`, send the full review report back to the requester session from `review_requested`
    - requester may be `coder` or `planner`
-4. For `browser_check_requested`, run `browser-test-request`; it should reuse the long-lived browser tester when available and create it only if missing, then the browser report will return to the requester session
+4. For `browser_check_requested`, generate one opaque `browser_check_id`, pass it to `browser-test-request` with this reviewer as report requester, and retain it with the review frame; pass original `requester_role` / `requester_session_id` and `setup_contact_workspace` as Setup Contact; on `browser_check_report`, resume with its evidence and matched review frame
+   - `Code changed: yes` is a must-fix delivery boundary: carry its branch/commit/files in `rework_required`, not acceptance. Requester must own, commit/verify, and resubmit the changed scope; do not closeout this round
 5. For `stop_recommended`:
-   - if `review_lane = integration_final`, return the final review result to requester and let planner decide whether to fix locally, spawn another task, or finish the plan
-   - otherwise, if `auto_accept_if_no_must_fix=true`, the final no-must-fix review report should proceed to `review-closeout`
-   - otherwise, normally, the agent that currently holds the final review report should run `review-closeout`
+   - for `integration_final` / `standalone`, after automatic or explicit acceptance, send the full `stop_recommended` report to requester; do not run `review-closeout`
+   - for task with `auto_accept_if_no_must_fix=true`, proceed to `review-closeout`
    - if the same final no-must-fix task-lane report is delivered to requester in unattended flow, requester may run `review-closeout` from that report instead of treating it as another rework round
    - only when `auto_accept_if_no_must_fix=false`, present user decision summary and wait for explicit acceptance or iteration decision
-   - after explicit acceptance in human-gated flow, run `review-closeout` for task-lane review, or finish the integration review for `integration_final`
+   - after explicit acceptance in human-gated flow, run `review-closeout` for task, or send the non-task result to requester
    - request human UI confirmation before acceptance/closeout only when `ui_manual_confirmation=required`, or when `ui_manual_confirmation=auto` and explicit policy wants heuristic UI gating
-   - only `review-only-v2` without a Handoff sends `review_completed`; `workspace-v2` needs a full Handoff and `legacy-v1` migrates before closeout
 
 Waypost Message subject (`rework_required`):
 - `rework required: <task_id> r<round>`
@@ -291,6 +320,12 @@ Waypost Message body rules (`rework_required`):
   - `body = <full review report>`
 - include enough evidence and fix guidance that the requester can continue from the message body alone
 
+Waypost Message (`stop_recommended`, accepted non-task):
+- use only for `integration_final` / `standalone` after automatic or explicit acceptance
+- retain `Action: stop_recommended` and use the full review report as body
+- use the `rework_required` target and send shape with subject `review complete: <task_id> r<round>`
+- ACK a claimed review input only after this send succeeds
+
 Waypost Message subject (`user_requested_iteration` after user chooses iterate):
 - `iteration requested: <task_id> r<round>`
 
@@ -308,26 +343,21 @@ Waypost Message body rules (`user_requested_iteration`):
   - `subject = "iteration requested: <task_id> r<round>"`
   - `body = <iteration message body>`
 
-User-facing output requirement for `stop_recommended`:
-1. `### Review Decision`
-2. `### Key Findings Snapshot`
-3. `### Residual Risk`
-4. `### Verification Summary`
-5. `### UI Confirmation Gate`
-6. `### Decision Needed`
+For a user-facing `stop_recommended`, include Review Decision, Key Findings Snapshot, Residual Risk, and Verification Summary. Add UI Confirmation Gate only when applicable; add Decision Needed only for a manual choice.
 
-When `auto_accept_if_no_must_fix=true`, skip decision prompt and state `Auto-accepted by workflow policy`.
+When `auto_accept_if_no_must_fix=true`, state `Auto-accepted by workflow policy`; do not ask for a decision.
 
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
-- For `stop_recommended` with manual decision, do that only when `auto_accept_if_no_must_fix=false`; wait for explicit user choice, then either run `review-closeout` or send `user_requested_iteration`
+- For accepted `integration_final` / `standalone` `stop_recommended`, send the full report to requester automatically
+- For `stop_recommended` with manual decision, do that only when `auto_accept_if_no_must_fix=false`; wait for explicit user choice, then close out task, send accepted non-task result, or send `user_requested_iteration`
 - In unattended flow, accepted no-must-fix task-lane reports that land with reviewer or requester must be treated as `review-closeout` input, not as another rework cycle
-- In unattended flow, accepted `integration_final` reports return directly to planner/requester; do not route them into `review-closeout`
+- In unattended flow, accepted `integration_final` / `standalone` reports return directly to requester; do not route them into `review-closeout`
 - Preserve `workflow_policy` unchanged in outbound messages
 - Preserve `special_requirements` unchanged in outbound messages
 - Keep message JSON internal unless user explicitly asks
-- Do not naturally end after writing the review report; if this action requires `rework_required`, `user_requested_iteration`, or `review-closeout`, complete that workflow step before ending the turn
+- Do not naturally end after writing the review report; if this action requires `rework_required`, accepted non-task `stop_recommended`, `user_requested_iteration`, or `review-closeout`, complete that workflow step before ending the turn
 
 Sender identity rule:
-- reviewer-originated actions (`rework_required`, `user_requested_iteration`) use `from_session_id = reviewer_session_id`
-- `closeout_delivered` / `review_completed` use the session id of the agent that executes `review-closeout`; preserve `reviewer_session_id` as the source of the accepted review
+- reviewer-originated actions (`rework_required`, `stop_recommended`, `user_requested_iteration`) use `from_session_id = reviewer_session_id`
+- `closeout_delivered` uses the session id of the agent that executes `review-closeout`; preserve `reviewer_session_id` as the source of the accepted review

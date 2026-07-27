@@ -16,6 +16,9 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 - `requester_session_id`
 - `requester_workspace`
 - `requester_role`
+- optional `setup_contact_session_id`
+- optional `setup_contact_workspace`
+- optional `setup_contact_role`
 - optional `browser_tester_session_id`
 - optional `browser_tester_session_ref`
 - optional `browser_tester_workspace`
@@ -31,6 +34,7 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
 - optional `browser_tester_tool`
 - optional `browser_tester_tool_profile`
 - optional `round`
+- optional `browser_check_id`
 
 ## Agent Deck Mode
 
@@ -42,16 +46,21 @@ Skill-specific context resolution:
 - `requester_session_id`: explicit -> message/review context -> current session id -> ask
 - `requester_workspace`: explicit -> current workspace -> ask
 - `requester_role`: explicit -> message/review context -> infer from current workflow stage -> default `requester`
+- `setup_contact_session_id`: explicit -> review context original requester -> requester_session_id
+- `setup_contact_workspace`: explicit -> review context original requester workspace -> requester_workspace
+- `setup_contact_role`: explicit -> review context original requester -> requester_role
 - `browser_tester_session_id`: explicit actual id -> workflow context actual id -> omit
 - `browser_tester_session_ref`: explicit -> workflow context -> default `browser-tester`
 - `browser_tester_workspace`: explicit -> message/review context -> current workspace
-- `browser_tester_tool_profile`: explicit -> message/review context -> omit when `browser_tester_tool` is already a full command -> default resolver role default `browser_tester` only when creating a new browser-tester session
-- `browser_tester_tool_cmd`: explicit full command -> message/review context resolved command -> existing session metadata on require paths -> shared tool-resolution contract for role `browser_tester` only on create path
+- `browser_tester_tool_profile`: explicit/context -> resolver default only on create
+- `browser_tester_tool_cmd`: explicit -> context/existing metadata -> shared resolver only on create
 - `round`: explicit -> context -> default `1`
+- `browser_check_id`: explicit -> generate one opaque unique ID for this request; never derive it from task/round
 
 Identity rules:
 - `browser_check_requested` sender must use the resolved `requester_session_id`
-- current session id is only a final fallback and diagnostic source; review workflows must preserve the original requester from message/review context
+- for a review-driven check, route report to reviewer; preserve original requester as setup contact
+- otherwise setup contact defaults to requester; current session id is only a final fallback and diagnostic source
 
 ## Waypost Message Body
 
@@ -64,6 +73,7 @@ From: <requester_role> <requester_session_id>
 To: browser-tester {{TO_SESSION_ID}}
 Planner: <planner_session_id_or_N/A>
 Round: <round>
+Browser Check: <browser_check_id>
 
 ## Summary
 [One-line browser-check summary]
@@ -75,12 +85,16 @@ Round: <round>
 - URL or route: [value]
 - Entry point: [how to reach it]
 - Accounts / env / flags: [value or `None`]
-- Login / auth: [credentials source, auth profile, or `Ask requester/user`]
+- Login / auth: [credentials source, auth profile, or `Ask Setup Contact/user`]
 - Test data / setup: [seed data, fixtures, prerequisites, or `None`]
 
 ## Workspace Routing
 - Requester workspace: [absolute path]
 - Browser tester workspace: [absolute path]
+
+## Setup Contact
+- Contact: [role + session id]
+- Workspace: [absolute path]
 
 ## Steps
 1. [step]
@@ -144,10 +158,7 @@ Use the `waypost` MCP tools:
 
 ## Rules
 
-- keep the request focused on one page, feature area, or one coherent validation batch
-- include all related test points for that batch in one request instead of splitting them into many tiny message tasks
-- prefer a compact test matrix of related scenarios, states, and regressions over a module-style task breakdown
-- specify assertions, not just exploration goals
+- one coherent batch; group related scenarios in a compact matrix and state assertions
 - keep the body self-contained; browser-tester should not need workflow files
 - prefer reusing the long-lived `browser-tester` session for this environment
 - if a resolved `browser-tester` ref points at a different workspace, ignore that hit and create a workspace-local browser tester instead
@@ -155,9 +166,10 @@ Use the `waypost` MCP tools:
 - carry both requester and browser-tester workspaces in the message body so later `agent_deck_require_session` calls can verify the correct worktree
 - on require paths, preserve existing session tool metadata
 - once this request resolves or creates the target, use the returned real `browser_tester_session_id` for the actual message send
-- the report returns to the requester session, not to a fixed reviewer session
+- a review-driven report returns to reviewer; otherwise it returns to the supplied requester
+- setup questions go to Setup Contact; reports always return to requester
+- retain `Browser Check` unchanged in setup traffic and report
 - if browser-tester edits are allowed, request body must say so explicitly and provide the branch name
 - browser-tester edits are only for display-adjacent code
-- follow the shared Async sender rule for the browser check report
-- requester should provide required login, auth, environment, and test-data context whenever possible
+- review-driven tester edits are provisional; delivery owner must submit them in a new review round before acceptance
 - leave `listener_message` empty unless a rare bootstrap/control case truly needs a pre-message startup instruction

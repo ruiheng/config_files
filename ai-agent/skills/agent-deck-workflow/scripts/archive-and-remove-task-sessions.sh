@@ -261,7 +261,11 @@ is_disposable_task_session() {
   local role="$1"
   local title="$2"
   local expected="${role}-${task_id}"
-  [[ -n "$title" && "$title" == "$expected" ]]
+  if [[ "$role" == "reviewer" ]]; then
+    [[ -n "$title" && ( "$title" == "$expected" || "$title" == reviewer-task-*-"${task_id}" ) ]]
+  else
+    [[ -n "$title" && "$title" == "$expected" ]]
+  fi
 }
 
 resolve_profile_name() {

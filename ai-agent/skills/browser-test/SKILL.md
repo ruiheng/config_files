@@ -1,82 +1,25 @@
 ---
 name: browser-test
-description: Validates browser behavior with agent-browser and sends a browser-check report back to the requester session.
+description: Validates browser behavior with agent-browser, handles browser setup requests, and sends a browser-check report back to the requester session.
 ---
 
 # Browser Test
 
-Run browser validation from a `browser_check_requested` message body and report the result back to the requester session.
+Handle `browser_check_requested` and its setup round trip; report the result to requester.
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.
 
 ## Input
 
-Provide the message body from `browser_check_requested`.
+Provide `browser_check_requested`, `browser_setup_requested`, or `browser_setup_provided`.
 
 ## Primary Tool
 
-Use `agent-browser` as the main validation tool.
-
-Preferred commands:
-- `agent-browser open`
-- `agent-browser wait`
-- `agent-browser snapshot -i`
-- `agent-browser click`
-- `agent-browser fill`
-- `agent-browser get`
-- `agent-browser console`
-- `agent-browser errors`
-- `agent-browser screenshot`
-
-## Basic agent-browser Help
-
-Keep this basic CLI shape in mind while executing browser checks:
-
-```text
-agent-browser - fast browser automation CLI for AI agents
-
-Usage: agent-browser <command> [args] [options]
-
-Core Commands:
-  open <url>                 Navigate to URL
-  click <sel>                Click element (or @ref)
-  type <sel> <text>          Type into element
-  fill <sel> <text>          Clear and fill
-  press <key>                Press key (Enter, Tab, Control+a)
-  wait <sel|ms>              Wait for element or time
-  screenshot [path]          Take screenshot
-  snapshot                   Accessibility tree with refs (for AI)
-  eval <js>                  Run JavaScript
-  close                      Close browser
-
-Navigation:
-  back                       Go back
-  forward                    Go forward
-  reload                     Reload page
-
-Get Info:  agent-browser get <what> [selector]
-  text, html, value, attr <name>, title, url, count, box, styles, cdp-url
-
-Check State:  agent-browser is <what> <selector>
-  visible, enabled, checked
-
-Examples:
-  agent-browser open example.com
-  agent-browser snapshot -i
-  agent-browser click @e2
-  agent-browser fill @e3 "test@example.com"
-  agent-browser get text @e1
-  agent-browser screenshot --full
-  agent-browser wait --load networkidle
-```
-
-For browser-test work, default to `snapshot -i` to get stable element refs, then interact via `@e...` refs when possible.
+Use `agent-browser`: `open` -> `snapshot -i` -> `@e...` interactions -> `console`/`errors` -> screenshot. Use command help only when needed.
 
 ## First-Use Environment Check
 
-Before the first browser action in a workflow turn, run a minimal environment check:
-1. confirm `agent-browser` is available with `command -v agent-browser`
-2. use `waypost`
+Before the first browser action in a workflow turn, confirm `agent-browser` with `command -v agent-browser`.
 
 ## Output Format
 
@@ -89,6 +32,7 @@ From: browser-tester <browser_tester_session_id>
 To: <requester_role> <requester_session_id>
 Planner: <planner_session_id_or_N/A>
 Round: <round>
+Browser Check: <browser_check_id>
 
 ## Decision
 PASS / FAIL / UNKNOWN
@@ -123,21 +67,37 @@ PASS / FAIL / UNKNOWN
 
 Use the `agent-deck-workflow` skill for shared protocol.
 
-Skill-specific context resolution:
-- `task_id`: explicit -> message body -> ask
-- `planner_session_id`: explicit -> message body -> ask
-- `browser_tester_session_id`: explicit -> message body `To` header -> bound Waypost sender context -> ask
-- `requester_session_id`: explicit -> message body `From` header -> ask
-- `requester_workspace`: explicit -> message body -> ask
-- `requester_role`: explicit -> message body `From` header -> default `requester`
-- `round`: explicit -> message body `Round` header -> default `1`
+Resolve by `Action:` before generic fields:
+- all actions: `browser_check_id`: required `Browser Check` header; if absent, fail and request a fresh message; never infer it from Task/Round
+- `browser_check_requested`:
+  - `task_id`, `round`: explicit -> headers -> ask/default
+  - `planner_session_id` (optional): explicit -> message body -> omit when absent or `N/A`
+  - `browser_tester_session_id`, `requester_session_id`: `To`, `From`
+  - `browser_tester_workspace`, `requester_workspace`: message body -> current workspace -> ask
+  - `requester_role`: `From` -> `requester`
+  - setup contact id/workspace/role: message body `Setup Contact` -> requester values
+- `browser_setup_requested`:
+  - `task_id`, `round`: headers
+  - tester id/workspace: `From`, `Reply workspace`; contact id/role: `To`
+  - omit requester, planner, and original Setup Contact resolution
+- `browser_setup_provided`:
+  - `task_id`, `round`: headers; contact id/role: `From`; tester id: `To`
+  - recover requester, planner, and browser frame only from the matching check history
 
-Execution flow:
+## Setup Round Trip
+
+For a `browser_check_requested` blocked by login, auth, environment, or test data:
+- send `browser_setup_requested` with `From: browser-tester`, `To: Setup Contact`, Task/Round/Browser Check, tester reply workspace, and missing prerequisites; require target at its declared workspace, then `waypost_defer` the claimed check once with `until` set to a bounded setup deadline; never release or re-defer it
+- on `browser_setup_requested`, reply `browser_setup_provided` with `From: Setup Contact`, `To: browser-tester`, Task/Round/Browser Check, and setup or `Unavailable: <reason>`, then ACK; never send secrets through Waypost
+- on `browser_setup_provided`, ACK; do not resume a check in that turn. Recover the ACKed reply later with `waypost_read` by `Browser Check`
+- on the deferred check, read its ACKed matching reply: reply -> continue (`Unavailable` -> `UNKNOWN`); no reply at deadline -> send `UNKNOWN` (`setup unanswered`) and ACK the check. Never resume from an unclaimed reply or match by Task/Round alone
+
+Execution flow (`browser_check_requested`):
 1. run the first-use environment check
    - if `agent-browser` is unavailable, stop and report the blocker instead of improvising with another browser tool
 2. execute the requested browser steps with `agent-browser`
    - if the request explicitly allows browser-tester edits, it may modify display-adjacent code on the requested branch before rerunning browser validation
-   - if login, auth, environment, or test-data prerequisites are missing, ask the requester first; ask the user directly when requester context is unavailable or user input is clearly required
+   - for missing login, auth, environment, or test data, use Setup Round Trip once; if setup is unavailable, report `UNKNOWN`
 3. collect runtime evidence
 4. produce one `browser_check_report`
 5. use `waypost`
@@ -152,14 +112,13 @@ Execution flow:
 
 ## Rules
 
-- validate the full requested browser test batch, not just one narrow sub-step and not unrelated product areas
-- prefer the shortest path that still covers the requested scenarios, assertions, and regression checks
-- when the request includes multiple related test points, report which ones were covered, which failed, and which remained unverified
-- return `UNKNOWN` when environment, auth, data, or setup blocks a reliable result
-- if `agent-browser` is missing, or required session identity cannot be resolved from explicit metadata plus bound Waypost sender context, state that explicitly in the report or blocker message
+- cover the full requested batch by the shortest useful path; report covered, failed, and unverified points
+- if environment, auth, data, setup, or identity blocks reliable validation, report `UNKNOWN` or the explicit blocker
 - by default, do not change code from this role
 - if the request explicitly allows browser-tester edits, limit them to display-adjacent code and keep them on the requested branch
 - keep findings factual and tied to observed browser evidence
-- prefer requester-provided login/auth/setup context over re-discovering it from scratch
+- prefer setup-contact-provided login/auth/setup context over re-discovering it from scratch
+- treat `Browser Check` as the check correlation key; Task/Round describe scope only
+- return the report to requester, not Setup Contact
 - use the requester workspace from the message body for reply-path session verification; do not substitute the browser-tester's current workspace
 - Do not naturally end after writing the report; this workflow turn is complete only after the required `waypost_send` back to the requester has succeeded

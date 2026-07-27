@@ -139,7 +139,7 @@ count_worker_sessions() {
       [
         .[]
         | select(
-            ((.title // "") | test("^(coder|reviewer|architect)-[0-9]{8}-[0-9]{4}-"))
+            ((.title // "") | test("^((coder|architect)-[0-9]{8}-[0-9]{4}-|reviewer-(task-|[0-9]{8}-[0-9]{4}-))"))
             and (.path // "") == $workspace_path
             and ((.status // "") | test("^(running|waiting|idle)$"))
           )

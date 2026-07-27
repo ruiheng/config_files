@@ -24,6 +24,13 @@ Use `SKILL.md` for:
 - decision rules the executing agent must follow
 - references or scripts the executing agent should load or use
 
+## Protocol Cutovers
+
+Review workflow changes use a deliberate hard cut. Legacy `review_completed`,
+`review-only-v2`, and Handoff recovery are unsupported. Before upgrading,
+manually drain those pending deliveries; do not add runtime migration rules to
+`SKILL.md`.
+
 `agents/openai.yaml` files are Codex skill interface metadata. Keep them with the
 owning skill unless replacing that skill's Codex-facing name, description, or
 default prompt; they are not dead files just because this repo has no internal
@@ -69,15 +76,15 @@ Choose the lightest surface that preserves the task's lifecycle. Parallelism alo
 2. After `delegate-task` Selection-Only Use selects a Waypost worker for a code task, Planner runs `delegate-code-task` and sends one code delegate workflow message.
 3. Planner or Coder may start two-architect drafting for an unresolved goal, or request direct review of mature committed tech-design docs.
 4. Coder implements changes and commits a delivery snapshot. In delegated coder flow, that commit is already workflow-authorized and overrides generic default commit-approval rules.
-5. Task-level review is planner-controlled: when per-task review is required, coder runs `review-request`; that skill creates or reuses the reviewer on demand as a child of planner, or returns control to planner without reviewer involvement when review is skipped.
+5. Task-level review is planner-controlled: when required, coder runs `review-request`; it creates or reuses a reviewer as a planner child. A `standalone` review has no planner or closeout; its reviewer is a requester child.
 6. Reviewer runs `review-code` and sends either:
    - `rework_required` back to Coder, or
    - `browser_check_requested` to Browser Tester, or
-   - `stop_recommended` to the workflow acceptance gate.
-7. Browser Tester runs `browser-test` and sends `browser_check_report` back to the requester session.
+   - `stop_recommended` to the task acceptance gate, or to requester for an accepted non-task review.
+7. Browser Tester runs `browser-test`; a review-driven `browser_check_report` returns to Reviewer, otherwise to its requester.
 8. If user wants another iteration, Reviewer sends `user_requested_iteration` to Coder.
 9. Repeat until quality is acceptable under workflow policy; unattended mode auto-accepts no-must-fix results by default unless the user or policy explicitly requires a human gate.
-10. After acceptance, Reviewer runs `review-closeout` and sends one closeout Waypost message to Planner.
+10. After task acceptance, Reviewer runs `review-closeout` and sends one closeout Waypost message to Planner.
 11. Planner runs `planner-closeout` from that `closeout_delivered` body and batches merge/progress/next-task work.
 12. Coder, Reviewer, and Architect can be fully exited; Browser Tester stays long-lived.
 
@@ -125,6 +132,7 @@ flowchart TD
     C -. creates/reuses planner-scoped reviewer .-> R[Reviewer]
     C -->|message: review_requested| R
     R -->|message: browser_check_requested| B[Browser Tester]
+    B -->|message: browser_check_report| R
     X[Requester] -->|message: browser_check_requested| B
     B -->|message: browser_check_report| X
     R -->|review result| DEC{Accepted By Policy/User?}
@@ -154,7 +162,7 @@ flowchart TD
 - `check-waypost-messages` routes generic delegation actions to `delegate-task`, code delegation to `delegate-code-task`, and `group/roundtable-*` `group_message_available` to `roundtable`; replace the group name-pattern rule with an explicit mapping if another group workflow is added
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session` with explicit parent group; root group is empty and valid
 - use Agent Deck for work a user may want to observe, steer, resume, or revisit; expose its session id/title in the user-facing dispatch result
-- delegated coder flow creates or reuses reviewer only through `review-request`; reviewer must be parented to planner, not coder
+- delegated task/integration reviewers are parented to planner, not coder; standalone reviewers are parented to requester
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.
 - Current agent-deck session hierarchy cannot always express deeper workflow ownership once a planner is already a child; keep any subgroup/group-path fallback inside the session manager rather than the workflow contract.
@@ -173,7 +181,7 @@ flowchart TD
 Current recommended operating mode:
 
 1. Keep `planner` as a long-lived session.
-2. Create `coder-<task_id>` as needed. For unresolved design, create or reuse `architect-author-<task_id>` and `architect-reviewer-<task_id>`; for mature committed design, use `architect-<task_id>`. Create or reuse `reviewer-<task_id>` on demand from `review-request` with planner as parent. Prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
+2. Create `coder-<task_id>` as needed. For unresolved design, create or reuse `architect-author-<task_id>` and `architect-reviewer-<task_id>`; for mature committed design, use `architect-<task_id>`. Create or reuse `reviewer-<task_id>` on demand from `review-request`: planner parent for task/integration, requester parent for standalone. Prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
 3. Queue message first. Best-effort nudges may wake non-local targets; correctness comes from receiver-side message pickup.
    Newly created or restarted targets should use the same message recv-first pickup path as any other target.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.

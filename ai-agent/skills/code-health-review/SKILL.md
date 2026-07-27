@@ -1,11 +1,11 @@
 ---
 name: code-health-review
-description: Review systemic maintainability and reliability risks without making code changes.
+description: Review systemic maintainability, reliability, and material simplification opportunities without making code changes.
 ---
 
 # Code Health Review
 
-Review code with a senior-engineer lens focused on maintainability, reliability, and provability.
+Review code with a senior-engineer lens focused on maintainability, reliability, provability, and material simplification.
 Prefer structural diagnoses that explain multiple symptoms at once instead of listing isolated cleanup ideas.
 
 This skill is advisory only.
@@ -29,6 +29,7 @@ Use this skill when the real question is structural, for example:
 - why fixes are slow or non-converging
 - why review cycles keep surfacing nearby failures
 - why the code is hard to test with confidence
+- why correct code is needlessly long, indirect, or over-abstracted
 
 Do not use this skill for:
 - a single local bug review with no sign of a broader pattern; use `review-code`
@@ -51,6 +52,7 @@ Useful pain signals include:
 - patch-on-patch code
 - duplicated decision logic
 - repeated implementation patterns with minor local variations
+- correct but needlessly long or indirect code shapes
 - weak or vague data contracts
 - code that is hard to test with confidence
 
@@ -113,6 +115,7 @@ Evaluate code using these lenses:
 - type discipline: whether the data model is explicit, checkable, and hard to misuse
 - decision locality: whether business rules live in one place or are re-encoded repeatedly
 - duplication pressure: whether the same shape of logic appears in multiple places with cosmetic variation
+- code shape: whether a correct implementation is needlessly long, indirect, or over-abstracted for its task
 - testability: whether important behavior can be proven with focused tests
 - change amplification: whether small changes spread across too many files or branches
 - bug concentration: whether certain modules or patterns keep attracting similar failures
@@ -146,6 +149,7 @@ Highest-signal patterns under those lenses:
 - treat pattern-level repetition as a first-class structural smell even when the text is not copied verbatim
 - prefer recommendations that delete repeated code paths and collapse near-duplicate workflows
 - treat net code reduction as a meaningful maintainability win when behavior and clarity are preserved
+- distinguish material simplification from taste; flag it only when it reduces change or proof surface
 - prefer recommendations that make focused regression tests easier to write
 - say directly when the code is locally messy but not structurally unhealthy
 - mark an area as a hotspot only when churn aligns with repeated bug shape, patch layering, weak proof, or repeated nearby fixes; churn alone is not enough
@@ -178,6 +182,9 @@ If none, write: `- None.`
 - [P1] [Area]: Symptom pattern | Structural diagnosis | Why it hurts maintainability or reliability | Recommended direction
 - [P2] [Area]: Symptom pattern | Structural diagnosis | Why it hurts maintainability or reliability | Recommended direction
 If none, write: `- None.`
+
+## Simplification Opportunities
+- [Area]: Needless shape | Simpler direction | Expected reduction in code or decision surface
 
 ## Hotspots
 - [Module or boundary]: Why this area keeps attracting churn, bugs, or patch layering

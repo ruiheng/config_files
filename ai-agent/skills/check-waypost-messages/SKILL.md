@@ -14,7 +14,11 @@ Workflow protocol baseline: use the `agent-deck-workflow` skill.
    - treat `body` as executable workflow input, not as a notification
    - parse the `Action:` header
    - if `Action: group_message_available`, run the group handler for `Group-Address` and `As-Person`; for `group/roundtable-*`, use `roundtable` Moderator Group Check
-   - route `execute_delegated_task` and `delegated_task_result` to `delegate-task`; `execute_delegate_task` to `delegate-code-task`; `closeout_delivered`, `review_completed`, and `code_delivery_complete` to `planner-closeout`
+   - route `execute_delegated_task` and `delegated_task_result` to `delegate-task`; `execute_delegate_task` to `delegate-code-task`; `closeout_delivered` and `code_delivery_complete` to `planner-closeout`
+   - route `browser_check_requested`, `browser_setup_requested`, and `browser_setup_provided` to `browser-test`; route reviewer-addressed `browser_check_report` to `review-code`
+   - route accepted task `stop_recommended` to `review-closeout`; ACK only after closeout completes
+   - route an `integration_final` result only with one matching active/recoverable plan; otherwise `waypost_defer`, do not ACK or fall through. Rework continues the plan; approved `stop_recommended` sends its final report before ACK
+   - hand `standalone` or other non-`integration_final` `stop_recommended` to requester, ACK it, and do not closeout
    - otherwise execute that workflow stage immediately
 4. Settle the claim when its current disposition is clear:
    - `waypost_ack` after its immediate required action completes, including handing a required decision to the user

@@ -16,9 +16,7 @@ For UI-related tasks, carry forward any UI confirmation package that exists in t
 Closeout should also give planner a compact summary of residual accepted findings that may need later tracking.
 
 Input gate:
-- run this skill only after acceptance has already been established by workflow policy or explicit decision
-- use this skill only for an accepted final review report
-- use this skill only for a task-lane review; return `integration_final` results directly to planner
+- run only after acceptance by workflow policy or explicit decision for a task review with complete Handoff; return `integration_final` / `standalone` results directly to requester
 - do not run this skill for pending review, iteration requests, or any report that still has unresolved must-fix items
 - determine eligibility from accepted review context and workflow policy, not from session title naming
 
@@ -47,36 +45,27 @@ Skill-specific context resolution:
 - `closeout_sender_session_id`: explicit -> current session id -> review context -> ask
 - `closeout_sender_role`: explicit -> current workflow role -> review context -> default `closeout_executor`
 - `reviewer_session_id`: explicit -> accepted review report `From` header -> review context -> ask
+- `review_lane`: explicit -> accepted report/context -> require `task`
 - `workflow_policy` (optional): explicit -> review/report context -> default unattended
 - `special_requirements` (optional fallback): explicit -> review/report context -> omit
-- `closeout_contract` (task lane): explicit -> accepted report/context -> `legacy-v1` when unmarked
-- `workspace_handoff` (optional): `worker_workspace`, `task_dir`, `workspace_lifecycle` from accepted report/context
-- `start_branch`, `integration_branch`, `task_branch` (workspace-closeout only): explicit -> review report text -> ask
+- `workspace_handoff`: complete -> preserve; missing/partial -> report blocker; do not infer
+- `start_branch`, `integration_branch`, `task_branch`: explicit -> review report text -> ask
 
-Closeout contract gate:
-- `workspace-v2`: require a complete Handoff; send `closeout_delivered`
-- `review-only-v2`: require no Handoff; send `review_completed`
-- `legacy-v1`: migrate as workspace closeout; never infer review-only from an unmarked report
+Handoff gate:
+- require complete Handoff and recorded Branch Plan; send `closeout_delivered`
 
-Legacy migration:
-1. recover workspace data from accepted context -> original review/delegated-task context -> old `Agent Deck Context`
-2. if exactly one of `Worker workspace` / `Task dir` exists, use it for both, as v1 had one workspace record
-3. if lifecycle is absent, set `legacy; cleanup=manual`; never infer temporary cleanup
-4. if worker workspace, task dir, or branch plan is still missing, ask one short clarification question
-
-Branch-plan rule for workspace contracts:
+Branch-plan rule with a Handoff:
 - do not infer, rename, or repair branch plan during closeout
 - use the recorded branch plan from the accepted review report unchanged
 - if recorded `integration_branch` looks like `task/*`, treat the branch plan as invalid and ask for the real integration branch
 - if any branch-plan field is missing, ask one short clarification question instead of guessing
 
-If contract-specific values are resolved:
+If required values are resolved:
 1. normalize identity values before any comparison:
    - resolve `planner_session_id` / `closeout_sender_session_id` / `reviewer_session_id` refs to UUID via `agent_deck_resolve_session`
    - if normalization fails for required identity, ask one short clarification question before sending
 2. choose message action and subject:
-   - `workspace-v2` / `legacy-v1`: `closeout_delivered`; `closeout delivered: <task_id>`
-   - `review-only-v2`: `review_completed`; `review completed: <task_id>`
+   - `closeout_delivered`; `closeout delivered: <task_id>`
 3. send mode:
    - if `closeout_sender_session_id == planner_session_id`, skip cross-session delivery and continue locally
    - otherwise send the selected action to planner through `waypost_send`
@@ -92,8 +81,7 @@ If contract-specific values are resolved:
    - `body = <closeout message body>`
 
 Recommended subjects:
-- workspace contracts: `closeout delivered: <task_id>`
-- review-only: `review completed: <task_id>`
+- `closeout delivered: <task_id>`
 
 ## Extraction Rules
 
@@ -105,7 +93,7 @@ Inclusion-first policy:
 - `Minor Suggestions`
 - `Verification Questions`
 - `UI Manual Confirmation Package`
-- for workspace contracts: `Recorded Branch Plan`, `Workspace Handoff`
+- with Handoff: `Recorded Branch Plan`, `Workspace Handoff`
 
 Planner handoff rule:
 - when closeout happens after acceptance, convert surviving non-blocking findings into planner-usable follow-up input instead of leaving them as raw review debris
@@ -145,9 +133,9 @@ Rules:
 No actionable items.
 ```
 
-## Output Template (Conditional)
+## Output Template
 
-For `workspace-v2` or `legacy-v1`, start with:
+Start with:
 
 ```markdown
 Task: <task_id>
@@ -156,46 +144,32 @@ From: <closeout_sender_role> <closeout_sender_session_id>
 To: planner <planner_session_id>
 Planner: <planner_session_id>
 Planner workspace: <planner_workspace>
-Closeout contract: <workspace-v2 | legacy-v1>
 Worker workspace: <worker_workspace>
 Task dir: <task_dir>
-Workspace lifecycle: <shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual>
+Workspace lifecycle: <shared; cleanup=none | temporary; cleanup=planner>
 Round: final
 Accepted Review By: reviewer <reviewer_session_id>
 
 ### Review Closeout
 ```
 
-Then append only non-empty sections. Include `Recorded Branch Plan` only for workspace contracts.
-
-For `review-only-v2`, start with:
+Append the required recorded plan:
 
 ```markdown
-Task: <task_id>
-Action: review_completed
-From: <closeout_sender_role> <closeout_sender_session_id>
-To: planner <planner_session_id>
-Planner: <planner_session_id>
-Planner workspace: <planner_workspace>
-Closeout contract: review-only-v2
-Review lane: task
-Round: final
-Accepted Review By: reviewer <reviewer_session_id>
-
-### Review Closeout
+#### Recorded Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Rule: use this recorded branch plan as the authoritative merge target; do not substitute `main`/`master`/current branch unless the user explicitly changed the plan
 ```
+
+Append only relevant non-empty sections:
 
 ```markdown
 #### Residual Follow-up For Planner
 - Track in progress/todo: [items worth recording for later follow-up, or `None`]
 - Consider as next task/subtask: [items worth queueing, or `None`]
 - No extra tracking needed: [items intentionally left as informational only, or `None`]
-
-#### Recorded Branch Plan
-- Start branch: [start_branch]
-- Integration branch: [integration_branch]
-- Task branch: [task_branch]
-- Rule: use this recorded branch plan as the authoritative merge target; do not substitute `main`/`master`/current branch unless the user explicitly changed the plan
 
 #### UI Manual Confirmation Package
 - UI impact: [detected | none detected]
@@ -215,5 +189,4 @@ Accepted Review By: reviewer <reviewer_session_id>
 6. Preserve `workflow_policy` unchanged when sending
 7. Preserve `special_requirements` unchanged when sending
 8. Make deferred follow-up ownership explicit enough that planner can act without rereading the whole report in the common case
-9. Never turn an unmarked task review into review-only; migrate it as `legacy-v1`
-10. Do not naturally end after drafting the closeout text; this workflow turn is complete only after the required local continuation or `waypost_send` delivery step has succeeded
+9. Do not naturally end after drafting the closeout text; this workflow turn is complete only after the required local continuation or `waypost_send` delivery step has succeeded

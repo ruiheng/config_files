@@ -184,6 +184,7 @@ Round: final
 For direct user-owned code sessions only:
 
 - user owns branch, commit, review, merge, and closeout decisions
+- on a user review request, run `review-request` with `review_lane = standalone`; return it here without closeout
 - make code progress and blockers legible, but do not claim workflow delivery or invent a Waypost result
 
 ## Requester Receive

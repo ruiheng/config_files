@@ -16,11 +16,13 @@ Before generating the message, determine one scope:
 2. `specific short commit ref`
 3. `branch`
 
+`integration_final`: `branch` only; require explicit `base_branch` distinct from target. Reject `commit` / `uncommitted`; do not convert or send.
+
 Workflow continuity rule:
 - In an ongoing implementation session, if scope is not explicit, inherit from active delegated task for current `task_id`
 - Ask a clarification question only when multiple scopes are equally plausible or no reliable scope can be inferred
 
-Branch plan continuity rule:
+For a task review with a complete Workspace Handoff:
 - preserve recorded `start_branch`, `integration_branch`, and `task_branch` from delegated task context
 - treat that branch plan as immutable task context unless the user explicitly changes it
 
@@ -32,13 +34,13 @@ Branch plan continuity rule:
   - `commit`: short commit ref
   - `branch`: branch name
 - Optional:
-  - `base_branch` (for branch scope)
+  - `base_branch` (branch or short commit ref, for branch scope)
   - `original_task`
   - `requester_role`
   - `requester_session_id`
   - `reviewer_session_ref`
   - `reviewer_session_id`
-  - `review_lane`
+  - `review_lane`: `task` | `integration_final` | `standalone`
   - `review_focus` (explicit optional emphasis; do not infer)
   - `author_intent`
   - `author_noted_issues`
@@ -49,8 +51,7 @@ Branch plan continuity rule:
   - `start_branch`
   - `integration_branch`
   - `task_branch`
-  - `closeout_contract`
-  - complete `Workspace Handoff`: `worker_workspace`, `task_dir`, `workspace_lifecycle` (optional)
+  - complete `Workspace Handoff`: `worker_workspace`, `task_dir`, `workspace_lifecycle`
 
 ## Original Task Source (Required)
 
@@ -71,7 +72,8 @@ Use read-only git commands only.
 - Commit:
   - `git show --name-status --format=fuller <short-commit-ref>`
 - Branch:
-  - choose base: `base_branch` -> recorded `integration_branch` -> ask
+  - `integration_final`: require explicit `base_branch`, distinct from target; never fall back to `integration_branch`
+  - otherwise choose base: `base_branch` -> recorded `integration_branch` -> ask
   - `git log --oneline <base>..<branch>`
   - `git diff --name-status <base>...<branch>`
 
@@ -100,13 +102,13 @@ Use the `agent-deck-workflow` skill for shared protocol.
 
 Skill-specific context resolution:
 - `task_id`: explicit -> branch `task/<task_id>` -> delegated context -> ask
-- `planner_session_id`: explicit/context -> ask
-- `planner_workspace`: explicit -> delegated context -> current workspace when requester is planner -> ask
+- `review_lane`: explicit -> delegated context -> `task` for an active delegated task -> `standalone`
+- `planner_session_id`: `task` / `integration_final` -> explicit/context -> ask; `standalone` -> omit
+- `planner_workspace`: `task` / `integration_final` -> explicit -> delegated context -> current workspace when requester is planner -> ask; `standalone` -> omit
 - `requester_role`: explicit -> delegated context -> current workflow role -> default `coder`
 - `requester_session_id`: explicit -> current session id -> delegated context -> ask
-- `reviewer_session_ref`: explicit -> delegated context -> default `reviewer-<task_id>`
+- `reviewer_session_ref`: explicit -> delegated context -> `reviewer-<review_lane>-<owner_session_id>-<task_id>`; owner is planner for `task` / `integration_final`, requester for `standalone`
 - `reviewer_session_id`: explicit actual id -> delegated context actual id -> created on demand when missing
-- `review_lane`: explicit -> delegated context -> default `task`
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
 - `coder_tool_profile`: explicit -> delegated context -> omit when `coder_tool` is already a full command -> default current-tool continuity or resolver role default `coder`
@@ -114,18 +116,14 @@ Skill-specific context resolution:
 - `reviewer_tool_profile`: explicit -> delegated context -> omit when `reviewer_tool` is already a full command -> default resolver role default `reviewer`
 - `reviewer_tool_cmd`: explicit full command -> delegated context resolved command -> shared tool-resolution contract for role `reviewer`
 - `round`: explicit -> infer from context -> default `1`
-- `start_branch`: explicit -> delegated context -> ask
-- `integration_branch`: explicit -> delegated context -> ask
-- `task_branch`: explicit -> delegated context -> ask
-- `closeout_contract` (task lane): explicit -> delegated context -> `workspace-v2` for a fresh full Handoff -> `review-only-v2` for a fresh direct review with no active/delegated task -> `legacy-v1` for unmarked existing task work
-- `workspace_handoff`: `workspace-v2` preserves explicit/delegated values without filling gaps; `legacy-v1` recovers it under the gate below
+- `workspace_handoff`: task -> explicit/delegated complete handoff -> preserve; missing/partial -> ask; `integration_final` / `standalone` -> omit
+- `start_branch`, `integration_branch`, `task_branch` (task only): explicit -> delegated context -> ask; otherwise omit
 
-Closeout contract gate:
-- `workspace-v2`: require a complete Handoff; ask when partial
-- `review-only-v2`: require no Handoff
-- `legacy-v1`: recover worker/task from old task context; if exactly one path exists, use it for both; use `legacy; cleanup=manual` when lifecycle is absent; ask before sending if neither path exists. Never classify unmarked existing work as review-only.
+Handoff gate:
+- task: require complete Handoff and recorded Branch Plan
+- `integration_final` / `standalone`: omit task Branch Plan and Handoff
 
-Branch-plan guard:
+Workspace-closeout branch-plan guard:
 - `integration_branch` must be the non-task landing branch; if it looks like `task/*`, ask for the real integration branch instead of sending the review request
 
 When this is a follow-up round after reviewer feedback, summarize which findings were adopted, which were rejected, and why.
@@ -135,20 +133,26 @@ Review-request continuity rule:
 - round `1` uses the full review-request body
 - round `>1` to the same reviewer session uses a delta-only body
 - if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
-- repeat `Closeout contract` in every task-lane request
-- repeat a complete Handoff in `workspace-v2`; preserve recovered legacy context in `legacy-v1`
+- a task review remains `task` through every round
+- task repeats its complete Handoff and Branch Plan every round
+- every delta retains `Task`, `Action`, `From`, `To`, `Round`, and Lane; task / `integration_final` also retain Planner fields
 - delta-only means terse:
-  - do not repeat the original task, branch plan, file list, or unchanged verification
+  - do not repeat the original task, file list, or unchanged verification; task always repeats Branch Plan and Handoff
   - summarize only changed scope, responses to prior findings, and new verification evidence; let the reviewer decide what to re-check
-  - if the whole message is effectively "please re-review after addressing the prior findings", prefer a short subject and a one-line body
-  - if the transport or tooling can support it, body can be minimal; otherwise keep it to a single short sentence
+  - one-line body applies only to delta content; task retains its required fields
 
 Identity rules:
 - `review_requested` sender must be the active requester session id for this review lane
 - use the bound Waypost sender context for sender validation
-- If an existing reviewer session tool differs from requested `reviewer_tool_cmd` or the requested `reviewer_tool_profile` policy, ask user to choose:
-  1. keep existing reviewer session/tool
-  2. ask planner to replace reviewer assignment with a different reviewer session/tool
+- Reuse an existing reviewer/tool unless an explicit requested command or profile conflicts; inferred/default differences do not.
+- For an explicit conflict, ask whether to keep the reviewer or reassign it.
+
+Reviewer reuse gate:
+- expected parent = owner; expected group = owner's group. Owner is planner for `task` / `integration_final`, requester for `standalone`
+- inspect candidate: `agent-deck session show <candidate_id_or_ref> --json`; check `path`, `parent_session_id`, `group`, `command`, `profile`
+- reuse only when path, parent, and group match expected ownership
+- compare explicit `reviewer_tool` / `reviewer_tool_profile` with candidate command/profile; on conflict ask keep or reassign, never silently require
+- if a default ref resolves to an ineligible session, derive a fresh lane-scoped ref before create; for an input/context ID/ref mismatch, ask and do not create
 
 Commit reference rule:
 - in message content, use a short commit ref, not a full 40-char hash
@@ -157,16 +161,13 @@ Commit reference rule:
 
 Round `1` or new reviewer session: use the full body below.
 
-Use this structure as the message body. Omit `Closeout contract` for `integration_final`; include `Workspace Handoff` only for `workspace-v2` or recovered `legacy-v1`.
+Use this structure as the message body. Omit task Branch Plan and Handoff for `integration_final` / `standalone`; task includes both. `standalone` also omits planner headers. Keep tool routing internal.
 
 ```markdown
 Task: <task_id>
 Action: review_requested
 From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
-Planner: <planner_session_id>
-Planner workspace: <planner_workspace>
-Closeout contract: <workspace-v2 | review-only-v2 | legacy-v1>
 Round: <round>
 
 ## Summary
@@ -175,31 +176,13 @@ Round: <round>
 ## Scope
 - Type: [uncommitted | commit | branch]
 - Target: [working tree | short commit ref | branch name]
-- Base (if branch): [base branch or N/A]
+- Base (branch): [base ref or N/A]
 
 ## Original Task
 [Original task text from explicit input or active session context. Use `Not provided` only after explicit clarification that no task text is available.]
 
-## Branch Plan
-- Start branch: [start_branch]
-- Integration branch: [integration_branch]
-- Task branch: [task_branch]
-- Stability rule: treat this recorded branch plan as immutable task context unless the user explicitly changes it
-
-## Workspace Handoff
-[workspace-v2 or legacy-v1 only]
-- Worker workspace: [worker_workspace]
-- Task dir: [task_dir]
-- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual]
-
 ## Review Context
-- Lane: [task | integration_final]
-
-## Tool Context
-- Coder tool profile: [coder_tool_profile or `explicit`]
-- Coder tool cmd: [coder_tool_cmd]
-- Reviewer tool profile: [reviewer_tool_profile or `existing-session`]
-- Reviewer tool cmd: [reviewer_tool_cmd or `existing-session`]
+- Lane: [task | integration_final | standalone]
 
 ## Optional Review Focus
 - [Explicit optional emphasis; must not limit the full independent review]
@@ -229,23 +212,42 @@ Round: <round>
 [Non-exhaustive author notes]
 ```
 
+For `task` / `integration_final`, insert after `To` in either template:
+
+```markdown
+Planner: <planner_session_id>
+Planner workspace: <planner_workspace>
+```
+
+For task, insert after `Original Task`:
+
+```markdown
+## Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Stability rule: treat this recorded branch plan as immutable task context unless the user explicitly changes it
+
+## Workspace Handoff
+- Worker workspace: [worker_workspace]
+- Task dir: [task_dir]
+- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner]
+```
+
 Round `>1` to the same reviewer session: send only delta.
 Keep the body as short as possible:
 - include only sections that changed
-- omit unchanged sections except `Closeout contract`, Branch Plan, and Handoff when its contract carries one
+- task always repeats Branch Plan and Handoff; other lanes omit unchanged sections
 - do not fill the template just because it exists
-- if the only meaningful update is "I addressed the prior findings, please re-review", use a one-line body
+- `integration_final` / `standalone` may use a one-line body; task keeps its Branch Plan and Handoff
 
-Use this structure. Omit `Closeout contract` for `integration_final`; include `Workspace Handoff` only for `workspace-v2` or recovered `legacy-v1`.
+Use this structure. Omit task Branch Plan and Handoff for `integration_final` / `standalone`; task includes both. `standalone` omits planner headers.
 
 ```markdown
 Task: <task_id>
 Action: review_requested
 From: <requester_role> <requester_session_id>
 To: reviewer {{TO_SESSION_ID}}
-Planner: <planner_session_id>
-Planner workspace: <planner_workspace>
-Closeout contract: <workspace-v2 | review-only-v2 | legacy-v1>
 Round: <round>
 
 ## Summary
@@ -257,20 +259,8 @@ Round: <round>
 - Findings rejected: [rejected items + rationale]
 - Author-noted new risks or open questions: [only if changed]
 
-## Branch Plan
-- Start branch: [start_branch]
-- Integration branch: [integration_branch]
-- Task branch: [task_branch]
-- Change status: [unchanged | explicitly updated this round]
-
-## Workspace Handoff
-[workspace-v2 or legacy-v1 only]
-- Worker workspace: [worker_workspace]
-- Task dir: [task_dir]
-- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner | legacy; cleanup=manual]
-
 ## Review Context
-- Lane: [task | integration_final]
+- Lane: [task | integration_final | standalone]
 
 ## Author Update Since Last Review (Optional)
 [Non-authoritative intent note for what changed; do not restate the diff]
@@ -290,6 +280,21 @@ Round: <round>
 [Current non-exhaustive author notes]
 ```
 
+For task, insert after `Delta Since Last Review`:
+
+```markdown
+## Branch Plan
+- Start branch: [start_branch]
+- Integration branch: [integration_branch]
+- Task branch: [task_branch]
+- Change status: [unchanged | explicitly updated this round]
+
+## Workspace Handoff
+- Worker workspace: [worker_workspace]
+- Task dir: [task_dir]
+- Workspace lifecycle: [shared; cleanup=none | temporary; cleanup=planner]
+```
+
 ## Waypost Message Send + Wakeup
 
 Recommended subject:
@@ -300,19 +305,17 @@ Preferred path: use the `waypost` MCP tools.
 Workflow send sequence:
 1. use `waypost`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
-3. if `reviewer_session_id` is known, call `agent_deck_require_session`
-   - identify target with `session_id = <reviewer_session_id>`
-   - pass `workdir = <current workspace>`
-   - do not pass create-only lifecycle fields
-4. if `reviewer_session_id` is missing, resolve reviewer tool metadata by the shared tool-resolution contract for role `reviewer`, then create or reuse the reviewer on demand with `agent_deck_create_session`
-   - `ensure_title = <reviewer_session_ref>`
-   - `ensure_cmd = <reviewer_tool_cmd>`
-   - `workdir = <current workspace>`
-   - `parent_session_id = <planner_session_id>`
-   - `group_path = <planner session group; empty string for root>`
-   - `no_parent_link = false`
-5. use the returned `session_id` as the authoritative `reviewer_session_id`
-6. fill the final body and call `waypost_send` with:
+3. choose candidate: known `reviewer_session_id`, otherwise resolve `reviewer_session_ref`
+4. apply Reviewer reuse gate; if it asks, stop. If eligible, call `agent_deck_require_session` with its `session_id` and `workdir = <current workspace>`
+5. if no eligible candidate, resolve reviewer tool metadata by the shared tool-resolution contract for role `reviewer`, then call `agent_deck_create_session` with:
+     - `ensure_title = <reviewer_session_ref>`
+     - `ensure_cmd = <reviewer_tool_cmd>`
+     - `workdir = <current workspace>`
+     - `task` / `integration_final`: `parent_session_id = <planner_session_id>`, `group_path = <planner session group; empty string for root>`
+     - `standalone`: `parent_session_id = <requester_session_id>`, `group_path = <requester session group; empty string for root>`
+     - `no_parent_link = false`
+6. use the returned `session_id` as the authoritative `reviewer_session_id`
+7. fill the final body and call `waypost_send` with:
    - `from_address = agent-deck/<requester_session_id>`
    - `to_address = agent-deck/<reviewer_session_id>`
    - `subject = "review request: <task_id> r<round>"`
@@ -324,10 +327,10 @@ Rules:
 - if reviewer continuity changed, resend the full review request body
 - include a `Checks Already Run` section so reviewer can reuse coder-run verification instead of rerunning the same slow checks
 - for each recorded check, include enough command/result detail to show scope and outcome
-- keep model/version defaults out of this skill; use shared tool-resolution policy
+- keep tool/model routing internal; use shared tool-resolution policy
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
-- treat `reviewer-<task_id>` as the planner-scoped allocation label; sender should prefer an existing delegated `reviewer_session_id` when present
-- coder/requester flow may create the reviewer only from `review-request`, and only with `parent_session_id = <planner_session_id>` plus `group_path = <planner session group; empty string for root>`; never create reviewer as a child of coder/requester
+- reuse only an ownership- and tool-compatible reviewer resolved by ID/ref; otherwise create a fresh lane-scoped reviewer
+- create reviewers only from `review-request`: parent task/integration to planner; parent standalone to requester
 - `waypost_send` may trigger a best-effort non-local reviewer nudge; correctness relies on Waypost message delivery
 - follow the shared Async sender rule for the review reply
 
