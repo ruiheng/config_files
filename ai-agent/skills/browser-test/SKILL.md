@@ -1,6 +1,6 @@
 ---
 name: browser-test
-description: Validates browser behavior with agent-browser, handles browser setup requests, and sends a browser-check report back to the requester session.
+description: Validate browser behavior with agent-browser.
 ---
 
 # Browser Test

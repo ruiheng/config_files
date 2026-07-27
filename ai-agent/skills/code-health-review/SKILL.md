@@ -1,6 +1,6 @@
 ---
 name: code-health-review
-description: Review systemic maintainability, reliability, and material simplification opportunities without making code changes.
+description: Review systemic code health without changes.
 ---
 
 # Code Health Review

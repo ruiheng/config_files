@@ -1,6 +1,6 @@
 ---
 name: review-request
-description: Generates a review-request Waypost message for code review from uncommitted changes, a specific short commit ref, or a branch.
+description: Request Agent Deck code review.
 ---
 
 # Review Request

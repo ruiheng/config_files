@@ -1,6 +1,6 @@
 ---
 name: delegate-code-task
-description: Delegate a workflow-owned code-changing task to a persistent Waypost-backed Agent Deck coder. Use after delegate-task selects or transfers the code lane; this skill owns code branches, commits, and optional task review.
+description: Delegate Waypost code work to an Agent Deck coder.
 ---
 
 # Delegate Code Task

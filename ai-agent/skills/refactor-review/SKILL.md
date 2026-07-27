@@ -1,6 +1,6 @@
 ---
 name: refactor-review
-description: Reviews existing code for duplication, unnecessary abstraction, and simplification opportunities, then returns prioritized refactoring advice without making changes.
+description: Advise on code refactoring without changes.
 ---
 
 # Refactor Review

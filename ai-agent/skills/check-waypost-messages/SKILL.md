@@ -1,6 +1,6 @@
 ---
 name: check-waypost-messages
-description: Claim and process pending Waypost messages with `waypost_recv`, allowing independent deliveries to progress without holding blocked claims.
+description: Claim and process pending Waypost messages.
 ---
 
 Workflow protocol baseline: use the `agent-deck-workflow` skill.

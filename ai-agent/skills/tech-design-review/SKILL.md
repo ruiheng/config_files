@@ -1,6 +1,6 @@
 ---
 name: tech-design-review
-description: Reviews tech-design artifacts or docs in direct or Waypost workflows.
+description: Review a technical design.
 ---
 
 # Tech-Design Review

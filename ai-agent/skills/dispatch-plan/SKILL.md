@@ -1,6 +1,6 @@
 ---
 name: dispatch-plan
-description: Send an `execute_plan` workflow message to a planner that should complete one supervisor-assigned goal inside one workspace and report back to a supervisor.
+description: Send a goal to an Agent Deck planner.
 ---
 
 # Dispatch Plan

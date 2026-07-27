@@ -1,6 +1,6 @@
 ---
 name: check-agent-mail
-description: Deprecated compatibility redirect.
+description: Deprecated redirect.
 ---
 
 Use `check-waypost-messages` instead.

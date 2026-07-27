@@ -1,6 +1,6 @@
 ---
 name: review-code
-description: Reviews code changes for logical correctness, design quality, and security. Use after code has been written to validate implementation quality.
+description: Review code changes for correctness and security.
 ---
 
 # Review Code

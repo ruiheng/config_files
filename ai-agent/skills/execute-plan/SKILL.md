@@ -1,6 +1,6 @@
 ---
 name: execute-plan
-description: Execute one supervisor-assigned goal inside one workspace, decompose it locally, drive resulting tasks to completion serially, and send one final report back to the supervisor.
+description: Execute a supervisor-assigned workspace goal.
 ---
 
 # Execute Plan

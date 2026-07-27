@@ -1,6 +1,6 @@
 ---
 name: plan-report
-description: Handle a final `plan_report_delivered` message from a planner, integrate completed results, and clean up planner sessions.
+description: Process a planner's final Waypost report.
 ---
 
 # Plan Report

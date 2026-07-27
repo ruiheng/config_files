@@ -1,6 +1,6 @@
 ---
 name: refactor-review-request
-description: Generates and sends a message request for advisory refactor review against a target scope without asking the reviewer to implement changes.
+description: Request an advisory refactor review.
 ---
 
 # Refactor Review Request

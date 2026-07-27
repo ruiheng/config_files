@@ -1,6 +1,6 @@
 ---
 name: tech-design-review-request
-description: Orchestrates tech-design drafting and independent review through Agent Deck. Use when separate architect sessions should draft or review a design, or when handling the resulting Waypost actions. Do not use for direct in-session design review.
+description: Request Agent Deck technical-design drafting or review.
 ---
 
 # Tech-Design Review Request

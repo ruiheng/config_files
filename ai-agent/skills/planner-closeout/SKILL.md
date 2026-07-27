@@ -1,6 +1,6 @@
 ---
 name: planner-closeout
-description: Handles accepted-review and coder completion/blocker handoffs; runs workspace closeout with a complete handoff.
+description: Close out accepted review or coder handoffs.
 ---
 
 # Planner Closeout

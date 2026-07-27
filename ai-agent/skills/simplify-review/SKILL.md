@@ -1,6 +1,6 @@
 ---
 name: simplify-review
-description: Review code and tests for safe simplification opportunities without making changes.
+description: Find safe code simplifications without changes.
 ---
 
 # Simplify Review

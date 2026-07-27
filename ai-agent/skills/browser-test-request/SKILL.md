@@ -1,6 +1,6 @@
 ---
 name: browser-test-request
-description: Generates a browser-check Waypost message for runtime page validation and sends it to a browser-tester session.
+description: Request Agent Deck browser validation.
 ---
 
 # Browser Test Request

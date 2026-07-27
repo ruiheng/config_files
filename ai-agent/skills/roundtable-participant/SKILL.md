@@ -1,6 +1,6 @@
 ---
 name: roundtable-participant
-description: Participate in a roundtable discussion from a personal control message. Use when a received workflow message has Action `roundtable_participant_turn` or asks this agent to read a Waypost group and respond as a named participant.
+description: Respond to an Agent Deck roundtable turn.
 ---
 
 # Roundtable Participant

@@ -1,6 +1,6 @@
 ---
 name: agent-deck
-description: Local operating rules and references for using agent-deck sessions safely and consistently.
+description: Manage local Agent Deck sessions.
 ---
 
 # Agent Deck

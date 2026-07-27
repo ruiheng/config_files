@@ -1,6 +1,6 @@
 ---
 name: delegate-task
-description: Create one bounded persistent Agent Deck worker, directly or through Waypost. Use when history must survive restarts, explicit tool or workspace control, later coordination, or user-visible and steerable work justifies its cost; use a native harness subagent for short disposable parallel work.
+description: Choose a worker surface for bounded work.
 ---
 
 # Delegate Task

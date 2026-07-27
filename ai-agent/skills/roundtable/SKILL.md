@@ -1,6 +1,6 @@
 ---
 name: roundtable
-description: Run a real multi-agent roundtable or brainstorming discussion with waypost group addresses and agent-deck sessions. Use when the user asks to start, continue, moderate, summarize, or inspect a roundtable discussion, including wakeups from group subscriber notifications.
+description: Run or manage an Agent Deck roundtable.
 ---
 
 # Roundtable

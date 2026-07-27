@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Generates a handoff document from the user's perspective for another AI agent to continue the work. Use when the current conversation needs to end and a new AI agent will take over.
+description: Create a handoff for another agent.
 disable-model-invocation: true
 ---
 

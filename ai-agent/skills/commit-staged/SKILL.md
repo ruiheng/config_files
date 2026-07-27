@@ -1,6 +1,6 @@
 ---
 name: commit-staged
-description: Analyzes staged git changes, checks for issues, generates and executes commit with appropriate message.
+description: Review and commit staged Git changes.
 ---
 
 # Commit Staged Changes
