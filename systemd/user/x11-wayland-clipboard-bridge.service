@@ -7,7 +7,7 @@ Conflicts=clipboard-sync.service
 
 [Service]
 Type=simple
-ExecStart=/home/ruiheng/config_files/scripts/x11-wayland-clipboard-bridge
+ExecStart=%h/.local/bin/x11-wayland-clipboard-bridge
 Restart=on-failure
 RestartSec=1
 

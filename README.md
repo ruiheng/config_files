@@ -14,7 +14,7 @@ cd ~/config_files
 # Preview changes without applying
 ./install.sh --dry-run
 
-# Execute installation (creates symbolic links)
+# Execute installation (copies configs and creates shared links)
 ./install.sh
 ```
 
@@ -45,7 +45,7 @@ Two scripts are provided for different platforms:
 - **`install.sh`** - For Linux, macOS, and WSL (Bash)
 - **`install.bat`** - For Windows (Command Prompt)
 
-Both scripts automatically create symbolic links to link configuration files from this repository to their proper system locations.
+`install.sh` copies ordinary configuration files so installed configs do not depend on the repository location. Shared agent instructions, modules, and skills are copied to `~/.local/share/config_files/ai-agent` and linked from there when multiple agents need the same files. `install.bat` continues to use its Windows-specific link behavior.
 
 ### Linux/macOS/WSL (install.sh)
 
@@ -60,7 +60,9 @@ Options:
   --help, -h        Show help message
 ```
 
-`install.sh` will check required CLI tools before linking configs and install missing ones through the detected package manager when supported. The current required tools are `tmux` and `jq`. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone.
+`install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. It also installs [`mq`](https://mqlang.org), a jq-like Markdown processor: pinned official binaries on supported Linux and Apple Silicon macOS, Homebrew when available, and a pinned Cargo build on Intel macOS. If neither Homebrew nor a working Cargo is available on Intel macOS, it reports the prerequisite and continues without mq. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone.
+
+For copied paths, including the stable shared agent assets under `~/.local/share/config_files/ai-agent`, the installer keeps the previous source snapshot under `~/.local/state/config_files/managed-copies`. Updates use that snapshot to remove files deleted from the repository while preserving target-only files, local modifications, and local deletions. Concurrent changes to the same entry, including delete/modify conflicts, are reported; `--force` backs up the target before applying the repository version.
 
 ### Windows (install.bat)
 
@@ -123,6 +125,8 @@ Options:
 | `grc/` | `~/.config/grc` | GRC colorizer configuration |
 | `fourmolu.yaml` | `~/.config/fourmolu.yaml` | Haskell formatter config |
 
+The i3, niri, sway, waybar, and systemd paths are Linux-only. `install.sh` reports them as skipped on macOS and WSL without failing the installation.
+
 #### Windows
 
 | Source | Target | Description |
@@ -145,7 +149,7 @@ Options:
 |--------|--------|-------------|
 | `ai-agent/skills/<skill>/` | `~/.codex/skills/<skill>/` | **Each skill linked individually** |
 
-**Note**: Codex skills are linked individually for reliability. If `~/.codex/skills` is currently a symlink, run `./install.sh --interactive` or `./install.sh --force` once to migrate it to a real directory and then link each skill.
+**Note**: Codex skills are linked individually from the stable shared snapshot. A legacy link to this repository's `ai-agent/skills` directory is migrated automatically; unrelated user-managed links still require `--interactive` or `--force`.
 
 ### Gemini CLI Configuration
 
@@ -186,7 +190,7 @@ Neovim configuration uses [lazy.nvim](https://github.com/folke/lazy.nvim) as the
 ### First-time Setup
 
 1. Ensure Neovim 0.9+ is installed
-2. Run `./install.sh` to link the configuration
+2. Run `./install.sh` to install the configuration
 3. On first Neovim start, lazy.nvim will automatically install all plugins
 
 ```bash
@@ -211,8 +215,8 @@ ln -s /opt/nvim-linux-x86_64/bin/nvim ~/.local/bin/nvim
 The scripts automatically detect the OS and apply appropriate configurations:
 
 - **Linux**: Full support for all configurations (via `install.sh`)
-- **macOS**: Most configs supported, window manager configs (i3, sway, niri, waybar) not applicable (via `install.sh`)
-- **WSL**: Same as Linux, window manager configs won't work in WSL (via `install.sh`)
+- **macOS**: Cross-platform shell, editor, and agent configs; Linux desktop and systemd paths are skipped (via `install.sh`)
+- **WSL**: Cross-platform shell, editor, and agent configs; Linux desktop and systemd paths are skipped (via `install.sh`)
 - **Windows**: Limited support - mainly Neovim and Git configs (via `install.bat`)
 
 ## Windows Notes
@@ -233,7 +237,7 @@ The scripts automatically detect the OS and apply appropriate configurations:
 
 ### General
 
-1. **No Overwrite by Default**: If a file already exists at the target (and is not a symlink), the script will skip it and report. Use `--force` to backup and replace, or `--interactive` to be prompted for each conflict.
+1. **Unmanaged Targets Are Preserved**: Existing unmanaged paths are skipped by default. Previously installed managed copies, including `~/.zshrc`, are updated with the three-way merge rules described above.
 
 ### Local Overrides
 
@@ -268,7 +272,7 @@ candidates = [
 
 3. **Backup**: When using `--force` or choosing backup in interactive mode, original files are backed up as `<filename>.backup.<timestamp>`
 
-4. **Relative Paths**: Some symlinks use relative paths (e.g., `../config_files/nvim`). These work correctly when the repository is at `~/config_files`.
+4. **Stable Install Paths**: Ordinary configs are copied to their runtime locations. Necessary shared-agent symlinks point to `~/.local/share/config_files`, not to the repository checkout.
 
 ### Windows-Specific Notes
 
@@ -282,12 +286,12 @@ candidates = [
 
 ## Manual Management
 
-If you need to create links manually:
+If you need to install ordinary configs manually, copy them so runtime behavior does not depend on the repository location:
 
 ```bash
-# Link a directory
-ln -s ~/config_files/nvim ~/.config/nvim
+# Copy a directory
+cp -pPR ~/config_files/nvim ~/.config/nvim
 
-# Link a single file
-ln -s ~/config_files/bashrc ~/.bashrc
+# Copy a single file
+cp -p ~/config_files/bashrc ~/.bashrc
 ```

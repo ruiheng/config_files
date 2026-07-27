@@ -40,8 +40,8 @@ This will:
 If you need to set up manually:
 
 ```bash
-# Link statusline script
-ln -s ~/config_files/ai-agent/claude/statusline-command.sh ~/.claude/statusline-command.sh
+# Copy the statusline script to its runtime location
+cp -p ~/config_files/ai-agent/claude/statusline-command.sh ~/.claude/statusline-command.sh
 
 # Ensure it's executable
 chmod +x ~/.claude/statusline-command.sh

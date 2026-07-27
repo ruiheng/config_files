@@ -22,7 +22,7 @@
 ### 目录结构
 
 ```
-~/.config_files/ai-agent/
+~/.local/share/config_files/ai-agent/
 ├── modules/
 │   ├── linus.md              # 角色定义
 │   ├── git-workflow.md       # Git 提交和工作流规则
@@ -36,13 +36,13 @@
 
 ```bash
 # Claude Code (已配置)
-~/.claude/CLAUDE.md -> ../config_files/ai-agent/CLAUDE.md
+~/.claude/CLAUDE.md -> ~/.local/share/config_files/ai-agent/CLAUDE.md
 
 # Gemini CLI (已配置)
-~/.gemini/GEMINI.md -> ../config_files/ai-agent/GEMINI.md
+~/.gemini/GEMINI.md -> ~/.local/share/config_files/ai-agent/GEMINI.md
 
 # Codex CLI (已配置)
-~/.codex/AGENTS.md -> ../config_files/ai-agent/AGENTS.md
+~/.codex/AGENTS.md -> ~/.local/share/config_files/ai-agent/AGENTS.md
 ```
 
 ### Import 语法支持
