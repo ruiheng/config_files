@@ -184,6 +184,7 @@ Current recommended operating mode:
 2. Create `coder-<task_id>` as needed. For unresolved design, create or reuse `architect-author-<task_id>` and `architect-reviewer-<task_id>`; for mature committed design, use `architect-<task_id>`. Create or reuse `reviewer-<task_id>` on demand from `review-request`: planner parent for task/integration, requester parent for standalone. Prefer reusing `browser-tester` as a long-lived session, but let `browser-test-request` create it on demand when missing.
 3. Queue message first. Best-effort nudges may wake non-local targets; correctness comes from receiver-side message pickup.
    Newly created or restarted targets should use the same message recv-first pickup path as any other target.
+   Keep nudge text deliberately non-assertive (`NOTICE: There might be new message in waypost.`). Harnesses can replay a nudge after the corresponding delivery was already claimed (observed with Codex; possible elsewhere). Do not replace it with a definite delivery claim: an empty receive after a nudge alone is not a transport fault and should not trigger diagnostics.
 4. Default to unattended final acceptance/closeout; require user confirmation only when the user or workflow policy explicitly makes acceptance human-gated.
 5. Keep transport content in message bodies. Immutable tech-design rounds are product artifacts, not message substitutes.
 6. Keep planner closeout actions batched after acceptance.
