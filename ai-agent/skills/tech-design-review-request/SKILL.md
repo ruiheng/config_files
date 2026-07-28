@@ -41,6 +41,21 @@ Write rounds under `.agent-artifacts/tech-design/<author_session_id>/rNNN.md`.
 
 `.agent-artifacts/` must remain ignored. Stop if it is tracked or the artifact path is outside the shared workspace.
 
+## Design Content Gate
+
+As architect-author, test the proposal against these points and record material conclusions in the artifact:
+
+- core approach, scope, ownership, boundaries; rationale for each change
+- persisted data/state: necessity, ownership, migration, rollback
+- configuration: defaults, deployment, operational impact, rollback
+- simplicity: unnecessary abstraction, speculative flexibility, duplicate paths, coupling/change surface
+- compatibility: required old/new client, reader, writer, data, configuration, and interface combinations; why each is needed
+- benefits, risks, failure handling, mitigation
+- key alternatives and tradeoffs
+- unresolved user-owned decisions: options and consequences
+
+Keep the treatment proportional. State an explicit no-impact conclusion when omission would be ambiguous; do not invent compatibility or machinery merely to satisfy this gate.
+
 ## Start Inputs
 
 Common:
@@ -134,7 +149,7 @@ On `tech_design_draft_requested`:
 
 1. recover the original requester, reviewer, round, artifact path, archive branch, and optional review focus from the message
 2. inspect relevant repository state and user-aligned context
-3. write a proportional, implementation-ready design to the named round file
+3. write a proportional, implementation-ready design that passes `Design Content Gate` to the named round file
 4. ensure accepted constraints and rationale live in the artifact, not only in messages
 5. send the exact artifact to the recorded reviewer, stop editing it, then return under the Async sender rule
 6. handle later `tech_design_review_report` deliveries until accepted or a user-owned decision is required
@@ -217,6 +232,16 @@ Round: <round>
 
 Do not paste or summarize the design, or hand-write a diff. Send from `agent-deck/<review_sender_session_id>` to `agent-deck/<reviewer_session_id>` with subject `tech-design review: <task_id> r<round>`, then follow the shared Async sender rule.
 
+## User Completion
+
+After the accepted design becomes authoritative:
+
+- default: final design path(s) and authoritative commit only
+- requested design summary/assessment: include it now from the accepted design and review report; cover proportionally core approach, persisted data/configuration, simplicity/over-design/boundaries, compatibility need, benefits/risks, key tradeoffs, and pending user decisions
+- requested decision summary only: report only the decisions
+
+Distinguish no impact from unknown; do not wait for a follow-up.
+
 ## Report Handling
 
 The session that sent the request handles the report.
@@ -242,6 +267,7 @@ After acceptance:
   2. require `git rev-parse <tech_design_branch>` to equal that commit; if it differs, stop and review the new tip
   3. rerun the review-existing path gate against the accepted commit
   4. verify the final docs are committed, switch to the recorded base branch, require it as current, then merge the design branch with normal `git merge`
+  5. follow `User Completion` with `design_docs_in_scope` and the resulting base `HEAD`
 
 For `review-existing`, do not squash, rebase, cherry-pick, or guess through dirty state, conflicts, detached `HEAD`, or base uncertainty.
 
@@ -308,8 +334,7 @@ On `tech_design_delivered`:
 7. Copy the accepted artifact unchanged to the formal tracked docs path and commit that file only
 8. after the archive commit succeeds, remove both architect sessions
 9. treat the tracked committed doc as authoritative and cite it in later implementation work
-
-Keep the user-facing completion concise: report the tracked doc path and commit, not the design itself.
+10. follow `User Completion` with the tracked doc and archive commit
 
 ## Rule
 

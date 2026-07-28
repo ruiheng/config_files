@@ -25,13 +25,15 @@ In direct-use mode, review the exact readable target named by the user; it may a
 
 Review as a skeptical senior engineer. Prioritize:
 
-- the simplest coherent solution and a concrete reason for every proposed change
+- problem framing, constraints, and success criteria
+- the simplest coherent approach; scope, ownership, boundaries; rationale for each change
 - over-design: speculative flexibility/scale, unnecessary layers or abstractions, duplicated paths, and excessive coupling/change surface
 - persisted data/schema changes: necessity, ownership, migration, and rollback
-- forward/backward compatibility: which old/new clients, readers, writers, or data versions must interoperate and why; do not assume it
-- problem framing, constraints, success criteria, alternatives, and tradeoffs
-- rollout, failure handling, operations, observability, security, privacy, and data boundaries
-- unresolved questions that block implementation confidence
+- configuration changes: defaults, deployment, operations, and rollback
+- compatibility: which old/new clients, readers, writers, data, configuration, or interfaces must interoperate and why; do not assume it
+- benefits, risks, alternatives, and key tradeoffs
+- rollout, failure handling, observability, security, privacy, and data boundaries
+- unresolved user-owned decisions, their options and consequences, and other questions that block implementation confidence
 
 This is not code review. Distinguish missing evidence from a wrong design and focus on the few findings most likely to change implementation confidence.
 
@@ -115,6 +117,8 @@ Decision guidance:
 `Residual Risk` may accompany a positive decision unless it blocks implementation confidence.
 
 In direct-use mode, omit the message header, use the same report sections, and describe the actual named target under `Reviewed Scope`.
+
+In direct-use mode, when the user asks for design highlights or assessment, add a compact `Design Assessment` covering: core approach; configuration; simplicity, over-design, and boundaries; compatibility need; benefits and risks; key tradeoffs; and pending user decisions. Do not repeat `Persisted Data Changes`; distinguish no impact from missing evidence.
 
 ## Message Delivery
 
