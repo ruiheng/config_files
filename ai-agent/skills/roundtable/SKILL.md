@@ -133,7 +133,7 @@ Round: <round>
 - Keep the answer concise and assume the moderator will translate for the user.
 ```
 
-After participant control message is sent, do independent moderator work when available. If no visible local work remains, use normal `check-waypost-messages`; group subscriber updates arrive as durable personal `group_message_available` deliveries, while external wake notification is only best-effort acceleration.
+After participant control message is sent, do independent moderator work when available. If no visible local work remains, end this turn. Do nothing until the next instruction.
 
 ## Ending
 

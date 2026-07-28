@@ -290,7 +290,7 @@ Execution flow in Agent Deck mode:
    - `rework_required` if `NEEDS_REVISION`, must-fix exists, completeness FAIL, or a browser report says `Code changed: yes`, unless the non-convergence stop rule below applies
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
    - `stop_recommended` if no must-fix remains and browser validation is not required or already passed
-   - if `round >= review_round_hard_stop_threshold` and similar issues are still recurring or progress is clearly non-converging, do not send another routine `rework_required`; present the situation to the user and wait for a decision
+   - if `round >= review_round_hard_stop_threshold` and similar issues are still recurring or progress is clearly non-converging, do not send another routine `rework_required`; present the situation to the user, then apply the Manual-decision rule
 3. For `rework_required`, send the full review report back to the requester session from `review_requested`
    - requester may be `coder` or `planner`
 4. For `browser_check_requested`, generate one opaque `browser_check_id`, pass it to `browser-test-request` with this reviewer as report requester, and retain it with the review frame; pass original `requester_role` / `requester_session_id` and `setup_contact_workspace` as Setup Contact; on `browser_check_report`, resume with its evidence and matched review frame
@@ -299,7 +299,7 @@ Execution flow in Agent Deck mode:
    - for `integration_final` / `standalone`, after automatic or explicit acceptance, send the full `stop_recommended` report to requester; do not run `review-closeout`
    - for task with `auto_accept_if_no_must_fix=true`, proceed to `review-closeout`
    - if the same final no-must-fix task-lane report is delivered to requester in unattended flow, requester may run `review-closeout` from that report instead of treating it as another rework round
-   - only when `auto_accept_if_no_must_fix=false`, present user decision summary and wait for explicit acceptance or iteration decision
+   - only when `auto_accept_if_no_must_fix=false`, present user decision summary, then apply the Manual-decision rule
    - after explicit acceptance in human-gated flow, run `review-closeout` for task, or send the non-task result to requester
    - request human UI confirmation before acceptance/closeout only when `ui_manual_confirmation=required`, or when `ui_manual_confirmation=auto` and explicit policy wants heuristic UI gating
 
@@ -347,10 +347,12 @@ For a user-facing `stop_recommended`, include Review Decision, Key Findings Snap
 
 When `auto_accept_if_no_must_fix=true`, state `Auto-accepted by workflow policy`; do not ask for a decision.
 
+Manual-decision rule: after presenting a decision to the user, end this turn. Do nothing until the user's next instruction.
+
 Required interaction behavior:
 - For `rework_required`, send automatically after the report is ready
 - For accepted `integration_final` / `standalone` `stop_recommended`, send the full report to requester automatically
-- For `stop_recommended` with manual decision, do that only when `auto_accept_if_no_must_fix=false`; wait for explicit user choice, then close out task, send accepted non-task result, or send `user_requested_iteration`
+- For `stop_recommended` with manual decision, do that only when `auto_accept_if_no_must_fix=false`; after the user's decision, close out task, send accepted non-task result, or send `user_requested_iteration`
 - In unattended flow, accepted no-must-fix task-lane reports that land with reviewer or requester must be treated as `review-closeout` input, not as another rework cycle
 - In unattended flow, accepted `integration_final` / `standalone` reports return directly to requester; do not route them into `review-closeout`
 - Preserve `workflow_policy` unchanged in outbound messages

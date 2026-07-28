@@ -110,9 +110,10 @@ Round: 1
 ## Review & Handoff
 - Per-task review: [required | skip]
 - Coder git writes and the delivery commit are pre-authorized
-- If required: after commit and validation, run `review-request` with `review_lane = task`; preserve the recorded Branch Plan and Workspace Handoff, then follow the shared Async sender rule
-- If skipped: after commit and validation, send `code_delivery_complete` to planner, then follow the shared Async sender rule
-- On a blocker before an accepted task review: send `code_delivery_complete` to planner under either policy, then follow the shared Async sender rule
+- If required: after commit and validation, run `review-request` with `review_lane = task`; preserve the recorded Branch Plan and Workspace Handoff
+- If skipped: after commit and validation, send `code_delivery_complete` to planner
+- On a blocker before an accepted task review: send `code_delivery_complete` to planner under either policy
+- After any successful review request or terminal handoff above, end this turn. Do nothing until the next instruction.
 - Reviewer routing: ref=<reviewer_session_ref>; id=<reviewer_session_id>; profile=<reviewer_tool_profile>; cmd=<reviewer_tool_cmd> [required only; omit absent values]
 - Workflow policy: [only when non-default]
 
