@@ -1,0 +1,6 @@
+interface:
+  display_name: "Explain for Me"
+  short_description: "Turn complex sources into a tailored HTML explainer"
+  default_prompt: "Use $explain-for-me to explain the current material in Chinese for a humanities audience."
+policy:
+  allow_implicit_invocation: false

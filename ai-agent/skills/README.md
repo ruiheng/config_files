@@ -58,7 +58,7 @@ reference to them.
 
 Choose the lightest surface that preserves the task's lifecycle. Parallelism alone does not justify Agent Deck. Do not use Agent Deck to emulate a native harness subagent.
 
-`delegate-task` is generic; a code plan uses its Selection-Only Use, then enters `delegate-code-task` for a Waypost-backed code lane.
+`delegate-task` is generic. `$delegate-task [$skill-name | skill-name] ...` parses only the first token of its input. Before dispatch it classifies the skill's code/delivery side effects and carries minimum sufficient known context, including requester-only source inline or by durable ref. It does not search merely to enlarge context; workers investigate gaps. Code-owned work enters `delegate-code-task`.
 
 ## Core Transport
 
@@ -162,6 +162,7 @@ flowchart TD
 - `check-waypost-messages` routes generic delegation actions to `delegate-task`, code delegation to `delegate-code-task`, and `group/roundtable-*` `group_message_available` to `roundtable`; replace the group name-pattern rule with an explicit mapping if another group workflow is added
 - planner-owned coder/reviewer/architect/refactor-reviewer sessions are created as child sessions through `agent_deck_create_session` with explicit parent group; root group is empty and valid
 - use Agent Deck for work a user may want to observe, steer, resume, or revisit; expose its session id/title in the user-facing dispatch result
+- `$explain-for-me` is a read-only, source-agnostic explanation skill. It writes its primary result as `.agent-artifacts/explain-for-me/<id>/index.html`; chat returns the pointer rather than repeating the explanation. Only an explicit request to show a remote page may start a harness-managed loopback background server, owned by the user-facing session rather than the worker.
 - delegated task/integration reviewers are parented to planner, not coder; standalone reviewers are parented to requester
 - Prefer child sessions when agent Deck can represent ownership and cleanup directly.
 - A planner may be top-level outside `dispatch-plan`; do not assume every planner is a child session.
@@ -203,6 +204,7 @@ Use skills:
 - Architect review: `tech-design-review`
 - Browser check request: `browser-test-request`
 - Browser tester: `browser-test`
+- Audience-adapted HTML explainer: `explain-for-me`
 - Refactor review request: `refactor-review-request`
 - Refactor advisor: `refactor-review`
 - Agent Deck skill + docs bundle: use `agent-deck`; docs live under its `references/`

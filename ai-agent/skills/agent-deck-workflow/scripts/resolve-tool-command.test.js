@@ -383,6 +383,24 @@ test("resolveToolCommand uses the role default profile", () => {
   assert.equal(resolved.candidate_count, 2);
 });
 
+test("explainer role prefers the configured agy command", () => {
+  const config = loadToolConfig(
+    path.resolve(__dirname, "../../../config/tool-profiles.toml"),
+    []
+  );
+  const resolved = resolveToolCommand({
+    role: "explainer",
+    showList: true,
+    inspectCommand: availableInspection,
+    config,
+  });
+
+  assert.equal(resolved.tool_profile, "explainer_default");
+  assert.equal(resolved.resolved_tool_cmd, "agy --model gemini-3.6-flash-high");
+  assert.equal(resolved.resolution_source, "role_default_profile");
+  assert.equal(resolved.tool_cmds[0], "agy --model gemini-3.6-flash-high");
+});
+
 test("resolveToolCommand prefers inherited command over role default profile", () => {
   const resolved = resolveToolCommand({
     role: "planner",
