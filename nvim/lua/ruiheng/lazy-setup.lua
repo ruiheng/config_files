@@ -460,6 +460,11 @@ require("lazy").setup({
           search = {
             enabled = false,
           },
+          -- Neovim 0.13-dev no longer exports the internal search symbols
+          -- used by Flash's char mode. Keep native f/F/t/T motions working.
+          char = {
+            enabled = false,
+          },
         },
       },
       -- stylua: ignore
