@@ -51,6 +51,11 @@ NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/insta
 RUSTUP_INSTALL_URL="https://sh.rustup.rs"
 MQ_VERSION="v0.7.0"
 MQ_RELEASE_BASE_URL="https://github.com/harehare/mq/releases/download/$MQ_VERSION"
+LAZYGIT_RELEASE_API_URL="https://api.github.com/repos/jesseduffield/lazygit/releases/latest"
+UV_INSTALL_URL="https://astral.sh/uv/install.sh"
+SPACESHIP_PROMPT_REPO="https://github.com/spaceship-prompt/spaceship-prompt.git"
+SPACESHIP_VI_MODE_REPO="https://github.com/spaceship-prompt/spaceship-vi-mode.git"
+ZSH_AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
 CLAUDE_CODE_INSTALL_URL="https://claude.ai/install.sh"
 ANTIGRAVITY_INSTALL_URL="https://antigravity.google/cli/install.sh"
 ANTIGRAVITY_INSTALL_SHA256="ee1ea43ce4e9e56356c4ab6dad907ef357ae4bdfcaadb682735909fb57c9c640"
@@ -710,6 +715,73 @@ merge_managed_directory_mode() {
     managed_copy_conflict "$display_path"
 }
 
+merge_managed_file_mode() {
+    local base="$1"
+    local live="$2"
+    local staged="$3"
+    local display_path="$4"
+    local live_mode
+
+    if path_mode_matches "$base" "$live"; then
+        return 0
+    fi
+
+    if path_mode_matches "$base" "$staged"; then
+        live_mode="$(path_mode "$live")" || return 1
+        chmod "$live_mode" "$staged"
+        return $?
+    fi
+
+    if path_mode_matches "$live" "$staged"; then
+        return 0
+    fi
+
+    managed_copy_conflict "$display_path"
+}
+
+merge_managed_regular_file() {
+    local base="$1"
+    local live="$2"
+    local staged="$3"
+    local display_path="$4"
+    local merged=""
+    local staged_mode
+
+    if cmp -s "$base" "$live" || cmp -s "$live" "$staged"; then
+        :
+    elif cmp -s "$base" "$staged"; then
+        staged_mode="$(path_mode "$staged")" || return 1
+        cp "$live" "$staged" || return 1
+        chmod "$staged_mode" "$staged" || return 1
+    elif command -v git &>/dev/null; then
+        merged="$(mktemp "${TMPDIR:-/tmp}/config-files-merge.XXXXXX")" || {
+            log_error "Failed to create temporary merge file: $display_path"
+            return 1
+        }
+        if ! git merge-file -p "$staged" "$base" "$live" > "$merged"; then
+            rm -f "$merged"
+            managed_copy_conflict "$display_path" || return 1
+            merge_managed_file_mode "$base" "$live" "$staged" "$display_path"
+            return $?
+        fi
+        staged_mode="$(path_mode "$staged")" || {
+            rm -f "$merged"
+            return 1
+        }
+        if ! cp "$merged" "$staged" || ! chmod "$staged_mode" "$staged"; then
+            rm -f "$merged"
+            log_error "Failed to stage merged file: $display_path"
+            return 1
+        fi
+        rm -f "$merged"
+        log_info "Merged local and repository changes: $display_path"
+    else
+        managed_copy_conflict "$display_path" || return 1
+    fi
+
+    merge_managed_file_mode "$base" "$live" "$staged" "$display_path"
+}
+
 installed_path_exists() {
     [[ -e "$1" || -L "$1" ]]
 }
@@ -830,12 +902,7 @@ merge_managed_item() {
         if [[ $staged_exists -eq 0 ]]; then
             return 0
         fi
-        if source_matches_installed_copy "$base" "$staged"; then
-            remove_installed_path "$staged"
-            return 0
-        fi
-        managed_copy_conflict "$display_path"
-        return $?
+        return 0
     fi
 
     if [[ $staged_exists -eq 0 ]]; then
@@ -867,6 +934,13 @@ merge_managed_item() {
         return $?
     fi
 
+    if [[ -f "$base" && ! -L "$base" \
+        && -f "$live" && ! -L "$live" \
+        && -f "$staged" && ! -L "$staged" ]]; then
+        merge_managed_regular_file "$base" "$live" "$staged" "$display_path"
+        return $?
+    fi
+
     if [[ -d "$base" && ! -L "$base" \
         && -d "$live" && ! -L "$live" \
         && -d "$staged" && ! -L "$staged" ]]; then
@@ -884,6 +958,29 @@ DRY_RUN_MERGE_ITEM_EXISTS=0
 
 mark_dry_run_merge_change() {
     DRY_RUN_MERGE_CHANGED=1
+}
+
+dry_run_regular_file_merge_is_clean() {
+    local base="$1"
+    local live="$2"
+    local upstream="$3"
+
+    if ! cmp -s "$base" "$live" \
+        && ! cmp -s "$live" "$upstream" \
+        && ! cmp -s "$base" "$upstream"; then
+        if ! command -v git &>/dev/null \
+            || ! git merge-file -p "$upstream" "$base" "$live" >/dev/null; then
+            return 1
+        fi
+    fi
+
+    if path_mode_matches "$base" "$live" \
+        || path_mode_matches "$base" "$upstream" \
+        || path_mode_matches "$live" "$upstream"; then
+        return 0
+    fi
+
+    return 1
 }
 
 dry_run_merge_managed_directory_mode() {
@@ -1050,10 +1147,6 @@ dry_run_merge_item() {
         if [[ $upstream_exists -eq 0 ]]; then
             return 0
         fi
-        if source_matches_installed_copy "$upstream" "$base" "$source_root"; then
-            return 0
-        fi
-        managed_copy_conflict "$display_path" || return 1
         DRY_RUN_MERGE_ITEM_EXISTS=1
         mark_dry_run_merge_change
         return 0
@@ -1088,6 +1181,17 @@ dry_run_merge_item() {
     if source_matches_installed_copy "$upstream" "$live" "$source_root" \
         || source_matches_installed_copy "$upstream" "$base" "$source_root"; then
         DRY_RUN_MERGE_ITEM_EXISTS=1
+        return 0
+    fi
+
+    if [[ -f "$base" && ! -L "$base" \
+        && -f "$live" && ! -L "$live" \
+        && -f "$upstream" && ! -L "$upstream" ]]; then
+        if ! dry_run_regular_file_merge_is_clean "$base" "$live" "$upstream"; then
+            managed_copy_conflict "$display_path" || return 1
+        fi
+        DRY_RUN_MERGE_ITEM_EXISTS=1
+        mark_dry_run_merge_change
         return 0
     fi
 
@@ -1748,6 +1852,8 @@ ensure_required_command() {
 install_required_tools() {
     local required_tools=(
         curl
+        fzf
+        git
         tmux
         lsof
         jq
@@ -1766,6 +1872,90 @@ install_required_tools() {
     return 0
 }
 
+fd_is_runnable() {
+    command -v fd &>/dev/null && fd --version >/dev/null 2>&1
+}
+
+install_fd_alias() {
+    local fdfind_path
+    local target="$HOME/.local/bin/fd"
+
+    fdfind_path="$(command -v fdfind)" || return 1
+    if [[ -e "$target" || -L "$target" ]]; then
+        if symlink_points_to "$target" "$fdfind_path"; then
+            log_ok "Found fd compatibility link"
+            return 0
+        fi
+        log_error "fd install target already exists: $target"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would link: $target -> $fdfind_path"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$target")" || return 1
+    if ! ln -s "$fdfind_path" "$target"; then
+        log_error "Failed to create fd compatibility link: $target"
+        return 1
+    fi
+    hash -r
+
+    if fd_is_runnable; then
+        log_ok "Installed fd compatibility link"
+        return 0
+    fi
+
+    log_error "fd is unavailable after linking: $target"
+    return 1
+}
+
+install_fd() {
+    local package_name="fd"
+
+    log_info "Checking fd..."
+
+    if fd_is_runnable; then
+        log_ok "Found fd"
+        return 0
+    fi
+    if command -v fdfind &>/dev/null && fdfind --version >/dev/null 2>&1; then
+        install_fd_alias
+        return $?
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        apt-get|dnf)
+            package_name="fd-find"
+            ;;
+    esac
+    if ! install_package "$package_name"; then
+        log_error "Please install '$package_name' manually and rerun the installer"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
+            log_dry "Would create the fd compatibility link for fdfind"
+        fi
+        return 0
+    fi
+
+    hash -r
+    if fd_is_runnable; then
+        log_ok "Installed fd"
+        return 0
+    fi
+    if command -v fdfind &>/dev/null && fdfind --version >/dev/null 2>&1; then
+        install_fd_alias
+        return $?
+    fi
+
+    log_error "fd is unavailable after package install: $package_name"
+    return 1
+}
+
 sha256_file() {
     local file_path="$1"
     local hash_output
@@ -1779,6 +1969,176 @@ sha256_file() {
     fi
 
     printf '%s\n' "${hash_output%% *}"
+}
+
+lazygit_asset_suffix() {
+    local architecture
+
+    architecture="$(uname -m)"
+    case "$OS:$architecture" in
+        linux:x86_64|linux:amd64|wsl:x86_64|wsl:amd64)
+            printf '%s\n' "Linux_x86_64"
+            ;;
+        linux:aarch64|linux:arm64|wsl:aarch64|wsl:arm64)
+            printf '%s\n' "Linux_arm64"
+            ;;
+        macos:x86_64|macos:amd64)
+            printf '%s\n' "Darwin_x86_64"
+            ;;
+        macos:aarch64|macos:arm64)
+            printf '%s\n' "Darwin_arm64"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+cleanup_lazygit_temp() {
+    local tmp_dir="$1"
+
+    rm -f \
+        "$tmp_dir/release.json" \
+        "$tmp_dir/lazygit.tar.gz" \
+        "$tmp_dir/lazygit"
+    rmdir "$tmp_dir" 2>/dev/null || true
+}
+
+install_lazygit() {
+    local asset_suffix
+    local release_tag
+    local version
+    local archive_name
+    local asset_info
+    local download_url
+    local asset_digest
+    local expected_sha256
+    local actual_sha256
+    local local_bin="$HOME/.local/bin"
+    local target="$local_bin/lazygit"
+    local tmp_dir
+    local release_json
+    local archive
+
+    log_info "Checking lazygit..."
+
+    if command -v lazygit &>/dev/null; then
+        log_ok "Found lazygit"
+        return 0
+    fi
+
+    if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
+        if ! install_package "lazygit"; then
+            return 1
+        fi
+        if [[ $DRY_RUN -eq 1 ]]; then
+            return 0
+        fi
+
+        hash -r
+        if command -v lazygit &>/dev/null; then
+            log_ok "Installed lazygit with Homebrew"
+            return 0
+        fi
+
+        log_error "lazygit is unavailable after Homebrew install"
+        return 1
+    fi
+
+    if ! asset_suffix="$(lazygit_asset_suffix)"; then
+        log_warn "lazygit automatic install is unavailable on: $OS/$(uname -m)"
+        log_info "Install lazygit manually to enable the configured Neovim shortcut"
+        return 0
+    fi
+
+    if [[ -e "$target" || -L "$target" ]]; then
+        log_error "lazygit install target already exists but is not runnable: $target"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would query the latest lazygit release: $LAZYGIT_RELEASE_API_URL"
+        log_dry "Would download and verify the latest lazygit $asset_suffix archive"
+        log_dry "Would install: $target"
+        return 0
+    fi
+
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/lazygit-install.XXXXXX")" || {
+        log_error "Failed to create temporary lazygit directory"
+        return 1
+    }
+    release_json="$tmp_dir/release.json"
+    archive="$tmp_dir/lazygit.tar.gz"
+
+    if ! curl -fsSL "$LAZYGIT_RELEASE_API_URL" -o "$release_json"; then
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "Failed to query the latest lazygit release"
+        return 1
+    fi
+
+    release_tag="$(jq -er '.tag_name | strings | select(length > 0)' "$release_json")" || {
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "Failed to read the latest lazygit version"
+        return 1
+    }
+    version="${release_tag#v}"
+    archive_name="lazygit_${version}_${asset_suffix}.tar.gz"
+    asset_info="$(
+        jq -er --arg name "$archive_name" \
+            '.assets[] | select((.name | ascii_downcase) == ($name | ascii_downcase)) | [.browser_download_url, .digest] | @tsv' \
+            "$release_json"
+    )" || {
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "No lazygit release asset found for: $asset_suffix"
+        return 1
+    }
+    IFS=$'\t' read -r download_url asset_digest <<< "$asset_info"
+    expected_sha256="${asset_digest#sha256:}"
+    if [[ ! "$expected_sha256" =~ ^[[:xdigit:]]{64}$ ]]; then
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "No valid SHA-256 digest found for: $archive_name"
+        return 1
+    fi
+
+    if ! curl -fsSL "$download_url" -o "$archive"; then
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "Failed to download lazygit $release_tag"
+        return 1
+    fi
+
+    actual_sha256="$(sha256_file "$archive")" || {
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "No SHA-256 tool available for lazygit verification"
+        return 1
+    }
+    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "lazygit archive SHA-256 mismatch"
+        return 1
+    fi
+
+    if ! tar -xzf "$archive" -C "$tmp_dir" lazygit; then
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "Failed to extract lazygit $release_tag"
+        return 1
+    fi
+    if ! mkdir -p "$local_bin" || ! install -m 0755 "$tmp_dir/lazygit" "$target"; then
+        cleanup_lazygit_temp "$tmp_dir"
+        log_error "Failed to install lazygit to: $target"
+        return 1
+    fi
+    cleanup_lazygit_temp "$tmp_dir"
+    hash -r
+
+    if "$target" --version >/dev/null 2>&1; then
+        log_ok "Installed lazygit $release_tag"
+        return 0
+    fi
+
+    rm -f "$target"
+    hash -r
+    log_error "lazygit is unavailable after install: $target"
+    return 1
 }
 
 mq_is_runnable() {
@@ -2244,6 +2604,45 @@ install_remote_cli() {
     return 1
 }
 
+install_uv() {
+    UV_UNMANAGED_INSTALL="$HOME/.local/bin" \
+        install_remote_cli "uv" "uv" "$UV_INSTALL_URL" ""
+}
+
+install_bun() {
+    log_info "Checking Bun..."
+
+    if command -v bun &>/dev/null; then
+        log_ok "Found Bun"
+        return 0
+    fi
+
+    if ! ensure_required_command "npm"; then
+        log_error "Bun requires npm"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: npm install -g bun"
+        return 0
+    fi
+
+    log_info "Running: npm install -g bun"
+    if ! npm install -g bun; then
+        log_error "Failed to install Bun with npm"
+        return 1
+    fi
+    hash -r
+
+    if command -v bun &>/dev/null; then
+        log_ok "Installed Bun"
+        return 0
+    fi
+
+    log_error "Bun is unavailable after npm install"
+    return 1
+}
+
 install_oh_my_zsh() {
     local install_dir="$HOME/.oh-my-zsh"
     local entrypoint="$install_dir/oh-my-zsh.sh"
@@ -2288,6 +2687,81 @@ install_oh_my_zsh() {
     fi
 
     log_error "Oh My Zsh is incomplete after install: $install_dir"
+    return 1
+}
+
+install_zsh_checkout() {
+    local display_name="$1"
+    local repo_url="$2"
+    local target="$3"
+    local marker="$4"
+    local -a clone_cmd=(git clone --depth=1 "$repo_url" "$target")
+
+    if [[ -f "$marker" ]]; then
+        log_ok "Found $display_name"
+        return 0
+    fi
+
+    if [[ -e "$target" || -L "$target" ]]; then
+        log_error "$display_name directory exists but is incomplete: $target"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${clone_cmd[*]}"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$target")" || return 1
+    log_info "Running: ${clone_cmd[*]}"
+    if ! "${clone_cmd[@]}" || [[ ! -f "$marker" ]]; then
+        log_error "Failed to install $display_name"
+        return 1
+    fi
+
+    log_ok "Installed $display_name"
+}
+
+install_zsh_dependencies() {
+    local custom_dir="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+    local spaceship_dir="$custom_dir/themes/spaceship-prompt"
+    local spaceship_theme="$spaceship_dir/spaceship.zsh-theme"
+    local theme_link="$custom_dir/themes/spaceship.zsh-theme"
+
+    log_info "Checking Zsh theme and plugins..."
+
+    ensure_required_command "fzf" || return 1
+    install_zsh_checkout \
+        "Spaceship prompt" "$SPACESHIP_PROMPT_REPO" \
+        "$spaceship_dir" "$spaceship_theme" || return 1
+    install_zsh_checkout \
+        "spaceship-vi-mode" "$SPACESHIP_VI_MODE_REPO" \
+        "$custom_dir/plugins/spaceship-vi-mode" \
+        "$custom_dir/plugins/spaceship-vi-mode/spaceship-vi-mode.plugin.zsh" || return 1
+    install_zsh_checkout \
+        "zsh-autocomplete" "$ZSH_AUTOCOMPLETE_REPO" \
+        "$custom_dir/plugins/zsh-autocomplete" \
+        "$custom_dir/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh" || return 1
+
+    if symlink_points_to "$theme_link" "$spaceship_theme"; then
+        log_ok "Found Spaceship theme link"
+        return 0
+    fi
+    if [[ -e "$theme_link" || -L "$theme_link" ]]; then
+        log_error "Spaceship theme target already exists: $theme_link"
+        return 1
+    fi
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would link: $theme_link -> $spaceship_theme"
+        return 0
+    fi
+
+    if ln -s "$spaceship_theme" "$theme_link"; then
+        log_ok "Linked Spaceship theme"
+        return 0
+    fi
+
+    log_error "Failed to link Spaceship theme: $theme_link"
     return 1
 }
 
@@ -4708,6 +5182,18 @@ main() {
 
     ensure_path_contains_local_bin
 
+    if ! install_fd; then
+        exit 1
+    fi
+
+    if ! install_lazygit; then
+        exit 1
+    fi
+
+    if ! install_uv; then
+        exit 1
+    fi
+
     if ! install_mq; then
         exit 1
     fi
@@ -4716,7 +5202,15 @@ main() {
         exit 1
     fi
 
+    if ! install_zsh_dependencies; then
+        exit 1
+    fi
+
     if ! install_nodejs_with_nvm; then
+        exit 1
+    fi
+
+    if ! install_bun; then
         exit 1
     fi
 

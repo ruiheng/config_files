@@ -1,26 +1,18 @@
-export PATH="$HOME/.local/bin:$PATH"
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="spaceship"
+bindkey -v
+source "$ZSH/custom/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
-export ZSH="$HOME/.oh-my-zsh"
-plugins=(git)
+plugins=(git fzf spaceship-vi-mode)
 source "$ZSH/oh-my-zsh.sh"
 
-function zle-line-init zle-keymap-select {
-	RPS1="${${KEYMAP/vicmd/-- NORMAL --}/(main|viins)/-- INSERT --}"
-	RPS2="$RPS1"
-	zle reset-prompt
-}
-zle -N zle-line-init
-zle -N zle-keymap-select
+SPACESHIP_PROMPT_ORDER=(${SPACESHIP_PROMPT_ORDER:#char} vi_mode char)
+spaceship_vi_mode_enable
 
-terminfo_down_sc=$terminfo[cud1]$terminfo[cuu1]$terminfo[sc]$terminfo[cud1]
-function zle-line-init zle-keymap-select {
-	PS1_2="${${KEYMAP/vicmd/-- NORMAL --}/(main|viins)/-- INSERT --}"
-	PS1="%{$terminfo_down_sc$PS1_2$terminfo[rc]%}%~ %# "
-	zle reset-prompt
-}
-preexec () { print -rn -- $terminfo[el]; }
-
-set -o vi
+# Clean PATH after all tool initializers have run.
+typeset -U path PATH
+path=("$HOME/.local/bin" ${path:#/usr/local/games})
+path=(${path:#/usr/games})

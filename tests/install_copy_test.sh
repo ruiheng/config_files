@@ -99,11 +99,29 @@ test_zshrc_uses_managed_copy_merge() {
     assert_file_content "$zshrc" "local zsh config"
 }
 
-test_zshrc_avoids_machine_specific_local_bin_path() {
-    grep -Fqx 'export PATH="$HOME/.local/bin:$PATH"' "$REPO_ROOT/zshrc" \
-        || fail_test "zshrc does not use the home-relative local bin path"
+test_shell_configs_clean_path() {
+    local bash_path
+
+    grep -Fq 'path=("$HOME/.local/bin"' "$REPO_ROOT/zshrc" \
+        || fail_test "zshrc does not prioritize the home-relative local bin path"
+    grep -Fq '${path:#/usr/local/games}' "$REPO_ROOT/zshrc" \
+        || fail_test "zshrc does not remove /usr/local/games"
+    grep -Fq '${path:#/usr/games}' "$REPO_ROOT/zshrc" \
+        || fail_test "zshrc does not remove /usr/games"
     ! grep -Fq '/home/ruiheng/.local/bin' "$REPO_ROOT/zshrc" \
         || fail_test "zshrc contains a machine-specific local bin path"
+
+    bash_path="$(
+        HOME="$TEST_ROOT/path-home" \
+        PATH="$TEST_ROOT/path-home/.local/bin:/usr/bin:$TEST_ROOT/path-home/.local/bin:/usr/local/games:/usr/games:/bin" \
+        bash --noprofile --norc -c '
+            source "$1/bashrc"
+            source "$1/bashrc"
+            printf "%s\\n" "$PATH"
+        ' _ "$REPO_ROOT"
+    )" || fail_test "bashrc PATH cleanup failed"
+    [[ "$bash_path" == "$TEST_ROOT/path-home/.local/bin:/usr/bin:/bin" ]] \
+        || fail_test "bashrc PATH cleanup was incorrect: $bash_path"
 }
 
 test_managed_copy_dry_run_is_read_only() {
@@ -256,6 +274,69 @@ test_source_deletion_and_user_addition() {
     assert_file_content "$dst/local.conf" "local"
 }
 
+test_non_overlapping_file_changes_merge() {
+    local case_dir="$TEST_ROOT/file-merge"
+    local base="$case_dir/base"
+    local src="$case_dir/src"
+    local dst="$case_dir/dst"
+    local dry_dst="$case_dir/dry-dst"
+
+    mkdir -p "$case_dir"
+    printf 'first=old\nmiddle=same\nlast=old\n' > "$base"
+    printf 'first=old\nmiddle=same\nlast=upstream\n' > "$src"
+    printf 'first=local\nmiddle=same\nlast=old\n' > "$dst"
+    cp "$dst" "$dry_dst"
+
+    DRY_RUN=1
+    deploy_copy "$src" "$dry_dst" "$base" \
+        || fail_test "non-overlapping file dry-run merge failed"
+    DRY_RUN=0
+    [[ "$(<"$dry_dst")" == $'first=local\nmiddle=same\nlast=old' ]] \
+        || fail_test "file dry-run merge changed the target"
+    [[ $MANAGED_COPY_CHANGED -eq 1 ]] \
+        || fail_test "file dry-run merge did not report a change"
+
+    deploy_copy "$src" "$dst" "$base" || fail_test "non-overlapping file merge failed"
+    [[ "$(<"$dst")" == $'first=local\nmiddle=same\nlast=upstream' ]] \
+        || fail_test "non-overlapping file merge produced the wrong content"
+}
+
+test_overlapping_file_changes_conflict() {
+    local case_dir="$TEST_ROOT/file-merge-conflict"
+    local base="$case_dir/base"
+    local src="$case_dir/src"
+    local dst="$case_dir/dst"
+
+    mkdir -p "$case_dir"
+    printf 'value=old\n' > "$base"
+    printf 'value=upstream\n' > "$src"
+    printf 'value=local\n' > "$dst"
+
+    if deploy_copy "$src" "$dst" "$base"; then
+        fail_test "overlapping file changes did not conflict"
+    fi
+    assert_file_content "$dst" "value=local"
+}
+
+test_merge_scratch_does_not_collide_with_sibling() {
+    local case_dir="$TEST_ROOT/merge-scratch-collision"
+    local base="$case_dir/base"
+    local live="$case_dir/live"
+    local staged_dir="$case_dir/staged"
+    local staged="$staged_dir/foo"
+    local sibling="$staged.config-files-merge"
+
+    mkdir -p "$staged_dir"
+    printf 'first=old\nmiddle=same\nlast=old\n' > "$base"
+    printf 'first=local\nmiddle=same\nlast=old\n' > "$live"
+    printf 'first=old\nmiddle=same\nlast=upstream\n' > "$staged"
+    printf 'keep sibling\n' > "$sibling"
+
+    merge_managed_regular_file "$base" "$live" "$staged" "$staged" \
+        || fail_test "merge scratch collision test failed"
+    assert_file_content "$sibling" "keep sibling"
+}
+
 test_deleted_directory_preserves_target_only_content() {
     local case_dir="$TEST_ROOT/deleted-directory-local-content"
     local base="$case_dir/base"
@@ -315,7 +396,7 @@ test_deleted_directory_modified_managed_content_conflicts() {
     assert_file_content "$dst/obsolete/local.conf" "local addition"
 }
 
-test_local_deletion_is_preserved() {
+test_local_deletion_is_restored() {
     local case_dir="$TEST_ROOT/local-deletion"
     local base="$case_dir/base"
     local src="$case_dir/src"
@@ -329,7 +410,7 @@ test_local_deletion_is_preserved() {
     printf 'old\n' > "$dst/changed-upstream"
 
     deploy_copy "$src" "$dst" "$base" || fail_test "local deletion merge failed"
-    [[ ! -e "$dst/deleted-locally" ]] || fail_test "locally deleted file was restored"
+    assert_file_content "$dst/deleted-locally" "old"
     assert_file_content "$dst/changed-upstream" "new"
 }
 
@@ -363,35 +444,22 @@ test_upstream_deletion_local_modification_conflicts() {
         || fail_test "--force did not back up the locally modified deleted source"
 }
 
-test_local_deletion_upstream_modification_conflicts() {
-    local case_dir="$TEST_ROOT/local-delete-conflict"
+test_local_deletion_upstream_modification_is_restored() {
+    local case_dir="$TEST_ROOT/local-delete-update"
     local base="$case_dir/base"
     local src="$case_dir/src"
     local dst="$case_dir/dst"
-    local forced_dst="$case_dir/dst-force"
-    local backup_path
 
-    mkdir -p "$base" "$src" "$dst" "$forced_dst"
+    mkdir -p "$base" "$src" "$dst"
     printf 'old\n' > "$base/changed-upstream"
     printf 'new\n' > "$src/changed-upstream"
 
-    if deploy_copy "$src" "$dst" "$base"; then
-        fail_test "local deletion and upstream modification did not conflict"
-    fi
-    [[ ! -e "$dst/changed-upstream" ]] || fail_test "failed conflict changed local deletion"
-
-    FORCE=1
-    deploy_copy "$src" "$forced_dst" "$base" \
-        || fail_test "--force local deletion conflict failed"
-    FORCE=0
-    assert_file_content "$forced_dst/changed-upstream" "new"
-
-    backup_path="$(find "$case_dir" ! -path "$case_dir" -prune -name 'dst-force.backup.*' -print -quit)"
-    [[ -n "$backup_path" && -d "$backup_path" ]] \
-        || fail_test "--force did not back up the locally deleted target"
+    deploy_copy "$src" "$dst" "$base" \
+        || fail_test "local deletion and upstream modification restore failed"
+    assert_file_content "$dst/changed-upstream" "new"
 }
 
-test_root_local_deletion_is_preserved() {
+test_root_local_deletion_is_restored() {
     local case_dir="$TEST_ROOT/root-local-deletion"
     local dst="$case_dir/bashrc"
     local snapshot
@@ -402,10 +470,11 @@ test_root_local_deletion_is_preserved() {
     cp "$REPO_ROOT/bashrc" "$snapshot"
 
     install_copy "bashrc" "$dst" || fail_test "root local deletion merge failed"
-    [[ ! -e "$dst" && ! -L "$dst" ]] || fail_test "deleted managed root was restored"
+    cmp -s "$REPO_ROOT/bashrc" "$dst" \
+        || fail_test "deleted managed root was not restored"
 }
 
-test_root_local_deletion_upstream_modification_conflicts() {
+test_root_local_deletion_upstream_modification_is_restored() {
     local case_dir="$TEST_ROOT/root-delete-conflict"
     local dst="$case_dir/bashrc"
     local snapshot
@@ -415,15 +484,10 @@ test_root_local_deletion_upstream_modification_conflicts() {
     mkdir -p "$(dirname "$snapshot")"
     printf 'old\n' > "$snapshot"
 
-    if install_copy "bashrc" "$dst"; then
-        fail_test "root deletion and upstream modification did not conflict"
-    fi
-    [[ ! -e "$dst" && ! -L "$dst" ]] || fail_test "failed root conflict restored the target"
-
-    FORCE=1
-    install_copy "bashrc" "$dst" || fail_test "--force root deletion conflict failed"
-    FORCE=0
-    cmp -s "$REPO_ROOT/bashrc" "$dst" || fail_test "--force did not install the upstream root"
+    install_copy "bashrc" "$dst" \
+        || fail_test "root deletion and upstream modification restore failed"
+    cmp -s "$REPO_ROOT/bashrc" "$dst" \
+        || fail_test "upstream-modified deleted root was not restored"
 }
 
 test_excluded_target_directories_are_preserved() {
@@ -752,6 +816,259 @@ test_macos_path_mode_uses_bsd_stat() {
         bash -c 'source "$1/install.sh"; path_mode "$2"' _ "$REPO_ROOT" "$case_dir/file"
     )" || fail_test "macOS mode lookup failed"
     [[ "$mode" == 600 ]] || fail_test "macOS mode lookup used the wrong stat format: $mode"
+}
+
+test_lazygit_asset_selection() {
+    local linux_x86
+    local linux_arm
+    local macos_x86
+    local macos_arm
+
+    linux_x86="$(
+        OSTYPE=linux-gnu bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" x86_64; }
+            lazygit_asset_suffix
+        ' _ "$REPO_ROOT"
+    )" || fail_test "lazygit Linux x86 asset selection failed"
+    [[ "$linux_x86" == "Linux_x86_64" ]] \
+        || fail_test "lazygit Linux x86 asset selection was incorrect"
+
+    linux_arm="$(
+        OSTYPE=linux-gnu bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" aarch64; }
+            lazygit_asset_suffix
+        ' _ "$REPO_ROOT"
+    )" || fail_test "lazygit Linux ARM asset selection failed"
+    [[ "$linux_arm" == "Linux_arm64" ]] \
+        || fail_test "lazygit Linux ARM asset selection was incorrect"
+
+    macos_x86="$(
+        OSTYPE=darwin23 bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" x86_64; }
+            lazygit_asset_suffix
+        ' _ "$REPO_ROOT"
+    )" || fail_test "lazygit macOS x86 asset selection failed"
+    [[ "$macos_x86" == "Darwin_x86_64" ]] \
+        || fail_test "lazygit macOS x86 asset selection was incorrect"
+
+    macos_arm="$(
+        OSTYPE=darwin23 bash -c '
+            source "$1/install.sh"
+            uname() { printf "%s\\n" arm64; }
+            lazygit_asset_suffix
+        ' _ "$REPO_ROOT"
+    )" || fail_test "lazygit macOS ARM asset selection failed"
+    [[ "$macos_arm" == "Darwin_arm64" ]] \
+        || fail_test "lazygit macOS ARM asset selection was incorrect"
+}
+
+test_fd_links_existing_fdfind() {
+    local case_dir="$TEST_ROOT/fd-alias"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$case_dir/home" "$fake_bin"
+    printf '%s\n' '#!/bin/sh' 'exit 0' > "$fake_bin/fdfind"
+    chmod +x "$fake_bin/fdfind"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_path_contains_local_bin
+            install_fd
+            [[ -L "$HOME/.local/bin/fd" ]]
+            [[ "$(readlink "$HOME/.local/bin/fd")" == "$2/fdfind" ]]
+            fd --version
+        ' _ "$REPO_ROOT" "$fake_bin" \
+        || fail_test "existing fdfind was not linked as fd"
+}
+
+test_lazygit_installs_verified_release() {
+    local case_dir="$TEST_ROOT/lazygit-install"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        OSTYPE=linux-gnu \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            curl_calls=0
+            curl() {
+                local output="${!#}"
+
+                curl_calls=$((curl_calls + 1))
+                if [[ "$*" == *"api.github.com"* ]]; then
+                    printf "%s\\n" \
+                        "{\"tag_name\":\"v1.2.3\",\"assets\":[{\"name\":\"lazygit_1.2.3_Linux_x86_64.tar.gz\",\"browser_download_url\":\"https://example.invalid/lazygit.tar.gz\",\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]}" \
+                        > "$output"
+                    return 0
+                fi
+
+                mkdir -p "$HOME/payload"
+                printf "%s\\n" "#!/bin/sh" "exit 0" > "$HOME/payload/lazygit"
+                chmod +x "$HOME/payload/lazygit"
+                tar -czf "$output" -C "$HOME/payload" lazygit
+            }
+            sha256_file() {
+                printf "%s\\n" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+
+            ensure_path_contains_local_bin
+            install_lazygit
+            [[ $curl_calls -eq 2 ]]
+            [[ -x "$HOME/.local/bin/lazygit" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "verified lazygit release install failed"
+}
+
+test_lazygit_unsupported_architecture_skips_cleanly() {
+    local case_dir="$TEST_ROOT/lazygit-unsupported"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        OSTYPE=linux-gnu \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "lazygit" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            uname() { printf "%s\\n" armv7l; }
+            install_lazygit
+        ' _ "$REPO_ROOT"
+    )" || fail_test "unsupported lazygit architecture aborted installation"
+
+    [[ "$output" == *"automatic install is unavailable"* ]] \
+        || fail_test "unsupported lazygit architecture was not reported"
+}
+
+test_uv_uses_unmanaged_local_bin_install() {
+    local case_dir="$TEST_ROOT/uv-install"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            curl() {
+                local output="${!#}"
+
+                printf "%s\\n" \
+                    "#!/usr/bin/env bash" \
+                    "[[ \"\${UV_UNMANAGED_INSTALL:-}\" == \"\$HOME/.local/bin\" ]] || exit 20" \
+                    "mkdir -p \"\$UV_UNMANAGED_INSTALL\"" \
+                    "cp /bin/true \"\$UV_UNMANAGED_INSTALL/uv\"" \
+                    > "$output"
+            }
+
+            ensure_path_contains_local_bin
+            install_uv
+            [[ -x "$HOME/.local/bin/uv" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "uv unmanaged local bin install failed"
+}
+
+test_bun_installs_with_npm() {
+    local case_dir="$TEST_ROOT/bun-install"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            npm_checked=0
+            ensure_required_command() {
+                [[ "$1" == "npm" ]] || return 1
+                npm_checked=1
+            }
+            npm() {
+                [[ "$*" == "install -g bun" ]] || return 1
+                mkdir -p "$HOME/.local/bin"
+                cp /bin/true "$HOME/.local/bin/bun"
+                cp /bin/true "$HOME/.local/bin/bunx"
+            }
+
+            ensure_path_contains_local_bin
+            install_bun
+            [[ $npm_checked -eq 1 ]]
+            [[ -x "$HOME/.local/bin/bun" ]]
+            [[ -x "$HOME/.local/bin/bunx" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "Bun npm install failed"
+}
+
+test_zsh_dependencies_are_installed() {
+    local case_dir="$TEST_ROOT/zsh-dependencies"
+
+    mkdir -p "$case_dir/home/.oh-my-zsh/custom"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_required_command() {
+                [[ "$1" == "fzf" ]]
+            }
+            git() {
+                local target="${!#}"
+
+                [[ "$1" == "clone" ]] || return 1
+                mkdir -p "$target"
+                case "$target" in
+                    */themes/spaceship-prompt)
+                        printf "%s\\n" "theme" > "$target/spaceship.zsh-theme"
+                        ;;
+                    */plugins/spaceship-vi-mode)
+                        printf "%s\\n" "plugin" > "$target/spaceship-vi-mode.plugin.zsh"
+                        ;;
+                    */plugins/zsh-autocomplete)
+                        printf "%s\\n" "plugin" > "$target/zsh-autocomplete.plugin.zsh"
+                        ;;
+                    *)
+                        return 1
+                        ;;
+                esac
+            }
+
+            install_zsh_dependencies
+            custom="$HOME/.oh-my-zsh/custom"
+            [[ -f "$custom/themes/spaceship-prompt/spaceship.zsh-theme" ]]
+            [[ -L "$custom/themes/spaceship.zsh-theme" ]]
+            [[ -f "$custom/plugins/spaceship-vi-mode/spaceship-vi-mode.plugin.zsh" ]]
+            [[ -f "$custom/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "Zsh dependencies were not installed"
 }
 
 test_mq_release_selection() {
@@ -1145,7 +1462,7 @@ test_libclang_is_installed_when_missing() {
 
 test_shared_agent_snapshot_preserves_local_content
 test_zshrc_uses_managed_copy_merge
-test_zshrc_avoids_machine_specific_local_bin_path
+test_shell_configs_clean_path
 test_managed_copy_dry_run_is_read_only
 test_managed_copy_dry_run_plans_updates_without_staging
 test_unrelated_repository_symlink_is_preserved
@@ -1153,14 +1470,17 @@ test_expected_repository_symlink_is_migrated
 test_shared_link_migration_is_exact
 test_unmodified_directory_to_file_transition
 test_source_deletion_and_user_addition
+test_non_overlapping_file_changes_merge
+test_overlapping_file_changes_conflict
+test_merge_scratch_does_not_collide_with_sibling
 test_deleted_directory_preserves_target_only_content
 test_deleted_unmodified_directory_is_removed
 test_deleted_directory_modified_managed_content_conflicts
-test_local_deletion_is_preserved
+test_local_deletion_is_restored
 test_upstream_deletion_local_modification_conflicts
-test_local_deletion_upstream_modification_conflicts
-test_root_local_deletion_is_preserved
-test_root_local_deletion_upstream_modification_conflicts
+test_local_deletion_upstream_modification_is_restored
+test_root_local_deletion_is_restored
+test_root_local_deletion_upstream_modification_is_restored
 test_excluded_target_directories_are_preserved
 test_target_only_symlink_is_preserved
 test_relative_repository_symlink_is_rejected_at_final_path
@@ -1171,6 +1491,13 @@ test_executable_mode_update
 test_non_executable_mode_update
 test_local_directory_mode_is_preserved_with_upstream_update
 test_macos_path_mode_uses_bsd_stat
+test_lazygit_asset_selection
+test_fd_links_existing_fdfind
+test_lazygit_installs_verified_release
+test_lazygit_unsupported_architecture_skips_cleanly
+test_uv_uses_unmanaged_local_bin_install
+test_bun_installs_with_npm
+test_zsh_dependencies_are_installed
 test_mq_release_selection
 test_mq_dry_run_plans_pinned_binary
 test_mq_intel_macos_uses_pinned_cargo_install
