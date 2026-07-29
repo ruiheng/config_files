@@ -36,6 +36,19 @@ owning skill unless replacing that skill's Codex-facing name, description, or
 default prompt; they are not dead files just because this repo has no internal
 reference to them.
 
+## Explicit-Only Skills
+
+Use explicit-only invocation for opt-in features whose primary result is a
+distinct deliverable rather than a normal chat reply (currently
+`explain-for-me` and `handoff`). Set both:
+
+- Claude Code `SKILL.md`: `disable-model-invocation: true`
+- Codex `agents/openai.yaml`: `policy.allow_implicit_invocation: false`
+
+Explicit `$skill` use still works. Keep receiver, protocol, and workflow skills
+implicit: they may need to run from an inbound action. Codex's generic validator
+currently rejects the Claude-only field; retain it as a cross-harness exception.
+
 ## Roles
 
 - Agent 1, **Planner** (`delegate-task`, `delegate-code-task`, `execute-plan`, `planner-closeout`): planning agent, chooses an execution surface, prepares execution briefs, can execute a supervisor-assigned task list inside one workspace, and completes planner-side closeout

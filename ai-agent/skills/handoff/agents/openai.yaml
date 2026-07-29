@@ -1,0 +1,6 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Create a concise cross-session handoff"
+  default_prompt: "Use $handoff to prepare a concise continuation handoff for another agent."
+policy:
+  allow_implicit_invocation: false
