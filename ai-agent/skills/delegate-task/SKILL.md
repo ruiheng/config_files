@@ -7,20 +7,15 @@ description: Delegate a bounded outcome to an appropriate worker surface, option
 
 Use `agent-deck-workflow` for Waypost transport, lifecycle, and tool resolution.
 
-Create a controlled session for one bounded outcome. Do not infer a code-delivery lifecycle, branches, commits, review, or closeout.
-
-`$delegate-task` means delegate; do not run the task locally.
+Delegate one bounded outcome; do not run it locally or infer a code-delivery lifecycle.
 
 ## Code Gate
 
 Classify before selecting a transport or dispatching.
 
-- A task is code-changing when it changes repository code, runtime/build configuration, schema, or a programmatic contract.
-- For named execution, read the requested skill contract before classifying. It is generic-safe only when it excludes repository/code-delivery mutation: tracked code/config/schema/contracts, Git history or branches, commit, review, merge, and closeout. Declared non-code artifacts are allowed.
-- A `generic` label never overrides the skill's side effects. Unknown safety -> ask; do not dispatch.
-- Never send a code-changing task as generic `execute_delegated_task`. Before creating a generic worker, transfer a workflow-owned code task to `delegate-code-task`.
-- Allow a direct Deck code session only when the user explicitly asks for it and takes delivery ownership. Record `user-owned direct`; do not infer it from user visibility alone.
-- A user-owned direct code session has no automatic branch, commit, review, merge, or closeout contract. If that ownership is not explicit, use the code lane or ask.
+- For named execution, classify from the skill contract; its side effects override task labels.
+- `code-changing`: mutates repository code/config/schema/contracts or Git delivery state. Declared non-code artifacts remain generic. Unknown -> ask.
+- Waypost code -> `delegate-code-task`. Direct code requires explicit `user-owned direct` and has no automatic delivery lifecycle; otherwise use the code lane or ask.
 
 ## Choose Execution Surface
 
@@ -28,8 +23,8 @@ Use the lightest delegated surface that preserves the task's lifecycle:
 
 - During Selection-Only Use, record local execution when the owning action can perform it.
 - Use a native harness subagent, when available, for short independent parallel work. It is disposable: the harness owns bounded execution and its result; the caller owns any code delivery. Do not create or address an Agent Deck session for it.
-- Use Agent Deck for a named persistent worker when history must survive restarts, explicit tool or workspace control, later Waypost coordination, or user-visible work the user may inspect, steer, or resume matters.
-- Difficulty or parallelism alone is not an Agent Deck reason. State one concrete lifecycle or user-interaction reason before creating a session.
+- Use Agent Deck when work needs persistent history, explicit tool/workspace control, later Waypost coordination, or a user-visible session to inspect, steer, or resume.
+- State one concrete lifecycle or user-interaction reason for Agent Deck; difficulty or parallelism alone is insufficient.
 
 For a named execution skill, use Agent Deck: Waypost when the requester has an address, otherwise direct. Use a native harness subagent only when the user explicitly requests disposable work.
 
@@ -40,18 +35,13 @@ When another action owns dispatch, use the selection rules above and stop before
 - Record the selected surface and, for Agent Deck, its concrete `session_reason` for the owning action.
 - If the owning action has a stricter direct-execution gate, use it only for that fast path. It may retain a planner-owned nonpersistent fallback without creating a worker.
 - Do not resolve sessions, compose a task contract, create a worker, or send `execute_delegated_task`.
-- For workflow-owned code that selects an Agent Deck worker, hand off directly to `delegate-code-task`; generic Waypost dispatch is prohibited.
-- A direct user-owned code session is a separate surface. Record that ownership; do not turn it into a generic Waypost task.
+- Workflow-owned code -> `delegate-code-task`; record direct user-owned code as a separate surface.
 
 ## Scope and Brief
 
-Delegate one outcome, not a solution recipe.
-
-- Let the worker investigate, decompose, choose local implementation, and validate within scope.
-- Give only decision-relevant context: parent goal when it changes choices, hard boundaries, established evidence, non-obvious fixed decisions with source, and testable completion criteria.
-- List required reading and useful references only. Omit empty sections and detail that does not change the outcome, boundary, risk, or done condition.
+- Brief one outcome with decision-relevant context, boundaries, and completion criteria; let the worker investigate and validate.
+- For a named skill, send exact input and only required known files/context. Attach requester-only source inline or by durable ref; do not search merely to enlarge context.
 - Ask before splitting only when it changes scope, priority, or tradeoffs.
-- For a named execution skill, send its exact input plus minimum sufficient known context. A worker does not inherit requester chat: attach required conversation-only source inline or as a durable worker-readable ref. Do not search merely to enlarge context.
 
 ## Select Transport
 
@@ -69,16 +59,13 @@ Use shared context priority; resolve only fields for the selected transport.
   - inspect only that token; reject `delegate-task` as its own inner skill
   - `$delegate-task $explain-for-me 中文` -> skill `explain-for-me`, input `中文`
 - `execution_input`: explicit -> remainder after the inner skill; otherwise full `$delegate-task` input -> `N/A`
-- `source_material`: explicit text/ref -> required requester-chat material -> omit when input is self-contained
-  - use minimum sufficient inline content or a durable path readable from `worker_workspace`
-- `task_kind`: execution-skill contract + explicit task/context -> `generic` (`generic | code-changing`)
-  - code or delivery side effects force `code-changing`; ask if unclear
+- `source_material`: explicit text/ref -> required requester-chat material -> omit when self-contained; use inline content or a durable worker-readable path
+- `task_kind`: skill contract + explicit task/context -> `generic`; code/delivery side effects -> `code-changing`; unclear -> ask
 - `worker_tool_role`: explicit -> `explainer` when `execution_skill = explain-for-me` -> `worker`
 - Direct code only: `user_owned_code_delivery`: explicit user decision -> `true`; otherwise absent
 - `worker_workspace`: explicit -> workflow/current workspace -> ask
   - do not invent a separate workspace
 - `workspace_lifecycle`: require `shared; cleanup=none` for `explain-for-me`; otherwise explicit -> `shared; cleanup=none`
-  - its returned HTML must remain available after delivery
   - a temporary worktree is Waypost-only; require explicit user confirmation, `temporary; cleanup=requester`, and `cleanup_workspace`; requester owns closeout
 - Waypost temporary only: `cleanup_workspace`: explicit -> requester workspace that owns the worktree -> ask
 - `session_reason`: explicit -> infer one concrete reason -> ask
@@ -127,7 +114,7 @@ Use this for a direct `startup_instruction`; prepend the Waypost envelope below 
 
 ## Done When
 - [testable outcome]
-- Report: [result, evidence, and open items]
+- Report: [result, evidence, and open items; artifact locations as full paths or URIs]
 
 ## Special Requirements
 [verbatim; only when present]
@@ -148,12 +135,8 @@ Round: 1
 
 ## Dispatch
 
-Before dispatch, apply the Code Gate:
-
-- if a named skill is not generic-safe, force `task_kind = code-changing` before selecting the lane
-- if `task_kind` is code-changing and transport is Waypost, stop generic dispatch and run `delegate-code-task`
-- if `task_kind` is code-changing and transport is direct, require `user_owned_code_delivery = true`; otherwise ask or transfer
-- if execution depends on requester-only material, resolve `source_material` before creating the worker
+- Apply the Code Gate.
+- require `source_material` when execution depends on requester-only material
 - if `execution_skill = explain-for-me`, require `shared; cleanup=none`; do not dispatch a temporary worker
 
 1. Resolve the worker by real id or ref with `agent_deck_resolve_session`.
@@ -171,7 +154,7 @@ Before dispatch, apply the Code Gate:
    - fill `{{TO_SESSION_ID}}`, then call `waypost_send` from `agent-deck/<requester_session_id>` to `agent-deck/<worker_session_id>`, subject `delegate: <task_id> -> worker`
    - follow the shared Async sender rule
 
-Keep the session available for user inspection, intervention, and later follow-up. Until completion or explicit transfer, do not alter a worker-owned shared workspace; temporary cleanup is best-effort after terminal delivery.
+Until completion or explicit transfer, do not alter a worker-owned shared workspace; temporary cleanup is best-effort after terminal delivery.
 
 ## Worker Receive
 
@@ -228,6 +211,6 @@ For initial dispatch, return only:
 - temporary-workspace cleanup status, when applicable
 - any blocker or send failure
 
-For a terminal worker result, return only its concise outcome, artifact pointer when present, and material open item or blocker.
+For a terminal worker result, return only its concise outcome, full artifact path/URI when present, and material open item or blocker.
 
 Keep tool commands, addresses, raw JSON, and routine wakeup details internal.
