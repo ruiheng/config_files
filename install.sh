@@ -156,7 +156,7 @@ add_install_component() {
     fi
 
     if [[ "$component" == "all" ]]; then
-        if [[ ${#SELECTED_COMPONENTS[@]} -gt 0 ]]; then
+        if [[ -n "${SELECTED_COMPONENTS[0]+set}" ]]; then
             echo "Cannot combine 'all' with other install components"
             exit 1
         fi
@@ -175,7 +175,7 @@ add_install_component() {
         INSTALL_ALL=0
     fi
 
-    for selected_component in "${SELECTED_COMPONENTS[@]}"; do
+    for selected_component in ${SELECTED_COMPONENTS[@]+"${SELECTED_COMPONENTS[@]}"}; do
         if [[ "$selected_component" == "$component" ]]; then
             return 0
         fi
@@ -195,7 +195,7 @@ add_install_components() {
     fi
 
     IFS=',' read -r -a components <<< "$raw_components"
-    for component in "${components[@]}"; do
+    for component in ${components[@]+"${components[@]}"}; do
         component="${component//[[:space:]]/}"
         add_install_component "$component"
     done
@@ -209,7 +209,7 @@ component_is_selected() {
         return 0
     fi
 
-    for selected_component in "${SELECTED_COMPONENTS[@]}"; do
+    for selected_component in ${SELECTED_COMPONENTS[@]+"${SELECTED_COMPONENTS[@]}"}; do
         if [[ "$selected_component" == "$component" ]]; then
             return 0
         fi
@@ -499,12 +499,12 @@ normalize_absolute_path_lexically() {
 
     [[ "$path" == /* ]] || return 1
     IFS='/' read -r -a components <<< "${path#/}"
-    for component in "${components[@]}"; do
+    for component in ${components[@]+"${components[@]}"}; do
         case "$component" in
             ''|.)
                 ;;
             ..)
-                if [[ ${#normalized_parts[@]} -gt 0 ]]; then
+                if [[ -n "${normalized_parts[0]+set}" ]]; then
                     last_index=$((${#normalized_parts[@]} - 1))
                     unset "normalized_parts[$last_index]"
                 fi
@@ -515,7 +515,7 @@ normalize_absolute_path_lexically() {
         esac
     done
 
-    for component in "${normalized_parts[@]}"; do
+    for component in ${normalized_parts[@]+"${normalized_parts[@]}"}; do
         result="$result/$component"
     done
     printf '%s\n' "${result:-/}"
@@ -1602,7 +1602,7 @@ install_copy() {
     }
 
     if symlink_points_to "$dst" "$src" \
-        || symlink_points_to_any "$dst" "${legacy_sources[@]}"; then
+        || symlink_points_to_any "$dst" ${legacy_sources[@]+"${legacy_sources[@]}"}; then
         managed_symlink=1
     fi
 
@@ -1749,7 +1749,7 @@ link_path() {
                 return 0
             fi
 
-            if symlink_points_to_any "$dst" "${legacy_sources[@]}"; then
+            if symlink_points_to_any "$dst" ${legacy_sources[@]+"${legacy_sources[@]}"}; then
                 installer_managed=1
             fi
 
@@ -2700,7 +2700,7 @@ install_remote_cli() {
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        if [[ ${#installer_args[@]} -gt 0 ]]; then
+        if [[ -n "${installer_args[0]+set}" ]]; then
             log_dry "Would install $display_name from: $install_url ${installer_args[*]}"
         else
             log_dry "Would install $display_name from: $install_url"
@@ -2737,7 +2737,7 @@ install_remote_cli() {
         log_ok "Verified $display_name installer SHA-256"
     fi
 
-    if ! bash "$tmp_file" "${installer_args[@]}"; then
+    if ! bash "$tmp_file" ${installer_args[@]+"${installer_args[@]}"}; then
         rm -f "$tmp_file"
         log_error "Failed to install $display_name"
         return 1
@@ -5242,7 +5242,7 @@ init_selected_submodules() {
     if ! collect_selected_submodule_paths; then
         return 1
     fi
-    if [[ ${#REQUIRED_SUBMODULE_PATHS[@]} -eq 0 ]]; then
+    if [[ -z "${REQUIRED_SUBMODULE_PATHS[0]+set}" ]]; then
         return 0
     fi
 
