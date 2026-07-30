@@ -1,0 +1,6 @@
+interface:
+  display_name: "Explore Defects"
+  short_description: "Explore potential defects from evidence"
+  default_prompt: "Use $explore-defects to scout for related potential defects from known evidence and validate the best leads."
+policy:
+  allow_implicit_invocation: false
