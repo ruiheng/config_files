@@ -8,6 +8,8 @@
 # Options:
 #   --dry-run     Show what would be done without making changes
 #   --force       Backup and replace existing files (be careful!)
+#   --only PARTS  Install only selected comma-separated sections
+#   --ai-skills   Install/update AI skills only
 #   --no-color    Disable colored output
 #   --help        Show this help message
 #
@@ -31,6 +33,13 @@ DRY_RUN=0
 FORCE=0
 INTERACTIVE=0
 USE_COLOR=1
+
+# Installation selection. The default installs every section and bootstraps
+# required tools. Any partial selection skips unrelated bootstrap work.
+declare -a SELECTED_COMPONENTS=()
+declare -a REQUIRED_SUBMODULE_PATHS=()
+INSTALL_ALL=1
+ONLY_ALL_REQUESTED=0
 
 # Interactive mode defaults (for 'all' responses)
 ALL_SKIP=0
@@ -110,7 +119,121 @@ declare -i copied=0 linked=0 skipped=0 failed=0 backed_up=0
 # Command Line Parsing
 # =============================================================================
 
+normalize_install_component() {
+    case "$1" in
+        dotfiles)
+            printf '%s\n' "home"
+            ;;
+        skills|ai_skills)
+            printf '%s\n' "ai-skills"
+            ;;
+        *)
+            printf '%s\n' "$1"
+            ;;
+    esac
+}
+
+is_valid_install_component() {
+    case "$1" in
+        all|home|xdg|bin|ai|ai-skills|serena)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+add_install_component() {
+    local component
+    local selected_component
+
+    component="$(normalize_install_component "$1")"
+    if [[ -z "$component" ]] || ! is_valid_install_component "$component"; then
+        echo "Unknown install component: $1"
+        echo "Valid components: all, home, xdg, bin, ai, ai-skills, serena"
+        exit 1
+    fi
+
+    if [[ "$component" == "all" ]]; then
+        if [[ ${#SELECTED_COMPONENTS[@]} -gt 0 ]]; then
+            echo "Cannot combine 'all' with other install components"
+            exit 1
+        fi
+        INSTALL_ALL=1
+        ONLY_ALL_REQUESTED=1
+        return 0
+    fi
+
+    if [[ $ONLY_ALL_REQUESTED -eq 1 ]]; then
+        echo "Cannot combine 'all' with other install components"
+        exit 1
+    fi
+
+    if [[ $INSTALL_ALL -eq 1 ]]; then
+        SELECTED_COMPONENTS=()
+        INSTALL_ALL=0
+    fi
+
+    for selected_component in "${SELECTED_COMPONENTS[@]}"; do
+        if [[ "$selected_component" == "$component" ]]; then
+            return 0
+        fi
+    done
+
+    SELECTED_COMPONENTS+=("$component")
+}
+
+add_install_components() {
+    local raw_components="$1"
+    local component
+    local -a components=()
+
+    if [[ -z "$raw_components" ]]; then
+        echo "Missing install component after --only"
+        exit 1
+    fi
+
+    IFS=',' read -r -a components <<< "$raw_components"
+    for component in "${components[@]}"; do
+        component="${component//[[:space:]]/}"
+        add_install_component "$component"
+    done
+}
+
+component_is_selected() {
+    local component="$1"
+    local selected_component
+
+    if [[ $INSTALL_ALL -eq 1 ]]; then
+        return 0
+    fi
+
+    for selected_component in "${SELECTED_COMPONENTS[@]}"; do
+        if [[ "$selected_component" == "$component" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+selected_components_label() {
+    local IFS=','
+
+    if [[ $INSTALL_ALL -eq 1 ]]; then
+        printf '%s\n' "all"
+    else
+        printf '%s\n' "${SELECTED_COMPONENTS[*]}"
+    fi
+}
+
 parse_args() {
+    INSTALL_ALL=1
+    ONLY_ALL_REQUESTED=0
+    SELECTED_COMPONENTS=()
+    REQUIRED_SUBMODULE_PATHS=()
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --dry-run)
@@ -123,6 +246,22 @@ parse_args() {
                 ;;
             --interactive|-i)
                 INTERACTIVE=1
+                shift
+                ;;
+            --only)
+                if [[ $# -lt 2 ]]; then
+                    echo "Missing install component after --only"
+                    exit 1
+                fi
+                add_install_components "$2"
+                shift 2
+                ;;
+            --only=*)
+                add_install_components "${1#--only=}"
+                shift
+                ;;
+            --ai-skills)
+                add_install_component "ai-skills"
                 shift
                 ;;
             --no-color)
@@ -153,14 +292,25 @@ Options:
   --dry-run         Show what would be done without making changes
   --force           Backup and replace existing files (be careful!)
   --interactive, -i Prompt when target exists (asks: skip/backup/replace/all)
+  --only PARTS      Install only selected comma-separated sections (repeatable)
+                    Sections: home, xdg, bin, ai, ai-skills, serena, all
+  --ai-skills       Alias for --only ai-skills
   --no-color        Disable colored output
   --help, -h        Show this help message
+
+Partial selections skip unrelated tool/CLI bootstrap, OS setup, and Neovim
+checks. "home" and "xdg" initialize their required Git submodules first and
+stop if that fails. "ai" installs $XDG_CONFIG_HOME/ai-agent (or
+$HOME/.config/ai-agent) plus AI skills; "ai-skills" only updates the shared
+AI snapshot and per-agent skill links.
 
 Examples:
   ./install.sh                  # Standard installation
   ./install.sh --dry-run        # Preview changes
   ./install.sh --force          # Replace existing configs (backs them up)
   ./install.sh --interactive    # Prompt for each conflict
+  ./install.sh --only home,xdg  # Install selected config sections
+  ./install.sh --ai-skills      # Install/update AI skills only
 EOF
 }
 
@@ -4193,6 +4343,16 @@ is_agent_deck_related_skill() {
     esac
 }
 
+detect_installed_agent_deck() {
+    if command -v agent-deck &>/dev/null; then
+        AGENT_DECK_AVAILABLE=1
+        log_ok "Found agent-deck"
+    else
+        AGENT_DECK_AVAILABLE=0
+        log_warn "agent-deck not found; skipping agent-deck related skills"
+    fi
+}
+
 setup_agent_deck_integration() {
     local agent_deck_planned=0
 
@@ -4301,6 +4461,12 @@ install_home_configs() {
     install_copy "git-completion.sh" "$HOME/.git-completion.sh"
 }
 
+install_ai_agent_config() {
+    local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+    install_copy "ai-agent" "$config_dir/ai-agent"
+}
+
 install_xdg_configs() {
     log_info "Installing XDG config directory files..."
 
@@ -4328,7 +4494,7 @@ install_xdg_configs() {
     install_copy "fourmolu.yaml" "$config_dir/fourmolu.yaml"
 
     # AI-related configs
-    install_copy "ai-agent" "$config_dir/ai-agent"
+    install_ai_agent_config
 
     # GRC (Generic Colouriser)
     install_copy "grc" "$config_dir/grc"
@@ -4777,6 +4943,20 @@ install_opencode_skills() {
     install_skills_individually "OpenCode" "$HOME/.config/opencode/skills"
 }
 
+install_all_ai_skills() {
+    local status=0
+
+    log_info "Installing AI skills only..."
+    install_claude_skills || status=1
+    install_gemini_skills || status=1
+    install_antigravity_skills || status=1
+    install_kiro_skills || status=1
+    install_codex_skills || status=1
+    install_opencode_skills || status=1
+
+    return "$status"
+}
+
 opencode_config_file_path() {
     local opencode_dir="$1"
 
@@ -4948,6 +5128,39 @@ install_serena_config() {
     fi
 }
 
+install_selected_components() {
+    log_info "Installing selected sections: $(selected_components_label)"
+
+    if component_is_selected "home"; then
+        install_home_configs
+    fi
+
+    if component_is_selected "xdg"; then
+        install_xdg_configs
+    elif component_is_selected "ai"; then
+        log_info "Installing AI Agent config..."
+        install_ai_agent_config
+    fi
+
+    if component_is_selected "bin"; then
+        install_local_bin_helpers
+    fi
+
+    if component_is_selected "ai" || component_is_selected "ai-skills"; then
+        if ! install_shared_ai_agent_snapshot; then
+            return 1
+        fi
+        detect_installed_agent_deck
+        install_all_ai_skills
+    fi
+
+    if component_is_selected "serena"; then
+        install_serena_config
+    fi
+
+    return 0
+}
+
 # =============================================================================
 # Git Submodules
 # =============================================================================
@@ -4978,6 +5191,85 @@ init_submodules() {
         log_warn "Failed to initialize some submodules (may require SSH key)"
         log_info "You can manually initialize later with: git submodule update --init --recursive"
     fi
+}
+
+collect_selected_submodule_paths() {
+    local gitlinks
+    local metadata
+    local submodule_path
+
+    REQUIRED_SUBMODULE_PATHS=()
+
+    if [[ $INSTALL_ALL -eq 1 ]]; then
+        return 0
+    fi
+    if ! component_is_selected "home" && ! component_is_selected "xdg"; then
+        return 0
+    fi
+    if [[ ! -e "$SCRIPT_DIR/.git" ]]; then
+        return 0
+    fi
+    if ! command -v git &>/dev/null; then
+        log_error "git is required to initialize selected submodules"
+        return 1
+    fi
+    if ! git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        log_error "Could not inspect Git submodules in: $SCRIPT_DIR"
+        return 1
+    fi
+    if ! gitlinks="$(git -C "$SCRIPT_DIR" ls-files --stage)"; then
+        log_error "Could not list Git submodules in: $SCRIPT_DIR"
+        return 1
+    fi
+
+    while IFS=$'\t' read -r metadata submodule_path; do
+        [[ "$metadata" == 160000\ * && -n "$submodule_path" ]] || continue
+
+        if component_is_selected "home" && [[ "$submodule_path" == tmux/* ]]; then
+            REQUIRED_SUBMODULE_PATHS+=("$submodule_path")
+        elif component_is_selected "xdg" && [[ "$submodule_path" == nvim/* ]]; then
+            REQUIRED_SUBMODULE_PATHS+=("$submodule_path")
+        fi
+    done <<< "$gitlinks"
+
+    return 0
+}
+
+init_selected_submodules() {
+    local submodule_path
+    local submodule_status
+
+    if ! collect_selected_submodule_paths; then
+        return 1
+    fi
+    if [[ ${#REQUIRED_SUBMODULE_PATHS[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    log_info "Initializing selected git submodules..."
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: git -C $SCRIPT_DIR submodule update --init --recursive -- ${REQUIRED_SUBMODULE_PATHS[*]}"
+        return 0
+    fi
+
+    if ! git -C "$SCRIPT_DIR" submodule update --init --recursive -- "${REQUIRED_SUBMODULE_PATHS[@]}"; then
+        log_error "Failed to initialize required submodules; selected installation was not applied"
+        return 1
+    fi
+
+    for submodule_path in "${REQUIRED_SUBMODULE_PATHS[@]}"; do
+        if ! submodule_status="$(git -C "$SCRIPT_DIR" submodule status -- "$submodule_path")"; then
+            log_error "Could not verify required submodule: $submodule_path"
+            return 1
+        fi
+        if [[ -z "$submodule_status" || "${submodule_status:0:1}" == "-" || "${submodule_status:0:1}" == "U" ]]; then
+            log_error "Required submodule is not initialized: $submodule_path"
+            return 1
+        fi
+    done
+
+    log_ok "Initialized selected git submodules"
+    return 0
 }
 
 # =============================================================================
@@ -5128,6 +5420,9 @@ print_banner() {
     echo "  Config Files Installation Script"
     echo "  OS detected: $OS"
     echo "  Package manager: $PACKAGE_MANAGER"
+    if [[ $INSTALL_ALL -eq 0 ]]; then
+        echo "  Sections: $(selected_components_label)"
+    fi
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "  MODE: DRY RUN (no changes will be made)"
     elif [[ $FORCE -eq 1 ]]; then
@@ -5175,6 +5470,18 @@ main() {
 
     log_info "Source directory: $SCRIPT_DIR"
     log_info "Target home: $HOME"
+
+    if [[ $INSTALL_ALL -eq 0 ]]; then
+        ensure_path_contains_local_bin
+        if ! init_selected_submodules; then
+            exit 1
+        fi
+        if ! install_selected_components; then
+            exit 1
+        fi
+        print_summary
+        return $?
+    fi
 
     if ! install_required_tools; then
         exit 1

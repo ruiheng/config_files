@@ -124,6 +124,147 @@ test_shell_configs_clean_path() {
         || fail_test "bashrc PATH cleanup was incorrect: $bash_path"
 }
 
+test_component_selection_parsing() {
+    parse_args --only "home, ai-skills" --only serena
+
+    [[ $INSTALL_ALL -eq 0 ]] \
+        || fail_test "--only did not enable selective installation"
+    component_is_selected "home" \
+        || fail_test "--only did not select home"
+    component_is_selected "ai-skills" \
+        || fail_test "--only did not select ai-skills"
+    component_is_selected "serena" \
+        || fail_test "repeated --only did not select serena"
+    ! component_is_selected "xdg" \
+        || fail_test "unselected component was treated as selected"
+
+    parse_args --only all
+    [[ $INSTALL_ALL -eq 1 ]] \
+        || fail_test "--only all did not restore full installation"
+
+    parse_args
+}
+
+test_selected_submodule_paths_follow_components() {
+    local submodule_path
+
+    parse_args --only home
+    collect_selected_submodule_paths \
+        || fail_test "could not collect home submodule paths"
+    [[ ${#REQUIRED_SUBMODULE_PATHS[@]} -gt 0 ]] \
+        || fail_test "home selection did not require any submodules"
+    for submodule_path in "${REQUIRED_SUBMODULE_PATHS[@]}"; do
+        [[ "$submodule_path" == tmux/* ]] \
+            || fail_test "home selected unrelated submodule: $submodule_path"
+    done
+    [[ " ${REQUIRED_SUBMODULE_PATHS[*]} " == *" tmux/plugins/tpm "* ]] \
+        || fail_test "home did not select tmux/plugins/tpm"
+
+    parse_args --only xdg
+    collect_selected_submodule_paths \
+        || fail_test "could not collect XDG submodule paths"
+    [[ ${#REQUIRED_SUBMODULE_PATHS[@]} -gt 0 ]] \
+        || fail_test "XDG selection did not require any submodules"
+    for submodule_path in "${REQUIRED_SUBMODULE_PATHS[@]}"; do
+        [[ "$submodule_path" == nvim/* ]] \
+            || fail_test "XDG selected unrelated submodule: $submodule_path"
+    done
+    [[ " ${REQUIRED_SUBMODULE_PATHS[*]} " == *" nvim/jinja-mixed "* ]] \
+        || fail_test "XDG did not select nvim/jinja-mixed"
+    [[ " ${REQUIRED_SUBMODULE_PATHS[*]} " == *" nvim/lua/buffer-nexus "* ]] \
+        || fail_test "XDG did not select nvim/lua/buffer-nexus"
+
+    parse_args
+}
+
+test_partial_home_and_xdg_initialize_submodules_before_copy() {
+    local events
+
+    events="$(
+        bash -c '
+            source "$1/install.sh"
+            events=""
+            init_selected_submodules() { events="${events}submodules "; }
+            install_home_configs() { events="${events}home "; }
+            install_xdg_configs() { events="${events}xdg "; }
+            print_summary() { :; }
+            main --only home,xdg >/dev/null
+            printf "%s\\n" "$events"
+        ' _ "$REPO_ROOT"
+    )" || fail_test "partial home/XDG installation failed"
+
+    [[ "$events" == "submodules home xdg " ]] \
+        || fail_test "partial home/XDG installation copied before initializing submodules"
+}
+
+test_partial_submodule_failure_stops_copy() {
+    local output
+
+    if output="$(
+        bash -c '
+            source "$1/install.sh"
+            init_selected_submodules() { return 1; }
+            install_home_configs() { printf "%s\\n" "home copy ran"; }
+            main --only home
+        ' _ "$REPO_ROOT" 2>&1
+    )"; then
+        fail_test "partial installation continued after submodule initialization failed"
+    fi
+
+    [[ "$output" != *"home copy ran"* ]] \
+        || fail_test "partial installation copied home configs after submodule failure"
+}
+
+test_partial_ai_skills_detects_agent_deck_from_local_bin() {
+    local case_dir="$TEST_ROOT/ai-skills-local-bin"
+
+    mkdir -p "$case_dir/home/.local/bin"
+    ln -s /usr/bin/true "$case_dir/home/.local/bin/agent-deck"
+
+    HOME="$case_dir/home" PATH="/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            install_shared_ai_agent_snapshot() { SHARED_AI_AGENT_READY=1; }
+            install_all_ai_skills() { :; }
+            print_summary() { :; }
+            main --ai-skills >/dev/null
+            [[ $AGENT_DECK_AVAILABLE -eq 1 ]]
+            case ":$PATH:" in
+                *":$HOME/.local/bin:"*) ;;
+                *) exit 1 ;;
+            esac
+        ' _ "$REPO_ROOT" \
+        || fail_test "partial AI skills install did not detect agent-deck from local bin"
+}
+
+test_ai_skills_only_skips_unrelated_bootstrap() {
+    local case_dir="$TEST_ROOT/ai-skills-only"
+    local output
+
+    mkdir -p "$case_dir"
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            bash "$REPO_ROOT/install.sh" --dry-run --no-color --ai-skills
+    )" || fail_test "--ai-skills dry run failed"
+
+    [[ "$output" == *"Sections: ai-skills"* ]] \
+        || fail_test "--ai-skills did not select the AI skills section"
+    [[ "$output" == *"Installing shared agent assets..."* ]] \
+        || fail_test "--ai-skills did not update the shared AI snapshot"
+    [[ "$output" == *"Installing Codex skills (individually)..."* ]] \
+        || fail_test "--ai-skills did not update per-agent skill links"
+    [[ "$output" != *"Checking required CLI tools..."* ]] \
+        || fail_test "--ai-skills ran the general CLI bootstrap"
+    [[ "$output" != *"Initializing git submodules..."* ]] \
+        || fail_test "--ai-skills initialized git submodules"
+    [[ "$output" != *"Installing home directory dotfiles..."* ]] \
+        || fail_test "--ai-skills installed home directory dotfiles"
+    [[ "$output" != *"Installing XDG config directory files..."* ]] \
+        || fail_test "--ai-skills installed XDG configs"
+}
+
 test_managed_copy_dry_run_is_read_only() {
     local case_dir="$TEST_ROOT/dry-run-managed-copy"
     local dst="$case_dir/bashrc"
@@ -1463,6 +1604,12 @@ test_libclang_is_installed_when_missing() {
 test_shared_agent_snapshot_preserves_local_content
 test_zshrc_uses_managed_copy_merge
 test_shell_configs_clean_path
+test_component_selection_parsing
+test_selected_submodule_paths_follow_components
+test_partial_home_and_xdg_initialize_submodules_before_copy
+test_partial_submodule_failure_stops_copy
+test_partial_ai_skills_detects_agent_deck_from_local_bin
+test_ai_skills_only_skips_unrelated_bootstrap
 test_managed_copy_dry_run_is_read_only
 test_managed_copy_dry_run_plans_updates_without_staging
 test_unrelated_repository_symlink_is_preserved
