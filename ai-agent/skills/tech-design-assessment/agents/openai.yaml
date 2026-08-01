@@ -1,0 +1,6 @@
+interface:
+  display_name: "Technical Design Assessment"
+  short_description: "Critically assess a completed technical design"
+  default_prompt: "Use $tech-design-assessment to assess this completed technical design against its current accepted intent."
+policy:
+  allow_implicit_invocation: false

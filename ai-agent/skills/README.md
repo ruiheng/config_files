@@ -40,7 +40,7 @@ reference to them.
 
 Use explicit-only invocation for opt-in features whose primary result is a
 distinct deliverable rather than a normal chat reply (currently
-`explain-for-me`, `handoff`, and `explore-defects`). Set both:
+`explain-for-me`, `handoff`, `explore-defects`, and `tech-design-assessment`). Set both:
 
 - Claude Code `SKILL.md`: `disable-model-invocation: true`
 - Codex `agents/openai.yaml`: `policy.allow_implicit_invocation: false`
