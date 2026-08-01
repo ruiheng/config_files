@@ -127,8 +127,6 @@ Residual Risk may accompany a positive decision unless it blocks implementation 
 
 In direct-use mode, omit the message header, use the same report sections, and describe the actual named target under Reviewed Scope.
 
-In direct-use mode, when the user asks for design highlights or assessment, add a compact Design Assessment covering approach, user fit/scope, relevant data/configuration/compatibility impact, material risks/tradeoffs, and pending user decisions. Do not repeat Persisted Data Changes; distinguish no impact from missing evidence.
-
 ## Message Delivery
 
 In message mode:

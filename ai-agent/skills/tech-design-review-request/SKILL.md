@@ -235,13 +235,7 @@ Do not paste or summarize the design, or hand-write a diff. Send from agent-deck
 
 ## User Completion
 
-After the accepted design becomes authoritative:
-
-- default: final design path(s) and authoritative commit only
-- requested design summary/assessment: include it now from the accepted design and review report; cover proportionally core approach, persisted data/configuration, simplicity/over-design/boundaries, compatibility need, benefits/risks, key tradeoffs, and pending user decisions
-- requested decision summary only: report only the decisions
-
-Distinguish no impact from unknown; do not wait for a follow-up.
+After the accepted design becomes authoritative, report only final design path(s) and authoritative commit.
 
 ## Report Handling
 
