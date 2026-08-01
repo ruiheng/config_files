@@ -26,6 +26,7 @@ Assess only relevant areas:
 
 - core approach; whether goals/requirements are sound, appropriately scoped, or should be split
 - material rationale, user fit, simplicity/over-design, ownership, boundaries, cohesion, and coupling
+- flexibility/foresight: readiness for credible future change within demonstrated need
 - persisted data/state and configuration: need, migration/rollback, defaults, deployment, and operations
 - compatibility in both directions—new-to-old and old-to-new data, configuration, and interfaces—and whether it is necessary
 - benefits, risks, mitigations/rollback, alternatives, and key tradeoffs
@@ -48,6 +49,9 @@ Keep the report compact. Focus on material issues, tradeoffs, and decisions; do 
 
 ## Core And Scope
 [approach, fit, simplification/splitting opportunities, or None]
+
+## Flexibility And Foresight
+[readiness for credible future change within demonstrated need, or None]
 
 ## Material Impacts
 - Data/state: [impact, migration/rollback, or None]
