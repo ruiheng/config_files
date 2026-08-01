@@ -333,7 +333,7 @@ On tech_design_delivered:
 4. require a clean index and no merge, rebase, or conflict state; do not clean unrelated worktree changes
 5. choose the formal tracked docs path; stop if it has unrelated uncommitted changes
 6. if substantive changes are needed, return them to the author for a new reviewed round while preserving Max Review Rounds
-7. copy the accepted artifact unchanged to the formal tracked docs path and commit that file only
+7. copy the accepted artifact to the formal tracked docs path, resolve trivial non-substantive issues locally, and commit that file only
 8. after the archive commit succeeds, remove both architect sessions
 9. treat the tracked committed doc as authoritative and cite it in later implementation work
 10. follow User Completion with the tracked doc and archive commit
