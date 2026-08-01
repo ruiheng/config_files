@@ -49,11 +49,14 @@ ALL_REPLACE=0
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
 WAYPOST_MCP_AVAILABLE=0
+WAYPOST_CONFIG_SWITCH_READY=0
 CODEX_SKILLS_DIR_READY=0
 CLAUDE_CODE_AVAILABLE=0
 CODEX_CLI_AVAILABLE=0
-NVM_NODE_AVAILABLE=0
+NODE_NPM_AVAILABLE=0
+RUST_CARGO_PLANNED=0
 SHARED_AI_AGENT_READY=0
+ZSH_STACK_READY=0
 CODEX_CLI_COMMAND="codex"
 NVM_VERSION="v0.40.3"
 NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh"
@@ -338,6 +341,24 @@ log_dry() {
     echo -e "${BLUE}[DRY RUN]${NC} $1"
 }
 
+run_best_effort() {
+    local label="$1"
+    shift
+    local failed_before=$failed
+    local status=0
+
+    "$@" || status=$?
+    if [[ $status -eq 0 && $failed -eq $failed_before ]]; then
+        return 0
+    fi
+
+    if [[ $failed -eq $failed_before ]]; then
+        failed=$((failed + 1))
+    fi
+    log_warn "$label failed; continuing"
+    return 1
+}
+
 ensure_path_contains_local_bin() {
     local local_bin="$HOME/.local/bin"
 
@@ -350,6 +371,7 @@ ensure_path_contains_local_bin() {
 
     export PATH="$local_bin:$PATH"
     log_info "Added to installer PATH: $local_bin"
+    log_info "Ensure future shells include this directory if installed commands are not found"
     return 0
 }
 
@@ -1706,6 +1728,7 @@ install_copy() {
 install_shared_ai_agent_snapshot() {
     local dst="$SHARED_AI_AGENT_DIR"
 
+    SHARED_AI_AGENT_READY=0
     log_info "Installing shared agent assets..."
     if ! install_copy "ai-agent" "$dst"; then
         return 1
@@ -1713,6 +1736,17 @@ install_shared_ai_agent_snapshot() {
 
     SHARED_AI_AGENT_READY=1
     return 0
+}
+
+install_waypost_ready_shared_ai_agent_snapshot() {
+    SHARED_AI_AGENT_READY=0
+
+    if [[ $WAYPOST_CONFIG_SWITCH_READY -ne 1 ]]; then
+        log_warn "Skipping shared AI agent snapshot; Waypost preparation did not complete"
+        return 0
+    fi
+
+    install_shared_ai_agent_snapshot
 }
 
 link_path() {
@@ -1910,16 +1944,51 @@ readonly PACKAGE_MANAGER="$(detect_package_manager)"
 # Installation Functions
 # =============================================================================
 
+package_is_installed() {
+    local package_name="$1"
+    local package_status
+
+    case "$PACKAGE_MANAGER" in
+        apt-get)
+            command -v dpkg-query &>/dev/null || return 1
+            package_status="$(dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null)" || return 1
+            [[ "$package_status" == "install ok installed" ]]
+            ;;
+        brew)
+            brew list --formula "$package_name" >/dev/null 2>&1 \
+                || brew list --cask "$package_name" >/dev/null 2>&1
+            ;;
+        dnf|zypper)
+            command -v rpm &>/dev/null && rpm -q "$package_name" >/dev/null 2>&1
+            ;;
+        pacman)
+            pacman -Q "$package_name" >/dev/null 2>&1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 install_package() {
     local package_name="$1"
     local -a install_cmd=()
+
+    if package_is_installed "$package_name"; then
+        log_ok "Found package: $package_name"
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_error "Required command or library is unavailable, and no package change would be made: $package_name"
+            return 1
+        fi
+        return 0
+    fi
 
     case "$PACKAGE_MANAGER" in
         apt-get)
             install_cmd=(sudo apt-get install -y "$package_name")
             ;;
         brew)
-            install_cmd=(brew install "$package_name")
+            install_cmd=(env HOMEBREW_NO_AUTO_UPDATE=1 brew install "$package_name")
             ;;
         dnf)
             install_cmd=(sudo dnf install -y "$package_name")
@@ -1966,17 +2035,39 @@ package_name_for_command() {
     esac
 }
 
+node_npm_are_usable() {
+    command -v node &>/dev/null \
+        && node --version >/dev/null 2>&1 \
+        && command -v npm &>/dev/null \
+        && npm --version >/dev/null 2>&1
+}
+
+npm_is_available_or_planned() {
+    node_npm_are_usable \
+        || [[ $DRY_RUN -eq 1 && $NODE_NPM_AVAILABLE -eq 1 ]]
+}
+
 ensure_required_command() {
     local command_name="$1"
+
+    if [[ "$command_name" == "npm" ]]; then
+        if npm_is_available_or_planned; then
+            if command -v npm &>/dev/null; then
+                log_ok "Found required command: npm"
+            else
+                log_dry "Would use required command from NVM: npm"
+            fi
+            return 0
+        fi
+
+        log_error "npm is unavailable; leaving the existing Node.js setup unchanged"
+        return 1
+    fi
+
     local package_name="${2:-$(package_name_for_command "$command_name")}"
 
     if command -v "$command_name" &>/dev/null; then
         log_ok "Found required command: $command_name"
-        return 0
-    fi
-
-    if [[ $DRY_RUN -eq 1 && "$command_name" == "npm" && $NVM_NODE_AVAILABLE -eq 1 ]]; then
-        log_dry "Would use required command from NVM: npm"
         return 0
     fi
 
@@ -2016,7 +2107,8 @@ install_required_tools() {
     log_info "Checking required CLI tools..."
 
     for tool_name in "${required_tools[@]}"; do
-        ensure_required_command "$tool_name" || return 1
+        run_best_effort "Required command: $tool_name" \
+            ensure_required_command "$tool_name"
     done
 
     return 0
@@ -2066,13 +2158,21 @@ install_fd() {
 
     log_info "Checking fd..."
 
-    if fd_is_runnable; then
-        log_ok "Found fd"
-        return 0
+    if command -v fd &>/dev/null; then
+        if fd_is_runnable; then
+            log_ok "Found fd"
+            return 0
+        fi
+        log_error "Found fd but it is not runnable; refusing to replace it"
+        return 1
     fi
-    if command -v fdfind &>/dev/null && fdfind --version >/dev/null 2>&1; then
-        install_fd_alias
-        return $?
+    if command -v fdfind &>/dev/null; then
+        if fdfind --version >/dev/null 2>&1; then
+            install_fd_alias
+            return $?
+        fi
+        log_error "Found fdfind but it is not runnable; refusing to replace it"
+        return 1
     fi
 
     case "$PACKAGE_MANAGER" in
@@ -2431,13 +2531,13 @@ install_mq() {
 
     log_info "Checking mq Markdown processor..."
 
-    if mq_is_runnable; then
-        log_ok "Found mq"
-        return 0
-    fi
-
     if command -v mq &>/dev/null; then
-        log_warn "Found mq but it is not runnable: $(command -v mq)"
+        if mq_is_runnable; then
+            log_ok "Found mq"
+            return 0
+        fi
+        log_error "Found mq but it is not runnable; refusing to replace it: $(command -v mq)"
+        return 1
     fi
 
     # Homebrew ships mq for both Apple Silicon and Intel macOS.
@@ -2564,16 +2664,97 @@ ensure_nvm_bash_profile() {
     return 1
 }
 
+warn_if_existing_nvm_needs_bash_setup() {
+    local profile="$HOME/.bashrc"
+
+    if [[ ! -e "$profile" && ! -L "$profile" ]]; then
+        return 0
+    fi
+    if bash_profile_loads_nvm "$profile"; then
+        return 0
+    fi
+
+    log_warn "Existing NVM is not initialized by Bash profile: $profile"
+    log_info "Add NVM initialization manually if future Bash shells cannot find Node.js"
+    return 0
+}
+
+set_nvm_default_version() {
+    local version="$1"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: nvm alias default $version"
+        return 0
+    fi
+
+    if nvm alias default "$version" >/dev/null; then
+        log_ok "Set the existing Node.js version as NVM default: $version"
+        return 0
+    fi
+
+    log_error "Failed to persist the NVM default version: $version"
+    return 1
+}
+
+ensure_nvm_default_version() {
+    local version="$1"
+    local default_version
+
+    default_version="$(nvm version default 2>/dev/null || true)"
+    if [[ -n "$default_version" && "$default_version" != "N/A" ]]; then
+        return 0
+    fi
+
+    set_nvm_default_version "$version"
+}
+
 install_nodejs_with_nvm() {
     local nvm_dir="$HOME/.nvm"
     local nvm_script="$nvm_dir/nvm.sh"
+    local ambient_node_or_npm_present=0
+    local current_node_path
+    local current_nvm_version
+    local existing_node_version
+    local installed_node_dir
+    local found_existing_nvm_node=0
+    local nvm_profile_is_installer_owned=0
     local tmp_file
 
     log_info "Checking Node.js via NVM..."
 
+    if command -v node &>/dev/null || command -v npm &>/dev/null; then
+        ambient_node_or_npm_present=1
+        if node_npm_are_usable; then
+            current_node_path="$(command -v node)"
+            if [[ "$current_node_path" == "$nvm_dir"/versions/node/* && -s "$nvm_script" ]]; then
+                # shellcheck source=/dev/null
+                source "$nvm_script"
+                current_nvm_version="$(nvm current 2>/dev/null || true)"
+                if [[ -n "$current_nvm_version" \
+                    && "$current_nvm_version" != "none" \
+                    && "$current_nvm_version" != "system" \
+                    && "$current_nvm_version" != "N/A" ]]; then
+                    ensure_nvm_default_version "$current_nvm_version" || return 1
+                fi
+                warn_if_existing_nvm_needs_bash_setup
+            fi
+            NODE_NPM_AVAILABLE=1
+            log_ok "Found Node.js and npm; leaving the existing installation unchanged"
+            return 0
+        fi
+
+        if [[ ! -s "$nvm_script" ]]; then
+            log_error "Existing Node.js/npm setup is incomplete or unusable; refusing to replace it"
+            return 1
+        fi
+
+        log_warn "Existing Node.js/npm setup is incomplete or unusable; checking existing NVM versions"
+    fi
+
     if [[ -s "$nvm_script" ]]; then
         log_ok "Found NVM"
     else
+        nvm_profile_is_installer_owned=1
         if [[ -e "$nvm_dir" ]]; then
             log_error "NVM directory exists but is incomplete: $nvm_dir"
             return 1
@@ -2608,13 +2789,17 @@ install_nodejs_with_nvm() {
         fi
     fi
 
-    ensure_nvm_bash_profile || return 1
+    if [[ $nvm_profile_is_installer_owned -eq 1 ]]; then
+        ensure_nvm_bash_profile || return 1
+    else
+        warn_if_existing_nvm_needs_bash_setup
+    fi
 
-    if [[ $DRY_RUN -eq 1 ]]; then
+    if [[ ! -s "$nvm_script" ]]; then
         log_dry "Would run: nvm install --lts"
         log_dry "Would run: nvm alias default lts/*"
         log_dry "Would run: nvm use default"
-        NVM_NODE_AVAILABLE=1
+        NODE_NPM_AVAILABLE=1
         return 0
     fi
 
@@ -2624,6 +2809,51 @@ install_nodejs_with_nvm() {
     if ! command -v nvm &>/dev/null; then
         log_error "NVM is unavailable after loading: $nvm_script"
         return 1
+    fi
+
+    if nvm use default >/dev/null 2>&1 && node_npm_are_usable; then
+        NODE_NPM_AVAILABLE=1
+        log_ok "Found the existing default Node.js version through NVM"
+        return 0
+    fi
+
+    existing_node_version="$(nvm version node 2>/dev/null || true)"
+    if [[ -n "$existing_node_version" && "$existing_node_version" != "N/A" ]]; then
+        if ! nvm use "$existing_node_version" >/dev/null 2>&1 \
+            || ! node_npm_are_usable; then
+            log_error "Existing NVM Node.js version is incomplete: $existing_node_version"
+            return 1
+        fi
+
+        set_nvm_default_version "$existing_node_version" || return 1
+        NODE_NPM_AVAILABLE=1
+        log_ok "Activated the existing NVM Node.js version: $existing_node_version"
+        return 0
+    fi
+
+    for installed_node_dir in "$nvm_dir"/versions/node/*; do
+        [[ -d "$installed_node_dir" ]] || continue
+        if [[ -x "$installed_node_dir/bin/node" ]]; then
+            found_existing_nvm_node=1
+        fi
+    done
+
+    if [[ $found_existing_nvm_node -eq 1 ]]; then
+        log_error "Existing NVM Node.js versions could not be activated; refusing to replace them"
+        return 1
+    fi
+
+    if [[ $ambient_node_or_npm_present -eq 1 ]]; then
+        log_error "Existing Node.js/npm setup is incomplete, and NVM has no usable installed version; refusing to replace it"
+        return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: nvm install --lts"
+        log_dry "Would run: nvm alias default lts/*"
+        log_dry "Would run: nvm use default"
+        NODE_NPM_AVAILABLE=1
+        return 0
     fi
 
     if ! nvm install --lts; then
@@ -2639,14 +2869,36 @@ install_nodejs_with_nvm() {
         return 1
     fi
 
-    if command -v node &>/dev/null && command -v npm &>/dev/null; then
-        NVM_NODE_AVAILABLE=1
+    if node_npm_are_usable; then
+        NODE_NPM_AVAILABLE=1
         log_ok "Node.js and npm are available through NVM"
         return 0
     fi
 
     log_error "Node.js or npm is unavailable after NVM setup"
     return 1
+}
+
+npm_global_run() {
+    local action="$1"
+    shift
+    local prefix="$HOME/.local"
+    local -a npm_cmd=(npm "$action" -g --prefix "$prefix" "$@")
+
+    ensure_path_contains_local_bin
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would run: ${npm_cmd[*]}"
+        return 0
+    fi
+
+    if ! mkdir -p "$prefix" || [[ ! -d "$prefix" || ! -w "$prefix" ]]; then
+        log_error "npm global install prefix is not writable: $prefix"
+        return 1
+    fi
+
+    log_info "Running: ${npm_cmd[*]}"
+    "${npm_cmd[@]}"
 }
 
 install_codex_cli() {
@@ -2657,20 +2909,18 @@ install_codex_cli() {
         return 0
     fi
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g @openai/codex"
-        return 0
-    fi
-
-    if ! command -v npm &>/dev/null; then
+    if ! npm_is_available_or_planned; then
         log_error "Codex CLI requires npm"
         return 1
     fi
 
-    log_info "Running: npm install -g @openai/codex"
-    if ! npm install -g @openai/codex; then
+    if ! npm_global_run install @openai/codex; then
         log_error "Failed to install Codex CLI"
         return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
     fi
 
     if command -v codex &>/dev/null; then
@@ -2772,15 +3022,13 @@ install_bun() {
         return 1
     fi
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g bun"
-        return 0
-    fi
-
-    log_info "Running: npm install -g bun"
-    if ! npm install -g bun; then
+    if ! npm_global_run install bun; then
         log_error "Failed to install Bun with npm"
         return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
     fi
     hash -r
 
@@ -2804,7 +3052,7 @@ install_oh_my_zsh() {
         return 0
     fi
 
-    if [[ -e "$install_dir" ]]; then
+    if [[ -e "$install_dir" || -L "$install_dir" ]]; then
         log_error "Oh My Zsh directory exists but is incomplete: $install_dir"
         return 1
     fi
@@ -2827,6 +3075,10 @@ install_oh_my_zsh() {
 
     log_info "Running: ${install_cmd[*]}"
     if ! "${install_cmd[@]}"; then
+        if [[ -e "$install_dir" || -L "$install_dir" ]]; then
+            remove_installed_path "$install_dir"
+            log_info "Removed incomplete Oh My Zsh install: $install_dir"
+        fi
         log_error "Failed to install Oh My Zsh"
         return 1
     fi
@@ -2836,7 +3088,9 @@ install_oh_my_zsh() {
         return 0
     fi
 
-    log_error "Oh My Zsh is incomplete after install: $install_dir"
+    remove_installed_path "$install_dir"
+    log_info "Removed incomplete Oh My Zsh install: $install_dir"
+    log_error "Oh My Zsh is incomplete after install"
     return 1
 }
 
@@ -2865,6 +3119,10 @@ install_zsh_checkout() {
     mkdir -p "$(dirname "$target")" || return 1
     log_info "Running: ${clone_cmd[*]}"
     if ! "${clone_cmd[@]}" || [[ ! -f "$marker" ]]; then
+        if [[ -e "$target" || -L "$target" ]]; then
+            remove_installed_path "$target"
+            log_info "Removed incomplete $display_name install: $target"
+        fi
         log_error "Failed to install $display_name"
         return 1
     fi
@@ -2915,40 +3173,50 @@ install_zsh_dependencies() {
     return 1
 }
 
+install_zsh_stack() {
+    ZSH_STACK_READY=0
+
+    if ! run_best_effort "Oh My Zsh" install_oh_my_zsh; then
+        log_warn "Skipping Zsh dependencies; Oh My Zsh is unavailable"
+        return 0
+    fi
+
+    if run_best_effort "Zsh dependencies" install_zsh_dependencies; then
+        ZSH_STACK_READY=1
+    fi
+    return 0
+}
+
 install_agent_browser() {
     log_info "Checking agent-browser..."
-    local installed_agent_browser=0
+
+    if command -v agent-browser &>/dev/null; then
+        log_ok "Found agent-browser; leaving the existing installation unchanged"
+        return 0
+    fi
 
     if ! ensure_required_command "npm"; then
         log_error "agent-browser requires npm"
         return 1
     fi
 
-    if ! command -v agent-browser &>/dev/null; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would run: npm install -g agent-browser"
-        else
-            log_info "Running: npm install -g agent-browser"
-            if ! npm install -g agent-browser; then
-                log_error "Failed to install agent-browser with npm"
-                return 1
-            fi
-            installed_agent_browser=1
-            log_ok "Installed agent-browser"
-        fi
-    else
-        log_ok "Found agent-browser"
-    fi
-
-    if [[ $DRY_RUN -eq 0 && $installed_agent_browser -eq 0 ]]; then
-        log_ok "Skipping agent-browser browser install; agent-browser is already installed"
-        return 0
-    fi
-
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: agent-browser install if agent-browser is newly installed"
+        npm_global_run install agent-browser || return 1
+        log_dry "Would run: agent-browser install"
         return 0
     fi
+
+    if ! npm_global_run install agent-browser; then
+        log_error "Failed to install agent-browser with npm"
+        return 1
+    fi
+    hash -r
+
+    if ! command -v agent-browser &>/dev/null; then
+        log_error "agent-browser is unavailable after npm install"
+        return 1
+    fi
+    log_ok "Installed agent-browser"
 
     log_info "Running: agent-browser install"
     if agent-browser install; then
@@ -2963,25 +3231,23 @@ install_agent_browser() {
 install_ast_grep() {
     log_info "Checking ast-grep..."
 
-    if ! ensure_required_command "npm"; then
-        log_error "ast-grep requires npm"
-        return 1
-    fi
-
     if command -v ast-grep &>/dev/null; then
         log_ok "Found ast-grep"
         return 0
     fi
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g @ast-grep/cli"
-        return 0
+    if ! ensure_required_command "npm"; then
+        log_error "ast-grep requires npm"
+        return 1
     fi
 
-    log_info "Running: npm install -g @ast-grep/cli"
-    if ! npm install -g @ast-grep/cli; then
+    if ! npm_global_run install @ast-grep/cli; then
         log_error "Failed to install ast-grep with npm"
         return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
     fi
 
     if command -v ast-grep &>/dev/null; then
@@ -3046,9 +3312,10 @@ install_ast_grep_skill() {
 }
 
 tree_sitter_cli_version() {
+    local tree_sitter_command="${1:-tree-sitter}"
     local version_output
 
-    version_output="$(tree-sitter --version 2>/dev/null)" || return 1
+    version_output="$("$tree_sitter_command" --version 2>/dev/null)" || return 1
     if [[ "$version_output" =~ ^tree-sitter[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
         printf '%s\n' "${BASH_REMATCH[1]}"
         return 0
@@ -3095,63 +3362,94 @@ load_cargo_environment() {
 }
 
 ensure_rust_cargo() {
+    local cargo_command_present=0
     local tmp_file
 
     log_info "Checking Rust/Cargo..."
+    RUST_CARGO_PLANNED=0
     load_cargo_environment
 
-    if ! command -v rustup &>/dev/null || ! rustup --version >/dev/null 2>&1; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would install the minimal Rust toolchain from: $RUSTUP_INSTALL_URL"
+    if command -v cargo &>/dev/null; then
+        cargo_command_present=1
+        if cargo --version >/dev/null 2>&1; then
+            log_ok "Found Cargo; leaving the existing toolchain unchanged"
+            return 0
+        fi
+        log_warn "Found Cargo but it is not directly runnable; checking rustup"
+    fi
+
+    if command -v rustup &>/dev/null; then
+        if ! rustup --version >/dev/null 2>&1; then
+            log_error "Found rustup but it is not runnable; refusing to replace it"
+            return 1
+        fi
+
+        if rustup run stable cargo --version >/dev/null 2>&1; then
+            log_ok "Found the existing Rust stable toolchain"
             return 0
         fi
 
-        if ! command -v curl &>/dev/null; then
-            log_error "Rust/Cargo installation requires curl"
+        if [[ $DRY_RUN -eq 1 ]]; then
+            RUST_CARGO_PLANNED=1
+            log_dry "Would install the missing Rust stable toolchain"
+            return 0
+        fi
+
+        log_info "Installing missing Rust stable toolchain..."
+        if ! rustup toolchain install stable --profile minimal; then
+            log_error "Failed to install the Rust stable toolchain"
             return 1
         fi
 
-        tmp_file="$(mktemp "${TMPDIR:-/tmp}/rustup-init.XXXXXX")" || {
-            log_error "Failed to create temporary Rust installer"
-            return 1
-        }
-
-        log_info "Installing minimal Rust toolchain..."
-        if ! curl --proto '=https' --tlsv1.2 -fsSL "$RUSTUP_INSTALL_URL" -o "$tmp_file"; then
-            rm -f "$tmp_file"
-            log_error "Failed to download Rust installer"
-            return 1
+        if rustup run stable cargo --version >/dev/null 2>&1; then
+            log_ok "Installed the missing Rust stable toolchain"
+            return 0
         fi
 
-        if ! bash "$tmp_file" -y --profile minimal --default-toolchain stable; then
-            rm -f "$tmp_file"
-            log_error "Failed to install Rust toolchain"
-            return 1
-        fi
-        rm -f "$tmp_file"
-
-        load_cargo_environment
-        hash -r
+        log_error "Cargo is unavailable from the Rust stable toolchain"
+        return 1
     fi
 
-    if ! command -v rustup &>/dev/null || ! rustup --version >/dev/null 2>&1; then
-        log_error "rustup is unavailable after Rust installation"
+    if [[ $cargo_command_present -eq 1 ]]; then
+        log_error "Found Cargo but it is not runnable and no usable rustup toolchain is available"
         return 1
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: rustup toolchain install stable --profile minimal"
+        RUST_CARGO_PLANNED=1
+        log_dry "Would install the minimal Rust toolchain from: $RUSTUP_INSTALL_URL"
         return 0
     fi
 
-    log_info "Ensuring current Rust stable toolchain..."
-    if ! rustup toolchain install stable --profile minimal; then
-        log_error "Failed to install the Rust stable toolchain"
+    if ! command -v curl &>/dev/null; then
+        log_error "Rust/Cargo installation requires curl"
         return 1
     fi
 
-    if rustup run stable cargo --version >/dev/null 2>&1; then
-        log_ok "Rust stable toolchain is available"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/rustup-init.XXXXXX")" || {
+        log_error "Failed to create temporary Rust installer"
+        return 1
+    }
+
+    log_info "Installing minimal Rust toolchain..."
+    if ! curl --proto '=https' --tlsv1.2 -fsSL "$RUSTUP_INSTALL_URL" -o "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to download Rust installer"
+        return 1
+    fi
+
+    if ! bash "$tmp_file" -y --profile minimal --default-toolchain stable; then
+        rm -f "$tmp_file"
+        log_error "Failed to install Rust toolchain"
+        return 1
+    fi
+    rm -f "$tmp_file"
+
+    load_cargo_environment
+    hash -r
+
+    if command -v cargo &>/dev/null && cargo --version >/dev/null 2>&1; then
+        log_ok "Installed Rust/Cargo"
         return 0
     fi
 
@@ -3251,15 +3549,18 @@ ensure_libclang() {
 
 install_tree_sitter_cli_with_cargo() {
     local required_version="$1"
-    local cargo_root="$HOME/.local"
+    local cargo_root
+    local cargo_candidate
+    local cargo_label
     local current_version=""
-    local -a install_cmd=(
-        rustup run stable cargo install
-        --root "$cargo_root"
-        tree-sitter-cli
-        --locked
-        --force
-    )
+    local direct_cargo_version=""
+    local install_target="$HOME/.local/bin/tree-sitter"
+    local stable_cargo_version=""
+    local staged_target
+    local build_succeeded=0
+    local -a cargo_candidates=()
+    local -a cargo_cmd=()
+    local -a install_cmd=()
 
     if ! ensure_rust_cargo; then
         return 1
@@ -3271,58 +3572,203 @@ install_tree_sitter_cli_with_cargo() {
 
     ensure_path_contains_local_bin
 
+    if command -v cargo &>/dev/null \
+        && direct_cargo_version="$(cargo --version 2>/dev/null)"; then
+        cargo_candidates+=(direct)
+    fi
+    if command -v rustup &>/dev/null \
+        && stable_cargo_version="$(rustup run stable cargo --version 2>/dev/null)"; then
+        if [[ -z "$direct_cargo_version" || "$stable_cargo_version" != "$direct_cargo_version" ]]; then
+            cargo_candidates+=(stable)
+        fi
+    elif [[ $DRY_RUN -eq 1 && $RUST_CARGO_PLANNED -eq 1 ]]; then
+        cargo_candidates+=(stable)
+    fi
+
+    if [[ ${#cargo_candidates[@]} -eq 0 ]]; then
+        log_error "Cargo is unavailable after Rust setup"
+        return 1
+    fi
+
     if [[ $DRY_RUN -eq 1 ]]; then
+        cargo_candidate="${cargo_candidates[0]}"
+        if [[ "$cargo_candidate" == "direct" ]]; then
+            cargo_cmd=(cargo)
+        else
+            cargo_cmd=(rustup run stable cargo)
+        fi
+        cargo_root="${TMPDIR:-/tmp}/tree-sitter-cargo.XXXXXX"
+        install_cmd=(
+            "${cargo_cmd[@]}" install
+            --root "$cargo_root"
+            tree-sitter-cli
+            --locked
+        )
         log_dry "Would run: ${install_cmd[*]}"
+        if [[ ${#cargo_candidates[@]} -gt 1 ]]; then
+            log_dry "Would retry with the existing Rust stable Cargo if the first build fails"
+        fi
+        log_dry "Would install the verified tree-sitter CLI to: $install_target"
         return 0
     fi
 
-    log_info "Building tree-sitter CLI from source: ${install_cmd[*]}"
-    if ! "${install_cmd[@]}"; then
-        log_error "Failed to build tree-sitter CLI with Cargo"
+    if [[ -e "$install_target" || -L "$install_target" ]]; then
+        log_error "tree-sitter install target already exists; refusing to replace it: $install_target"
         return 1
     fi
+
+    for cargo_candidate in "${cargo_candidates[@]}"; do
+        if [[ "$cargo_candidate" == "direct" ]]; then
+            cargo_cmd=(cargo)
+            cargo_label="Cargo"
+        else
+            cargo_cmd=(rustup run stable cargo)
+            cargo_label="Rust stable Cargo"
+        fi
+
+        cargo_root="$(mktemp -d "${TMPDIR:-/tmp}/tree-sitter-cargo.XXXXXX")" || {
+            log_error "Failed to create a temporary tree-sitter build directory"
+            return 1
+        }
+        staged_target="$cargo_root/bin/tree-sitter"
+        install_cmd=(
+            "${cargo_cmd[@]}" install
+            --root "$cargo_root"
+            tree-sitter-cli
+            --locked
+        )
+
+        log_info "Building tree-sitter CLI with $cargo_label: ${install_cmd[*]}"
+        if ! "${install_cmd[@]}"; then
+            rm -rf "$cargo_root"
+            log_warn "$cargo_label failed to build tree-sitter CLI"
+            continue
+        fi
+
+        current_version=""
+        if ! current_version="$(tree_sitter_cli_version "$staged_target")"; then
+            rm -rf "$cargo_root"
+            log_warn "$cargo_label produced an unusable tree-sitter CLI"
+            continue
+        fi
+        if ! tree_sitter_version_is_supported "$current_version" "$required_version"; then
+            rm -rf "$cargo_root"
+            log_warn "$cargo_label built tree-sitter CLI $current_version; requires $required_version or newer"
+            continue
+        fi
+
+        build_succeeded=1
+        break
+    done
+
+    if [[ $build_succeeded -ne 1 ]]; then
+        log_error "Failed to build a supported tree-sitter CLI with the available Cargo toolchains"
+        return 1
+    fi
+
+    if [[ -e "$install_target" || -L "$install_target" ]]; then
+        rm -rf "$cargo_root"
+        log_error "tree-sitter install target appeared during the Cargo build; refusing to replace it: $install_target"
+        return 1
+    fi
+    if ! mkdir -p "$(dirname "$install_target")" \
+        || ! install -m 0755 "$staged_target" "$install_target"; then
+        rm -f "$install_target"
+        rm -rf "$cargo_root"
+        log_error "Failed to install the verified tree-sitter CLI to: $install_target"
+        return 1
+    fi
+    rm -rf "$cargo_root"
     hash -r
 
-    if current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
+    if current_version="$(tree_sitter_cli_version "$install_target")" \
+        && tree_sitter_version_is_supported "$current_version" "$required_version"; then
         log_ok "Built supported tree-sitter CLI: $current_version"
         return 0
     fi
 
-    log_error "tree-sitter CLI is unavailable after Cargo build"
+    rm -f "$install_target"
+    hash -r
+
+    log_error "tree-sitter CLI is unavailable after publishing the Cargo build"
+    return 1
+}
+
+remove_tree_sitter_install_created_by_npm() {
+    local target="$1"
+    local package_dir="$HOME/.local/lib/node_modules/tree-sitter-cli"
+
+    if ! npm_global_run uninstall tree-sitter-cli; then
+        log_error "Failed to remove npm ownership of tree-sitter-cli"
+        return 1
+    fi
+
+    if [[ -e "$package_dir" || -L "$package_dir" ]]; then
+        log_error "npm package remains after uninstall: $package_dir"
+        return 1
+    fi
+
+    if [[ ! -e "$target" && ! -L "$target" ]]; then
+        hash -r
+        log_info "Removed npm ownership of tree-sitter-cli"
+        return 0
+    fi
+    if [[ -d "$target" && ! -L "$target" ]]; then
+        log_error "npm created an unexpected tree-sitter directory: $target"
+        return 1
+    fi
+    if rm -f "$target"; then
+        hash -r
+        log_info "Removed npm-owned tree-sitter-cli and its unusable launcher: $target"
+        return 0
+    fi
+
+    log_error "Failed to remove the unusable tree-sitter launcher after npm uninstall: $target"
     return 1
 }
 
 install_tree_sitter_cli() {
     local required_version="0.26.1"
     local current_version=""
+    local install_target="$HOME/.local/bin/tree-sitter"
 
     log_info "Checking tree-sitter CLI..."
+    ensure_path_contains_local_bin
 
-    if current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
-        log_ok "Found supported tree-sitter CLI: $current_version"
-        return 0
+    if command -v tree-sitter &>/dev/null; then
+        if current_version="$(tree_sitter_cli_version)"; then
+            if tree_sitter_version_is_supported "$current_version" "$required_version"; then
+                log_ok "Found supported tree-sitter CLI: $current_version"
+                return 0
+            fi
+            log_error "Found tree-sitter CLI $current_version; requires $required_version or newer and will not be replaced"
+            return 1
+        else
+            log_error "Found tree-sitter CLI but could not read its version; refusing to replace it"
+            return 1
+        fi
     fi
 
-    if [[ -n "$current_version" ]]; then
-        log_warn "tree-sitter CLI $current_version is unsupported; requires $required_version or newer"
+    if [[ -e "$install_target" || -L "$install_target" ]]; then
+        log_error "tree-sitter install target already exists but is unavailable; refusing to replace it: $install_target"
+        return 1
     fi
 
-    if ! command -v npm &>/dev/null; then
+    if ! npm_is_available_or_planned; then
         log_warn "npm is unavailable; building tree-sitter CLI from source with Cargo"
         install_tree_sitter_cli_with_cargo "$required_version"
         return
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g --allow-scripts=tree-sitter-cli tree-sitter-cli (requires $required_version or newer)"
+        npm_global_run install --allow-scripts=tree-sitter-cli tree-sitter-cli || return 1
         log_dry "Would install Rust/Cargo and libclang, then build tree-sitter-cli from source if the npm binary is unusable"
         return 0
     fi
 
     # tree-sitter-cli needs install.js to download the actual CLI. npm 11's
     # script policy allows this known package through the per-command flag.
-    log_info "Running: npm install -g --allow-scripts=tree-sitter-cli tree-sitter-cli"
-    if ! npm install -g --allow-scripts=tree-sitter-cli tree-sitter-cli; then
+    if ! npm_global_run install --allow-scripts=tree-sitter-cli tree-sitter-cli; then
         log_warn "npm install did not provide a runnable tree-sitter CLI; trying Cargo"
     elif current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
         log_ok "Installed supported tree-sitter CLI: $current_version"
@@ -3332,11 +3778,15 @@ install_tree_sitter_cli() {
     # A prior install may have added the package while its lifecycle script was
     # blocked. Rebuild only this package to run its now-allowed install script.
     log_info "Re-running tree-sitter-cli install script"
-    if ! npm rebuild -g --allow-scripts=tree-sitter-cli tree-sitter-cli; then
+    if ! npm_global_run rebuild --allow-scripts=tree-sitter-cli tree-sitter-cli; then
         log_warn "npm rebuild did not provide a runnable tree-sitter CLI; trying Cargo"
     elif current_version="$(tree_sitter_cli_version)" && tree_sitter_version_is_supported "$current_version" "$required_version"; then
         log_ok "Installed supported tree-sitter CLI: $current_version"
         return 0
+    fi
+
+    if ! remove_tree_sitter_install_created_by_npm "$install_target"; then
+        return 1
     fi
 
     install_tree_sitter_cli_with_cargo "$required_version"
@@ -3345,25 +3795,23 @@ install_tree_sitter_cli() {
 install_codegraph() {
     log_info "Checking codegraph..."
 
-    if ! ensure_required_command "npm"; then
-        log_error "codegraph requires npm"
-        return 1
-    fi
-
     if command -v codegraph &>/dev/null; then
         log_ok "Found codegraph"
         return 0
     fi
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: npm install -g @colbymchenry/codegraph"
-        return 0
+    if ! ensure_required_command "npm"; then
+        log_error "codegraph requires npm"
+        return 1
     fi
 
-    log_info "Running: npm install -g @colbymchenry/codegraph"
-    if ! npm install -g @colbymchenry/codegraph; then
+    if ! npm_global_run install @colbymchenry/codegraph; then
         log_error "Failed to install codegraph with npm"
         return 1
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
     fi
 
     if command -v codegraph &>/dev/null; then
@@ -3560,31 +4008,37 @@ ensure_waypost_mcp_command() {
     return 0
 }
 
-migrate_legacy_waypost_state_if_present() {
+prepare_waypost_config_switch() {
     local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
     local legacy_state_dir="$state_home/ai-agent/mailbox"
 
-    if [[ ! -e "$legacy_state_dir" ]] && [[ ! -L "$legacy_state_dir" ]]; then
-        return 0
-    fi
+    WAYPOST_CONFIG_SWITCH_READY=0
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would run: waypost migrate"
-        return 0
-    fi
-
-    if command -v pgrep &>/dev/null && pgrep -f 'agent-mailbox[[:space:]]+mcp([[:space:]]|$)' >/dev/null 2>&1; then
-        log_warn "Legacy agent-mailbox MCP process detected; stop it before migration to avoid state divergence"
-    fi
-
-    log_info "Migrating legacy Waypost state: $legacy_state_dir"
-    if ! waypost migrate; then
-        log_error "Failed to migrate legacy Waypost state"
+    if ! ensure_waypost_mcp_command; then
+        log_warn "Skipping Waypost-dependent config changes"
         return 1
     fi
 
-    log_ok "Migrated legacy Waypost state"
+    if [[ -e "$legacy_state_dir" ]] || [[ -L "$legacy_state_dir" ]]; then
+        log_error "Legacy Waypost state requires explicit migration: $legacy_state_dir"
+        log_info "Run 'waypost migrate' manually, verify the result, then rerun this installer"
+        log_warn "Preserving legacy state and skipping Waypost-dependent config changes"
+        return 1
+    fi
+
+    WAYPOST_CONFIG_SWITCH_READY=1
     return 0
+}
+
+waypost_config_switch_is_ready() {
+    local client_name="$1"
+
+    if [[ $WAYPOST_CONFIG_SWITCH_READY -eq 1 ]]; then
+        return 0
+    fi
+
+    log_warn "Skipping $client_name Waypost MCP switch; preparation did not complete"
+    return 1
 }
 
 waypost_mcp_permissions_json() {
@@ -3757,8 +4211,8 @@ remove_gemini_stale_waypost_mcps() {
 }
 
 install_gemini_waypost_mcp() {
-    remove_gemini_stale_waypost_mcps
     rewrite_gemini_waypost_config || return 1
+    remove_gemini_stale_waypost_mcps
 }
 
 rewrite_antigravity_waypost_config() {
@@ -4179,10 +4633,9 @@ install_claude_waypost_mcp() {
         return 0
     fi
 
-    remove_claude_stale_waypost_mcps
-
     if [[ $DRY_RUN -eq 1 ]]; then
         log_dry "Would run: claude mcp add -s user waypost -- waypost mcp"
+        remove_claude_stale_waypost_mcps
         return 0
     fi
 
@@ -4190,6 +4643,7 @@ install_claude_waypost_mcp() {
         log_ok "Configured Claude MCP: waypost"
         rewrite_claude_waypost_config || return 1
         ensure_claude_waypost_permissions || return 1
+        remove_claude_stale_waypost_mcps
         return 0
     fi
 
@@ -4425,18 +4879,30 @@ setup_agent_deck_integration() {
 }
 
 install_home_configs() {
+    local config_submodules_ready="${1:-1}"
+    local zsh_stack_ready="${2:-1}"
+
     log_info "Installing home directory dotfiles..."
 
     # Shell configs
     install_copy "bashrc" "$HOME/.bashrc"
-    install_copy "zshrc" "$HOME/.zshrc"
+    if [[ $zsh_stack_ready -eq 1 ]]; then
+        install_copy "zshrc" "$HOME/.zshrc"
+    else
+        log_warn "Skipping zshrc; the Zsh stack is unavailable"
+        skipped=$((skipped + 1))
+    fi
 
     # Screen config
     install_copy "screenrc" "$HOME/.screenrc"
 
     # Tmux config (file in tmux/ directory)
     install_copy "tmux/tmux.conf" "$HOME/.tmux.conf"
-    install_copy "tmux/plugins/tpm" "$HOME/.tmux/plugins/tpm"
+    if [[ $config_submodules_ready -eq 1 ]]; then
+        install_copy "tmux/plugins/tpm" "$HOME/.tmux/plugins/tpm"
+    else
+        log_warn "Skipping TPM config; its Git submodule is unavailable"
+    fi
 
     # Git config (OS-specific)
     case "$OS" in
@@ -4464,10 +4930,17 @@ install_home_configs() {
 install_ai_agent_config() {
     local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
 
+    if [[ $WAYPOST_CONFIG_SWITCH_READY -ne 1 ]]; then
+        log_warn "Skipping AI agent config; Waypost preparation did not complete"
+        return 0
+    fi
+
     install_copy "ai-agent" "$config_dir/ai-agent"
 }
 
 install_xdg_configs() {
+    local config_submodules_ready="${1:-1}"
+
     log_info "Installing XDG config directory files..."
 
     local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -4488,7 +4961,11 @@ install_xdg_configs() {
     install_copy "ranger" "$config_dir/ranger"
 
     # Cross-platform application configs.
-    install_copy "nvim" "$config_dir/nvim"
+    if [[ $config_submodules_ready -eq 1 ]]; then
+        install_copy "nvim" "$config_dir/nvim"
+    else
+        log_warn "Skipping Neovim config; its Git submodules are unavailable"
+    fi
 
     # Individual files
     install_copy "fourmolu.yaml" "$config_dir/fourmolu.yaml"
@@ -4762,15 +5239,16 @@ install_claude_config() {
     local bin_dir="$HOME/.local/bin"
     link_shared_ai_agent_item "skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh" "$bin_dir/agent-deck-workflow-init-permissions"
     link_shared_ai_agent_item "skills/agent-deck-workflow/scripts/adwf-send-and-wake.sh" "$bin_dir/adwf-send-and-wake"
-    remove_obsolete_waypost_launchers
-    if ! ensure_waypost_mcp_command; then
-        log_error "Failed to verify built-in waypost MCP command for Claude"
-        return 1
-    fi
-    install_claude_waypost_mcp
 
     # Link statusline script
     link_shared_ai_agent_item "claude/statusline-command.sh" "$claude_dir/statusline-command.sh"
+
+    if ! waypost_config_switch_is_ready "Claude"; then
+        return 0
+    fi
+
+    install_claude_waypost_mcp || return 1
+    remove_obsolete_waypost_launchers
 }
 
 cleanup_gemini_duplicate_skill_links() {
@@ -4849,9 +5327,8 @@ install_antigravity_config() {
 
     install_antigravity_skills
 
-    if ! ensure_waypost_mcp_command; then
-        log_error "Failed to verify built-in waypost MCP command for Antigravity"
-        return 1
+    if ! waypost_config_switch_is_ready "Antigravity"; then
+        return 0
     fi
 
     install_antigravity_waypost_mcp
@@ -4872,9 +5349,8 @@ install_kiro_config() {
 
     install_kiro_skills
 
-    if ! ensure_waypost_mcp_command; then
-        log_error "Failed to verify built-in waypost MCP command for Kiro CLI"
-        return 1
+    if ! waypost_config_switch_is_ready "Kiro CLI"; then
+        return 0
     fi
 
     install_kiro_waypost_mcp
@@ -4912,9 +5388,8 @@ install_gemini_config() {
         log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
     fi
 
-    if ! ensure_waypost_mcp_command; then
-        log_error "Failed to verify built-in waypost MCP command for Gemini"
-        return 1
+    if ! waypost_config_switch_is_ready "Gemini"; then
+        return 0
     fi
 
     install_gemini_waypost_mcp
@@ -5000,9 +5475,8 @@ install_codex_config() {
         log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
     fi
 
-    if ! ensure_waypost_mcp_command; then
-        log_error "Failed to verify built-in waypost MCP command for Codex"
-        return 1
+    if ! waypost_config_switch_is_ready "Codex"; then
+        return 0
     fi
 
     install_codex_waypost_mcp
@@ -5095,12 +5569,28 @@ install_opencode_config() {
     # Link skills individually for OpenCode
     install_opencode_skills
 
-    if ! ensure_waypost_mcp_command; then
-        log_error "Failed to verify built-in waypost MCP command for OpenCode"
-        return 1
+    if ! waypost_config_switch_is_ready "OpenCode"; then
+        return 0
     fi
 
     install_opencode_waypost_mcp
+}
+
+install_snapshot_dependent_ai_configs() {
+    if [[ $SHARED_AI_AGENT_READY -ne 1 ]]; then
+        log_warn "Skipping AI client configs; the shared AI agent snapshot is unavailable"
+        return 0
+    fi
+
+    run_best_effort "Claude config" install_claude_config
+    run_best_effort "Gemini config" install_gemini_config
+    run_best_effort "Antigravity config" install_antigravity_config
+    run_best_effort "Kiro config" install_kiro_config
+    run_best_effort "Codex config" install_codex_config
+    # This installer depends on the Codex skills directory prepared above.
+    run_best_effort "ast-grep skill" install_ast_grep_skill
+    run_best_effort "OpenCode config" install_opencode_config
+    return 0
 }
 
 install_serena_config() {
@@ -5129,33 +5619,46 @@ install_serena_config() {
 }
 
 install_selected_components() {
+    local config_submodules_ready="${1:-1}"
+
     log_info "Installing selected sections: $(selected_components_label)"
 
+    if component_is_selected "xdg" \
+        || component_is_selected "ai" \
+        || component_is_selected "ai-skills"; then
+        run_best_effort "Waypost preparation" prepare_waypost_config_switch
+    fi
+
     if component_is_selected "home"; then
-        install_home_configs
+        run_best_effort "Home configs" \
+            install_home_configs "$config_submodules_ready"
     fi
 
     if component_is_selected "xdg"; then
-        install_xdg_configs
+        run_best_effort "XDG configs" \
+            install_xdg_configs "$config_submodules_ready"
     elif component_is_selected "ai"; then
         log_info "Installing AI Agent config..."
-        install_ai_agent_config
+        run_best_effort "AI Agent config" install_ai_agent_config
     fi
 
     if component_is_selected "bin"; then
-        install_local_bin_helpers
+        run_best_effort "Local bin helpers" install_local_bin_helpers
     fi
 
     if component_is_selected "ai" || component_is_selected "ai-skills"; then
-        if ! install_shared_ai_agent_snapshot; then
-            return 1
+        run_best_effort "Shared AI agent snapshot" \
+            install_waypost_ready_shared_ai_agent_snapshot
+        if [[ $SHARED_AI_AGENT_READY -eq 1 ]]; then
+            detect_installed_agent_deck
+            run_best_effort "AI skills" install_all_ai_skills
+        else
+            log_warn "Skipping AI skills; the shared AI agent snapshot is unavailable"
         fi
-        detect_installed_agent_deck
-        install_all_ai_skills
     fi
 
     if component_is_selected "serena"; then
-        install_serena_config
+        run_best_effort "Serena config" install_serena_config
     fi
 
     return 0
@@ -5187,10 +5690,12 @@ init_submodules() {
     # Initialize and update submodules
     if git -C "$SCRIPT_DIR" submodule update --init --recursive; then
         log_ok "Submodules initialized successfully"
-    else
-        log_warn "Failed to initialize some submodules (may require SSH key)"
-        log_info "You can manually initialize later with: git submodule update --init --recursive"
+        return 0
     fi
+
+    log_error "Failed to initialize some submodules (may require SSH key)"
+    log_info "You can manually initialize later with: git submodule update --init --recursive"
+    return 1
 }
 
 collect_selected_submodule_paths() {
@@ -5253,7 +5758,7 @@ init_selected_submodules() {
     fi
 
     if ! git -C "$SCRIPT_DIR" submodule update --init --recursive -- "${REQUIRED_SUBMODULE_PATHS[@]}"; then
-        log_error "Failed to initialize required submodules; selected installation was not applied"
+        log_error "Failed to initialize required submodules; submodule-backed configs will be skipped"
         return 1
     fi
 
@@ -5451,19 +5956,24 @@ print_summary() {
     if [[ $DRY_RUN -eq 1 ]]; then
         log_info "Dry run complete. No changes were made."
         log_info "Run without --dry-run to apply changes."
-        return 0
     fi
 
     if [[ $failed -gt 0 ]]; then
         log_error "Some operations failed. Please review the output above."
         return 1
-    else
-        log_ok "Installation completed successfully!"
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
         return 0
     fi
+
+    log_ok "Installation completed successfully!"
+    return 0
 }
 
 main() {
+    local config_submodules_ready=1
+
     parse_args "$@"
 
     print_banner
@@ -5473,138 +5983,86 @@ main() {
 
     if [[ $INSTALL_ALL -eq 0 ]]; then
         ensure_path_contains_local_bin
-        if ! init_selected_submodules; then
-            exit 1
+        if ! run_best_effort "Selected submodules" init_selected_submodules; then
+            config_submodules_ready=0
         fi
-        if ! install_selected_components; then
-            exit 1
-        fi
+        run_best_effort "Selected components" \
+            install_selected_components "$config_submodules_ready"
         print_summary
         return $?
     fi
 
-    if ! install_required_tools; then
-        exit 1
-    fi
+    install_required_tools
 
     ensure_path_contains_local_bin
 
-    if ! install_fd; then
-        exit 1
+    run_best_effort "fd" install_fd
+    run_best_effort "lazygit" install_lazygit
+    run_best_effort "uv" install_uv
+    run_best_effort "mq" install_mq
+    install_zsh_stack
+    run_best_effort "Node.js and npm" install_nodejs_with_nvm
+    run_best_effort "Bun" install_bun
+
+    if run_best_effort "Codex CLI" install_codex_cli; then
+        CODEX_CLI_AVAILABLE=1
     fi
 
-    if ! install_lazygit; then
-        exit 1
+    if run_best_effort "Claude Code" \
+        install_remote_cli "Claude Code" "claude" "$CLAUDE_CODE_INSTALL_URL" ""; then
+        CLAUDE_CODE_AVAILABLE=1
     fi
 
-    if ! install_uv; then
-        exit 1
+    run_best_effort "Antigravity CLI" \
+        install_remote_cli "Antigravity CLI" "agy" \
+        "$ANTIGRAVITY_INSTALL_URL" "$ANTIGRAVITY_INSTALL_SHA256"
+
+    if run_best_effort "agent-deck" \
+        install_remote_cli "agent-deck" "agent-deck" \
+        "$AGENT_DECK_INSTALL_URL" "$AGENT_DECK_INSTALL_SHA256" \
+        --version "$AGENT_DECK_VERSION" --skip-tmux-config --non-interactive; then
+        AGENT_DECK_AVAILABLE=1
     fi
 
-    if ! install_mq; then
-        exit 1
-    fi
-
-    if ! install_oh_my_zsh; then
-        exit 1
-    fi
-
-    if ! install_zsh_dependencies; then
-        exit 1
-    fi
-
-    if ! install_nodejs_with_nvm; then
-        exit 1
-    fi
-
-    if ! install_bun; then
-        exit 1
-    fi
-
-    if ! install_codex_cli; then
-        exit 1
-    fi
-    CODEX_CLI_AVAILABLE=1
-
-    if ! install_remote_cli "Claude Code" "claude" "$CLAUDE_CODE_INSTALL_URL" ""; then
-        exit 1
-    fi
-    CLAUDE_CODE_AVAILABLE=1
-
-    if ! install_remote_cli "Antigravity CLI" "agy" "$ANTIGRAVITY_INSTALL_URL" "$ANTIGRAVITY_INSTALL_SHA256"; then
-        exit 1
-    fi
-
-    if ! install_remote_cli "agent-deck" "agent-deck" "$AGENT_DECK_INSTALL_URL" "$AGENT_DECK_INSTALL_SHA256" --version "$AGENT_DECK_VERSION" --skip-tmux-config --non-interactive; then
-        exit 1
-    fi
-    AGENT_DECK_AVAILABLE=1
-
-    if ! install_agent_browser; then
-        exit 1
-    fi
-
-    if ! install_ast_grep; then
-        exit 1
-    fi
-
-    if ! install_codegraph; then
-        exit 1
-    fi
-
-    if ! install_tree_sitter_cli; then
-        exit 1
-    fi
-
-    if ! ensure_waypost_mcp_command; then
-        exit 1
-    fi
-
-    if ! migrate_legacy_waypost_state_if_present; then
-        exit 1
-    fi
-
-    if ! setup_agent_deck_integration; then
-        exit 1
-    fi
+    run_best_effort "agent-browser" install_agent_browser
+    run_best_effort "ast-grep" install_ast_grep
+    run_best_effort "codegraph" install_codegraph
+    run_best_effort "tree-sitter CLI" install_tree_sitter_cli
+    run_best_effort "Waypost preparation" prepare_waypost_config_switch
+    run_best_effort "agent-deck integration" setup_agent_deck_integration
 
     # Initialize git submodules first
-    init_submodules
-
-    if ! install_shared_ai_agent_snapshot; then
-        exit 1
+    if ! run_best_effort "Git submodules" init_submodules; then
+        config_submodules_ready=0
     fi
+
+    run_best_effort "Shared AI agent snapshot" \
+        install_waypost_ready_shared_ai_agent_snapshot
 
     # Install configs
-    install_home_configs
-    install_xdg_configs
-    install_local_bin_helpers
-    install_claude_config
-    install_gemini_config
-    install_antigravity_config
-    install_kiro_config
-    install_codex_config
-    if ! install_ast_grep_skill; then
-        exit 1
-    fi
-    install_opencode_config
-    install_serena_config
+    run_best_effort "Home configs" \
+        install_home_configs "$config_submodules_ready" "$ZSH_STACK_READY"
+    run_best_effort "XDG configs" \
+        install_xdg_configs "$config_submodules_ready"
+    run_best_effort "Local bin helpers" install_local_bin_helpers
+    install_snapshot_dependent_ai_configs
+    run_best_effort "Serena config" install_serena_config
 
     # OS-specific handling
     case "$OS" in
         linux)
-            install_linux_specific
+            run_best_effort "Linux-specific config" install_linux_specific
             ;;
         macos)
-            install_macos_specific
+            run_best_effort "macOS-specific config" install_macos_specific
             ;;
         wsl)
-            install_wsl_specific
+            run_best_effort "WSL-specific config" install_wsl_specific
             ;;
     esac
 
     # Setup Neovim (important!)
-    setup_nvim
+    run_best_effort "Neovim setup" setup_nvim
 
     print_summary
 }
