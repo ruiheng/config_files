@@ -35,6 +35,7 @@ In draft-review, author and reviewer are separate sibling sessions. The reviewer
 Write rounds under .agent-artifacts/tech-design/<author_session_id>/rNNN.md.
 
 - only the author writes this directory
+- r001 is complete; for every later round, copy the preceding file to the next path before editing it. Every delivered round must remain a complete, self-contained design, never a delta, diff, or dependency on a prior round
 - a round may be edited until its review request is sent; afterward leave it unchanged and write revisions in later numbered rounds
 - number revisions monotonically; the named artifact path identifies the round under review
 - drafting must not change Git state or workspace ownership
@@ -155,7 +156,7 @@ On tech_design_draft_requested:
 
 1. recover the requester, reviewer, round, maximum, artifact path, archive branch, and optional review focus
 2. inspect relevant repository state and user-aligned context
-3. write a proportional, implementation-ready design that passes Design Content Gate to the named round file
+3. write the complete, proportional, implementation-ready design to the named round file, following Dispatched Draft Round Contract and Design Content Gate
 4. ensure accepted constraints and rationale live in the artifact, not only in messages
 5. send the named artifact to the recorded reviewer, leave it unchanged, then return under the Async sender rule
 6. handle later tech_design_review_report deliveries until accepted or a user-owned decision is required
@@ -243,7 +244,7 @@ The session that sent the request handles every review report. A report received
 
 - NEEDS_INPUT: correct the reported input and resend with enough context; do not change a valid dispatched artifact/commit
 - NEEDS_REVISION: preserve Max Review Rounds, revise, and request the next round
-  - draft: create the next numbered artifact; leave the reviewed one unchanged
+  - draft: copy the reviewed artifact to the next numbered path, revise that copy, and leave the reviewed one unchanged
   - existing: update and commit the docs on the same design branch
 - SOUND: accept
 - SOUND_WITH_CAVEATS: accept only if every accepted caveat is non-blocking and already recorded in the reviewed artifact/commit; otherwise revise and re-review
