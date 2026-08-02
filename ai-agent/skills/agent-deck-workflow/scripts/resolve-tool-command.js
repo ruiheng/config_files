@@ -223,6 +223,32 @@ function ensureSectionTarget(config, sectionName) {
   throw new Error(`unsupported TOML section: ${sectionName}`);
 }
 
+function ensureCandidateArrayTarget(config, sectionName) {
+  const prefix = "profiles.";
+  const suffix = ".candidates";
+  if (!sectionName.startsWith(prefix) || !sectionName.endsWith(suffix)) {
+    throw new Error("unsupported TOML array table: " + sectionName);
+  }
+
+  const profileName = sectionName.slice(prefix.length, -suffix.length).trim();
+  if (!profileName) {
+    throw new Error("candidate profile name is empty");
+  }
+
+  config.profiles ||= {};
+  const profile = (config.profiles[profileName] ||= {});
+  if (profile.candidates === undefined) {
+    profile.candidates = [];
+  }
+  if (!Array.isArray(profile.candidates)) {
+    throw new Error("profile candidates cannot mix an array and array tables");
+  }
+
+  const candidate = {};
+  profile.candidates.push(candidate);
+  return candidate;
+}
+
 function parseToolProfilesToml(text) {
   const config = {
     version: null,
@@ -231,18 +257,25 @@ function parseToolProfilesToml(text) {
   };
   const lines = text.split(/\r?\n/);
   let currentTarget = config;
-  let currentSection = "";
 
   for (let i = 0; i < lines.length; i += 1) {
-    let line = stripInlineComment(lines[i]).trim();
+    const line = stripInlineComment(lines[i]).trim();
     if (!line) {
+      continue;
+    }
+
+    const arraySectionMatch = line.match(/^\[\[(.+)\]\]$/);
+    if (arraySectionMatch) {
+      currentTarget = ensureCandidateArrayTarget(
+        config,
+        arraySectionMatch[1].trim()
+      );
       continue;
     }
 
     const sectionMatch = line.match(/^\[(.+)]$/);
     if (sectionMatch) {
-      currentSection = sectionMatch[1].trim();
-      currentTarget = ensureSectionTarget(config, currentSection);
+      currentTarget = ensureSectionTarget(config, sectionMatch[1].trim());
       continue;
     }
 
@@ -628,11 +661,56 @@ function resolveProfileName(config, role, explicitProfile) {
   return "";
 }
 
+function normalizeToolCandidate(candidate, profileName, candidateIndex) {
+  if (typeof candidate === "string") {
+    if (!candidate.trim()) {
+      throw new Error(
+        "tool candidate command must be non-empty: " +
+          profileName +
+          " candidate " +
+          candidateIndex
+      );
+    }
+    return { command: candidate };
+  }
+
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw new Error(
+      "tool candidate must be a command string or table: " +
+        profileName +
+        " candidate " +
+        candidateIndex
+    );
+  }
+
+  if (typeof candidate.command !== "string" || !candidate.command.trim()) {
+    throw new Error(
+      "tool candidate command must be non-empty: " +
+        profileName +
+        " candidate " +
+        candidateIndex
+    );
+  }
+  if (
+    candidate.startup_message !== undefined &&
+    (typeof candidate.startup_message !== "string" ||
+      !candidate.startup_message.trim())
+  ) {
+    throw new Error(
+      "tool candidate startup_message must be non-empty when set: " +
+        profileName +
+        " candidate " +
+        candidateIndex
+    );
+  }
+
+  return { ...candidate };
+}
+
 function resolveProfileCommand(
   config,
   profileName,
   resolutionSource,
-  excludedCommands = [],
   showList = false,
   inspectCommand = inspectToolCommand,
   inspectionOptions = {}
@@ -651,10 +729,12 @@ function resolveProfileCommand(
   const unverifiedToolCmds = [];
   const usableToolCmds = [];
   for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
-    const toolCmd = candidates[candidateIndex];
-    if (excludedCommands.includes(toolCmd)) {
-      continue;
-    }
+    const candidate = normalizeToolCandidate(
+      candidates[candidateIndex],
+      profileName,
+      candidateIndex
+    );
+    const toolCmd = candidate.command;
     const inspection = inspectCommand(toolCmd, inspectionOptions);
     if (inspection.availability === "unavailable") {
       unavailableToolCmds.push(toolCommandDiagnostic(inspection, candidateIndex));
@@ -663,23 +743,27 @@ function resolveProfileCommand(
     if (inspection.availability === "unverified") {
       unverifiedToolCmds.push(toolCommandDiagnostic(inspection, candidateIndex));
     }
-    usableToolCmds.push({ toolCmd, candidateIndex });
+    usableToolCmds.push({ candidate, toolCmd, candidateIndex });
   }
-  const toolCmds = usableToolCmds.map(({ toolCmd }) => toolCmd);
-  if (!toolCmds.length) {
+  const toolCandidates = usableToolCmds.map(({ candidate }) => ({ ...candidate }));
+  if (!toolCandidates.length) {
     if (unavailableToolCmds.length) {
       throw noUsableToolCommandsError(profileName, unavailableToolCmds);
     }
     throw new Error(`no remaining candidates for tool profile: ${profileName}`);
   }
   const selectedIndex = usableToolCmds[0].candidateIndex;
+  const selectedCandidate = toolCandidates[0];
   const resolved = {
     tool_profile: profileName,
-    resolved_tool_cmd: toolCmds[0],
+    resolved_tool_cmd: selectedCandidate.command,
     resolution_source: resolutionSource,
     fallback_index: selectedIndex,
     candidate_count: candidates.length,
   };
+  if (!showList && selectedCandidate.startup_message !== undefined) {
+    resolved.startup_message = selectedCandidate.startup_message;
+  }
   if (unavailableToolCmds.length) {
     resolved.unavailable_tool_cmds = unavailableToolCmds;
   }
@@ -687,7 +771,7 @@ function resolveProfileCommand(
     resolved.unverified_tool_cmds = unverifiedToolCmds;
   }
   if (showList) {
-    resolved.tool_cmds = toolCmds;
+    resolved.tool_candidates = toolCandidates;
   }
   return resolved;
 }
@@ -715,7 +799,7 @@ function resolveSingleToolCommand(
     resolved.unverified_tool_cmds = [toolCommandDiagnostic(inspection, 0)];
   }
   if (showList) {
-    resolved.tool_cmds = [toolCmd];
+    resolved.tool_candidates = [{ command: toolCmd }];
   }
   return resolved;
 }
@@ -726,7 +810,6 @@ function resolveToolCommand(options = {}) {
     profile = "",
     command = "",
     inheritCommand = "",
-    excludedCommands = [],
     showList = false,
     inspectCommand = inspectToolCommand,
     inspectionOptions = {},
@@ -750,7 +833,6 @@ function resolveToolCommand(options = {}) {
       config,
       resolvedProfile,
       "explicit_profile",
-      excludedCommands,
       showList,
       inspectCommand,
       inspectionOptions
@@ -774,7 +856,6 @@ function resolveToolCommand(options = {}) {
       config,
       roleDefaultProfile,
       "role_default_profile",
-      excludedCommands,
       showList,
       inspectCommand,
       inspectionOptions
@@ -790,7 +871,6 @@ function parseArgs(argv) {
     profile: "",
     command: "",
     inheritCommand: "",
-    excludedCommands: [],
     showList: false,
     workdir: "",
     targetPath: "",
@@ -809,8 +889,6 @@ function parseArgs(argv) {
       options.command = argv[++i] || "";
     } else if (arg === "--inherit-command") {
       options.inheritCommand = argv[++i] || "";
-    } else if (arg === "--exclude-command") {
-      options.excludedCommands.push(argv[++i] || "");
     } else if (arg === "--show-list") {
       options.showList = true;
     } else if (arg === "--workdir") {
@@ -849,7 +927,6 @@ function runCli(argv) {
     profile: options.profile,
     command: options.command,
     inheritCommand: options.inheritCommand,
-    excludedCommands: options.excludedCommands,
     showList: options.showList,
     inspectionOptions,
     config,
@@ -857,7 +934,7 @@ function runCli(argv) {
 
   if (options.format === "text") {
     const output = options.showList
-      ? resolved.tool_cmds.join("\n")
+      ? resolved.tool_candidates.map(({ command }) => command).join("\n")
       : resolved.resolved_tool_cmd;
     process.stdout.write(`${output}\n`);
     return;

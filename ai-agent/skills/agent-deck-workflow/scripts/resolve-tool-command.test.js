@@ -76,6 +76,32 @@ candidates = [
   ]);
 });
 
+test("parseToolProfilesToml reads candidate tables and startup messages", () => {
+  const config = parseToolProfilesToml(`
+version = 2
+
+[profiles.reviewer_default]
+strategy = "ordered"
+
+[[profiles.reviewer_default.candidates]]
+command = "codex --model gpt-5.6-luna"
+startup_message = "Follow the review workflow.\\nWait for the review request."
+
+[[profiles.reviewer_default.candidates]]
+command = "claude --model sonnet"
+`);
+
+  assert.equal(config.version, 2);
+  assert.deepEqual(config.profiles.reviewer_default.candidates, [
+    {
+      command: "codex --model gpt-5.6-luna",
+      startup_message:
+        "Follow the review workflow.\nWait for the review request.",
+    },
+    { command: "claude --model sonnet" },
+  ]);
+});
+
 test("parseTomlValue accepts TOML literal strings and arrays", () => {
   assert.equal(parseTomlValue("'reviewer_local'"), "reviewer_local");
   assert.deepEqual(
@@ -283,6 +309,45 @@ candidates = ["cwd-first"]
   ]);
 });
 
+test("loadToolConfig merges v2 candidate tables with v1 string overrides", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-profiles-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  const localConfigPath = path.join(tmpDir, "tool-profiles.local.toml");
+
+  fs.writeFileSync(
+    configPath,
+    `version = 2
+
+[profiles.coder_default]
+strategy = "ordered"
+
+[[profiles.coder_default.candidates]]
+command = "base-tool"
+startup_message = "Initialize the worker."
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    localConfigPath,
+    `version = 1
+
+[profiles.coder_default]
+merge = "append"
+candidates = ["local-tool"]
+`,
+    "utf8"
+  );
+
+  const config = loadToolConfig(configPath, localConfigPath);
+  assert.deepEqual(config.profiles.coder_default.candidates, [
+    {
+      command: "base-tool",
+      startup_message: "Initialize the worker.",
+    },
+    "local-tool",
+  ]);
+});
+
 test("loadToolConfig applies local overrides in order", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-profiles-"));
   const configPath = path.join(tmpDir, "tool-profiles.toml");
@@ -374,13 +439,108 @@ test("resolveToolCommand uses the role default profile", () => {
 
   assert.equal(resolved.tool_profile, "reviewer_default");
   assert.equal(resolved.resolved_tool_cmd, "codex --model gpt-5.4");
-  assert.deepEqual(resolved.tool_cmds, [
-    "codex --model gpt-5.4",
-    "codex --model gpt-5.5",
+  assert.deepEqual(resolved.tool_candidates, [
+    { command: "codex --model gpt-5.4" },
+    { command: "codex --model gpt-5.5" },
   ]);
   assert.equal(resolved.resolution_source, "role_default_profile");
   assert.equal(resolved.fallback_index, 0);
   assert.equal(resolved.candidate_count, 2);
+});
+
+test("resolveToolCommand returns ordered candidates with startup messages", () => {
+  const firstCommand = "codex --model gpt-5.6-luna";
+  const secondCommand = "claude --model sonnet";
+  const config = {
+    version: 2,
+    roles: { reviewer: "reviewer_default" },
+    profiles: {
+      reviewer_default: {
+        strategy: "ordered",
+        candidates: [
+          {
+            command: firstCommand,
+            startup_message: "Follow the review workflow.",
+          },
+          {
+            command: secondCommand,
+            startup_message: "Use the fallback review workflow.",
+          },
+        ],
+      },
+    },
+  };
+
+  const selected = resolveToolCommand({
+    role: "reviewer",
+    inspectCommand: availableInspection,
+    config,
+  });
+  assert.equal(selected.resolved_tool_cmd, firstCommand);
+  assert.equal(selected.startup_message, "Follow the review workflow.");
+
+  const listed = resolveToolCommand({
+    role: "reviewer",
+    showList: true,
+    inspectCommand: availableInspection,
+    config,
+  });
+  assert.deepEqual(listed.tool_candidates, [
+    {
+      command: firstCommand,
+      startup_message: "Follow the review workflow.",
+    },
+    {
+      command: secondCommand,
+      startup_message: "Use the fallback review workflow.",
+    },
+  ]);
+  assert.equal("startup_message" in listed, false);
+});
+
+test("resolveToolCommand keeps legacy candidates free of startup_message", () => {
+  const resolved = resolveToolCommand({
+    profile: "reviewer_default",
+    inspectCommand: availableInspection,
+    config: {
+      version: 1,
+      roles: {},
+      profiles: {
+        reviewer_default: {
+          strategy: "ordered",
+          candidates: ["codex --model gpt-5.5"],
+        },
+      },
+    },
+  });
+
+  assert.equal("startup_message" in resolved, false);
+});
+
+test("resolveToolCommand rejects an empty configured startup_message", () => {
+  assert.throws(
+    () =>
+      resolveToolCommand({
+        profile: "reviewer_default",
+        inspectCommand: availableInspection,
+        config: {
+          version: 2,
+          roles: {},
+          profiles: {
+            reviewer_default: {
+              strategy: "ordered",
+              candidates: [
+                {
+                  command: "codex --model gpt-5.6-luna",
+                  startup_message: "",
+                },
+              ],
+            },
+          },
+        },
+      }),
+    /startup_message must be non-empty when set/
+  );
 });
 
 test("explainer role prefers the configured agy command", () => {
@@ -398,7 +558,10 @@ test("explainer role prefers the configured agy command", () => {
   assert.equal(resolved.tool_profile, "explainer_default");
   assert.equal(resolved.resolved_tool_cmd, "agy --model gemini-3.6-flash-high");
   assert.equal(resolved.resolution_source, "role_default_profile");
-  assert.equal(resolved.tool_cmds[0], "agy --model gemini-3.6-flash-high");
+  assert.equal(
+    resolved.tool_candidates[0].command,
+    "agy --model gemini-3.6-flash-high"
+  );
 });
 
 test("resolveToolCommand prefers inherited command over role default profile", () => {
@@ -454,10 +617,11 @@ test("resolveToolCommand prefers explicit profile over inherited command", () =>
   assert.equal(resolved.resolution_source, "explicit_profile");
 });
 
-test("resolveToolCommand can skip a failed candidate and choose the next one", () => {
+test("resolveToolCommand returns candidates in retry order", () => {
+  const firstCommand = "codex --model gpt-5.4";
+  const secondCommand = "claude --model sonnet";
   const resolved = resolveToolCommand({
     profile: "reviewer_default",
-    excludedCommands: ["codex --model gpt-5.4"],
     showList: true,
     inspectCommand: availableInspection,
     config: {
@@ -466,15 +630,33 @@ test("resolveToolCommand can skip a failed candidate and choose the next one", (
       profiles: {
         reviewer_default: {
           strategy: "ordered",
-          candidates: ["codex --model gpt-5.4", "claude --model sonnet"],
+          candidates: [
+            {
+              command: firstCommand,
+              startup_message: "Initialize the primary reviewer.",
+            },
+            {
+              command: secondCommand,
+              startup_message: "Initialize the fallback reviewer.",
+            },
+          ],
         },
       },
     },
   });
 
-  assert.equal(resolved.resolved_tool_cmd, "claude --model sonnet");
-  assert.deepEqual(resolved.tool_cmds, ["claude --model sonnet"]);
-  assert.equal(resolved.fallback_index, 1);
+  assert.equal(resolved.resolved_tool_cmd, firstCommand);
+  assert.deepEqual(resolved.tool_candidates, [
+    {
+      command: firstCommand,
+      startup_message: "Initialize the primary reviewer.",
+    },
+    {
+      command: secondCommand,
+      startup_message: "Initialize the fallback reviewer.",
+    },
+  ]);
+  assert.equal(resolved.fallback_index, 0);
 });
 
 test("resolveToolCommand skips missing executables and reports them", () => {
@@ -506,7 +688,7 @@ test("resolveToolCommand skips missing executables and reports them", () => {
   });
 
   assert.equal(resolved.resolved_tool_cmd, usableCmd);
-  assert.deepEqual(resolved.tool_cmds, [usableCmd]);
+  assert.deepEqual(resolved.tool_candidates, [{ command: usableCmd }]);
   assert.equal(resolved.fallback_index, 1);
   assert.deepEqual(resolved.unavailable_tool_cmds, [
     {
@@ -553,7 +735,9 @@ test("resolveToolCommand keeps an explicit command missing only from dispatcher 
   });
 
   assert.equal(resolved.resolved_tool_cmd, "agent --model target-only");
-  assert.deepEqual(resolved.tool_cmds, ["agent --model target-only"]);
+  assert.deepEqual(resolved.tool_candidates, [
+    { command: "agent --model target-only" },
+  ]);
   assert.deepEqual(resolved.unverified_tool_cmds, [
     {
       tool_cmd: "agent --model target-only",
@@ -590,7 +774,7 @@ test("resolveToolCommand filters a missing relative command in the target workdi
   });
 
   assert.equal(resolved.resolved_tool_cmd, usableCmd);
-  assert.deepEqual(resolved.tool_cmds, [usableCmd]);
+  assert.deepEqual(resolved.tool_candidates, [{ command: usableCmd }]);
   assert.deepEqual(resolved.unavailable_tool_cmds, [
     {
       tool_cmd: "./bin/missing-tool",

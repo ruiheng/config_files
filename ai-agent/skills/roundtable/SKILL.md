@@ -58,7 +58,7 @@ Resolve by priority: explicit input -> current roundtable context -> message bod
    - `parent_session_id = <moderator_session_id>`
    - `group_path = <participant_group_path>`
    - `no_parent_link = false`
-   - leave `startup_instruction` / `listener_message` empty; control message is the bootstrap path and wakeup is best-effort
+   - pass the optional resolved `participant_tool_startup_message` as `startup_instruction`; leave `listener_message` empty because the control message is the bootstrap path and wakeup is best-effort
 6. Send the opening user-intent message to the group with `waypost_send group:true`, `to_address = group_address`, and `from_address = moderator_notify_address`.
 7. Send each participant one personal control message with Action `roundtable_participant_turn`; first turns are parallel by default.
 
