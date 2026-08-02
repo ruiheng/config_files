@@ -65,7 +65,9 @@ Options:
 `--only` can be repeated and accepts `home`, `xdg`, `bin`, `ai`, `ai-skills`,
 `serena`, or `all`. Partial selections skip unrelated tool/CLI bootstrap, OS
 setup, and Neovim checks. Selections containing `home` or `xdg` initialize
-their required Git submodules before copying and stop safely if that fails.
+their required Git submodules before copying. If initialization fails, only
+the submodule-backed TPM and Neovim configs are skipped; independent selected
+items continue.
 `ai` updates
 `$XDG_CONFIG_HOME/ai-agent` (or `$HOME/.config/ai-agent`) and all AI skills;
 `ai-skills` only updates the shared snapshot at

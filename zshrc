@@ -4,7 +4,14 @@ bindkey -v
 source "$ZSH/custom/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh"
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    if command -v node >/dev/null 2>&1 && node --version >/dev/null 2>&1 \
+        && command -v npm >/dev/null 2>&1 && npm --version >/dev/null 2>&1; then
+        source "$NVM_DIR/nvm.sh" --no-use
+    else
+        source "$NVM_DIR/nvm.sh"
+    fi
+fi
 
 plugins=(git fzf spaceship-vi-mode)
 source "$ZSH/oh-my-zsh.sh"

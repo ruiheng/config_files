@@ -48,6 +48,367 @@ assert_path_mode() {
         || fail_test "unexpected mode at $path: $actual (expected $expected)"
 }
 
+test_best_effort_continues_and_counts_failures() {
+    local case_dir="$TEST_ROOT/best-effort"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        ACTION_LOG="$case_dir/actions" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            failed=0
+            failing_step() {
+                printf "%s\n" "failing" >> "$ACTION_LOG"
+                return 1
+            }
+            successful_step() {
+                printf "%s\n" "successful" >> "$ACTION_LOG"
+            }
+            run_best_effort "failing step" failing_step
+            run_best_effort "successful step" successful_step
+            [[ $failed -eq 1 ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "best-effort runner did not continue after a failure"
+
+    [[ "$(<"$case_dir/actions")" == $'failing\nsuccessful' ]] \
+        || fail_test "best-effort runner skipped a later action"
+}
+
+test_dry_run_summary_propagates_best_effort_failure() {
+    local case_dir="$TEST_ROOT/dry-run-best-effort-status"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            bash -c '
+                source "$1/install.sh"
+                DRY_RUN=1
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                failed=0
+                run_best_effort "forced failure" false
+                if print_summary; then exit 10; fi
+                [[ $failed -eq 1 ]]
+            ' _ "$REPO_ROOT"
+    )" || fail_test "dry-run summary did not propagate a best-effort failure"
+
+    [[ "$output" == *"Dry run complete. No changes were made."* ]] \
+        || fail_test "failed dry run did not complete its summary"
+    [[ "$output" == *"Some operations failed"* ]] \
+        || fail_test "failed dry run did not report its aggregate status"
+}
+
+test_waypost_preparation_requires_explicit_migration() {
+    local case_dir="$TEST_ROOT/waypost-preparation-gate"
+
+    mkdir -p "$case_dir/home" "$case_dir/state/ai-agent/mailbox"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        MIGRATION_CALLED="$case_dir/migration-called" \
+        LAUNCHERS_REMOVED="$case_dir/launchers-removed" \
+        MCP_SWITCHED="$case_dir/mcp-switched" \
+        LINK_LOG="$case_dir/links" \
+        TEST_FRESH_STATE="$case_dir/fresh-state" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            ensure_waypost_mcp_command() { return 1; }
+            if prepare_waypost_config_switch; then exit 10; fi
+            [[ $WAYPOST_CONFIG_SWITCH_READY -eq 0 ]]
+            [[ ! -e "$MIGRATION_CALLED" ]]
+
+            ensure_waypost_mcp_command() { return 0; }
+            waypost() {
+                touch "$MIGRATION_CALLED"
+                return 0
+            }
+            if prepare_waypost_config_switch; then exit 11; fi
+            [[ $WAYPOST_CONFIG_SWITCH_READY -eq 0 ]]
+            [[ -d "$XDG_STATE_HOME/ai-agent/mailbox" ]]
+            [[ ! -e "$MIGRATION_CALLED" ]]
+
+            link_shared_ai_agent_item() {
+                printf "%s\\n" "$1" >> "$LINK_LOG"
+            }
+            install_claude_skills() { :; }
+            remove_obsolete_waypost_launchers() { touch "$LAUNCHERS_REMOVED"; }
+            install_claude_waypost_mcp() { touch "$MCP_SWITCHED"; }
+            install_claude_config
+            [[ ! -e "$LAUNCHERS_REMOVED" ]]
+            [[ ! -e "$MCP_SWITCHED" ]]
+            grep -Fqx "claude/statusline-command.sh" "$LINK_LOG"
+
+            XDG_STATE_HOME="$TEST_FRESH_STATE"
+            prepare_waypost_config_switch
+            [[ $WAYPOST_CONFIG_SWITCH_READY -eq 1 ]]
+
+            install_claude_waypost_mcp() { return 1; }
+            if install_claude_config; then exit 12; fi
+            [[ ! -e "$LAUNCHERS_REMOVED" ]]
+
+            install_claude_waypost_mcp() { touch "$MCP_SWITCHED"; }
+            install_claude_config
+            [[ -e "$LAUNCHERS_REMOVED" ]]
+            [[ -e "$MCP_SWITCHED" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "Waypost prerequisites did not gate client configuration switching"
+}
+
+test_waypost_preparation_gates_dependent_assets() {
+    local case_dir="$TEST_ROOT/waypost-asset-gate"
+
+    mkdir -p "$case_dir/home" "$case_dir/state/ai-agent/mailbox"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        MIGRATION_CALLED="$case_dir/migration-called" \
+        COPY_CALLED="$case_dir/copy-called" \
+        SNAPSHOT_CALLED="$case_dir/snapshot-called" \
+        SKILLS_CALLED="$case_dir/skills-called" \
+        SERENA_CALLED="$case_dir/serena-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            WAYPOST_CONFIG_SWITCH_READY=0
+            SHARED_AI_AGENT_READY=1
+            install_copy() { touch "$COPY_CALLED"; }
+            install_ai_agent_config
+            install_waypost_ready_shared_ai_agent_snapshot
+            [[ $SHARED_AI_AGENT_READY -eq 0 ]]
+            [[ ! -e "$COPY_CALLED" ]]
+
+            failed=0
+            parse_args --only ai-skills,serena
+            ensure_waypost_mcp_command() { return 0; }
+            waypost() { touch "$MIGRATION_CALLED"; }
+            install_shared_ai_agent_snapshot() {
+                touch "$SNAPSHOT_CALLED"
+                SHARED_AI_AGENT_READY=1
+            }
+            install_all_ai_skills() { touch "$SKILLS_CALLED"; }
+            install_serena_config() { touch "$SERENA_CALLED"; }
+
+            install_selected_components
+            [[ $failed -eq 1 ]]
+            [[ $SHARED_AI_AGENT_READY -eq 0 ]]
+            [[ -d "$XDG_STATE_HOME/ai-agent/mailbox" ]]
+            [[ ! -e "$MIGRATION_CALLED" ]]
+            [[ ! -e "$SNAPSHOT_CALLED" ]]
+            [[ ! -e "$SKILLS_CALLED" ]]
+            [[ -e "$SERENA_CALLED" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "failed Waypost preparation allowed dependent AI assets to change"
+}
+
+test_zsh_stack_gates_dependencies_after_core_failure() {
+    local case_dir="$TEST_ROOT/zsh-stack-gate"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        ZSH_DEPENDENCIES_CALLED="$case_dir/dependencies-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            failed=0
+            install_oh_my_zsh() { return 1; }
+            install_zsh_dependencies() { touch "$ZSH_DEPENDENCIES_CALLED"; }
+            install_zsh_stack
+            [[ $failed -eq 1 ]]
+            [[ ! -e "$ZSH_DEPENDENCIES_CALLED" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "Zsh dependencies ran after Oh My Zsh failed"
+}
+
+test_zsh_stack_readiness_gates_only_zshrc() {
+    local case_dir="$TEST_ROOT/zsh-stack-home-gate"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            failed=0
+            skipped=0
+            install_oh_my_zsh() { return 0; }
+            install_zsh_dependencies() { return 1; }
+
+            install_zsh_stack
+            [[ $failed -eq 1 ]]
+            [[ $ZSH_STACK_READY -eq 0 ]]
+
+            install_home_configs 0 "$ZSH_STACK_READY"
+            [[ ! -e "$HOME/.zshrc" ]]
+            [[ -f "$HOME/.bashrc" ]]
+            [[ -f "$HOME/.screenrc" ]]
+
+            install_zsh_dependencies() { return 0; }
+            install_zsh_stack
+            [[ $ZSH_STACK_READY -eq 1 ]]
+            install_home_configs 0 "$ZSH_STACK_READY"
+            [[ -f "$HOME/.zshrc" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "Zsh stack readiness did not gate only zshrc deployment"
+}
+
+test_failed_zsh_clones_leave_retryable_targets() {
+    local case_dir="$TEST_ROOT/zsh-clone-cleanup"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_required_command() { return 0; }
+            git() {
+                local target="${!#}"
+                mkdir -p "$target"
+                return 1
+            }
+
+            if install_oh_my_zsh; then exit 10; fi
+            [[ ! -e "$HOME/.oh-my-zsh" ]]
+
+            target="$HOME/.oh-my-zsh/custom/themes/test-theme"
+            marker="$target/test.zsh-theme"
+            if install_zsh_checkout "test theme" "https://example.invalid/theme.git" "$target" "$marker"; then
+                exit 11
+            fi
+            [[ ! -e "$target" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "failed Zsh clones left incomplete targets"
+}
+
+test_dangling_oh_my_zsh_symlink_is_preserved() {
+    local case_dir="$TEST_ROOT/dangling-oh-my-zsh"
+
+    mkdir -p "$case_dir/home"
+    ln -s "$case_dir/missing-oh-my-zsh" "$case_dir/home/.oh-my-zsh"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        DANGLING_TARGET="$case_dir/missing-oh-my-zsh" \
+        GIT_CHECK_CALLED="$case_dir/git-check-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_required_command() {
+                touch "$GIT_CHECK_CALLED"
+                return 99
+            }
+
+            if install_oh_my_zsh; then exit 10; fi
+            [[ -L "$HOME/.oh-my-zsh" ]]
+            [[ "$(readlink "$HOME/.oh-my-zsh")" == "$DANGLING_TARGET" ]]
+            [[ ! -e "$GIT_CHECK_CALLED" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "dangling Oh My Zsh symlink was not preserved"
+}
+
+test_dry_run_rejects_installed_package_with_missing_resource() {
+    local case_dir="$TEST_ROOT/dry-run-installed-package-missing-resource"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            bash -c '
+                source "$1/install.sh"
+                DRY_RUN=1
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                package_is_installed() { return 0; }
+
+                if ensure_required_command "config-files-missing-command" "existing-package"; then
+                    exit 10
+                fi
+
+                find_libclang_dir() { return 1; }
+                libclang_package_name() { printf "%s\\n" "existing-libclang"; }
+                if ensure_libclang; then exit 11; fi
+            ' _ "$REPO_ROOT"
+    )" || fail_test "dry-run accepted an installed package with a missing resource"
+
+    [[ "$output" == *"no package change would be made"* ]] \
+        || fail_test "dry-run did not explain the installed-package mismatch"
+}
+
+test_required_tools_check_every_item_best_effort() {
+    local case_dir="$TEST_ROOT/required-tools-best-effort"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        ACTION_LOG="$case_dir/actions" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            failed=0
+            ensure_required_command() {
+                printf "%s\n" "$1" >> "$ACTION_LOG"
+                [[ "$1" != "git" && "$1" != "yq" ]]
+            }
+            install_required_tools
+            [[ $failed -eq 2 ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "required tool checks stopped after a failure"
+
+    [[ "$(head -n 1 "$case_dir/actions")" == "curl" ]] \
+        || fail_test "required tool checks did not start with curl"
+    [[ "$(tail -n 1 "$case_dir/actions")" == "zsh" ]] \
+        || fail_test "required tool checks did not reach the final item"
+    [[ "$(wc -l < "$case_dir/actions")" -eq 9 ]] \
+        || fail_test "required tool checks did not attempt every item"
+}
+
+test_local_bin_path_injection_reports_persistence_limit() {
+    local case_dir="$TEST_ROOT/local-bin-path-warning"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            PATH="/usr/bin:/bin" \
+            bash -c '
+                source "$1/install.sh"
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                ensure_path_contains_local_bin
+            ' _ "$REPO_ROOT"
+    )" || fail_test "local bin PATH setup failed"
+
+    [[ "$output" == *"Ensure future shells include this directory"* ]] \
+        || fail_test "local bin PATH setup did not report its persistence limit"
+}
+
 test_shared_agent_snapshot_preserves_local_content() {
     local shared_dir="$SHARED_AI_AGENT_DIR"
     local snapshot
@@ -78,6 +439,81 @@ test_shared_agent_snapshot_preserves_local_content() {
         || fail_test "shared agent snapshot retained a target-only file"
 }
 
+test_failed_shared_snapshot_preserves_existing_consumer_links() {
+    local case_dir="$TEST_ROOT/shared-snapshot-consumer-gate"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        CONSUMER_CALLED="$case_dir/consumer-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            mkdir -p "$SHARED_AI_AGENT_DIR" "$HOME/.claude"
+            cp "$SCRIPT_DIR/README.md" "$SHARED_AI_AGENT_DIR/CLAUDE.md"
+            ln -s "$SCRIPT_DIR/ai-agent/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+
+            SHARED_AI_AGENT_READY=1
+            install_copy() { return 1; }
+            if install_shared_ai_agent_snapshot; then exit 10; fi
+            [[ $SHARED_AI_AGENT_READY -eq 0 ]]
+
+            install_claude_config() { touch "$CONSUMER_CALLED"; }
+            install_gemini_config() { touch "$CONSUMER_CALLED"; }
+            install_antigravity_config() { touch "$CONSUMER_CALLED"; }
+            install_kiro_config() { touch "$CONSUMER_CALLED"; }
+            install_codex_config() { touch "$CONSUMER_CALLED"; }
+            install_ast_grep_skill() { touch "$CONSUMER_CALLED"; }
+            install_opencode_config() { touch "$CONSUMER_CALLED"; }
+
+            install_snapshot_dependent_ai_configs
+            [[ ! -e "$CONSUMER_CALLED" ]]
+            symlink_points_to \
+                "$HOME/.claude/CLAUDE.md" \
+                "$SCRIPT_DIR/ai-agent/CLAUDE.md"
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "failed shared snapshot allowed stale snapshot consumers to run"
+}
+
+test_selected_snapshot_failure_skips_ai_skills_and_continues() {
+    local case_dir="$TEST_ROOT/selected-shared-snapshot-gate"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        DETECT_CALLED="$case_dir/detect-called" \
+        SKILLS_CALLED="$case_dir/skills-called" \
+        SERENA_CALLED="$case_dir/serena-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            failed=0
+            parse_args --only ai-skills,serena
+
+            prepare_waypost_config_switch() {
+                WAYPOST_CONFIG_SWITCH_READY=1
+            }
+            SHARED_AI_AGENT_READY=1
+            install_copy() { return 1; }
+            detect_installed_agent_deck() { touch "$DETECT_CALLED"; }
+            install_all_ai_skills() { touch "$SKILLS_CALLED"; }
+            install_serena_config() { touch "$SERENA_CALLED"; }
+
+            install_selected_components
+            [[ $failed -eq 1 ]]
+            [[ $SHARED_AI_AGENT_READY -eq 0 ]]
+            [[ ! -e "$DETECT_CALLED" ]]
+            [[ ! -e "$SKILLS_CALLED" ]]
+            [[ -e "$SERENA_CALLED" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "selected snapshot failure did not gate skills and continue"
+}
+
 test_zshrc_uses_managed_copy_merge() {
     local case_dir="$TEST_ROOT/zshrc-merge"
     local zshrc="$case_dir/home/.zshrc"
@@ -102,6 +538,10 @@ test_zshrc_uses_managed_copy_merge() {
 test_shell_configs_clean_path() {
     local bash_path
 
+    grep -Fq 'source "$NVM_DIR/nvm.sh" --no-use' "$REPO_ROOT/bashrc" \
+        || fail_test "bashrc does not preserve an existing Node.js runtime when loading NVM"
+    grep -Fq 'source "$NVM_DIR/nvm.sh" --no-use' "$REPO_ROOT/zshrc" \
+        || fail_test "zshrc does not preserve an existing Node.js runtime when loading NVM"
     grep -Fq 'path=("$HOME/.local/bin"' "$REPO_ROOT/zshrc" \
         || fail_test "zshrc does not prioritize the home-relative local bin path"
     grep -Fq '${path:#/usr/local/games}' "$REPO_ROOT/zshrc" \
@@ -122,6 +562,39 @@ test_shell_configs_clean_path() {
     )" || fail_test "bashrc PATH cleanup failed"
     [[ "$bash_path" == "$TEST_ROOT/path-home/.local/bin:/usr/bin:/bin" ]] \
         || fail_test "bashrc PATH cleanup was incorrect: $bash_path"
+}
+
+test_bashrc_preserves_ambient_node_when_loading_nvm() {
+    local case_dir="$TEST_ROOT/bashrc-preserves-node"
+    local system_bin="$case_dir/system-bin"
+    local nvm_bin="$case_dir/home/.nvm/versions/node/v99.0.0/bin"
+
+    mkdir -p "$system_bin" "$nvm_bin"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "v20.0.0"' > "$system_bin/node"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "10.0.0"' > "$system_bin/npm"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "v99.0.0"' > "$nvm_bin/node"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "99.0.0"' > "$nvm_bin/npm"
+    printf '%s\n' \
+        'printf "%s\n" "${1:-}" > "$NVM_SOURCE_ARG"' \
+        'if [ "${1:-}" != "--no-use" ]; then' \
+        '    export PATH="$NVM_DEFAULT_BIN:$PATH"' \
+        'fi' > "$case_dir/home/.nvm/nvm.sh"
+    chmod +x "$system_bin/node" "$system_bin/npm" "$nvm_bin/node" "$nvm_bin/npm"
+
+    HOME="$case_dir/home" \
+        PATH="$system_bin:/usr/bin:/bin" \
+        NVM_DEFAULT_BIN="$nvm_bin" \
+        NVM_SOURCE_ARG="$case_dir/nvm-source-arg" \
+        SYSTEM_NODE_BIN="$system_bin" \
+        bash --noprofile --norc -c '
+            source "$1/bashrc"
+            [[ "$(command -v node)" == "$SYSTEM_NODE_BIN/node" ]]
+            [[ "$(command -v npm)" == "$SYSTEM_NODE_BIN/npm" ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "bashrc switched away from an existing usable Node.js runtime"
+
+    [[ "$(<"$case_dir/nvm-source-arg")" == "--no-use" ]] \
+        || fail_test "bashrc did not load NVM with --no-use for an existing Node.js runtime"
 }
 
 test_component_selection_parsing() {
@@ -197,22 +670,77 @@ test_partial_home_and_xdg_initialize_submodules_before_copy() {
         || fail_test "partial home/XDG installation copied before initializing submodules"
 }
 
-test_partial_submodule_failure_stops_copy() {
+test_partial_submodule_failure_skips_gitlink_configs_and_continues() {
     local output
 
     if output="$(
         bash -c '
             source "$1/install.sh"
             init_selected_submodules() { return 1; }
-            install_home_configs() { printf "%s\\n" "home copy ran"; }
-            main --only home
+            install_home_configs() {
+                printf "home submodules ready=%s\\n" "$1"
+            }
+            install_local_bin_helpers() { printf "%s\\n" "bin copy ran"; }
+            main --only home,bin
         ' _ "$REPO_ROOT" 2>&1
     )"; then
-        fail_test "partial installation continued after submodule initialization failed"
+        fail_test "partial installation did not report the submodule failure"
     fi
 
-    [[ "$output" != *"home copy ran"* ]] \
-        || fail_test "partial installation copied home configs after submodule failure"
+    [[ "$output" == *"home submodules ready=0"* ]] \
+        || fail_test "partial installation did not disable submodule-backed Home configs"
+    [[ "$output" == *"bin copy ran"* ]] \
+        || fail_test "partial installation stopped before an independent component"
+    [[ "$output" == *"Selected submodules failed; continuing"* ]] \
+        || fail_test "partial installation did not report best-effort continuation"
+}
+
+test_config_installers_skip_unavailable_submodule_sources() {
+    local case_dir="$TEST_ROOT/unavailable-config-submodules"
+    local action_log="$case_dir/actions"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        ACTION_LOG="$action_log" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            install_copy() { printf "%s\\n" "$1" >> "$ACTION_LOG"; }
+            install_home_configs 0
+            install_xdg_configs 0
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "config installers failed while skipping unavailable submodules"
+
+    [[ "$(<"$action_log")" != *"tmux/plugins/tpm"* ]] \
+        || fail_test "Home config copied an unavailable TPM submodule"
+    [[ "$(<"$action_log")" != *$'\nnvim\n'* ]] \
+        || fail_test "XDG config copied unavailable Neovim submodules"
+    [[ "$(<"$action_log")" == *"tmux/tmux.conf"* ]] \
+        || fail_test "Home config skipped an independent Tmux config"
+    [[ "$(<"$action_log")" == *"ranger"* ]] \
+        || fail_test "XDG config skipped an independent config"
+}
+
+test_full_submodule_failure_is_reported() {
+    local output
+
+    if output="$(
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            git() { return 1; }
+            init_submodules
+        ' _ "$REPO_ROOT" 2>&1
+    )"; then
+        fail_test "full submodule initialization failure was reported as success"
+    fi
+
+    [[ "$output" == *"Failed to initialize some submodules"* ]] \
+        || fail_test "full submodule initialization failure was not visible"
 }
 
 test_partial_ai_skills_detects_agent_deck_from_local_bin() {
@@ -224,6 +752,7 @@ test_partial_ai_skills_detects_agent_deck_from_local_bin() {
     HOME="$case_dir/home" PATH="/usr/bin:/bin" \
         bash -c '
             source "$1/install.sh"
+            prepare_waypost_config_switch() { WAYPOST_CONFIG_SWITCH_READY=1; }
             install_shared_ai_agent_snapshot() { SHARED_AI_AGENT_READY=1; }
             install_all_ai_skills() { :; }
             print_summary() { :; }
@@ -239,13 +768,19 @@ test_partial_ai_skills_detects_agent_deck_from_local_bin() {
 
 test_ai_skills_only_skips_unrelated_bootstrap() {
     local case_dir="$TEST_ROOT/ai-skills-only"
+    local fake_bin="$case_dir/bin"
     local output
 
-    mkdir -p "$case_dir"
+    mkdir -p "$fake_bin"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        '[ "$1 $2" = "mcp --help" ]' > "$fake_bin/waypost"
+    chmod +x "$fake_bin/waypost"
     output="$(
         HOME="$case_dir/home" \
             XDG_STATE_HOME="$case_dir/state" \
             XDG_DATA_HOME="$case_dir/data" \
+            PATH="$fake_bin:/usr/bin:/bin" \
             bash "$REPO_ROOT/install.sh" --dry-run --no-color --ai-skills
     )" || fail_test "--ai-skills dry run failed"
 
@@ -1031,6 +1566,35 @@ test_fd_links_existing_fdfind() {
         || fail_test "existing fdfind was not linked as fd"
 }
 
+test_existing_unrunnable_tools_fail_without_replacement() {
+    local case_dir="$TEST_ROOT/unrunnable-tools"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' '#!/bin/sh' 'exit 1' > "$fake_bin/fd"
+    printf '%s\n' '#!/bin/sh' 'exit 1' > "$fake_bin/mq"
+    chmod +x "$fake_bin/fd" "$fake_bin/mq"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        REPLACEMENT_ATTEMPTED="$case_dir/replacement-attempted" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            install_package() { touch "$REPLACEMENT_ATTEMPTED"; return 99; }
+            curl() { touch "$REPLACEMENT_ATTEMPTED"; return 99; }
+            if install_fd; then exit 10; fi
+            if install_mq; then exit 11; fi
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "unrunnable existing tools were not reported as blocking"
+
+    [[ ! -e "$case_dir/replacement-attempted" ]] \
+        || fail_test "unrunnable existing tool triggered a replacement install"
+}
+
 test_lazygit_installs_verified_release() {
     local case_dir="$TEST_ROOT/lazygit-install"
 
@@ -1103,6 +1667,38 @@ test_lazygit_unsupported_architecture_skips_cleanly() {
         || fail_test "unsupported lazygit architecture was not reported"
 }
 
+test_installed_package_is_not_reinstalled() {
+    local case_dir="$TEST_ROOT/existing-package"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'touch "$PACKAGE_INSTALL_CALLED"' \
+        'exit 99' > "$fake_bin/apt-get"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'printf "%s" "install ok installed"' > "$fake_bin/dpkg-query"
+    chmod +x "$fake_bin/apt-get" "$fake_bin/dpkg-query"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        PACKAGE_INSTALL_CALLED="$case_dir/package-install-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            [[ "$PACKAGE_MANAGER" == "apt-get" ]]
+            install_package existing-package
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "installed package was not preserved"
+
+    [[ ! -e "$case_dir/package-install-called" ]] \
+        || fail_test "installed package was passed to the package manager again"
+}
+
 test_uv_uses_unmanaged_local_bin_install() {
     local case_dir="$TEST_ROOT/uv-install"
 
@@ -1133,6 +1729,416 @@ test_uv_uses_unmanaged_local_bin_install() {
         || fail_test "uv unmanaged local bin install failed"
 }
 
+test_existing_node_and_ai_clis_are_not_reinstalled() {
+    local case_dir="$TEST_ROOT/existing-node-ai-clis"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin" "$case_dir/home/.nvm"
+    cp /bin/true "$fake_bin/node"
+    cp /bin/true "$fake_bin/codex"
+    cp /bin/true "$fake_bin/claude"
+    cp /bin/true "$fake_bin/gemini"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ "$1" = "--version" ]; then printf "%s\n" "10.0.0"; exit 0; fi' \
+        'touch "$NPM_INSTALL_CALLED"' \
+        'exit 99' > "$fake_bin/npm"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'touch "$CURL_CALLED"' \
+        'exit 99' > "$fake_bin/curl"
+    printf '%s\n' \
+        'touch "$NVM_SOURCED"' \
+        'nvm() { return 99; }' > "$case_dir/home/.nvm/nvm.sh"
+    chmod +x "$fake_bin/npm" "$fake_bin/curl"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        NPM_INSTALL_CALLED="$case_dir/npm-install-called" \
+        CURL_CALLED="$case_dir/curl-called" \
+        NVM_SOURCED="$case_dir/nvm-sourced" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            install_nodejs_with_nvm
+            install_codex_cli
+            install_remote_cli "Claude Code" "claude" "https://example.invalid/claude" ""
+            install_remote_cli "Gemini CLI" "gemini" "https://example.invalid/gemini" ""
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "existing Node.js AI CLIs were not preserved"
+
+    [[ ! -e "$case_dir/npm-install-called" ]] \
+        || fail_test "existing Node.js setup invoked an npm install"
+    [[ ! -e "$case_dir/curl-called" ]] \
+        || fail_test "existing AI CLI triggered a remote installer"
+    [[ ! -e "$case_dir/nvm-sourced" ]] \
+        || fail_test "existing Node.js setup loaded NVM and could switch versions"
+}
+
+test_system_node_uses_user_prefix_for_missing_npm_tool() {
+    local case_dir="$TEST_ROOT/system-node-user-prefix"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin" "$case_dir/home"
+    cp /bin/true "$fake_bin/node"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ "$1" = "--version" ]; then printf "%s\n" "10.0.0"; exit 0; fi' \
+        'printf "%s\n" "$*" > "$NPM_ARGS"' \
+        '[ "$*" = "install -g --prefix $HOME/.local bun" ] || exit 21' \
+        'mkdir -p "$HOME/.local/bin"' \
+        'cp /bin/true "$HOME/.local/bin/bun"' \
+        'cp /bin/true "$HOME/.local/bin/bunx"' > "$fake_bin/npm"
+    chmod +x "$fake_bin/npm"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        NPM_ARGS="$case_dir/npm-args" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "bun" && ! -x "$HOME/.local/bin/bun" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            install_nodejs_with_nvm
+            install_bun
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "system Node.js did not install a missing npm tool to the user prefix"
+
+    [[ "$(<"$case_dir/npm-args")" == "install -g --prefix $case_dir/home/.local bun" ]] \
+        || fail_test "npm global install did not use the user-owned prefix"
+    [[ -x "$case_dir/home/.local/bin/bun" ]] \
+        || fail_test "user-prefix npm install did not expose the installed command"
+}
+
+test_broken_existing_node_and_npm_are_rejected_without_replacement() {
+    local case_dir="$TEST_ROOT/broken-existing-node-npm"
+    local fake_bin="$case_dir/bin"
+    local output
+
+    mkdir -p "$fake_bin" "$case_dir/home"
+    cp /bin/false "$fake_bin/node"
+    cp /bin/false "$fake_bin/npm"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'touch "$CURL_CALLED"' \
+        'exit 99' > "$fake_bin/curl"
+    chmod +x "$fake_bin/curl"
+
+    if output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            PATH="$fake_bin:/usr/bin:/bin" \
+            CURL_CALLED="$case_dir/curl-called" \
+            bash -c '
+                source "$1/install.sh"
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                install_nodejs_with_nvm
+            ' _ "$REPO_ROOT" 2>&1
+    )"; then
+        fail_test "broken existing Node.js/npm setup was accepted"
+    fi
+
+    [[ "$output" == *"incomplete or unusable; refusing to replace it"* ]] \
+        || fail_test "broken existing Node.js/npm setup was not reported"
+    [[ ! -e "$case_dir/curl-called" ]] \
+        || fail_test "broken existing Node.js/npm setup triggered a replacement install"
+}
+
+test_active_existing_nvm_warns_without_modifying_bashrc() {
+    local case_dir="$TEST_ROOT/active-existing-nvm-bash-warning"
+    local nvm_dir="$case_dir/home/.nvm"
+    local version_bin="$nvm_dir/versions/node/v20.0.0/bin"
+    local output
+
+    mkdir -p "$version_bin"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "v20.0.0"' > "$version_bin/node"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "10.0.0"' > "$version_bin/npm"
+    chmod +x "$version_bin/node" "$version_bin/npm"
+    printf '%s\n' \
+        'nvm() {' \
+        '    case "$1:$2" in' \
+        '        current:) printf "%s\n" "v20.0.0" ;;' \
+        '        version:default) printf "%s\n" "v20.0.0" ;;' \
+        '        *) return 0 ;;' \
+        '    esac' \
+        '}' > "$nvm_dir/nvm.sh"
+    printf '%s\n' '# user-managed bashrc' > "$case_dir/home/.bashrc"
+    cp "$case_dir/home/.bashrc" "$case_dir/bashrc.before"
+
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            PATH="$version_bin:/usr/bin:/bin" \
+            bash -c '
+                source "$1/install.sh"
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                install_nodejs_with_nvm
+            ' _ "$REPO_ROOT"
+    )" || fail_test "active existing NVM setup was not preserved"
+
+    cmp -s "$case_dir/bashrc.before" "$case_dir/home/.bashrc" \
+        || fail_test "active existing NVM setup modified a user-managed bashrc"
+    [[ "$output" == *"Existing NVM is not initialized by Bash profile"* ]] \
+        || fail_test "active existing NVM setup did not warn about future Bash shells"
+}
+
+test_inactive_existing_nvm_is_tried_before_rejecting_ambient_node() {
+    local case_dir="$TEST_ROOT/inactive-existing-nvm"
+    local fake_bin="$case_dir/bin"
+    local nvm_dir="$case_dir/home/.nvm"
+    local version_bin="$nvm_dir/versions/node/v20.0.0/bin"
+
+    mkdir -p "$fake_bin" "$version_bin"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "system-node"' > "$fake_bin/node"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "v20.0.0"' > "$version_bin/node"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\n" "10.0.0"' > "$version_bin/npm"
+    chmod +x "$fake_bin/node" "$version_bin/node" "$version_bin/npm"
+    printf '%s\n' \
+        'touch "$NVM_SOURCED"' \
+        'nvm() {' \
+        '    case "$1:$2" in' \
+        '        use:default) export PATH="$NVM_VERSION_BIN:$PATH" ;;' \
+        '        version:default) printf "%s\n" "v20.0.0" ;;' \
+        '        install:*) touch "$NVM_INSTALL_CALLED"; return 99 ;;' \
+        '        *) return 0 ;;' \
+        '    esac' \
+        '}' > "$nvm_dir/nvm.sh"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        NVM_VERSION_BIN="$version_bin" \
+        NVM_SOURCED="$case_dir/nvm-sourced" \
+        NVM_INSTALL_CALLED="$case_dir/nvm-install-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "npm" ]]; then
+                    case ":$PATH:" in
+                        *":$NVM_VERSION_BIN:"*) ;;
+                        *) return 1 ;;
+                    esac
+                fi
+                builtin command "$@"
+            }
+
+            install_nodejs_with_nvm
+            [[ $NODE_NPM_AVAILABLE -eq 1 ]]
+            [[ "$(command -v node)" == "$NVM_VERSION_BIN/node" ]]
+            [[ "$(command -v npm)" == "$NVM_VERSION_BIN/npm" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "inactive existing NVM was not tried after ambient Node failed validation"
+
+    [[ -e "$case_dir/nvm-sourced" ]] \
+        || fail_test "inactive existing NVM was not sourced"
+    [[ ! -e "$case_dir/nvm-install-called" ]] \
+        || fail_test "inactive existing NVM triggered a new Node.js install"
+}
+
+test_new_nvm_dry_run_plans_bash_setup() {
+    local case_dir="$TEST_ROOT/new-nvm-bash-setup-dry-run"
+    local output
+
+    mkdir -p "$case_dir/home"
+    printf '%s\n' '# user-managed bashrc' > "$case_dir/home/.bashrc"
+
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            PATH="/usr/bin:/bin" \
+            bash -c '
+                source "$1/install.sh"
+                DRY_RUN=1
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                command() {
+                    if [[ "$1" == "-v" && ( "${2:-}" == "node" || "${2:-}" == "npm" ) ]]; then
+                        return 1
+                    fi
+                    builtin command "$@"
+                }
+                install_nodejs_with_nvm
+            ' _ "$REPO_ROOT"
+    )" || fail_test "new NVM dry-run setup failed"
+
+    [[ "$output" == *"Would append NVM initialization"* ]] \
+        || fail_test "new NVM setup did not retain installer-owned Bash initialization"
+}
+
+test_node_setup_failure_does_not_install_npm_for_consumers() {
+    local case_dir="$TEST_ROOT/node-failure-npm-consumer"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin" "$case_dir/home"
+    cp /bin/true "$fake_bin/node"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        PACKAGE_INSTALL_CALLED="$case_dir/package-install-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && ( "${2:-}" == "npm" || "${2:-}" == "bun" ) ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            install_package() {
+                touch "$PACKAGE_INSTALL_CALLED"
+                return 99
+            }
+            if install_nodejs_with_nvm; then exit 10; fi
+            if install_bun; then exit 11; fi
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "npm consumer handling failed after Node.js setup failure"
+
+    [[ ! -e "$case_dir/package-install-called" ]] \
+        || fail_test "npm consumer attempted to install npm through the package manager"
+}
+
+test_existing_nvm_version_becomes_persistent_default() {
+    local case_dir="$TEST_ROOT/nvm-persistent-default"
+    local nvm_dir="$case_dir/home/.nvm"
+    local version_bin="$nvm_dir/versions/node/v20.11.1/bin"
+
+    mkdir -p "$version_bin"
+    cp /bin/true "$version_bin/node"
+    cp /bin/true "$version_bin/npm"
+    printf '%s\n' \
+        'export NVM_DIR="$HOME/.nvm"' \
+        'nvm() {' \
+        '    case "$1:$2" in' \
+        '        use:default) return 3 ;;' \
+        '        use:v20.11.1) export PATH="$NVM_DIR/versions/node/v20.11.1/bin:$PATH" ;;' \
+        '        version:node) printf "%s\n" "v20.11.1" ;;' \
+        '        alias:default) printf "%s\n" "$3" > "$NVM_DEFAULT_SET" ;;' \
+        '        current:) printf "%s\n" "none" ;;' \
+        '        *) return 4 ;;' \
+        '    esac' \
+        '}' > "$nvm_dir/nvm.sh"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="/usr/bin:/bin" \
+        NVM_DEFAULT_SET="$case_dir/default-version" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && ( "${2:-}" == "node" || "${2:-}" == "npm" ) ]]; then
+                    case ":$PATH:" in
+                        *":$HOME/.nvm/versions/node/v20.11.1/bin:"*) ;;
+                        *) return 1 ;;
+                    esac
+                fi
+                builtin command "$@"
+            }
+            install_nodejs_with_nvm
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "existing NVM version was not activated and persisted"
+
+    [[ "$(<"$case_dir/default-version")" == "v20.11.1" ]] \
+        || fail_test "reused NVM version was not saved as the default"
+}
+
+test_planned_npm_is_reused_by_dry_run_installers() {
+    local case_dir="$TEST_ROOT/planned-npm-dry-run"
+    local output
+
+    mkdir -p "$case_dir/home"
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            PATH="/usr/bin:/bin" \
+            CARGO_FALLBACK_CALLED="$case_dir/cargo-fallback-called" \
+            bash -c '
+                source "$1/install.sh"
+                DRY_RUN=1
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                command() {
+                    if [[ "$1" == "-v" ]]; then
+                        case "${2:-}" in
+                            node|npm|codex|tree-sitter) return 1 ;;
+                        esac
+                    fi
+                    builtin command "$@"
+                }
+                install_nodejs_with_nvm
+                install_codex_cli
+                install_tree_sitter_cli_with_cargo() {
+                    touch "$CARGO_FALLBACK_CALLED"
+                    return 99
+                }
+                install_tree_sitter_cli
+            ' _ "$REPO_ROOT"
+    )" || fail_test "dry-run installers did not reuse the planned npm command"
+
+    [[ "$output" == *"npm install -g --prefix $case_dir/home/.local @openai/codex"* ]] \
+        || fail_test "Codex dry-run did not plan its npm install"
+    [[ "$output" == *"npm install -g --prefix $case_dir/home/.local --allow-scripts=tree-sitter-cli tree-sitter-cli"* ]] \
+        || fail_test "tree-sitter dry-run did not reuse the planned npm command"
+    [[ ! -e "$case_dir/cargo-fallback-called" ]] \
+        || fail_test "tree-sitter dry-run chose Cargo despite npm being planned"
+}
+
+test_existing_npm_tools_skip_prerequisite_installers() {
+    local case_dir="$TEST_ROOT/existing-npm-tools"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin"
+    cp /bin/true "$fake_bin/agent-browser"
+    cp /bin/true "$fake_bin/ast-grep"
+    cp /bin/true "$fake_bin/codegraph"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        PREREQUISITE_CALLED="$case_dir/prerequisite-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_required_command() {
+                touch "$PREREQUISITE_CALLED"
+                return 99
+            }
+            install_agent_browser
+            install_ast_grep
+            install_codegraph
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "existing npm tools did not skip their installers"
+
+    [[ ! -e "$case_dir/prerequisite-called" ]] \
+        || fail_test "existing npm tool checked or installed npm"
+}
+
 test_bun_installs_with_npm() {
     local case_dir="$TEST_ROOT/bun-install"
 
@@ -1151,7 +2157,7 @@ test_bun_installs_with_npm() {
                 npm_checked=1
             }
             npm() {
-                [[ "$*" == "install -g bun" ]] || return 1
+                [[ "$*" == "install -g --prefix $HOME/.local bun" ]] || return 1
                 mkdir -p "$HOME/.local/bin"
                 cp /bin/true "$HOME/.local/bin/bun"
                 cp /bin/true "$HOME/.local/bin/bunx"
@@ -1425,23 +2431,145 @@ test_mq_failed_binary_is_removed_and_retryable() {
         || fail_test "mq invalid binary was not cleaned up for retry"
 }
 
+test_existing_tree_sitter_is_not_upgraded() {
+    local case_dir="$TEST_ROOT/tree-sitter-existing"
+    local fake_bin="$case_dir/bin"
+    local output
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'printf "%s\n" "tree-sitter 0.20.8"' > "$fake_bin/tree-sitter"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'touch "$NPM_CALLED"' \
+        'exit 99' > "$fake_bin/npm"
+    chmod +x "$fake_bin/tree-sitter" "$fake_bin/npm"
+
+    if output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            PATH="$fake_bin:/usr/bin:/bin" \
+            NPM_CALLED="$case_dir/npm-called" \
+            bash -c '
+                source "$1/install.sh"
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                install_tree_sitter_cli
+            ' _ "$REPO_ROOT"
+    )"; then
+        fail_test "existing unsupported tree-sitter CLI was accepted"
+    fi
+
+    [[ ! -e "$case_dir/npm-called" ]] \
+        || fail_test "existing tree-sitter CLI was upgraded with npm"
+    [[ "$output" == *"requires 0.26.1 or newer and will not be replaced"* ]] \
+        || fail_test "existing old tree-sitter CLI did not report the blocking incompatibility"
+}
+
+test_existing_tree_sitter_target_is_not_replaced() {
+    local case_dir="$TEST_ROOT/tree-sitter-existing-target"
+    local fake_bin="$case_dir/bin"
+    local target="$case_dir/home/.local/bin/tree-sitter"
+    local original_target="$case_dir/original-tree-sitter"
+
+    mkdir -p "$fake_bin" "$(dirname "$target")"
+    ln -s "$original_target" "$target"
+    printf '%s\n' '#!/bin/sh' 'touch "$INSTALLER_CALLED"' 'exit 99' > "$fake_bin/npm"
+    printf '%s\n' '#!/bin/sh' 'touch "$INSTALLER_CALLED"' 'exit 99' > "$fake_bin/cargo"
+    chmod +x "$fake_bin/npm" "$fake_bin/cargo"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        INSTALLER_CALLED="$case_dir/installer-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "tree-sitter" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            if install_tree_sitter_cli; then exit 10; fi
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "existing unavailable tree-sitter target was not reported as blocking"
+
+    [[ -L "$target" && "$(readlink "$target")" == "$original_target" ]] \
+        || fail_test "existing tree-sitter target was removed or replaced"
+    [[ ! -e "$case_dir/installer-called" ]] \
+        || fail_test "existing tree-sitter target triggered a replacement installer"
+}
+
+test_planned_cargo_is_reused_by_tree_sitter_dry_run() {
+    local case_dir="$TEST_ROOT/planned-cargo-dry-run"
+    local output
+
+    mkdir -p "$case_dir/home" "$case_dir/tmp"
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            TMPDIR="$case_dir/tmp" \
+            PATH="/usr/bin:/bin" \
+            bash -c '
+                source "$1/install.sh"
+                DRY_RUN=1
+                USE_COLOR=0
+                RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+                command() {
+                    if [[ "$1" == "-v" ]]; then
+                        case "${2:-}" in
+                            cargo|rustup) return 1 ;;
+                        esac
+                    fi
+                    builtin command "$@"
+                }
+                ensure_libclang() { return 0; }
+                install_tree_sitter_cli_with_cargo 0.26.1
+            ' _ "$REPO_ROOT"
+    )" || fail_test "tree-sitter Cargo dry-run rejected the planned Rust toolchain"
+
+    [[ "$output" == *"rustup run stable cargo install --root $case_dir/tmp/tree-sitter-cargo.XXXXXX tree-sitter-cli --locked"* ]] \
+        || fail_test "tree-sitter Cargo dry-run did not report the planned Cargo command"
+    [[ "$output" == *"Would install the verified tree-sitter CLI to: $case_dir/home/.local/bin/tree-sitter"* ]] \
+        || fail_test "tree-sitter Cargo dry-run did not report the verified publish target"
+}
+
 test_tree_sitter_allows_npm_install_script_and_falls_back_to_cargo() {
     local case_dir="$TEST_ROOT/tree-sitter-approval"
     local fake_bin="$case_dir/bin"
     local fake_lib_dir="$case_dir/libclang"
+    local cargo_root
 
-    mkdir -p "$fake_bin" "$fake_lib_dir"
+    mkdir -p "$fake_bin" "$fake_lib_dir" "$case_dir/tmp"
     touch "$fake_lib_dir/libclang.so.1"
     printf '%s\n' \
         '#!/bin/sh' \
+        'printf "%s\n" "$*" >> "$TREE_SITTER_NPM_ACTIONS"' \
+        'if [ "$1" = "--version" ]; then printf "%s\n" "10.0.0"; exit 0; fi' \
         'case "$1 $2" in' \
         '  "install -g")' \
+        '    case " $* " in *" --prefix $HOME/.local "*) ;; *) exit 1 ;; esac' \
         '    case " $* " in *" --allow-scripts=tree-sitter-cli "*) ;; *) exit 1 ;; esac' \
+        '    mkdir -p "$HOME/.local/bin" "$HOME/.local/lib/node_modules/tree-sitter-cli"' \
+        '    printf "%s\n" "#!/bin/sh" "exit 1" > "$TREE_SITTER_BIN"' \
+        '    chmod +x "$TREE_SITTER_BIN"' \
         '    touch "$TREE_SITTER_INSTALLED" ;;' \
         '  "rebuild -g")' \
+        '    case " $* " in *" --prefix $HOME/.local "*) ;; *) exit 1 ;; esac' \
         '    case " $* " in *" --allow-scripts=tree-sitter-cli "*) ;; *) exit 1 ;; esac' \
         '    test -f "$TREE_SITTER_INSTALLED" || exit 1' \
         '    ;;' \
+        '  "uninstall -g")' \
+        '    case " $* " in *" --prefix $HOME/.local "*) ;; *) exit 1 ;; esac' \
+        '    rm -rf "$HOME/.local/lib/node_modules/tree-sitter-cli"' \
+        '    rm -f "$TREE_SITTER_BIN"' \
+        '    touch "$TREE_SITTER_NPM_REMOVED" ;;' \
         '  *) exit 1 ;;' \
         'esac' > "$fake_bin/npm"
     printf '%s\n' \
@@ -1449,11 +2577,25 @@ test_tree_sitter_allows_npm_install_script_and_falls_back_to_cargo() {
         'case "$1" in' \
         '  --version) printf "%s\n" "cargo 1.85.0" ;;' \
         '  install)' \
-        '    case " $* " in *" --root $HOME/.local "*) ;; *) exit 1 ;; esac' \
-        '    case " $* " in *" tree-sitter-cli --locked --force "*) ;; *) exit 1 ;; esac' \
-        '    mkdir -p "$HOME/.local/bin"' \
-        '    printf "%s\n" "#!/bin/sh" "printf '\''tree-sitter 0.26.11\\n'\''" > "$TREE_SITTER_BIN"' \
-        '    chmod +x "$TREE_SITTER_BIN"' \
+        '    case " $* " in *" tree-sitter-cli --locked "*) ;; *) exit 1 ;; esac' \
+        '    root=""' \
+        '    while [ "$#" -gt 0 ]; do' \
+        '      case "$1" in' \
+        '        --root) root="$2"; shift 2 ;;' \
+        '        *) shift ;;' \
+        '      esac' \
+        '    done' \
+        '    test -n "$root" || exit 1' \
+        '    printf "%s\n" "$root" > "$TREE_SITTER_CARGO_ROOT"' \
+        '    if [ -e "$TREE_SITTER_BIN" ] || [ -L "$TREE_SITTER_BIN" ] ||' \
+        '        [ -e "$HOME/.local/lib/node_modules/tree-sitter-cli" ]; then' \
+        '        touch "$TREE_SITTER_CARGO_COLLISION"' \
+        '        exit 41' \
+        '    fi' \
+        '    touch "$TREE_SITTER_TARGET_WAS_FREE"' \
+        '    mkdir -p "$root/bin"' \
+        '    printf "%s\n" "#!/bin/sh" "printf '\''tree-sitter 0.26.11\\n'\''" > "$root/bin/tree-sitter"' \
+        '    chmod +x "$root/bin/tree-sitter"' \
         '    touch "$TREE_SITTER_CARGO_INSTALLED" ;;' \
         '  *) exit 1 ;;' \
         'esac' > "$fake_bin/cargo"
@@ -1475,65 +2617,192 @@ test_tree_sitter_allows_npm_install_script_and_falls_back_to_cargo() {
     HOME="$case_dir/home" \
         XDG_STATE_HOME="$case_dir/state" \
         XDG_DATA_HOME="$case_dir/data" \
+        TMPDIR="$case_dir/tmp" \
         PATH="$fake_bin:/usr/bin:/bin" \
         LIBCLANG_PATH="$fake_lib_dir" \
         TREE_SITTER_INSTALLED="$case_dir/installed" \
+        TREE_SITTER_NPM_ACTIONS="$case_dir/npm-actions" \
+        TREE_SITTER_NPM_REMOVED="$case_dir/npm-removed" \
         TREE_SITTER_BIN="$case_dir/home/.local/bin/tree-sitter" \
         TREE_SITTER_CARGO_INSTALLED="$case_dir/cargo-installed" \
+        TREE_SITTER_CARGO_ROOT="$case_dir/cargo-root" \
+        TREE_SITTER_CARGO_COLLISION="$case_dir/cargo-collision" \
+        TREE_SITTER_TARGET_WAS_FREE="$case_dir/target-was-free" \
         RUSTUP_TOOLCHAIN_INSTALLED="$case_dir/rustup-toolchain-installed" \
         bash -c '
             source "$1/install.sh"
             USE_COLOR=0
             RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "tree-sitter" && ! -x "$TREE_SITTER_BIN" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
             install_tree_sitter_cli
         ' _ "$REPO_ROOT" >/dev/null \
         || fail_test "tree-sitter CLI install did not fall back to Cargo"
     [[ -f "$case_dir/cargo-installed" ]] \
         || fail_test "tree-sitter CLI Cargo fallback was not used"
-    [[ -f "$case_dir/rustup-toolchain-installed" ]] \
-        || fail_test "tree-sitter CLI did not ensure the Rust stable toolchain"
+    [[ -f "$case_dir/npm-removed" ]] \
+        || fail_test "tree-sitter npm ownership was not removed before Cargo fallback: $(<"$case_dir/npm-actions")"
+    [[ -f "$case_dir/target-was-free" && ! -e "$case_dir/cargo-collision" ]] \
+        || fail_test "tree-sitter npm launcher was not removed before Cargo fallback"
+    [[ ! -f "$case_dir/rustup-toolchain-installed" ]] \
+        || fail_test "tree-sitter CLI updated Rust despite existing Cargo"
+    cargo_root="$(<"$case_dir/cargo-root")"
+    [[ "$cargo_root" == "$case_dir/tmp"/tree-sitter-cargo.* ]] \
+        || fail_test "tree-sitter Cargo fallback did not use a temporary install root: $cargo_root"
+    [[ ! -e "$cargo_root" ]] \
+        || fail_test "tree-sitter Cargo fallback left its temporary install root behind"
+    [[ "$("$case_dir/home/.local/bin/tree-sitter" --version)" == "tree-sitter 0.26.11" ]] \
+        || fail_test "verified tree-sitter Cargo binary was not published"
 }
 
-test_rustup_is_installed_when_only_cargo_exists() {
-    local case_dir="$TEST_ROOT/rustup-install"
+test_tree_sitter_cargo_retries_existing_stable_toolchain() {
+    local case_dir="$TEST_ROOT/tree-sitter-cargo-stable-retry"
+    local fake_bin="$case_dir/bin"
+    local fake_lib_dir="$case_dir/libclang"
+    local stable_root
+
+    mkdir -p "$fake_bin" "$fake_lib_dir" "$case_dir/tmp"
+    touch "$fake_lib_dir/libclang.so.1"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  --version) printf "%s\n" "cargo 1.60.0" ;;' \
+        '  install) touch "$DIRECT_CARGO_CALLED"; exit 42 ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/cargo"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  run)' \
+        '    [ "$2 $3" = "stable cargo" ] || exit 1' \
+        '    shift 3' \
+        '    case "$1" in' \
+        '      --version) printf "%s\n" "cargo 1.90.0" ;;' \
+        '      install)' \
+        '        root=""' \
+        '        while [ "$#" -gt 0 ]; do' \
+        '          case "$1" in' \
+        '            --root) root="$2"; shift 2 ;;' \
+        '            *) shift ;;' \
+        '          esac' \
+        '        done' \
+        '        test -n "$root" || exit 1' \
+        '        printf "%s\n" "$root" > "$STABLE_CARGO_ROOT"' \
+        '        mkdir -p "$root/bin"' \
+        '        printf "%s\n" "#!/bin/sh" "printf '\''tree-sitter 0.26.11\\n'\''" > "$root/bin/tree-sitter"' \
+        '        chmod +x "$root/bin/tree-sitter"' \
+        '        touch "$STABLE_CARGO_CALLED" ;;' \
+        '      *) exit 1 ;;' \
+        '    esac ;;' \
+        '  toolchain) touch "$RUSTUP_TOOLCHAIN_INSTALL_CALLED"; exit 99 ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/rustup"
+    chmod +x "$fake_bin/cargo" "$fake_bin/rustup"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        TMPDIR="$case_dir/tmp" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        LIBCLANG_PATH="$fake_lib_dir" \
+        DIRECT_CARGO_CALLED="$case_dir/direct-cargo-called" \
+        STABLE_CARGO_CALLED="$case_dir/stable-cargo-called" \
+        STABLE_CARGO_ROOT="$case_dir/stable-cargo-root" \
+        RUSTUP_TOOLCHAIN_INSTALL_CALLED="$case_dir/rustup-toolchain-install-called" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            install_tree_sitter_cli_with_cargo 0.26.1
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "tree-sitter Cargo build did not retry the existing stable toolchain"
+
+    [[ -e "$case_dir/direct-cargo-called" && -e "$case_dir/stable-cargo-called" ]] \
+        || fail_test "tree-sitter Cargo build did not try both existing toolchains"
+    [[ ! -e "$case_dir/rustup-toolchain-install-called" ]] \
+        || fail_test "tree-sitter Cargo fallback installed or updated the stable toolchain"
+    stable_root="$(<"$case_dir/stable-cargo-root")"
+    [[ ! -e "$stable_root" ]] \
+        || fail_test "tree-sitter stable Cargo fallback left its temporary root behind"
+    [[ "$("$case_dir/home/.local/bin/tree-sitter" --version)" == "tree-sitter 0.26.11" ]] \
+        || fail_test "tree-sitter stable Cargo fallback did not publish the verified binary"
+}
+
+test_failed_tree_sitter_cargo_build_is_retryable() {
+    local case_dir="$TEST_ROOT/tree-sitter-cargo-retry"
+    local fake_bin="$case_dir/bin"
+    local fake_lib_dir="$case_dir/libclang"
+    local failed_root
+
+    mkdir -p "$fake_bin" "$fake_lib_dir" "$case_dir/tmp"
+    touch "$fake_lib_dir/libclang.so.1"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '  --version) printf "%s\n" "cargo 1.85.0" ;;' \
+        '  install)' \
+        '    root=""' \
+        '    while [ "$#" -gt 0 ]; do' \
+        '      case "$1" in' \
+        '        --root) root="$2"; shift 2 ;;' \
+        '        *) shift ;;' \
+        '      esac' \
+        '    done' \
+        '    test -n "$root" || exit 1' \
+        '    mkdir -p "$root/bin"' \
+        '    if [ ! -e "$CARGO_FIRST_ATTEMPT" ]; then' \
+        '      touch "$CARGO_FIRST_ATTEMPT"' \
+        '      printf "%s\n" "$root" > "$FAILED_CARGO_ROOT"' \
+        '      printf "%s\n" "#!/bin/sh" "exit 1" > "$root/bin/tree-sitter"' \
+        '    else' \
+        '      printf "%s\n" "#!/bin/sh" "printf '\''tree-sitter 0.26.11\\n'\''" > "$root/bin/tree-sitter"' \
+        '    fi' \
+        '    chmod +x "$root/bin/tree-sitter" ;;' \
+        '  *) exit 1 ;;' \
+        'esac' > "$fake_bin/cargo"
+    chmod +x "$fake_bin/cargo"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        TMPDIR="$case_dir/tmp" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        LIBCLANG_PATH="$fake_lib_dir" \
+        CARGO_FIRST_ATTEMPT="$case_dir/first-attempt" \
+        FAILED_CARGO_ROOT="$case_dir/failed-root" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            if install_tree_sitter_cli_with_cargo 0.26.1; then exit 10; fi
+            [[ ! -e "$HOME/.local/bin/tree-sitter" && ! -L "$HOME/.local/bin/tree-sitter" ]]
+            install_tree_sitter_cli_with_cargo 0.26.1
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "failed tree-sitter Cargo build was not retryable"
+
+    failed_root="$(<"$case_dir/failed-root")"
+    [[ ! -e "$failed_root" ]] \
+        || fail_test "failed tree-sitter Cargo build left its temporary root behind"
+    [[ "$("$case_dir/home/.local/bin/tree-sitter" --version)" == "tree-sitter 0.26.11" ]] \
+        || fail_test "tree-sitter Cargo retry did not publish the verified binary"
+}
+
+test_existing_cargo_is_not_replaced_by_rustup() {
+    local case_dir="$TEST_ROOT/existing-cargo"
     local fake_bin="$case_dir/bin"
 
     mkdir -p "$fake_bin"
     printf '%s\n' \
         '#!/bin/sh' \
-        'case "$1" in' \
-        '  --version) printf "%s\n" "cargo 1.85.0" ;;' \
-        '  *) exit 1 ;;' \
-        'esac' > "$fake_bin/cargo-template"
-    printf '%s\n' \
-        '#!/bin/sh' \
         'printf "%s\n" "cargo 1.63.0"' > "$fake_bin/cargo"
     printf '%s\n' \
         '#!/bin/sh' \
-        'case "$1" in' \
-        '  --version) printf "%s\n" "rustup 1.28.2" ;;' \
-        '  toolchain)' \
-        '    [ "$2 $3 $4 $5" = "install stable --profile minimal" ] || exit 1' \
-        '    touch "$RUSTUP_TOOLCHAIN_INSTALLED" ;;' \
-        '  run)' \
-        '    [ "$2 $3" = "stable cargo" ] || exit 1' \
-        '    shift 3' \
-        '    exec cargo "$@" ;;' \
-        '  *) exit 1 ;;' \
-        'esac' > "$fake_bin/rustup-template"
-    printf '%s\n' \
-        '#!/bin/sh' \
-        'target=""' \
-        'while [ "$#" -gt 0 ]; do' \
-        '  case "$1" in' \
-        '    -o) target="$2"; shift 2 ;;' \
-        '    *) shift ;;' \
-        '  esac' \
-        'done' \
-        'test -n "$target" || exit 1' \
         'touch "$RUSTUP_CURL_CALLED"' \
-        'printf "%s\n" "#!/bin/sh" "mkdir -p \"\$HOME/.cargo/bin\"" "cp \"\$RUSTUP_FAKE_CARGO\" \"\$HOME/.cargo/bin/cargo\"" "cp \"\$RUSTUP_FAKE_RUSTUP\" \"\$HOME/.cargo/bin/rustup\"" "chmod +x \"\$HOME/.cargo/bin/cargo\" \"\$HOME/.cargo/bin/rustup\"" > "$target"' \
-        'chmod +x "$target"' > "$fake_bin/curl"
+        'exit 99' > "$fake_bin/curl"
     chmod +x "$fake_bin/cargo" "$fake_bin/curl"
 
     HOME="$case_dir/home" \
@@ -1541,21 +2810,51 @@ test_rustup_is_installed_when_only_cargo_exists() {
         XDG_DATA_HOME="$case_dir/data" \
         PATH="$fake_bin:/usr/bin:/bin" \
         RUSTUP_CURL_CALLED="$case_dir/rustup-curl-called" \
-        RUSTUP_FAKE_CARGO="$fake_bin/cargo-template" \
-        RUSTUP_FAKE_RUSTUP="$fake_bin/rustup-template" \
-        RUSTUP_TOOLCHAIN_INSTALLED="$case_dir/rustup-toolchain-installed" \
         bash -c '
             source "$1/install.sh"
             USE_COLOR=0
             RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
             ensure_rust_cargo
-            cargo --version | grep -Fqx "cargo 1.85.0"
+            cargo --version | grep -Fqx "cargo 1.63.0"
         ' _ "$REPO_ROOT" >/dev/null \
-        || fail_test "rustup was not installed when only Cargo existed"
-    [[ -f "$case_dir/rustup-curl-called" ]] \
-        || fail_test "Rust installer was not downloaded"
-    [[ -f "$case_dir/rustup-toolchain-installed" ]] \
-        || fail_test "Rust stable toolchain was not installed"
+        || fail_test "existing Cargo was not preserved"
+    [[ ! -f "$case_dir/rustup-curl-called" ]] \
+        || fail_test "existing Cargo triggered a Rust replacement install"
+}
+
+test_rustup_stable_handles_broken_cargo_proxy() {
+    local case_dir="$TEST_ROOT/rustup-broken-cargo-proxy"
+    local fake_bin="$case_dir/bin"
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' '#!/bin/sh' 'exit 1' > "$fake_bin/cargo"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '    --version) printf "%s\n" "rustup 1.28.2" ;;' \
+        '    run)' \
+        '        [ "$2 $3 $4" = "stable cargo --version" ] || exit 2' \
+        '        printf "%s\n" "cargo 1.85.0" ;;' \
+        '    toolchain) touch "$RUSTUP_TOOLCHAIN_INSTALLED"; exit 99 ;;' \
+        '    *) exit 3 ;;' \
+        'esac' > "$fake_bin/rustup"
+    chmod +x "$fake_bin/cargo" "$fake_bin/rustup"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        RUSTUP_TOOLCHAIN_INSTALLED="$case_dir/toolchain-installed" \
+        bash -c '
+            source "$1/install.sh"
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+            ensure_rust_cargo
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "usable rustup stable toolchain did not satisfy a broken Cargo proxy"
+
+    [[ ! -e "$case_dir/toolchain-installed" ]] \
+        || fail_test "existing rustup stable toolchain was unnecessarily reinstalled"
 }
 
 test_libclang_is_installed_when_missing() {
@@ -1580,7 +2879,8 @@ test_libclang_is_installed_when_missing() {
         '    exit 0' \
         'fi' \
         'exit 1' > "$fake_bin/apt-get"
-    chmod +x "$fake_bin/find" "$fake_bin/sudo" "$fake_bin/apt-get"
+    printf '%s\n' '#!/bin/sh' 'exit 1' > "$fake_bin/dpkg-query"
+    chmod +x "$fake_bin/find" "$fake_bin/sudo" "$fake_bin/apt-get" "$fake_bin/dpkg-query"
 
     HOME="$case_dir/home" \
         XDG_STATE_HOME="$case_dir/state" \
@@ -1601,13 +2901,29 @@ test_libclang_is_installed_when_missing() {
         || fail_test "libclang package installation was not attempted"
 }
 
+test_best_effort_continues_and_counts_failures
+test_dry_run_summary_propagates_best_effort_failure
+test_waypost_preparation_requires_explicit_migration
+test_waypost_preparation_gates_dependent_assets
+test_zsh_stack_gates_dependencies_after_core_failure
+test_zsh_stack_readiness_gates_only_zshrc
+test_failed_zsh_clones_leave_retryable_targets
+test_dangling_oh_my_zsh_symlink_is_preserved
+test_dry_run_rejects_installed_package_with_missing_resource
+test_required_tools_check_every_item_best_effort
+test_local_bin_path_injection_reports_persistence_limit
 test_shared_agent_snapshot_preserves_local_content
+test_failed_shared_snapshot_preserves_existing_consumer_links
+test_selected_snapshot_failure_skips_ai_skills_and_continues
 test_zshrc_uses_managed_copy_merge
 test_shell_configs_clean_path
+test_bashrc_preserves_ambient_node_when_loading_nvm
 test_component_selection_parsing
 test_selected_submodule_paths_follow_components
 test_partial_home_and_xdg_initialize_submodules_before_copy
-test_partial_submodule_failure_stops_copy
+test_partial_submodule_failure_skips_gitlink_configs_and_continues
+test_config_installers_skip_unavailable_submodule_sources
+test_full_submodule_failure_is_reported
 test_partial_ai_skills_detects_agent_deck_from_local_bin
 test_ai_skills_only_skips_unrelated_bootstrap
 test_managed_copy_dry_run_is_read_only
@@ -1640,9 +2956,21 @@ test_local_directory_mode_is_preserved_with_upstream_update
 test_macos_path_mode_uses_bsd_stat
 test_lazygit_asset_selection
 test_fd_links_existing_fdfind
+test_existing_unrunnable_tools_fail_without_replacement
 test_lazygit_installs_verified_release
 test_lazygit_unsupported_architecture_skips_cleanly
+test_installed_package_is_not_reinstalled
 test_uv_uses_unmanaged_local_bin_install
+test_existing_node_and_ai_clis_are_not_reinstalled
+test_system_node_uses_user_prefix_for_missing_npm_tool
+test_broken_existing_node_and_npm_are_rejected_without_replacement
+test_active_existing_nvm_warns_without_modifying_bashrc
+test_inactive_existing_nvm_is_tried_before_rejecting_ambient_node
+test_new_nvm_dry_run_plans_bash_setup
+test_node_setup_failure_does_not_install_npm_for_consumers
+test_existing_nvm_version_becomes_persistent_default
+test_planned_npm_is_reused_by_dry_run_installers
+test_existing_npm_tools_skip_prerequisite_installers
 test_bun_installs_with_npm
 test_zsh_dependencies_are_installed
 test_mq_release_selection
@@ -1650,8 +2978,14 @@ test_mq_dry_run_plans_pinned_binary
 test_mq_intel_macos_uses_pinned_cargo_install
 test_mq_intel_macos_without_cargo_skips_cleanly
 test_mq_failed_binary_is_removed_and_retryable
+test_existing_tree_sitter_is_not_upgraded
+test_existing_tree_sitter_target_is_not_replaced
+test_planned_cargo_is_reused_by_tree_sitter_dry_run
 test_tree_sitter_allows_npm_install_script_and_falls_back_to_cargo
-test_rustup_is_installed_when_only_cargo_exists
+test_tree_sitter_cargo_retries_existing_stable_toolchain
+test_failed_tree_sitter_cargo_build_is_retryable
+test_existing_cargo_is_not_replaced_by_rustup
+test_rustup_stable_handles_broken_cargo_proxy
 test_libclang_is_installed_when_missing
 test_known_legacy_links_are_migrated
 test_platform_specific_configs_skip_cleanly
