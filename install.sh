@@ -9,6 +9,7 @@
 #   --dry-run     Show what would be done without making changes
 #   --force       Backup and replace existing files (be careful!)
 #   --only PARTS  Install only selected comma-separated sections
+#   --skip PARTS  Skip selected comma-separated sections
 #   --ai-skills   Install/update AI skills only
 #   --no-color    Disable colored output
 #   --help        Show this help message
@@ -35,11 +36,14 @@ INTERACTIVE=0
 USE_COLOR=1
 
 # Installation selection. The default installs every section and bootstraps
-# required tools. Any partial selection skips unrelated bootstrap work.
+# required tools. Partial selections skip unrelated bootstrap work; skips keep
+# the full-install bootstrap and omit only the selected sections.
 declare -a SELECTED_COMPONENTS=()
+declare -a SKIPPED_COMPONENTS=()
 declare -a REQUIRED_SUBMODULE_PATHS=()
 INSTALL_ALL=1
 ONLY_ALL_REQUESTED=0
+SKIP_COMPONENTS_REQUESTED=0
 
 # Interactive mode defaults (for 'all' responses)
 ALL_SKIP=0
@@ -151,6 +155,11 @@ add_install_component() {
     local component
     local selected_component
 
+    if [[ $SKIP_COMPONENTS_REQUESTED -eq 1 ]]; then
+        echo "Cannot combine --only with --skip"
+        exit 1
+    fi
+
     component="$(normalize_install_component "$1")"
     if [[ -z "$component" ]] || ! is_valid_install_component "$component"; then
         echo "Unknown install component: $1"
@@ -187,6 +196,33 @@ add_install_component() {
     SELECTED_COMPONENTS+=("$component")
 }
 
+add_skipped_component() {
+    local component
+    local skipped_component
+
+    if [[ $INSTALL_ALL -eq 0 || $ONLY_ALL_REQUESTED -eq 1 ]]; then
+        echo "Cannot combine --skip with --only"
+        exit 1
+    fi
+
+    component="$(normalize_install_component "$1")"
+    if [[ -z "$component" ]] || ! is_valid_install_component "$component" \
+        || [[ "$component" == "all" ]]; then
+        echo "Unknown skip component: $1"
+        echo "Valid components to skip: home, xdg, bin, ai, ai-skills, serena"
+        exit 1
+    fi
+
+    for skipped_component in ${SKIPPED_COMPONENTS[@]+"${SKIPPED_COMPONENTS[@]}"}; do
+        if [[ "$skipped_component" == "$component" ]]; then
+            return 0
+        fi
+    done
+
+    SKIPPED_COMPONENTS+=("$component")
+    SKIP_COMPONENTS_REQUESTED=1
+}
+
 add_install_components() {
     local raw_components="$1"
     local component
@@ -204,11 +240,54 @@ add_install_components() {
     done
 }
 
+add_skipped_components() {
+    local raw_components="$1"
+    local component
+    local -a components=()
+
+    if [[ -z "$raw_components" ]]; then
+        echo "Missing skip component after --skip"
+        exit 1
+    fi
+
+    IFS=',' read -r -a components <<< "$raw_components"
+    for component in ${components[@]+"${components[@]}"}; do
+        component="${component//[[:space:]]/}"
+        add_skipped_component "$component"
+    done
+}
+
+component_is_skipped() {
+    local component="$1"
+    local skipped_component
+
+    for skipped_component in ${SKIPPED_COMPONENTS[@]+"${SKIPPED_COMPONENTS[@]}"}; do
+        if [[ "$skipped_component" == "$component" ]]; then
+            return 0
+        fi
+    done
+
+    # AI skills require the AI configuration snapshot, so skipping AI also
+    # skips its skills even when ai-skills was not named explicitly.
+    if [[ "$component" == "ai-skills" ]]; then
+        for skipped_component in ${SKIPPED_COMPONENTS[@]+"${SKIPPED_COMPONENTS[@]}"}; do
+            if [[ "$skipped_component" == "ai" ]]; then
+                return 0
+            fi
+        done
+    fi
+
+    return 1
+}
+
 component_is_selected() {
     local component="$1"
     local selected_component
 
     if [[ $INSTALL_ALL -eq 1 ]]; then
+        if component_is_skipped "$component"; then
+            return 1
+        fi
         return 0
     fi
 
@@ -231,10 +310,32 @@ selected_components_label() {
     fi
 }
 
+skipped_components_label() {
+    local IFS=','
+
+    printf '%s\n' "${SKIPPED_COMPONENTS[*]}"
+}
+
+# Preserve --only xdg's historical behavior of including ai-agent config.
+# In a full install, however, --skip ai must omit that config too.
+should_install_ai_agent_config() {
+    if [[ $INSTALL_ALL -eq 0 ]]; then
+        return 0
+    fi
+
+    component_is_selected "ai"
+}
+
+should_install_ai_skills() {
+    component_is_selected "ai-skills"
+}
+
 parse_args() {
     INSTALL_ALL=1
     ONLY_ALL_REQUESTED=0
     SELECTED_COMPONENTS=()
+    SKIPPED_COMPONENTS=()
+    SKIP_COMPONENTS_REQUESTED=0
     REQUIRED_SUBMODULE_PATHS=()
 
     while [[ $# -gt 0 ]]; do
@@ -261,6 +362,18 @@ parse_args() {
                 ;;
             --only=*)
                 add_install_components "${1#--only=}"
+                shift
+                ;;
+            --skip)
+                if [[ $# -lt 2 ]]; then
+                    echo "Missing skip component after --skip"
+                    exit 1
+                fi
+                add_skipped_components "$2"
+                shift 2
+                ;;
+            --skip=*)
+                add_skipped_components "${1#--skip=}"
                 shift
                 ;;
             --ai-skills)
@@ -297,15 +410,19 @@ Options:
   --interactive, -i Prompt when target exists (asks: skip/backup/replace/all)
   --only PARTS      Install only selected comma-separated sections (repeatable)
                     Sections: home, xdg, bin, ai, ai-skills, serena, all
+  --skip PARTS      Skip selected comma-separated sections (repeatable)
+                    Sections: home, xdg, bin, ai, ai-skills, serena
   --ai-skills       Alias for --only ai-skills
   --no-color        Disable colored output
   --help, -h        Show this help message
 
 Partial selections skip unrelated tool/CLI bootstrap, OS setup, and Neovim
 checks. "home" and "xdg" initialize their required Git submodules first and
-stop if that fails. "ai" installs $XDG_CONFIG_HOME/ai-agent (or
-$HOME/.config/ai-agent) plus AI skills; "ai-skills" only updates the shared
-AI snapshot and per-agent skill links.
+continue if that fails, skipping only their submodule-backed configs. "ai"
+installs $XDG_CONFIG_HOME/ai-agent (or $HOME/.config/ai-agent) plus AI skills;
+"ai-skills" only updates the shared AI snapshot and per-agent skill links.
+--skip keeps the full-install bootstrap but omits the named sections; it
+cannot be combined with --only. Skipping "ai" also skips "ai-skills".
 
 Examples:
   ./install.sh                  # Standard installation
@@ -313,6 +430,7 @@ Examples:
   ./install.sh --force          # Replace existing configs (backs them up)
   ./install.sh --interactive    # Prompt for each conflict
   ./install.sh --only home,xdg  # Install selected config sections
+  ./install.sh --skip xdg,serena # Full install except selected sections
   ./install.sh --ai-skills      # Install/update AI skills only
 EOF
 }
@@ -4971,7 +5089,9 @@ install_xdg_configs() {
     install_copy "fourmolu.yaml" "$config_dir/fourmolu.yaml"
 
     # AI-related configs
-    install_ai_agent_config
+    if should_install_ai_agent_config; then
+        install_ai_agent_config
+    fi
 
     # GRC (Generic Colouriser)
     install_copy "grc" "$config_dir/grc"
@@ -5233,7 +5353,9 @@ install_claude_config() {
     link_shared_ai_agent_item "modules" "$claude_dir/modules"
 
     # Link skills individually (required by Claude Code)
-    install_claude_skills
+    if should_install_ai_skills; then
+        install_claude_skills
+    fi
 
     # Install workflow permission init script to ~/.local/bin
     local bin_dir="$HOME/.local/bin"
@@ -5325,7 +5447,9 @@ install_antigravity_skills() {
 install_antigravity_config() {
     log_info "Installing Antigravity CLI config..."
 
-    install_antigravity_skills
+    if should_install_ai_skills; then
+        install_antigravity_skills
+    fi
 
     if ! waypost_config_switch_is_ready "Antigravity"; then
         return 0
@@ -5347,7 +5471,9 @@ install_kiro_config() {
         log_warn "kiro-cli not found; writing Kiro config files only"
     fi
 
-    install_kiro_skills
+    if should_install_ai_skills; then
+        install_kiro_skills
+    fi
 
     if ! waypost_config_switch_is_ready "Kiro CLI"; then
         return 0
@@ -5376,7 +5502,9 @@ install_gemini_config() {
     link_shared_ai_agent_item "modules" "$gemini_dir/modules"
 
     # Link skills individually for reliability
-    install_gemini_skills
+    if should_install_ai_skills; then
+        install_gemini_skills
+    fi
 
     # Link shell policy rules for workflow automation approvals
     if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
@@ -5462,7 +5590,9 @@ install_codex_config() {
         fi
     fi
 
-    install_codex_skills
+    if should_install_ai_skills; then
+        install_codex_skills
+    fi
     # ensure_codex_tui_usage_limit_resume_prompt || return 1
 
     # Link Codex escalation rules for workflow automation approvals
@@ -5567,7 +5697,9 @@ install_opencode_config() {
     link_shared_ai_agent_item "modules" "$opencode_dir/modules"
 
     # Link skills individually for OpenCode
-    install_opencode_skills
+    if should_install_ai_skills; then
+        install_opencode_skills
+    fi
 
     if ! waypost_config_switch_is_ready "OpenCode"; then
         return 0
@@ -5577,6 +5709,10 @@ install_opencode_config() {
 }
 
 install_snapshot_dependent_ai_configs() {
+    if ! component_is_selected "ai"; then
+        return 0
+    fi
+
     if [[ $SHARED_AI_AGENT_READY -ne 1 ]]; then
         log_warn "Skipping AI client configs; the shared AI agent snapshot is unavailable"
         return 0
@@ -5588,7 +5724,9 @@ install_snapshot_dependent_ai_configs() {
     run_best_effort "Kiro config" install_kiro_config
     run_best_effort "Codex config" install_codex_config
     # This installer depends on the Codex skills directory prepared above.
-    run_best_effort "ast-grep skill" install_ast_grep_skill
+    if component_is_selected "ai-skills"; then
+        run_best_effort "ast-grep skill" install_ast_grep_skill
+    fi
     run_best_effort "OpenCode config" install_opencode_config
     return 0
 }
@@ -5705,7 +5843,7 @@ collect_selected_submodule_paths() {
 
     REQUIRED_SUBMODULE_PATHS=()
 
-    if [[ $INSTALL_ALL -eq 1 ]]; then
+    if [[ $INSTALL_ALL -eq 1 && $SKIP_COMPONENTS_REQUESTED -eq 0 ]]; then
         return 0
     fi
     if ! component_is_selected "home" && ! component_is_selected "xdg"; then
@@ -5927,6 +6065,8 @@ print_banner() {
     echo "  Package manager: $PACKAGE_MANAGER"
     if [[ $INSTALL_ALL -eq 0 ]]; then
         echo "  Sections: $(selected_components_label)"
+    elif [[ $SKIP_COMPONENTS_REQUESTED -eq 1 ]]; then
+        echo "  Skipping: $(skipped_components_label)"
     fi
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "  MODE: DRY RUN (no changes will be made)"
@@ -6028,41 +6168,69 @@ main() {
     run_best_effort "ast-grep" install_ast_grep
     run_best_effort "codegraph" install_codegraph
     run_best_effort "tree-sitter CLI" install_tree_sitter_cli
-    run_best_effort "Waypost preparation" prepare_waypost_config_switch
-    run_best_effort "agent-deck integration" setup_agent_deck_integration
 
-    # Initialize git submodules first
-    if ! run_best_effort "Git submodules" init_submodules; then
-        config_submodules_ready=0
+    if component_is_selected "ai"; then
+        run_best_effort "Waypost preparation" prepare_waypost_config_switch
+        run_best_effort "agent-deck integration" setup_agent_deck_integration
     fi
 
-    run_best_effort "Shared AI agent snapshot" \
-        install_waypost_ready_shared_ai_agent_snapshot
+    # Initialize only submodules required by enabled sections when skipping.
+    if [[ $SKIP_COMPONENTS_REQUESTED -eq 1 ]]; then
+        if ! run_best_effort "Enabled Git submodules" init_selected_submodules; then
+            config_submodules_ready=0
+        fi
+    else
+        if ! run_best_effort "Git submodules" init_submodules; then
+            config_submodules_ready=0
+        fi
+    fi
+
+    if component_is_selected "ai"; then
+        run_best_effort "Shared AI agent snapshot" \
+            install_waypost_ready_shared_ai_agent_snapshot
+    fi
 
     # Install configs
-    run_best_effort "Home configs" \
-        install_home_configs "$config_submodules_ready" "$ZSH_STACK_READY"
-    run_best_effort "XDG configs" \
-        install_xdg_configs "$config_submodules_ready"
-    run_best_effort "Local bin helpers" install_local_bin_helpers
-    install_snapshot_dependent_ai_configs
-    run_best_effort "Serena config" install_serena_config
+    if component_is_selected "home"; then
+        run_best_effort "Home configs" \
+            install_home_configs "$config_submodules_ready" "$ZSH_STACK_READY"
+    fi
+    if component_is_selected "xdg"; then
+        run_best_effort "XDG configs" \
+            install_xdg_configs "$config_submodules_ready"
+    elif component_is_selected "ai"; then
+        log_info "Installing AI Agent config..."
+        run_best_effort "AI Agent config" install_ai_agent_config
+    fi
+    if component_is_selected "bin"; then
+        run_best_effort "Local bin helpers" install_local_bin_helpers
+    fi
+    if component_is_selected "ai"; then
+        install_snapshot_dependent_ai_configs
+    fi
+    if component_is_selected "serena"; then
+        run_best_effort "Serena config" install_serena_config
+    fi
 
     # OS-specific handling
-    case "$OS" in
-        linux)
-            run_best_effort "Linux-specific config" install_linux_specific
-            ;;
-        macos)
-            run_best_effort "macOS-specific config" install_macos_specific
-            ;;
-        wsl)
-            run_best_effort "WSL-specific config" install_wsl_specific
-            ;;
-    esac
+    if component_is_selected "xdg"; then
+        case "$OS" in
+            linux)
+                run_best_effort "Linux-specific config" install_linux_specific
+                ;;
+            macos)
+                run_best_effort "macOS-specific config" install_macos_specific
+                ;;
+            wsl)
+                run_best_effort "WSL-specific config" install_wsl_specific
+                ;;
+        esac
+    fi
 
     # Setup Neovim (important!)
-    run_best_effort "Neovim setup" setup_nvim
+    if component_is_selected "xdg"; then
+        run_best_effort "Neovim setup" setup_nvim
+    fi
 
     print_summary
 }

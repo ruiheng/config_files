@@ -618,6 +618,153 @@ test_component_selection_parsing() {
     parse_args
 }
 
+test_component_skip_parsing() {
+    parse_args --skip "xdg, ai-skills" --skip serena
+
+    [[ $INSTALL_ALL -eq 1 ]] \
+        || fail_test "--skip unexpectedly changed full-install mode"
+    [[ $SKIP_COMPONENTS_REQUESTED -eq 1 ]] \
+        || fail_test "--skip did not enable skip mode"
+    component_is_selected "home" \
+        || fail_test "--skip disabled an unlisted component"
+    ! component_is_selected "xdg" \
+        || fail_test "--skip did not disable xdg"
+    component_is_selected "ai" \
+        || fail_test "--skip ai-skills disabled AI config"
+    ! component_is_selected "ai-skills" \
+        || fail_test "--skip did not disable AI skills"
+    ! component_is_selected "serena" \
+        || fail_test "repeated --skip did not disable serena"
+    [[ "$(skipped_components_label)" == "xdg,ai-skills,serena" ]] \
+        || fail_test "--skip label was incorrect"
+
+    parse_args --skip ai
+    ! component_is_selected "ai" \
+        || fail_test "--skip ai did not disable AI config"
+    ! component_is_selected "ai-skills" \
+        || fail_test "--skip ai did not disable AI skills"
+
+    parse_args
+}
+
+test_skip_rejects_only_and_all() {
+    if bash "$REPO_ROOT/install.sh" --only home --skip xdg >/dev/null 2>&1; then
+        fail_test "--only and --skip were accepted together"
+    fi
+
+    if bash "$REPO_ROOT/install.sh" --skip all >/dev/null 2>&1; then
+        fail_test "--skip all was accepted"
+    fi
+}
+
+test_full_skip_omits_selected_sections() {
+    local events
+
+    events="$(
+        bash -c '
+            source "$1/install.sh"
+            events=""
+            print_banner() { :; }
+            print_summary() { :; }
+            install_required_tools() { :; }
+            ensure_path_contains_local_bin() { :; }
+            install_fd() { :; }
+            install_lazygit() { :; }
+            install_uv() { :; }
+            install_mq() { :; }
+            install_oh_my_zsh() { :; }
+            install_zsh_dependencies() { :; }
+            install_nodejs_with_nvm() { :; }
+            install_bun() { :; }
+            install_codex_cli() { :; }
+            install_remote_cli() { :; }
+            install_agent_browser() { :; }
+            install_ast_grep() { :; }
+            install_codegraph() { :; }
+            install_tree_sitter_cli() { :; }
+            init_selected_submodules() { events="${events}submodules "; }
+            install_home_configs() { events="${events}home "; }
+            install_xdg_configs() { events="${events}xdg "; }
+            install_local_bin_helpers() { events="${events}bin "; }
+            install_shared_ai_agent_snapshot() { events="${events}snapshot "; }
+            install_claude_config() { events="${events}claude "; }
+            install_serena_config() { events="${events}serena "; }
+            install_linux_specific() { events="${events}linux "; }
+            setup_nvim() { events="${events}nvim "; }
+            main --skip xdg,bin,ai,serena >/dev/null
+            printf "%s\\n" "$events"
+        ' _ "$REPO_ROOT"
+    )" || fail_test "full installation with --skip failed"
+
+    [[ "$events" == "submodules home " ]] \
+        || fail_test "--skip ran disabled sections: $events"
+}
+
+test_full_skip_xdg_keeps_ai_agent_config() {
+    local events
+
+    events="$(
+        bash -c '
+            source "$1/install.sh"
+            events=""
+            print_banner() { :; }
+            print_summary() { :; }
+            install_required_tools() { :; }
+            ensure_path_contains_local_bin() { :; }
+            install_fd() { :; }
+            install_lazygit() { :; }
+            install_uv() { :; }
+            install_mq() { :; }
+            install_zsh_stack() { ZSH_STACK_READY=1; }
+            install_nodejs_with_nvm() { :; }
+            install_bun() { :; }
+            install_codex_cli() { :; }
+            install_remote_cli() { :; }
+            install_agent_browser() { :; }
+            install_ast_grep() { :; }
+            install_codegraph() { :; }
+            install_tree_sitter_cli() { :; }
+            prepare_waypost_config_switch() { WAYPOST_CONFIG_SWITCH_READY=1; }
+            setup_agent_deck_integration() { :; }
+            init_selected_submodules() { events="${events}submodules "; }
+            install_xdg_configs() { events="${events}xdg "; }
+            install_waypost_ready_shared_ai_agent_snapshot() {
+                SHARED_AI_AGENT_READY=1
+                events="${events}snapshot "
+            }
+            install_ai_agent_config() { events="${events}ai-agent "; }
+            install_snapshot_dependent_ai_configs() { events="${events}clients "; }
+            main --skip home,xdg,bin,serena >/dev/null
+            printf "%s\\n" "$events"
+        ' _ "$REPO_ROOT"
+    )" || fail_test "full installation with --skip xdg failed"
+
+    [[ "$events" == *"ai-agent "* ]] \
+        || fail_test "--skip xdg omitted the enabled AI agent config: $events"
+    [[ "$events" != *"xdg "* ]] \
+        || fail_test "--skip xdg ran XDG configs: $events"
+}
+
+test_skip_ai_skills_omits_skill_links() {
+    local case_dir="$TEST_ROOT/skip-ai-skills"
+
+    mkdir -p "$case_dir/home"
+    HOME="$case_dir/home" \
+        bash -c '
+            source "$1/install.sh"
+            parse_args --skip ai-skills
+            skill_links=0
+            install_claude_skills() { skill_links=1; }
+            link_shared_ai_agent_item() { :; }
+            remove_obsolete_waypost_launchers() { :; }
+            ensure_waypost_mcp_command() { :; }
+            install_claude_waypost_mcp() { :; }
+            install_claude_config >/dev/null
+            [[ $skill_links -eq 0 ]]
+        ' _ "$REPO_ROOT" \
+        || fail_test "--skip ai-skills installed Claude skill links"
+}
+
 test_selected_submodule_paths_follow_components() {
     local submodule_path
 
@@ -2919,6 +3066,11 @@ test_zshrc_uses_managed_copy_merge
 test_shell_configs_clean_path
 test_bashrc_preserves_ambient_node_when_loading_nvm
 test_component_selection_parsing
+test_component_skip_parsing
+test_skip_rejects_only_and_all
+test_full_skip_omits_selected_sections
+test_full_skip_xdg_keeps_ai_agent_config
+test_skip_ai_skills_omits_skill_links
 test_selected_submodule_paths_follow_components
 test_partial_home_and_xdg_initialize_submodules_before_copy
 test_partial_submodule_failure_skips_gitlink_configs_and_continues

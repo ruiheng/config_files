@@ -57,6 +57,7 @@ Options:
   --force           Backup and replace existing files
   --interactive, -i Prompt when target exists (asks: skip/backup/replace/all)
   --only PARTS      Install only selected comma-separated sections
+  --skip PARTS      Skip selected comma-separated sections
   --ai-skills       Install/update AI skills only
   --no-color        Disable colored output
   --help, -h        Show help message
@@ -73,6 +74,11 @@ items continue.
 `ai-skills` only updates the shared snapshot at
 `$XDG_DATA_HOME/config_files/ai-agent` (or
 `$HOME/.local/share/config_files/ai-agent`) and per-agent skill links.
+
+`--skip` can also be repeated and accepts `home`, `xdg`, `bin`, `ai`,
+`ai-skills`, or `serena`. It keeps the full-install tool/CLI bootstrap while
+omitting those sections. It cannot be combined with `--only`; skipping `ai`
+also skips `ai-skills`.
 
 `install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `fd`, `fzf`, `git`, `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. Debian/Ubuntu installs the `fd-find` package and creates a `~/.local/bin/fd` compatibility link. It installs Oh My Zsh with the configured Spaceship theme, `spaceship-vi-mode`, and `zsh-autocomplete`. It also installs `lazygit` from Homebrew or a checksum-verified official release, `uv` from Astral's official installer, Bun from its official npm package, and [`mq`](https://mqlang.org), a jq-like Markdown processor. Unsupported lazygit architectures are reported and skipped without blocking config deployment. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone. When the official Tree-sitter CLI binary is unusable, it ensures the current Rust stable toolchain and libclang before building from source.
 
@@ -110,6 +116,9 @@ Options:
 
 # Install selected configuration sections
 ./install.sh --only home,xdg
+
+# Full install except selected sections
+./install.sh --skip xdg,serena
 
 # No color output (for scripts or logging)
 ./install.sh --no-color
