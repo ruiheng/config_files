@@ -26,17 +26,18 @@ Do not make the requester invent a proposal merely to obtain review.
 
 - requester: starts the workflow and owns user-facing handoff
 - architect-author: inspects the repository, writes draft rounds, handles reviewer dialogue, and sends the final pointer
-- architect-reviewer: independently reviews exact snapshots, never edits them, and stops at the review limit
+- architect-reviewer: independently reviews the requested round without editing it and stops at the review limit
 
 In draft-review, author and reviewer are separate sibling sessions. The reviewer normally replies to the author; limit decisions are user-gated.
 
-## Immutable Draft Contract
+## Dispatched Draft Round Contract
 
 Write rounds under .agent-artifacts/tech-design/<author_session_id>/rNNN.md.
 
 - only the author writes this directory
-- a round may be edited until its review request is sent; after sending, never modify or replace that file
-- each revision uses the next monotonically numbered file; never reuse a round, and review only the exact named path
+- r001 is complete; for every later round, copy the preceding file to the next path before editing it. Every delivered round must remain a complete, self-contained design, never a delta, diff, or dependency on a prior round
+- a round may be edited until its review request is sent; afterward leave it unchanged and write revisions in later numbered rounds
+- number revisions monotonically; the named artifact path identifies the round under review
 - drafting must not change Git state or workspace ownership
 
 .agent-artifacts/ must remain ignored. Stop if it is tracked or the artifact path is outside the shared workspace.
@@ -155,15 +156,15 @@ On tech_design_draft_requested:
 
 1. recover the requester, reviewer, round, maximum, artifact path, archive branch, and optional review focus
 2. inspect relevant repository state and user-aligned context
-3. write a proportional, implementation-ready design that passes Design Content Gate to the named round file
+3. write the complete, proportional, implementation-ready design to the named round file, following Dispatched Draft Round Contract and Design Content Gate
 4. ensure accepted constraints and rationale live in the artifact, not only in messages
-5. send the exact artifact to the recorded reviewer, stop editing it, then return under the Async sender rule
+5. send the named artifact to the recorded reviewer, leave it unchanged, then return under the Async sender rule
 6. handle later tech_design_review_report deliveries until accepted or a user-owned decision is required
 7. after acceptance, send the terse final notification; do not archive or commit the design
 
 Do not ask the requester to supply technical design content that repository inspection and engineering judgment can resolve.
 
-Treat a later tech_design_draft_requested as a decision or constraint delta: reuse the lane and create the next immutable round. A continued review arrives as a normal report with its updated maximum.
+Treat a later tech_design_draft_requested as a decision or constraint delta: reuse the lane and create the next numbered round. A continued review arrives as a normal report with its updated maximum.
 
 ## Review-Existing Start
 
@@ -205,8 +206,8 @@ Max Review Rounds: <max_review_rounds>
 
 ## Review Target
 [Use exactly one form]
-- Mode: immutable-artifact
-- Artifact: <exact .agent-artifacts/tech-design/<author_session_id>/rNNN.md path>
+- Mode: draft-round
+- Artifact: <named .agent-artifacts/tech-design/<author_session_id>/rNNN.md path>
 
 or
 
@@ -241,9 +242,9 @@ After the accepted design becomes authoritative, report only final design path(s
 
 The session that sent the request handles every review report. A report received after user-approved continuation resumes the same lane with its updated maximum.
 
-- NEEDS_INPUT: correct the reported input and resend with enough context; never mutate a valid dispatched artifact/commit
+- NEEDS_INPUT: correct the reported input and resend with enough context; do not change a valid dispatched artifact/commit
 - NEEDS_REVISION: preserve Max Review Rounds, revise, and request the next round
-  - draft: create the next numbered artifact; never edit the reviewed one
+  - draft: copy the reviewed artifact to the next numbered path, revise that copy, and leave the reviewed one unchanged
   - existing: update and commit the docs on the same design branch
 - SOUND: accept
 - SOUND_WITH_CAVEATS: accept only if every accepted caveat is non-blocking and already recorded in the reviewed artifact/commit; otherwise revise and re-review
@@ -321,7 +322,7 @@ On tech_design_decision_requested, follow Decision Response; do not edit the art
 
 On tech_design_delivered:
 
-1. verify the artifact exists and the report pointer records acceptance of that exact path
+1. verify the artifact exists and the report pointer records acceptance of that named path
 2. if a committed formal doc on the archive branch already represents the accepted design, reuse it and continue with session cleanup and completion
 3. require the current branch to equal the delivered archive branch; stop on mismatch or detached HEAD and do not switch automatically
 4. require a clean index and no merge, rebase, or conflict state; do not clean unrelated worktree changes

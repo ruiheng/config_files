@@ -57,6 +57,7 @@ Options:
   --force           Backup and replace existing files
   --interactive, -i Prompt when target exists (asks: skip/backup/replace/all)
   --only PARTS      Install only selected comma-separated sections
+  --skip PARTS      Skip selected comma-separated sections
   --ai-skills       Install/update AI skills only
   --no-color        Disable colored output
   --help, -h        Show help message
@@ -75,6 +76,11 @@ items continue.
 `$HOME/.local/share/config_files/ai-agent`) and per-agent skill links.
 `ai-skills` does not require Waypost; Waypost setup only controls optional MCP
 configuration changes.
+
+`--skip` can also be repeated and accepts `home`, `xdg`, `bin`, `ai`,
+`ai-skills`, or `serena`. It keeps the full-install tool/CLI bootstrap while
+omitting those sections. It cannot be combined with `--only`; skipping `ai`
+also skips `ai-skills`.
 
 `install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `fd`, `fzf`, `git`, `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. Debian/Ubuntu installs the `fd-find` package and creates a `~/.local/bin/fd` compatibility link. It installs Oh My Zsh with the configured Spaceship theme, `spaceship-vi-mode`, and `zsh-autocomplete`. It also installs `lazygit` from Homebrew or a checksum-verified official release, `uv` from Astral's official installer, Bun from its official npm package, and [`mq`](https://mqlang.org), a jq-like Markdown processor. Unsupported lazygit architectures are reported and skipped without blocking config deployment. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone. When the official Tree-sitter CLI binary is unusable, it ensures the current Rust stable toolchain and libclang before building from source.
 
@@ -112,6 +118,9 @@ Options:
 
 # Install selected configuration sections
 ./install.sh --only home,xdg
+
+# Full install except selected sections
+./install.sh --skip xdg,serena
 
 # No color output (for scripts or logging)
 ./install.sh --no-color
@@ -267,7 +276,7 @@ Keep shared defaults in the repository and put machine-specific values in local 
 
 - Git loads `~/.gitconfig.local` after [`gitconfig.unix`](./gitconfig.unix). A sample is provided at [`gitconfig.local.example`](./gitconfig.local.example).
 - Coc can merge [`nvim/coc-settings.json`](./nvim/coc-settings.json) with an ignored local file at [`nvim/coc-settings.local.json`](./nvim/coc-settings.local.example.json). This is useful for per-machine proxies or other local-only settings.
-- AI workflow tool defaults live in [`ai-agent/config/tool-profiles.toml`](./ai-agent/config/tool-profiles.toml). Override roles or candidate commands locally with `~/.config/ai-agent/config/tool-profiles.local.toml`; add `tool-profiles.local.toml` in the current working directory for project-specific overrides. Current-directory overrides win.
+- AI workflow tool defaults live in [`ai-agent/config/tool-profiles.toml`](./ai-agent/config/tool-profiles.toml). Override roles or candidates locally with `~/.config/ai-agent/config/tool-profiles.local.toml`; add `tool-profiles.local.toml` in the current working directory for project-specific overrides. Current-directory overrides win. A candidate may be a legacy command string or a table with `command` and an optional `startup_message`. With `--show-list`, the resolver returns candidates with configured fields; absent `startup_message` is omitted.
 
 Example:
 
@@ -277,10 +286,13 @@ reviewer = 'reviewer_local'
 
 [profiles.reviewer_local]
 strategy = 'ordered'
-candidates = [
-  'codex --model gpt-5.5 -c model_reasoning_effort=medium --ask-for-approval on-request',
-  'claude --model sonnet --permission-mode acceptEdits',
-]
+
+[[profiles.reviewer_local.candidates]]
+command = 'codex --model gpt-5.5 -c model_reasoning_effort=medium --ask-for-approval on-request'
+startup_message = 'Follow the review workflow. Wait for the review request before acting.'
+
+[[profiles.reviewer_local.candidates]]
+command = 'claude --model sonnet --permission-mode acceptEdits'
 ```
 
 2. **Interactive Mode**: Use `--interactive` (or `-i`) to be prompted when a target exists:

@@ -14,12 +14,12 @@ Determine mode from the input, not session metadata:
 - message mode: a Waypost body with Action: tech_design_review_requested
 - direct-use mode: every other invocation
 
-Message mode requires one exact snapshot:
+Message mode requires one named review target:
 
-- immutable-artifact: the exact .agent-artifacts/.../rNNN.md path in the request
+- draft-round: one complete, self-contained .agent-artifacts/.../rNNN.md file named in the request
 - committed-docs: the stated docs at the stated branch commit
 
-In direct-use mode, review the exact readable target named by the user. Use available problem, goals, and constraints.
+In direct-use mode, review the readable target named by the user. Use available problem, goals, and constraints.
 
 ## Review Limit
 
@@ -47,19 +47,20 @@ This is not code review. Judge reasonableness as well as correctness; prefer rem
 
 ## Baseline Gate
 
-Require a readable exact review target and enough problem framing to judge it.
+Require a readable, self-contained review target and enough problem framing to judge it.
 
 - direct-use mode: ask one short clarification question when either is missing
 - message mode: use NEEDS_INPUT only when the request cannot identify/read the target or lacks request-owned context required to judge it; list the missing input under Findings and never ask the user
 
-Use NEEDS_REVISION for material design omissions, including gaps that make the proposal unjudgeable.
+Use NEEDS_REVISION for material design omissions, including gaps that make the proposal unjudgeable or a draft round that relies on an earlier round, a diff, or an “unchanged” reference.
 
 ## Snapshot Inspection
 
-For immutable-artifact:
+For draft-round:
 
-- review only the named file as the authoritative design round
-- do not edit it or substitute a newer file
+- review the named file as the requested design round
+- do not edit it or switch to a newer round
+- require it to contain the full current design; use prior rounds only to compare changes, never to supply missing design content
 - repository inspection may validate claims, but must not change the reviewed target
 - on later rounds, compare against the prior artifact from this session's report or Waypost history when useful
 
@@ -88,7 +89,7 @@ Max Review Rounds: <max_review_rounds>
 
 ## Reviewed Scope
 [Use the applicable form. With NEEDS_INPUT, include resolved scope and mark missing fields.]
-- Mode: immutable-artifact
+- Mode: draft-round
 - Artifact: .agent-artifacts/.../rNNN.md
 
 or

@@ -13,9 +13,11 @@ Use this reference only before creating a new Agent Deck session.
 
   Omit `--profile` when none is set.
 - `<target_workdir>` is the same workdir passed to `agent_deck_create_session`.
-- Record the resolved profile as `*_tool_profile`, command as `*_tool_cmd`, and ordered `tool_cmds` for this creation.
-- If creation rejects a profile-resolved command and `tool_cmds[1]` exists, replace `*_tool_cmd` with it and retry the same `agent_deck_create_session` once. Keep its other arguments unchanged; if the retry fails, surface the error.
+- JSON includes ordered `tool_candidates`. Each has `command` and its configured fields; `startup_message` is absent when not configured.
+- Record the chosen profile as `*_tool_profile`, command as `*_tool_cmd`, and optional candidate `startup_message` as `*_tool_startup_message`.
+- For a new profile-resolved session, pass the optional `*_tool_startup_message` as `startup_instruction`. If the action owns another startup instruction, put the profile message first, then the action message, separated by one blank line. Do not add a startup instruction when neither exists.
+- Use candidates in order. If creation rejects the first profile-resolved candidate and another exists, retry once with the next candidate and its optional startup message; otherwise surface the error.
 - Pass `--workdir` for the target session. Pass `--target-path <PATH>` only when its PATH is known.
-- Static checking does not run commands. Filter only trusted-context misses; retain dispatcher-/command-path misses in `tool_cmds` as `unverified_tool_cmds`, and preserve `unavailable_tool_cmds` as diagnostics.
+- Static checking does not run commands. Filter only trusted-context misses; retain dispatcher-/command-path misses in `tool_candidates` as `unverified_tool_cmds`, and preserve `unavailable_tool_cmds` as diagnostics.
 - Local profile candidates replace by default. Set `merge = "prepend"` or `merge = "append"` with `candidates` to extend the prior list.
 - The action skill owns the role, parent, workspace, reuse policy, and create/require choice.

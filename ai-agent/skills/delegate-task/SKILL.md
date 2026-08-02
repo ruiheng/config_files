@@ -45,7 +45,7 @@ When another action owns dispatch, use the selection rules above and stop before
 
 ## Select Transport
 
-- **Direct session:** no addressable requester session, or the user wants to work with the session directly. Start a fresh worker with its task contract as `startup_instruction`. The user observes and steers it in Agent Deck; no automatic Waypost return is expected. Code is allowed only for explicit user-owned direct delivery.
+- **Direct session:** no addressable requester session, or the user wants to work with the session directly. Start a fresh worker with its task contract as the workflow startup instruction; the shared tool-resolution contract prepends an optional profile startup message. The user observes and steers it in Agent Deck; no automatic Waypost return is expected. Code is allowed only for explicit user-owned direct delivery.
 - **Waypost worker:** an addressable requester session exists and later coordination or a returned result is needed. Send `execute_delegated_task`; the worker returns `delegated_task_result`. This is non-code only.
 
 Do not invent a requester address. For a direct continuation, surface the existing session and let the user steer it there rather than injecting a second task from this session.
@@ -78,7 +78,7 @@ Resolve a command only when creating a worker: explicit full command -> intended
 
 ## Task Contract
 
-Use this for a direct `startup_instruction`; prepend the Waypost envelope below for a Waypost worker. For a temporary worktree, include its cleanup owner and workspace.
+Use this as the direct workflow startup instruction; prepend the Waypost envelope below for a Waypost worker. The shared tool-resolution contract prepends an optional profile startup message. For a temporary worktree, include its cleanup owner and workspace.
 
 ```markdown
 ## Objective
@@ -145,12 +145,12 @@ Round: 1
 
    - require `shared; cleanup=none`; a temporary lifecycle must use a Waypost worker
    - found: call `agent_deck_require_session` with its real id and workspace; report it for the user to continue
-   - absent: resolve its tool command, then call `agent_deck_create_session` with `ensure_title`, `ensure_cmd`, `workdir`, `no_parent_link = true`, and `startup_instruction = <task contract>`
+   - absent: resolve its tool command by the shared tool-resolution contract, then call `agent_deck_create_session` with `ensure_title`, `ensure_cmd`, `workdir`, `no_parent_link = true`, and `startup_instruction = <optional tool startup message followed by task contract>`
 
 3. For a Waypost worker:
 
    - found: call `agent_deck_require_session` with its real id and workspace
-   - absent: resolve its tool command, then call `agent_deck_create_session` with `ensure_title`, `ensure_cmd`, `workdir`, `parent_session_id = <requester_session_id>`, `group_path = <requester group; empty for root>`, and `no_parent_link = false`; leave `startup_instruction` empty
+   - absent: resolve its tool command by the shared tool-resolution contract, then call `agent_deck_create_session` with `ensure_title`, `ensure_cmd`, `workdir`, `parent_session_id = <requester_session_id>`, `group_path = <requester group; empty for root>`, `no_parent_link = false`, and the optional resolved `startup_instruction`; do not add workflow task text there
    - fill `{{TO_SESSION_ID}}`, then call `waypost_send` from `agent-deck/<requester_session_id>` to `agent-deck/<worker_session_id>`, subject `delegate: <task_id> -> worker`
    - follow the shared Async sender rule
 
