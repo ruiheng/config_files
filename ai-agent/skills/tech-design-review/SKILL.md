@@ -14,12 +14,12 @@ Determine mode from the input, not session metadata:
 - message mode: a Waypost body with Action: tech_design_review_requested
 - direct-use mode: every other invocation
 
-Message mode requires one exact snapshot:
+Message mode requires one named review target:
 
-- immutable-artifact: the exact .agent-artifacts/.../rNNN.md path in the request
+- draft-round: the named .agent-artifacts/.../rNNN.md path in the request
 - committed-docs: the stated docs at the stated branch commit
 
-In direct-use mode, review the exact readable target named by the user. Use available problem, goals, and constraints.
+In direct-use mode, review the readable target named by the user. Use available problem, goals, and constraints.
 
 ## Review Limit
 
@@ -56,10 +56,10 @@ Use NEEDS_REVISION for material design omissions, including gaps that make the p
 
 ## Snapshot Inspection
 
-For immutable-artifact:
+For draft-round:
 
-- review only the named file as the authoritative design round
-- do not edit it or substitute a newer file
+- review the named file as the requested design round
+- do not edit it or switch to a newer round
 - repository inspection may validate claims, but must not change the reviewed target
 - on later rounds, compare against the prior artifact from this session's report or Waypost history when useful
 
@@ -88,7 +88,7 @@ Max Review Rounds: <max_review_rounds>
 
 ## Reviewed Scope
 [Use the applicable form. With NEEDS_INPUT, include resolved scope and mark missing fields.]
-- Mode: immutable-artifact
+- Mode: draft-round
 - Artifact: .agent-artifacts/.../rNNN.md
 
 or
