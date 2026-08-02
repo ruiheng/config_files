@@ -27,6 +27,7 @@ readonly MANAGED_PATHS_FILE="$CONFIG_FILES_STATE_DIR/managed-paths"
 readonly MANAGED_COPIES_DIR="$CONFIG_FILES_STATE_DIR/managed-copies"
 readonly SHARED_INSTALL_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/config_files"
 readonly SHARED_AI_AGENT_DIR="$SHARED_INSTALL_ROOT/ai-agent"
+readonly SHARED_AGENT_SKILLS_DIR="$HOME/.agents/skills"
 
 # Command line flags
 DRY_RUN=0
@@ -50,6 +51,7 @@ ALL_REPLACE=0
 AGENT_DECK_AVAILABLE=0
 WAYPOST_MCP_AVAILABLE=0
 WAYPOST_CONFIG_SWITCH_READY=0
+SHARED_AGENT_SKILLS_DIR_READY=0
 CODEX_SKILLS_DIR_READY=0
 CLAUDE_CODE_AVAILABLE=0
 CODEX_CLI_AVAILABLE=0
@@ -1738,17 +1740,6 @@ install_shared_ai_agent_snapshot() {
     return 0
 }
 
-install_waypost_ready_shared_ai_agent_snapshot() {
-    SHARED_AI_AGENT_READY=0
-
-    if [[ $WAYPOST_CONFIG_SWITCH_READY -ne 1 ]]; then
-        log_warn "Skipping shared AI agent snapshot; Waypost preparation did not complete"
-        return 0
-    fi
-
-    install_shared_ai_agent_snapshot
-}
-
 link_path() {
     local src="$1"
     local dst="$2"
@@ -3261,9 +3252,8 @@ install_ast_grep() {
 
 install_ast_grep_skill() {
     # skills uses the shared directory as Codex's global canonical path.
-    local shared_skills_dir="$HOME/.agents/skills"
+    local shared_skills_dir="$SHARED_AGENT_SKILLS_DIR"
     local shared_skill_file="$shared_skills_dir/ast-grep/SKILL.md"
-    local codex_skill_file="$HOME/.codex/skills/ast-grep/SKILL.md"
     local -a skill_cmd=(
         npx --yes skills add https://github.com/ast-grep/agent-skill
         --global --agent codex --yes
@@ -3276,7 +3266,7 @@ install_ast_grep_skill() {
         return 0
     fi
 
-    if [[ -f "$shared_skill_file" || -f "$codex_skill_file" ]]; then
+    if [[ -f "$shared_skill_file" ]]; then
         log_ok "Found ast-grep skill"
         return 0
     fi
@@ -3302,7 +3292,7 @@ install_ast_grep_skill() {
         return 1
     fi
 
-    if [[ -f "$shared_skill_file" || -f "$codex_skill_file" ]]; then
+    if [[ -f "$shared_skill_file" ]]; then
         log_ok "Installed ast-grep skill"
         return 0
     fi
@@ -5165,7 +5155,7 @@ install_skills_individually() {
 
     if [[ $missing_only -eq 1 ]]; then
         log_info "Installing missing $tool_name skills..."
-        if [[ ! -d "$tool_skills_dir" ]] && [[ ! -L "$tool_skills_dir" ]]; then
+        if ! skills_directory_is_available "$tool_skills_dir"; then
             log_error "$tool_name skills path is missing: $tool_skills_dir"
             return 1
         fi
@@ -5206,6 +5196,18 @@ install_skills_individually() {
             fi
         done
     fi
+}
+
+skills_directory_is_available() {
+    local skills_dir="$1"
+
+    if [[ -d "$skills_dir" ]] || [[ -L "$skills_dir" ]]; then
+        return 0
+    fi
+
+    [[ $DRY_RUN -eq 1 ]] \
+        && [[ "$skills_dir" == "$SHARED_AGENT_SKILLS_DIR" ]] \
+        && [[ $SHARED_AGENT_SKILLS_DIR_READY -eq 1 ]]
 }
 
 install_claude_skills() {
@@ -5251,29 +5253,32 @@ install_claude_config() {
     remove_obsolete_waypost_launchers
 }
 
-cleanup_gemini_duplicate_skill_links() {
-    local gemini_skills_dir="$1"
+cleanup_duplicate_skill_links() {
+    local tool_name="$1"
+    local duplicate_skills_dir="$2"
     local src_skills_dir="$SCRIPT_DIR/ai-agent/skills"
 
-    if [[ ! -d "$gemini_skills_dir" ]]; then
+    if [[ ! -d "$duplicate_skills_dir" ]]; then
         return 0
     fi
 
-    cleanup_dead_skill_links "Gemini CLI" "$gemini_skills_dir"
+    cleanup_dead_skill_links "$tool_name" "$duplicate_skills_dir"
 
     for skill_dir in "$src_skills_dir"/*; do
         if [[ -d "$skill_dir" ]]; then
             local skill_name
             skill_name=$(basename "$skill_dir")
-            local target_link="$gemini_skills_dir/$skill_name"
+            local target_link="$duplicate_skills_dir/$skill_name"
 
-            # Remove only symlink entries to avoid deleting user-managed directories/files.
-            if [[ -L "$target_link" ]]; then
+            # Remove only links created by this installer.
+            if [[ -L "$target_link" ]] \
+                && { symlink_points_to "$target_link" "$src_skills_dir/$skill_name" \
+                    || symlink_points_to "$target_link" "$SHARED_AI_AGENT_DIR/skills/$skill_name"; }; then
                 if [[ $DRY_RUN -eq 1 ]]; then
-                    log_dry "Would remove duplicate Gemini skill link: $target_link"
+                    log_dry "Would remove duplicate $tool_name skill link: $target_link"
                 else
                     rm "$target_link"
-                    log_info "Removed duplicate Gemini skill link: $target_link"
+                    log_info "Removed duplicate $tool_name skill link: $target_link"
                 fi
             fi
         fi
@@ -5302,16 +5307,17 @@ has_shared_gemini_skill_conflicts() {
 }
 
 install_gemini_skills() {
-    local agents_skills_dir="$HOME/.agents/skills"
+    local agents_skills_dir="$SHARED_AGENT_SKILLS_DIR"
     local gemini_skills_dir="$HOME/.gemini/skills"
 
     # Newer Gemini setup may load skills from ~/.agents/skills.
     # Installing duplicates in ~/.gemini/skills triggers skill conflict warnings.
-    if has_shared_gemini_skill_conflicts "$agents_skills_dir"; then
+    if [[ $SHARED_AGENT_SKILLS_DIR_READY -eq 1 ]] \
+        || has_shared_gemini_skill_conflicts "$agents_skills_dir"; then
         log_info "Detected shared Gemini skills path: $agents_skills_dir"
         install_skills_individually "Gemini shared" "$agents_skills_dir" 1 || return 1
         log_warn "Skipping Gemini skill links under $gemini_skills_dir to avoid duplicate skill conflicts"
-        cleanup_gemini_duplicate_skill_links "$gemini_skills_dir"
+        cleanup_duplicate_skill_links "Gemini" "$gemini_skills_dir"
         return 0
     fi
 
@@ -5396,15 +5402,37 @@ install_gemini_config() {
 }
 
 install_codex_skills() {
-    local codex_skills_dir="$HOME/.codex/skills"
+    local codex_skills_dir="$SHARED_AGENT_SKILLS_DIR"
+    local legacy_codex_skills_dir="$HOME/.codex/skills"
+    local status=0
 
+    SHARED_AGENT_SKILLS_DIR_READY=0
     CODEX_SKILLS_DIR_READY=0
     if ! prepare_skills_target_dir "Codex" "$codex_skills_dir"; then
         return 0
     fi
 
+    SHARED_AGENT_SKILLS_DIR_READY=1
     CODEX_SKILLS_DIR_READY=1
-    install_skills_individually "Codex" "$codex_skills_dir" 0 1
+    install_skills_individually "Codex" "$codex_skills_dir" 0 1 || status=1
+
+    # Codex also discovers ~/.agents/skills. Remove only old installer links
+    # from the legacy path so the same skill is not exposed twice.
+    if [[ -L "$legacy_codex_skills_dir" ]]; then
+        if symlink_points_to "$legacy_codex_skills_dir" "$SCRIPT_DIR/ai-agent/skills" \
+            || symlink_points_to "$legacy_codex_skills_dir" "$SHARED_AI_AGENT_DIR/skills"; then
+            if [[ $DRY_RUN -eq 1 ]]; then
+                log_dry "Would remove legacy Codex skills directory: $legacy_codex_skills_dir"
+            else
+                rm "$legacy_codex_skills_dir"
+                log_info "Removed legacy Codex skills directory: $legacy_codex_skills_dir"
+            fi
+        fi
+    else
+        cleanup_duplicate_skill_links "Codex legacy" "$legacy_codex_skills_dir" || status=1
+    fi
+
+    return "$status"
 }
 
 ensure_codex_tui_usage_limit_resume_prompt() {
@@ -5422,11 +5450,11 @@ install_all_ai_skills() {
     local status=0
 
     log_info "Installing AI skills only..."
+    install_codex_skills || status=1
     install_claude_skills || status=1
     install_gemini_skills || status=1
     install_antigravity_skills || status=1
     install_kiro_skills || status=1
-    install_codex_skills || status=1
     install_opencode_skills || status=1
 
     return "$status"
@@ -5582,12 +5610,12 @@ install_snapshot_dependent_ai_configs() {
         return 0
     fi
 
+    # Codex prepares the shared ~/.agents/skills path used by Gemini.
+    run_best_effort "Codex config" install_codex_config
     run_best_effort "Claude config" install_claude_config
     run_best_effort "Gemini config" install_gemini_config
     run_best_effort "Antigravity config" install_antigravity_config
     run_best_effort "Kiro config" install_kiro_config
-    run_best_effort "Codex config" install_codex_config
-    # This installer depends on the Codex skills directory prepared above.
     run_best_effort "ast-grep skill" install_ast_grep_skill
     run_best_effort "OpenCode config" install_opencode_config
     return 0
@@ -5624,8 +5652,7 @@ install_selected_components() {
     log_info "Installing selected sections: $(selected_components_label)"
 
     if component_is_selected "xdg" \
-        || component_is_selected "ai" \
-        || component_is_selected "ai-skills"; then
+        || component_is_selected "ai"; then
         run_best_effort "Waypost preparation" prepare_waypost_config_switch
     fi
 
@@ -5648,7 +5675,7 @@ install_selected_components() {
 
     if component_is_selected "ai" || component_is_selected "ai-skills"; then
         run_best_effort "Shared AI agent snapshot" \
-            install_waypost_ready_shared_ai_agent_snapshot
+            install_shared_ai_agent_snapshot
         if [[ $SHARED_AI_AGENT_READY -eq 1 ]]; then
             detect_installed_agent_deck
             run_best_effort "AI skills" install_all_ai_skills
@@ -6037,7 +6064,7 @@ main() {
     fi
 
     run_best_effort "Shared AI agent snapshot" \
-        install_waypost_ready_shared_ai_agent_snapshot
+        install_shared_ai_agent_snapshot
 
     # Install configs
     run_best_effort "Home configs" \

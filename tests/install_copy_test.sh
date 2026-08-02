@@ -164,35 +164,26 @@ test_waypost_preparation_requires_explicit_migration() {
         || fail_test "Waypost prerequisites did not gate client configuration switching"
 }
 
-test_waypost_preparation_gates_dependent_assets() {
-    local case_dir="$TEST_ROOT/waypost-asset-gate"
+test_waypost_is_optional_for_ai_skills() {
+    local case_dir="$TEST_ROOT/waypost-optional-ai-skills"
 
     mkdir -p "$case_dir/home" "$case_dir/state/ai-agent/mailbox"
     HOME="$case_dir/home" \
         XDG_STATE_HOME="$case_dir/state" \
         XDG_DATA_HOME="$case_dir/data" \
-        MIGRATION_CALLED="$case_dir/migration-called" \
-        COPY_CALLED="$case_dir/copy-called" \
         SNAPSHOT_CALLED="$case_dir/snapshot-called" \
         SKILLS_CALLED="$case_dir/skills-called" \
         SERENA_CALLED="$case_dir/serena-called" \
         bash -c '
+            set -e
             source "$1/install.sh"
             USE_COLOR=0
             RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
 
             WAYPOST_CONFIG_SWITCH_READY=0
-            SHARED_AI_AGENT_READY=1
-            install_copy() { touch "$COPY_CALLED"; }
-            install_ai_agent_config
-            install_waypost_ready_shared_ai_agent_snapshot
-            [[ $SHARED_AI_AGENT_READY -eq 0 ]]
-            [[ ! -e "$COPY_CALLED" ]]
-
             failed=0
             parse_args --only ai-skills,serena
-            ensure_waypost_mcp_command() { return 0; }
-            waypost() { touch "$MIGRATION_CALLED"; }
+            ensure_waypost_mcp_command() { return 1; }
             install_shared_ai_agent_snapshot() {
                 touch "$SNAPSHOT_CALLED"
                 SHARED_AI_AGENT_READY=1
@@ -201,15 +192,13 @@ test_waypost_preparation_gates_dependent_assets() {
             install_serena_config() { touch "$SERENA_CALLED"; }
 
             install_selected_components
-            [[ $failed -eq 1 ]]
-            [[ $SHARED_AI_AGENT_READY -eq 0 ]]
+            [[ $failed -eq 0 ]]
             [[ -d "$XDG_STATE_HOME/ai-agent/mailbox" ]]
-            [[ ! -e "$MIGRATION_CALLED" ]]
-            [[ ! -e "$SNAPSHOT_CALLED" ]]
-            [[ ! -e "$SKILLS_CALLED" ]]
+            [[ -e "$SNAPSHOT_CALLED" ]]
+            [[ -e "$SKILLS_CALLED" ]]
             [[ -e "$SERENA_CALLED" ]]
         ' _ "$REPO_ROOT" >/dev/null \
-        || fail_test "failed Waypost preparation allowed dependent AI assets to change"
+        || fail_test "Waypost availability incorrectly gated AI skills"
 }
 
 test_zsh_stack_gates_dependencies_after_core_failure() {
@@ -768,19 +757,14 @@ test_partial_ai_skills_detects_agent_deck_from_local_bin() {
 
 test_ai_skills_only_skips_unrelated_bootstrap() {
     local case_dir="$TEST_ROOT/ai-skills-only"
-    local fake_bin="$case_dir/bin"
+    local expected_shared_skills="$case_dir/home/.agents/skills"
     local output
 
-    mkdir -p "$fake_bin"
-    printf '%s\n' \
-        '#!/bin/sh' \
-        '[ "$1 $2" = "mcp --help" ]' > "$fake_bin/waypost"
-    chmod +x "$fake_bin/waypost"
     output="$(
         HOME="$case_dir/home" \
             XDG_STATE_HOME="$case_dir/state" \
             XDG_DATA_HOME="$case_dir/data" \
-            PATH="$fake_bin:/usr/bin:/bin" \
+            PATH="/usr/bin:/bin" \
             bash "$REPO_ROOT/install.sh" --dry-run --no-color --ai-skills
     )" || fail_test "--ai-skills dry run failed"
 
@@ -790,6 +774,14 @@ test_ai_skills_only_skips_unrelated_bootstrap() {
         || fail_test "--ai-skills did not update the shared AI snapshot"
     [[ "$output" == *"Installing Codex skills (individually)..."* ]] \
         || fail_test "--ai-skills did not update per-agent skill links"
+    [[ "$output" == *"Detected shared Gemini skills path: $expected_shared_skills"* ]] \
+        || fail_test "--ai-skills dry run did not route Gemini through the shared skills path"
+    [[ "$output" == *"Installing missing Gemini shared skills..."* ]] \
+        || fail_test "--ai-skills dry run did not plan shared Gemini skills"
+    [[ "$output" != *"Installing Gemini CLI skills (individually)..."* ]] \
+        || fail_test "--ai-skills dry run planned a duplicate Gemini skills path"
+    [[ "$output" != *"Checking built-in waypost MCP command..."* ]] \
+        || fail_test "--ai-skills unexpectedly required Waypost"
     [[ "$output" != *"Checking required CLI tools..."* ]] \
         || fail_test "--ai-skills ran the general CLI bootstrap"
     [[ "$output" != *"Initializing git submodules..."* ]] \
@@ -2904,7 +2896,7 @@ test_libclang_is_installed_when_missing() {
 test_best_effort_continues_and_counts_failures
 test_dry_run_summary_propagates_best_effort_failure
 test_waypost_preparation_requires_explicit_migration
-test_waypost_preparation_gates_dependent_assets
+test_waypost_is_optional_for_ai_skills
 test_zsh_stack_gates_dependencies_after_core_failure
 test_zsh_stack_readiness_gates_only_zshrc
 test_failed_zsh_clones_leave_retryable_targets

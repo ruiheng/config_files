@@ -73,6 +73,8 @@ items continue.
 `ai-skills` only updates the shared snapshot at
 `$XDG_DATA_HOME/config_files/ai-agent` (or
 `$HOME/.local/share/config_files/ai-agent`) and per-agent skill links.
+`ai-skills` does not require Waypost; Waypost setup only controls optional MCP
+configuration changes.
 
 `install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `fd`, `fzf`, `git`, `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. Debian/Ubuntu installs the `fd-find` package and creates a `~/.local/bin/fd` compatibility link. It installs Oh My Zsh with the configured Spaceship theme, `spaceship-vi-mode`, and `zsh-autocomplete`. It also installs `lazygit` from Homebrew or a checksum-verified official release, `uv` from Astral's official installer, Bun from its official npm package, and [`mq`](https://mqlang.org), a jq-like Markdown processor. Unsupported lazygit architectures are reported and skipped without blocking config deployment. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone. When the official Tree-sitter CLI binary is unusable, it ensures the current Rust stable toolchain and libclang before building from source.
 
@@ -167,9 +169,9 @@ The i3, niri, sway, waybar, and systemd paths are Linux-only. `install.sh` repor
 
 | Source | Target | Description |
 |--------|--------|-------------|
-| `ai-agent/skills/<skill>/` | `~/.codex/skills/<skill>/` | **Each skill linked individually** |
+| `ai-agent/skills/<skill>/` | `~/.agents/skills/<skill>/` | **Each skill linked individually** |
 
-**Note**: Codex skills are linked individually from the stable shared snapshot. A legacy link to this repository's `ai-agent/skills` directory is migrated automatically; unrelated user-managed links still require `--interactive` or `--force`.
+**Note**: Codex uses the shared `~/.agents/skills` directory so each skill has one global discovery path. Installer-managed entries under the legacy `~/.codex/skills` path are removed automatically; unrelated user-managed entries are preserved.
 
 ### Gemini CLI Configuration
 
