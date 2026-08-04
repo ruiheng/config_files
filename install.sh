@@ -11,6 +11,7 @@
 #   --only PARTS  Install only selected comma-separated sections
 #   --skip PARTS  Skip selected comma-separated sections
 #   --ai-skills   Install/update AI skills only
+#   --ai-rules     Install/update global AI authorization rules only
 #   --no-color    Disable colored output
 #   --help        Show this help message
 #
@@ -22,7 +23,9 @@ set -uo pipefail
 # =============================================================================
 
 # Script directory (where this script resides)
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=ai-agent/skills/agent-deck-workflow/scripts/waypost-permission-spec.sh
+source "$SCRIPT_DIR/ai-agent/skills/agent-deck-workflow/scripts/waypost-permission-spec.sh"
 readonly CONFIG_FILES_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/config_files"
 readonly MANAGED_PATHS_FILE="$CONFIG_FILES_STATE_DIR/managed-paths"
 readonly MANAGED_COPIES_DIR="$CONFIG_FILES_STATE_DIR/managed-copies"
@@ -53,12 +56,16 @@ ALL_REPLACE=0
 
 # Optional integration flags
 AGENT_DECK_AVAILABLE=0
-WAYPOST_MCP_AVAILABLE=0
 WAYPOST_CONFIG_SWITCH_READY=0
+AI_RULES_WAYPOST_PREREQUISITES=unknown
+CLAUDE_WAYPOST_CLI_MANIFEST_PERMISSIONS='[]'
+CLAUDE_WAYPOST_CLI_MANIFEST_PRESENT=0
+CLAUDE_WAYPOST_CLI_MANIFEST_TMP=""
 SHARED_AGENT_SKILLS_DIR_READY=0
 CODEX_SKILLS_DIR_READY=0
 CLAUDE_CODE_AVAILABLE=0
 CODEX_CLI_AVAILABLE=0
+CODEX_LEGACY_MCP_CLEANUP_PENDING=0
 NODE_NPM_AVAILABLE=0
 RUST_CARGO_PLANNED=0
 SHARED_AI_AGENT_READY=0
@@ -84,6 +91,7 @@ AGENT_DECK_INSTALL_SHA256="ea85297639d0c02ec61a89ac80d40f507a0c9096331c28b777c5a
 # Keep enough MCP time for Waypost operations.
 WAYPOST_MCP_TOOL_TIMEOUT_SEC=660
 WAYPOST_MCP_TOOL_TIMEOUT_MS=660000
+WAYPOST_CLI_RULE_MARKER="# Managed by config_files: Waypost read-only CLI permissions"
 
 WAYPOST_MCP_TOOL_NAMES=(
     agent_deck_create_session
@@ -136,6 +144,9 @@ normalize_install_component() {
         skills|ai_skills)
             printf '%s\n' "ai-skills"
             ;;
+        rules|ai_rules|agent_rules|agent-rules|waypost-rules|waypost_rules|waypost_cli_rules|waypost-cli-rules)
+            printf '%s\n' "ai-rules"
+            ;;
         *)
             printf '%s\n' "$1"
             ;;
@@ -144,7 +155,7 @@ normalize_install_component() {
 
 is_valid_install_component() {
     case "$1" in
-        all|home|xdg|bin|ai|ai-skills|serena)
+        all|home|xdg|bin|ai|ai-skills|ai-rules|serena)
             return 0
             ;;
         *)
@@ -165,7 +176,7 @@ add_install_component() {
     component="$(normalize_install_component "$1")"
     if [[ -z "$component" ]] || ! is_valid_install_component "$component"; then
         echo "Unknown install component: $1"
-        echo "Valid components: all, home, xdg, bin, ai, ai-skills, serena"
+        echo "Valid components: all, home, xdg, bin, ai, ai-skills, ai-rules, serena"
         exit 1
     fi
 
@@ -211,7 +222,7 @@ add_skipped_component() {
     if [[ -z "$component" ]] || ! is_valid_install_component "$component" \
         || [[ "$component" == "all" ]]; then
         echo "Unknown skip component: $1"
-        echo "Valid components to skip: home, xdg, bin, ai, ai-skills, serena"
+        echo "Valid components to skip: home, xdg, bin, ai, ai-skills, ai-rules, serena"
         exit 1
     fi
 
@@ -382,6 +393,10 @@ parse_args() {
                 add_install_component "ai-skills"
                 shift
                 ;;
+            --ai-rules|--agent-rules|--waypost-rules)
+                add_install_component "ai-rules"
+                shift
+                ;;
             --no-color)
                 USE_COLOR=0
                 RED='' GREEN='' YELLOW='' BLUE='' NC=''
@@ -411,10 +426,11 @@ Options:
   --force           Backup and replace existing files (be careful!)
   --interactive, -i Prompt when target exists (asks: skip/backup/replace/all)
   --only PARTS      Install only selected comma-separated sections (repeatable)
-                    Sections: home, xdg, bin, ai, ai-skills, serena, all
+                    Sections: home, xdg, bin, ai, ai-skills, ai-rules, serena, all
   --skip PARTS      Skip selected comma-separated sections (repeatable)
-                    Sections: home, xdg, bin, ai, ai-skills, serena
+                    Sections: home, xdg, bin, ai, ai-skills, ai-rules, serena
   --ai-skills       Alias for --only ai-skills
+  --ai-rules        Alias for --only ai-rules
   --no-color        Disable colored output
   --help, -h        Show this help message
 
@@ -423,6 +439,9 @@ checks. "home" and "xdg" initialize their required Git submodules first and
 continue if that fails, skipping only their submodule-backed configs. "ai"
 installs $XDG_CONFIG_HOME/ai-agent (or $HOME/.config/ai-agent) plus AI skills;
 "ai-skills" only updates the shared AI snapshot and per-agent skill links.
+"ai-rules" updates installer-managed authorization rules for Codex, Claude
+Code, Gemini CLI, and Antigravity without registering MCP servers or installing
+skills.
 --skip keeps the full-install bootstrap but omits the named sections; it
 cannot be combined with --only. Skipping "ai" also skips "ai-skills".
 
@@ -434,6 +453,7 @@ Examples:
   ./install.sh --only home,xdg  # Install selected config sections
   ./install.sh --skip xdg,serena # Full install except selected sections
   ./install.sh --ai-skills      # Install/update AI skills only
+  ./install.sh --ai-rules       # Install global AI authorization rules only
 EOF
 }
 
@@ -1850,12 +1870,88 @@ install_shared_ai_agent_snapshot() {
 
     SHARED_AI_AGENT_READY=0
     log_info "Installing shared agent assets..."
+    freeze_legacy_ai_rule_links || return 1
     if ! install_copy "ai-agent" "$dst"; then
         return 1
     fi
 
     SHARED_AI_AGENT_READY=1
     return 0
+}
+
+# Legacy installers linked authorization policy directly into the mutable
+# shared AI snapshot. Freeze only those exact links before refreshing that
+# snapshot, so selecting ai/ai-skills cannot silently change authorizations.
+# The frozen copy is adopted into normal managed-copy state and is later
+# updated only by the ai-rules component.
+freeze_legacy_ai_rule_link() {
+    local rule_file="$1"
+    local tmp_file
+
+    shift
+    [[ -L "$rule_file" ]] || return 0
+    symlink_points_to_any "$rule_file" "$@" || return 0
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        if [[ -f "$rule_file" ]]; then
+            log_dry "Would freeze legacy AI authorization link: $rule_file"
+        else
+            log_dry "Would remove dangling legacy AI authorization link: $rule_file"
+        fi
+        return 0
+    fi
+
+    # A dangling installer-owned link has no active policy to preserve. Remove
+    # the link before its target is recreated by the incoming shared snapshot.
+    if [[ ! -f "$rule_file" ]]; then
+        rm -f "$rule_file" || {
+            log_error "Failed to remove dangling legacy AI authorization link: $rule_file"
+            return 1
+        }
+        log_info "Removed dangling legacy AI authorization link: $rule_file"
+        return 0
+    fi
+
+    tmp_file="$(mktemp "$(dirname "$rule_file")/.ai-rules-freeze.XXXXXX")" || {
+        log_error "Failed to stage legacy AI authorization policy: $rule_file"
+        return 1
+    }
+    if ! cp -pL "$rule_file" "$tmp_file" || ! mv "$tmp_file" "$rule_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to freeze legacy AI authorization link: $rule_file"
+        return 1
+    fi
+
+    # Preserve the exact active bytes as the merge base. This avoids treating
+    # a frozen legacy policy as user-owned on the next ai-rules update.
+    if ! record_managed_copy_snapshot "$rule_file" "$rule_file" \
+        || ! record_managed_path "$rule_file"; then
+        log_error "Failed to adopt frozen AI authorization policy: $rule_file"
+        return 1
+    fi
+
+    log_info "Froze legacy AI authorization link: $rule_file"
+    return 0
+}
+
+freeze_legacy_ai_rule_links() {
+    local legacy_gemini_preserved_policy
+
+    legacy_gemini_preserved_policy="$SHARED_INSTALL_ROOT/ai-rules-preserved/gemini/policies/agent-deck-workflow.toml"
+
+    freeze_legacy_ai_rule_link \
+        "$HOME/.codex/rules/agent-deck-workflow.rules" \
+        "$SHARED_AI_AGENT_DIR/codex/rules/agent-deck-workflow.rules" \
+        "$SHARED_AI_AGENT_DIR/.codex/rules/agent-deck-workflow.rules" \
+        "$SCRIPT_DIR/ai-agent/codex/rules/agent-deck-workflow.rules" \
+        "$SCRIPT_DIR/ai-agent/.codex/rules/agent-deck-workflow.rules" || return 1
+    freeze_legacy_ai_rule_link \
+        "$HOME/.gemini/policies/agent-deck-workflow.toml" \
+        "$SHARED_AI_AGENT_DIR/gemini/policies/agent-deck-workflow.toml" \
+        "$SHARED_AI_AGENT_DIR/.gemini/policies/agent-deck-workflow.toml" \
+        "$SCRIPT_DIR/ai-agent/gemini/policies/agent-deck-workflow.toml" \
+        "$SCRIPT_DIR/ai-agent/.gemini/policies/agent-deck-workflow.toml" \
+        "$legacy_gemini_preserved_policy"
 }
 
 link_path() {
@@ -4091,28 +4187,128 @@ ensure_toml_literal_key() {
     return 0
 }
 
+waypost_find_git_project_root() {
+    local directory="$1"
+
+    # Keep the project boundary when Git itself is unavailable: a normal
+    # checkout has a .git directory and a linked worktree has a .git file.
+    # Do not treat an arbitrary cwd (notably $HOME) as a project merely
+    # because the installer was launched there.
+    while :; do
+        if [[ -d "$directory/.git" || -f "$directory/.git" ]]; then
+            printf '%s\n' "$directory"
+            return 0
+        fi
+        [[ "$directory" == "/" ]] && return 1
+        directory="$(dirname "$directory")"
+    done
+}
+
+waypost_global_rejected_roots() {
+    local project_root=""
+    local working_dir=""
+
+    # Never authorize a binary sourced from this mutable checkout. Also reject
+    # the actual root of another checkout: its PATH may put a project-local
+    # executable ahead of the installed Waypost command. Do not invoke `git`
+    # from that same PATH to discover the boundary; a project-controlled git
+    # wrapper or GIT_DIR could report an unrelated root.
+    working_dir="$(pwd -P)" || working_dir="$PWD"
+    printf '%s\0' "$SCRIPT_DIR"
+    project_root="$(waypost_find_git_project_root "$working_dir" 2>/dev/null || true)"
+    [[ -n "$project_root" ]] && printf '%s\0' "$project_root"
+}
+
+resolve_trusted_waypost_command() {
+    local rejected_root
+    local -a rejected_roots=()
+
+    while IFS= read -r -d '' rejected_root; do
+        rejected_roots+=("$rejected_root")
+    done < <(waypost_global_rejected_roots)
+
+    if ! waypost_rule_resolve_cli "${rejected_roots[@]}"; then
+        log_error "Cannot use Waypost for installer-managed authorization: $WAYPOST_RULE_RESOLVE_ERROR"
+        return 1
+    fi
+
+    return 0
+}
+
 ensure_waypost_mcp_command() {
-    if [[ $WAYPOST_MCP_AVAILABLE -eq 1 ]]; then
-        log_ok "waypost MCP command already available"
+    log_info "Checking built-in waypost MCP command..."
+
+    if ! resolve_trusted_waypost_command; then
+        log_info "Install Waypost outside the current project, then rerun the installer"
+        return 1
+    fi
+
+    if ! "$WAYPOST_RULE_COMMAND" mcp --help >/dev/null 2>&1; then
+        log_error "Installed Waypost does not expose the built-in MCP server"
+        log_info "Update Waypost so 'waypost mcp' is supported, then rerun the installer"
+        return 1
+    fi
+
+    log_ok "Found built-in Waypost MCP server: $WAYPOST_RULE_COMMAND mcp"
+    return 0
+}
+
+ensure_waypost_cli_command() {
+    log_info "Checking Waypost CLI for read-only permissions..."
+
+    if ! waypost_rule_state_dir >/dev/null; then
+        log_error "Waypost state directory must be absolute: ${WAYPOST_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-agent/waypost}"
+        return 1
+    fi
+
+    if ! resolve_trusted_waypost_command; then
+        log_info "Install Waypost outside the current project, then rerun the installer"
+        return 1
+    fi
+
+    if ! waypost_rule_validate_capabilities "$WAYPOST_RULE_COMMAND"; then
+        log_error "Installed Waypost does not support state-scoped read/list commands"
+        log_info "Update Waypost so 'waypost --state-dir PATH read|list' is supported, then rerun the installer"
+        return 1
+    fi
+
+    log_ok "Found Waypost CLI for read-only permissions: $WAYPOST_RULE_COMMAND"
+    return 0
+}
+
+ensure_ai_rules_renderer_dependencies() {
+    local dependency
+
+    for dependency in jq perl; do
+        if ! command -v "$dependency" &>/dev/null; then
+            log_error "Missing required command for AI authorization rules: $dependency"
+            log_info "Install $dependency, then rerun the installer"
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+ensure_waypost_authorization_prerequisites() {
+    ensure_ai_rules_renderer_dependencies \
+        && load_claude_waypost_cli_manifest \
+        && ensure_waypost_mcp_command \
+        && ensure_waypost_cli_command
+}
+
+prepare_ai_rules_waypost_prerequisites() {
+    if ! component_is_selected "ai-rules"; then
         return 0
     fi
 
-    log_info "Checking built-in waypost MCP command..."
-
-    if ! command -v waypost &>/dev/null; then
-        log_error "Missing required command: waypost"
-        log_info "Install or update waypost so 'waypost mcp' is available, then rerun the installer"
-        return 1
+    if ensure_waypost_authorization_prerequisites; then
+        AI_RULES_WAYPOST_PREREQUISITES=ready
+    else
+        AI_RULES_WAYPOST_PREREQUISITES=failed
+        log_warn "AI authorization prerequisites failed; existing authorization rules will be preserved"
     fi
 
-    if ! waypost mcp --help >/dev/null 2>&1; then
-        log_error "Installed waypost does not expose the built-in MCP server"
-        log_info "Update waypost so 'waypost mcp' is supported, then rerun the installer"
-        return 1
-    fi
-
-    WAYPOST_MCP_AVAILABLE=1
-    log_ok "Found built-in waypost MCP server: waypost mcp"
     return 0
 }
 
@@ -4158,6 +4354,265 @@ waypost_mcp_permissions_json() {
             split("\n")
             | map(select(length > 0) | ($prefix + . + $suffix))
         '
+}
+
+waypost_cli_commands() {
+    if [[ -z "$WAYPOST_RULE_COMMAND" ]]; then
+        log_error "Waypost CLI rules were requested before trusted command validation"
+        return 1
+    fi
+
+    waypost_rule_command_forms "$WAYPOST_RULE_COMMAND"
+}
+
+waypost_cli_state_dirs() {
+    waypost_rule_state_dirs
+}
+
+waypost_cli_readonly_prefixes_json() {
+    local waypost_path
+    local state_dir
+
+    local waypost_action
+    local prefixes_json='[]'
+
+    if [[ -z "$WAYPOST_RULE_COMMAND" ]]; then
+        log_error "Waypost CLI rules were requested before trusted command validation"
+        return 1
+    fi
+
+    while IFS= read -r -d '' waypost_path; do
+        while IFS= read -r -d '' state_dir; do
+            for waypost_action in read list; do
+                prefixes_json="$(jq -cn \
+                    --argjson prefixes "$prefixes_json" \
+                    --arg waypost_path "$waypost_path" \
+                    --arg state_dir "$state_dir" \
+                    --arg waypost_action "$waypost_action" \
+                    '$prefixes + [[$waypost_path, "--state-dir", $state_dir, $waypost_action]] | unique')" \
+                    || return 1
+            done
+        done < <(waypost_cli_state_dirs)
+    done < <(waypost_cli_commands)
+
+    printf '%s\n' "$prefixes_json"
+}
+
+write_generated_waypost_cli_file() {
+    local dst="$1"
+    local content="$2"
+    local client_name="$3"
+    local current_content=""
+    local action
+    local tmp_file
+
+    if [[ -e "$dst" || -L "$dst" ]]; then
+        if [[ -f "$dst" && ! -L "$dst" ]] \
+            && [[ "$(head -n 1 "$dst")" == "$WAYPOST_CLI_RULE_MARKER" ]]; then
+            current_content="$(<"$dst")"
+            if [[ "$current_content" == "$content" ]]; then
+                log_warn "Already generated $client_name Waypost CLI permissions: $dst"
+                skipped=$((skipped + 1))
+                return 0
+            fi
+        elif [[ $FORCE -eq 1 ]]; then
+            backup_item "$dst" || return 1
+        elif [[ $INTERACTIVE -eq 1 ]]; then
+            prompt_user "$dst"
+            action=$?
+            case "$action" in
+                0)
+                    skipped=$((skipped + 1))
+                    return 0
+                    ;;
+                1)
+                    backup_item "$dst" || return 1
+                    ;;
+                2)
+                    if [[ $DRY_RUN -eq 1 ]]; then
+                        log_dry "Would remove existing path: $dst"
+                    else
+                        remove_installed_path "$dst"
+                    fi
+                    ;;
+                3)
+                    log_info "Installation cancelled by user"
+                    exit 0
+                    ;;
+            esac
+        else
+            log_warn "User-managed Waypost CLI permissions exist: $dst"
+            skipped=$((skipped + 1))
+            return 0
+        fi
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would generate $client_name Waypost CLI permissions: $dst"
+        copied=$((copied + 1))
+        return 0
+    fi
+
+    ensure_parent_directory "$dst" || {
+        failed=$((failed + 1))
+        return 1
+    }
+
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/waypost-cli-permissions.XXXXXX")" || {
+        log_error "Failed to create temporary $client_name Waypost permissions file"
+        failed=$((failed + 1))
+        return 1
+    }
+
+    if ! printf '%s\n' "$content" > "$tmp_file" || ! mv "$tmp_file" "$dst"; then
+        rm -f "$tmp_file"
+        log_error "Failed to write $client_name Waypost CLI permissions: $dst"
+        failed=$((failed + 1))
+        return 1
+    fi
+
+    log_ok "Generated $client_name Waypost CLI permissions: $dst"
+    copied=$((copied + 1))
+    return 0
+}
+
+waypost_codex_cli_rules() {
+    waypost_cli_readonly_prefixes_json | jq -r --arg marker "$WAYPOST_CLI_RULE_MARKER" '
+        $marker + "\n\n" + (
+            map(
+                "prefix_rule(\n"
+                + "    pattern = [" + (map(@json) | join(", ")) + "],\n"
+                + "    decision = \"allow\",\n"
+                + ")"
+            ) | join("\n\n")
+        )
+    '
+}
+
+install_codex_waypost_cli_permissions() {
+    local rules_file="$HOME/.codex/rules/waypost-readonly.rules"
+    local rules_content
+
+    ensure_waypost_cli_command || return 1
+    rules_content="$(waypost_codex_cli_rules)" || {
+        log_error "Failed to build Codex Waypost CLI permissions"
+        return 1
+    }
+
+    write_generated_waypost_cli_file "$rules_file" "$rules_content" "Codex"
+}
+
+waypost_claude_cli_permissions_json() {
+    local rules_json
+
+    rules_json="$(waypost_claude_cli_rule_records_json)" || return 1
+    waypost_rule_claude_cli_permissions_from_rule_records_json "$rules_json"
+}
+
+waypost_claude_cli_rule_records_json() {
+    local state_dir
+    local waypost_command
+    local waypost_action
+    local wildcard
+    local rule_json
+    local rules_json='[]'
+
+    while IFS= read -r -d '' waypost_command; do
+        while IFS= read -r -d '' state_dir; do
+            for waypost_action in read list; do
+                for wildcard in false true; do
+                    rule_json="$(waypost_rule_claude_cli_rule_json \
+                        "$waypost_command" "$state_dir" "$waypost_action" "$wildcard")" || return 1
+                    rules_json="$(jq -cn \
+                        --argjson rules "$rules_json" \
+                        --argjson rule "$rule_json" \
+                        '$rules + [$rule] | unique')" || return 1
+                done
+            done
+        done < <(waypost_cli_state_dirs)
+    done < <(waypost_cli_commands)
+
+    printf '%s\n' "$rules_json"
+}
+
+waypost_gemini_cli_policy() {
+    waypost_cli_readonly_prefixes_json | jq -r --arg marker "$WAYPOST_CLI_RULE_MARKER" '
+        $marker + "\n\n" + (
+            to_entries
+            | map(
+                .key as $index
+                | .value as $prefix
+                | "[[rule]]\n"
+                  + "name = \"allow_waypost_cli_" + $prefix[-1] + "_" + (($index + 1) | tostring) + "\"\n"
+                  + "enabled = true\n"
+                  + "decision = \"allow\"\n"
+                  + "toolName = \"run_shell_command\"\n"
+                  + "commandPrefix = [" + ($prefix | map(@json) | join(", ")) + "]\n"
+                  + "priority = 950\n"
+                  + "modes = [\"default\", \"autoEdit\", \"yolo\"]"
+            ) | join("\n\n")
+        )
+    '
+}
+
+install_gemini_waypost_cli_permissions() {
+    local policy_file="$HOME/.gemini/policies/waypost-readonly.toml"
+    local policy_content
+
+    ensure_waypost_cli_command || return 1
+    policy_content="$(waypost_gemini_cli_policy)" || {
+        log_error "Failed to build Gemini Waypost CLI permissions"
+        return 1
+    }
+
+    write_generated_waypost_cli_file "$policy_file" "$policy_content" "Gemini"
+}
+
+install_waypost_cli_rules() {
+    local status=0
+    local prerequisites_checked=0
+
+    if (($# > 0)); then
+        prerequisites_checked="$1"
+    fi
+
+    if [[ $prerequisites_checked -ne 1 ]] && ! ensure_waypost_cli_command; then
+        log_warn "Skipping Waypost CLI permission rules"
+        return 1
+    fi
+
+    log_info "Installing read-only Waypost CLI permission rules..."
+    install_codex_waypost_cli_permissions || status=1
+    ensure_claude_waypost_cli_permissions || status=1
+    install_gemini_waypost_cli_permissions || status=1
+
+    return "$status"
+}
+
+install_agent_deck_workflow_rules() {
+    local status=0
+
+    log_info "Installing Agent Deck authorization rules..."
+    # Authorization assets have their own ownership boundary. Do not link
+    # them into the shared skill snapshot: ai/ai-skills must never update a
+    # live authorization policy when ai-rules was not selected.
+    install_copy \
+        "ai-agent/codex/rules/agent-deck-workflow.rules" \
+        "$HOME/.codex/rules/agent-deck-workflow.rules" \
+        0 \
+        "$SHARED_AI_AGENT_DIR/codex/rules/agent-deck-workflow.rules" \
+        "$SHARED_AI_AGENT_DIR/.codex/rules/agent-deck-workflow.rules" \
+        "$SCRIPT_DIR/ai-agent/.codex/rules/agent-deck-workflow.rules" || status=1
+    install_copy \
+        "ai-agent/gemini/policies/agent-deck-workflow.toml" \
+        "$HOME/.gemini/policies/agent-deck-workflow.toml" \
+        0 \
+        "$SHARED_AI_AGENT_DIR/gemini/policies/agent-deck-workflow.toml" \
+        "$SHARED_AI_AGENT_DIR/.gemini/policies/agent-deck-workflow.toml" \
+        "$SCRIPT_DIR/ai-agent/.gemini/policies/agent-deck-workflow.toml" \
+        "$SHARED_INSTALL_ROOT/ai-rules-preserved/gemini/policies/agent-deck-workflow.toml" || status=1
+
+    return "$status"
 }
 
 ensure_top_level_mcp_stdio_server() {
@@ -4220,6 +4675,18 @@ ensure_top_level_mcp_stdio_server() {
     return 1
 }
 
+ensure_regular_or_absent_settings_file() {
+    local settings_name="$1"
+    local settings_file="$2"
+
+    if [[ -L "$settings_file" || ( -e "$settings_file" && ! -f "$settings_file" ) ]]; then
+        log_error "Refusing symlinked or non-file $settings_name: $settings_file"
+        return 1
+    fi
+
+    return 0
+}
+
 rewrite_gemini_waypost_config() {
     local gemini_config="$HOME/.gemini/settings.json"
     local tmp_file
@@ -4229,9 +4696,13 @@ rewrite_gemini_waypost_config() {
         return 0
     fi
 
-    mkdir -p "$(dirname "$gemini_config")"
+    ensure_regular_or_absent_settings_file "Gemini settings path" "$gemini_config" || return 1
+    mkdir -p "$(dirname "$gemini_config")" || {
+        log_error "Failed to create Gemini settings directory"
+        return 1
+    }
 
-    tmp_file="$(mktemp "${TMPDIR:-/tmp}/gemini-mcp-config.XXXXXX")" || {
+    tmp_file="$(mktemp "$(dirname "$gemini_config")/.gemini-mcp-config.XXXXXX")" || {
         log_error "Failed to create temporary file for Gemini MCP config"
         return 1
     }
@@ -4240,9 +4711,6 @@ rewrite_gemini_waypost_config() {
         if ! jq '
             .general = ((.general // {})
                 | .enableAutoUpdate = false)
-            | .security = ((.security // {})
-                | .enablePermanentToolApproval = true
-                | .disableAlwaysAllow = false)
             | .mcpServers as $mcpServers
             | .mcpServers = (($mcpServers // {})
                 | del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", ."adwf-mailbox")
@@ -4266,10 +4734,6 @@ rewrite_gemini_waypost_config() {
           "general": {
             "enableAutoUpdate": false
           },
-          "security": {
-            "enablePermanentToolApproval": true,
-            "disableAlwaysAllow": false
-          },
           "mcpServers": {
             "waypost": {
               "command": "waypost",
@@ -4288,13 +4752,74 @@ rewrite_gemini_waypost_config() {
         return 1
     fi
 
-    if mv "$tmp_file" "$gemini_config"; then
+    if ! ensure_regular_or_absent_settings_file "Gemini settings path" "$gemini_config"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+    if waypost_rule_replace_file "$tmp_file" "$gemini_config"; then
         log_ok "Rewrote Gemini MCP config: waypost"
         return 0
     fi
 
     rm -f "$tmp_file"
     log_error "Failed to write Gemini MCP config: $gemini_config"
+    return 1
+}
+
+ensure_gemini_permanent_tool_approval() {
+    local gemini_config="$HOME/.gemini/settings.json"
+    local tmp_file
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would enable Gemini permanent tool approval in: $gemini_config"
+        return 0
+    fi
+
+    ensure_regular_or_absent_settings_file "Gemini settings path" "$gemini_config" || return 1
+    mkdir -p "$(dirname "$gemini_config")" || {
+        log_error "Failed to create Gemini settings directory"
+        return 1
+    }
+
+    tmp_file="$(mktemp "$(dirname "$gemini_config")/.gemini-permissions.XXXXXX")" || {
+        log_error "Failed to create temporary file for Gemini authorization settings"
+        return 1
+    }
+
+    if [[ -e "$gemini_config" ]]; then
+        if ! jq '
+            .security = ((.security // {})
+                | .enablePermanentToolApproval = true
+                | .disableAlwaysAllow = false)
+        ' "$gemini_config" > "$tmp_file"; then
+            rm -f "$tmp_file"
+            log_error "Failed to update Gemini authorization settings: $gemini_config"
+            return 1
+        fi
+    elif ! jq -n '
+        {
+          "security": {
+            "enablePermanentToolApproval": true,
+            "disableAlwaysAllow": false
+          }
+        }
+    ' > "$tmp_file"; then
+        rm -f "$tmp_file"
+        log_error "Failed to create Gemini authorization settings: $gemini_config"
+        return 1
+    fi
+
+    if ! ensure_regular_or_absent_settings_file "Gemini settings path" "$gemini_config"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+    if waypost_rule_replace_file "$tmp_file" "$gemini_config"; then
+        log_ok "Enabled Gemini permanent tool approval"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_error "Failed to write Gemini authorization settings: $gemini_config"
     return 1
 }
 
@@ -4323,83 +4848,179 @@ install_gemini_waypost_mcp() {
     remove_gemini_stale_waypost_mcps
 }
 
+json_waypost_mcp_uses_builtin_command() {
+    local config_file="$1"
+
+    [[ -f "$config_file" ]] || return 1
+    jq -e '
+        (.mcpServers.waypost? // null) as $server
+        | ($server | type == "object")
+          and ($server.command == "waypost")
+          and (($server.args | type == "array") and ($server.args[0] == "mcp"))
+    ' \
+        "$config_file" >/dev/null 2>&1
+}
+
 rewrite_antigravity_waypost_config() {
     local antigravity_mcp_config="$HOME/.gemini/config/mcp_config.json"
     local antigravity_settings="$HOME/.gemini/antigravity-cli/settings.json"
-    local antigravity_permissions_json
     local tmp_file
+    local settings_input="$antigravity_settings"
+    local settings_input_tmp=""
 
-    antigravity_permissions_json="$(waypost_mcp_permissions_json 'mcp(waypost/' ')')" || {
-        log_error "Failed to build Antigravity Waypost MCP permissions"
+    if [[ $DRY_RUN -eq 1 ]]; then
+        ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "waypost" "waypost" '["mcp"]' || return 1
+        if [[ ! -s "$antigravity_settings" ]]; then
+            log_dry "Would create Antigravity settings file and remove stale MCP servers in: $antigravity_settings"
+        else
+            log_dry "Would remove stale Antigravity MCP servers in: $antigravity_settings"
+        fi
+        return 0
+    fi
+
+    ensure_regular_or_absent_settings_file "Antigravity settings path" "$antigravity_settings" || return 1
+    ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "waypost" "waypost" '["mcp"]' || return 1
+    mkdir -p "$(dirname "$antigravity_settings")" || {
+        log_error "Failed to create Antigravity settings directory"
+        return 1
+    }
+    if [[ ! -s "$antigravity_settings" ]]; then
+        settings_input_tmp="$(mktemp "$(dirname "$antigravity_settings")/.antigravity-settings-input.XXXXXX")" || {
+            log_error "Failed to stage Antigravity settings input"
+            return 1
+        }
+        if ! printf '{}\n' > "$settings_input_tmp"; then
+            rm -f "$settings_input_tmp"
+            log_error "Failed to render Antigravity settings input"
+            return 1
+        fi
+        settings_input="$settings_input_tmp"
+    fi
+
+    tmp_file="$(mktemp "$(dirname "$antigravity_settings")/.antigravity-settings.XXXXXX")" || {
+        rm -f "$settings_input_tmp"
+        log_error "Failed to create temporary file for Antigravity settings cleanup"
         return 1
     }
 
-    ensure_top_level_mcp_stdio_server "Antigravity" "$antigravity_mcp_config" "waypost" "waypost" '["mcp"]' || return 1
-
-    if [[ $DRY_RUN -eq 1 && ! -s "$antigravity_settings" ]]; then
-        log_dry "Would create Antigravity settings file and merge Waypost MCP permissions into: $antigravity_settings"
-    fi
-
-    if [[ $DRY_RUN -eq 0 ]]; then
-        mkdir -p "$(dirname "$antigravity_settings")" || {
-            log_error "Failed to create Antigravity settings directory"
-            return 1
-        }
-        if [[ ! -s "$antigravity_settings" ]]; then
-            printf '{}\n' > "$antigravity_settings" || {
-                log_error "Failed to create Antigravity settings file: $antigravity_settings"
-                return 1
-            }
-        fi
-    fi
-
-    if [[ -s "$antigravity_settings" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Would migrate Antigravity MCP permissions to waypost in: $antigravity_settings"
-            return 0
-        fi
-
-        tmp_file="$(mktemp "${TMPDIR:-/tmp}/antigravity-settings.XXXXXX")" || {
-            log_error "Failed to create temporary file for Antigravity settings cleanup"
-            return 1
-        }
-
-        if ! jq --argjson perms "$antigravity_permissions_json" '
-            def migrate_permission:
-                if type == "string" then
-                    sub("^mcp\\((workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)/"; "mcp(waypost/")
-                    | sub("^mcp\\(waypost/mailbox_"; "mcp(waypost/waypost_")
-                else
-                    .
-                end;
-            def is_waypost_permission:
-                type == "string" and startswith("mcp(waypost/");
+    if ! jq '
             if (.mcpServers | type) == "object" then
                 .mcpServers |= del(.workflow_mailbox, .agent_mailbox, ."agent-mailbox", .adwf_mailbox, ."adwf-mailbox")
                 | if (.mcpServers == {}) then del(.mcpServers) else . end
             else
                 .
             end
-            | .permissions.allow = (
-                (.permissions.allow // [])
-                | map(migrate_permission)
-                | if any(.[]?; is_waypost_permission) then . else . + $perms end
-                | unique
-            )
-        ' "$antigravity_settings" > "$tmp_file"; then
-            rm -f "$tmp_file"
-            log_error "Failed to migrate Antigravity MCP permissions: $antigravity_settings"
-            return 1
-        fi
+        ' "$settings_input" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        rm -f "$settings_input_tmp"
+        log_error "Failed to remove stale Antigravity MCP servers: $antigravity_settings"
+        return 1
+    fi
+    rm -f "$settings_input_tmp"
 
-        if ! mv "$tmp_file" "$antigravity_settings"; then
-            rm -f "$tmp_file"
-            log_error "Failed to write Antigravity MCP permissions: $antigravity_settings"
-            return 1
-        fi
+    if ! ensure_regular_or_absent_settings_file "Antigravity settings path" "$antigravity_settings"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+    if ! waypost_rule_replace_file "$tmp_file" "$antigravity_settings"; then
+        rm -f "$tmp_file"
+        log_error "Failed to write Antigravity MCP settings: $antigravity_settings"
+        return 1
     fi
 
-    log_ok "Rewrote Antigravity MCP config and permissions: waypost"
+    log_ok "Rewrote Antigravity MCP config: waypost"
+    return 0
+}
+
+antigravity_waypost_mcp_uses_builtin_command() {
+    json_waypost_mcp_uses_builtin_command "$HOME/.gemini/config/mcp_config.json" \
+        || json_waypost_mcp_uses_builtin_command "$HOME/.gemini/antigravity-cli/settings.json"
+}
+
+ensure_antigravity_waypost_permissions() {
+    local antigravity_settings="$HOME/.gemini/antigravity-cli/settings.json"
+    local antigravity_permissions_json
+    local migrate_legacy=0
+    local tmp_file
+    local settings_input="$antigravity_settings"
+    local settings_input_tmp=""
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Would migrate Antigravity Waypost MCP permissions in: $antigravity_settings"
+        return 0
+    fi
+
+    ensure_regular_or_absent_settings_file "Antigravity settings path" "$antigravity_settings" || return 1
+    antigravity_permissions_json="$(waypost_mcp_permissions_json 'mcp(waypost/' ')')" || {
+        log_error "Failed to build Antigravity Waypost MCP permissions"
+        return 1
+    }
+
+    if antigravity_waypost_mcp_uses_builtin_command; then
+        migrate_legacy=1
+    fi
+
+    mkdir -p "$(dirname "$antigravity_settings")" || {
+        log_error "Failed to create Antigravity settings directory"
+        return 1
+    }
+    if [[ ! -s "$antigravity_settings" ]]; then
+        settings_input_tmp="$(mktemp "$(dirname "$antigravity_settings")/.antigravity-permissions-input.XXXXXX")" || {
+            log_error "Failed to stage Antigravity settings input"
+            return 1
+        }
+        if ! printf '{}\n' > "$settings_input_tmp"; then
+            rm -f "$settings_input_tmp"
+            log_error "Failed to render Antigravity settings input"
+            return 1
+        fi
+        settings_input="$settings_input_tmp"
+    fi
+
+    tmp_file="$(mktemp "$(dirname "$antigravity_settings")/.antigravity-permissions.XXXXXX")" || {
+        rm -f "$settings_input_tmp"
+        log_error "Failed to create temporary file for Antigravity permissions"
+        return 1
+    }
+
+    if ! jq --argjson perms "$antigravity_permissions_json" \
+        --argjson migrate_legacy "$migrate_legacy" '
+        def migrate_permission:
+            if type == "string" then
+                sub("^mcp\\((workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)/"; "mcp(waypost/")
+                | sub("^mcp\\(waypost/mailbox_"; "mcp(waypost/waypost_")
+            else
+                .
+            end;
+        .permissions.allow = (
+            (.permissions.allow // [])
+            | if $migrate_legacy == 1 then map(migrate_permission) else . end
+            | . + $perms
+            | unique
+        )
+    ' "$settings_input" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        rm -f "$settings_input_tmp"
+        log_error "Failed to migrate Antigravity MCP permissions: $antigravity_settings"
+        return 1
+    fi
+    rm -f "$settings_input_tmp"
+
+    if ! ensure_regular_or_absent_settings_file "Antigravity settings path" "$antigravity_settings"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+    if ! waypost_rule_replace_file "$tmp_file" "$antigravity_settings"; then
+        rm -f "$tmp_file"
+        log_error "Failed to write Antigravity MCP permissions: $antigravity_settings"
+        return 1
+    fi
+
+    if [[ $migrate_legacy -eq 1 ]]; then
+        log_ok "Migrated Antigravity Waypost MCP permissions"
+    else
+        log_ok "Updated Antigravity Waypost MCP permissions (legacy approvals retained)"
+    fi
     return 0
 }
 
@@ -4409,6 +5030,34 @@ install_antigravity_waypost_mcp() {
 
 install_kiro_waypost_mcp() {
     ensure_top_level_mcp_stdio_server "Kiro CLI" "$HOME/.kiro/settings/mcp.json" "waypost" "waypost" '["mcp"]'
+}
+
+codex_waypost_mcp_uses_builtin_command() {
+    local codex_config="$HOME/.codex/config.toml"
+
+    [[ -f "$codex_config" ]] || return 1
+    perl -0ne '
+        my @lines = split /\n/, $_, -1;
+        my $in_waypost_section = 0;
+        my $has_command = 0;
+        my $has_args = 0;
+
+        for my $line (@lines) {
+            if ($line =~ /^\s*\[/) {
+                last if $in_waypost_section;
+                $in_waypost_section =
+                    $line =~ /^\s*\[\s*mcp_servers\.(?:"waypost"|waypost)\s*\]\s*(?:\#.*)?$/;
+                next;
+            }
+            next unless $in_waypost_section;
+            $has_command = 1
+                if $line =~ /^\s*command\s*=\s*"waypost"\s*(?:\#.*)?$/;
+            $has_args = 1
+                if $line =~ /^\s*args\s*=\s*\[\s*"mcp"(?:\s*,[^\]]*)?\]\s*(?:\#.*)?$/;
+        }
+
+        exit($in_waypost_section && $has_command && $has_args ? 0 : 1);
+    ' "$codex_config"
 }
 
 migrate_codex_legacy_waypost_tool_permissions() {
@@ -4421,6 +5070,11 @@ migrate_codex_legacy_waypost_tool_permissions() {
     if ! perl -0ne '
         exit(/\[mcp_servers\.("?(?:workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)"?)\.tools\./m ? 0 : 1);
     ' "$codex_config"; then
+        return 0
+    fi
+
+    if ! codex_waypost_mcp_uses_builtin_command; then
+        log_warn "Retaining Codex legacy MCP tool approvals; a built-in Waypost MCP is not configured"
         return 0
     fi
 
@@ -4498,6 +5152,8 @@ codex_waypost_uses_builtin_command() {
 }
 
 install_codex_waypost_mcp() {
+    CODEX_LEGACY_MCP_CLEANUP_PENDING=0
+
     if ! command -v "$CODEX_CLI_COMMAND" &>/dev/null && [[ $CODEX_CLI_AVAILABLE -ne 1 ]]; then
         log_warn "Skipping Codex MCP install ($CODEX_CLI_COMMAND not found)"
         return 0
@@ -4525,9 +5181,6 @@ install_codex_waypost_mcp() {
             log_ok "Configured Codex MCP: waypost"
         fi
     fi
-
-    migrate_codex_legacy_waypost_tool_permissions || return 1
-    remove_codex_legacy_waypost_mcps
 
     local codex_config="$HOME/.codex/config.toml"
     if [[ ! -f "$codex_config" ]]; then
@@ -4592,6 +5245,9 @@ install_codex_waypost_mcp() {
             : 1
         );
     ' "$codex_config"; then
+        # Tool approvals belong to ai-rules. Keep legacy MCP sections intact
+        # until that component has migrated their tool tables successfully.
+        CODEX_LEGACY_MCP_CLEANUP_PENDING=1
         log_ok "Ensured Codex MCP env passthrough and Waypost tool timeout: waypost"
         return 0
     fi
@@ -4600,19 +5256,156 @@ install_codex_waypost_mcp() {
     return 1
 }
 
-ensure_claude_waypost_permissions() {
-    local claude_settings="$HOME/.claude/settings.json"
-    local claude_permissions_json
-    local tmp_file
+claude_waypost_mcp_uses_builtin_command() {
+    json_waypost_mcp_uses_builtin_command "$HOME/.claude.json"
+}
 
-    claude_permissions_json="$(waypost_mcp_permissions_json 'mcp__waypost__' '')" || {
-        log_error "Failed to build Claude Waypost MCP permissions"
+claude_waypost_cli_manifest_path() {
+    printf '%s\n' "$CONFIG_FILES_STATE_DIR/ai-rules/claude-waypost-cli.json"
+}
+
+# Claude settings have no rule IDs. Persist structured CLI argv plus the exact
+# rendered entries so future state-dir/path updates remove only installer-owned
+# rules without reparsing shell syntax.
+load_claude_waypost_cli_manifest() {
+    local manifest_path
+    local manifest_permissions
+
+    CLAUDE_WAYPOST_CLI_MANIFEST_PERMISSIONS='[]'
+    CLAUDE_WAYPOST_CLI_MANIFEST_PRESENT=0
+    manifest_path="$(claude_waypost_cli_manifest_path)"
+
+    if [[ ! -e "$manifest_path" && ! -L "$manifest_path" ]]; then
+        return 0
+    fi
+    if [[ ! -f "$manifest_path" || -L "$manifest_path" ]]; then
+        log_error "Refusing invalid Claude Waypost ownership manifest: $manifest_path"
+        return 1
+    fi
+
+    manifest_permissions="$(waypost_rule_claude_cli_manifest_permissions_json "$manifest_path")" || {
+        log_error "Refusing malformed Claude Waypost ownership manifest: $manifest_path"
         return 1
     }
 
-    if [[ $DRY_RUN -eq 1 ]]; then
-        log_dry "Would migrate Claude MCP permissions to waypost in: $claude_settings"
+    CLAUDE_WAYPOST_CLI_MANIFEST_PERMISSIONS="$manifest_permissions"
+    CLAUDE_WAYPOST_CLI_MANIFEST_PRESENT=1
+    return 0
+}
+
+stage_claude_waypost_cli_manifest() {
+    local permissions_json="$1"
+    local rules_json="$2"
+    local manifest_path
+
+    CLAUDE_WAYPOST_CLI_MANIFEST_TMP=""
+    manifest_path="$(claude_waypost_cli_manifest_path)"
+    ensure_parent_directory "$manifest_path" || return 1
+
+    CLAUDE_WAYPOST_CLI_MANIFEST_TMP="$(mktemp "$(dirname "$manifest_path")/.claude-waypost-cli.XXXXXX")" || {
+        log_error "Failed to stage Claude Waypost ownership manifest"
+        return 1
+    }
+    if ! jq -n \
+        --argjson permissions "$permissions_json" \
+        --argjson rules "$rules_json" \
+        '{version: 2, permissions: $permissions, rules: $rules}' \
+        > "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP"; then
+        rm -f "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP"
+        CLAUDE_WAYPOST_CLI_MANIFEST_TMP=""
+        log_error "Failed to render Claude Waypost ownership manifest"
+        return 1
+    fi
+
+    return 0
+}
+
+commit_claude_waypost_cli_manifest() {
+    local manifest_path
+
+    [[ -n "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP" ]] || return 0
+    manifest_path="$(claude_waypost_cli_manifest_path)"
+    if waypost_rule_replace_file "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP" "$manifest_path"; then
+        CLAUDE_WAYPOST_CLI_MANIFEST_TMP=""
         return 0
+    fi
+
+    rm -f "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP"
+    CLAUDE_WAYPOST_CLI_MANIFEST_TMP=""
+    log_error "Failed to write Claude Waypost ownership manifest: $manifest_path"
+    return 1
+}
+
+discard_claude_waypost_cli_manifest() {
+    if [[ -n "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP" ]]; then
+        rm -f "$CLAUDE_WAYPOST_CLI_MANIFEST_TMP"
+        CLAUDE_WAYPOST_CLI_MANIFEST_TMP=""
+    fi
+}
+
+ensure_claude_waypost_permissions() {
+    local include_mcp="${1:-1}"
+    local include_cli="${2:-1}"
+    local claude_settings="$HOME/.claude/settings.json"
+    local claude_mcp_permissions_json='[]'
+    local claude_cli_permissions_json='[]'
+    local claude_cli_rule_records_json='[]'
+    local migrate_mcp=0
+    local migrate_legacy_cli=0
+    local tmp_file
+    local settings_input="$claude_settings"
+    local settings_input_tmp=""
+    local settings_backup=""
+    local settings_existed=0
+
+    case "$include_mcp:$include_cli" in
+        0:1|1:0|1:1) ;;
+        *)
+            log_error "Invalid Claude Waypost permission scope"
+            return 1
+            ;;
+    esac
+
+    if [[ $include_mcp -eq 1 ]]; then
+        claude_mcp_permissions_json="$(waypost_mcp_permissions_json 'mcp__waypost__' '')" || {
+            log_error "Failed to build Claude Waypost MCP permissions"
+            return 1
+        }
+        if claude_waypost_mcp_uses_builtin_command; then
+            migrate_mcp=1
+        fi
+    fi
+
+    if [[ $include_cli -eq 1 ]]; then
+        load_claude_waypost_cli_manifest || return 1
+        if [[ $CLAUDE_WAYPOST_CLI_MANIFEST_PRESENT -eq 0 ]]; then
+            migrate_legacy_cli=1
+        fi
+        claude_cli_rule_records_json="$(waypost_claude_cli_rule_records_json)" || {
+            log_error "Failed to build Claude Waypost CLI ownership records"
+            return 1
+        }
+        claude_cli_permissions_json="$(waypost_rule_claude_cli_permissions_from_rule_records_json \
+            "$claude_cli_rule_records_json")" || {
+            log_error "Failed to build Claude Waypost CLI permissions"
+            return 1
+        }
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        if [[ $include_mcp -eq 1 && $include_cli -eq 1 ]]; then
+            log_dry "Would update Claude Waypost MCP and CLI permissions in: $claude_settings"
+        elif [[ $include_mcp -eq 1 ]]; then
+            log_dry "Would update Claude Waypost MCP permissions in: $claude_settings"
+        else
+            log_dry "Would update Claude Waypost CLI permissions in: $claude_settings"
+        fi
+        return 0
+    fi
+
+    if [[ -L "$claude_settings" || ( -e "$claude_settings" && ! -f "$claude_settings" ) ]]; then
+        log_error "Refusing symlinked or non-file Claude settings path: $claude_settings"
+        return 1
     fi
 
     mkdir -p "$(dirname "$claude_settings")" || {
@@ -4620,19 +5413,59 @@ ensure_claude_waypost_permissions() {
         return 1
     }
 
-    if [[ ! -s "$claude_settings" ]]; then
-        printf '{}\n' > "$claude_settings" || {
-            log_error "Failed to create Claude settings file: $claude_settings"
+    if [[ $include_cli -eq 1 && -e "$claude_settings" ]]; then
+        settings_existed=1
+        settings_backup="$(mktemp "$(dirname "$claude_settings")/.claude-settings-rollback.XXXXXX")" || {
+            log_error "Failed to stage Claude settings rollback"
             return 1
         }
+        if ! cp -p "$claude_settings" "$settings_backup"; then
+            rm -f "$settings_backup"
+            log_error "Failed to stage Claude settings rollback"
+            return 1
+        fi
     fi
 
-    tmp_file="$(mktemp "${TMPDIR:-/tmp}/claude-settings.XXXXXX")" || {
+    if [[ $include_cli -eq 1 ]]; then
+        stage_claude_waypost_cli_manifest \
+            "$claude_cli_permissions_json" "$claude_cli_rule_records_json" || {
+                rm -f "$settings_backup"
+                return 1
+            }
+    fi
+
+    if [[ ! -s "$claude_settings" ]]; then
+        settings_input_tmp="$(mktemp "$(dirname "$claude_settings")/.claude-settings-input.XXXXXX")" || {
+            discard_claude_waypost_cli_manifest
+            rm -f "$settings_backup"
+            log_error "Failed to stage Claude settings input"
+            return 1
+        }
+        if ! printf '{}\n' > "$settings_input_tmp"; then
+            rm -f "$settings_input_tmp"
+            discard_claude_waypost_cli_manifest
+            rm -f "$settings_backup"
+            log_error "Failed to render Claude settings input"
+            return 1
+        fi
+        settings_input="$settings_input_tmp"
+    fi
+
+    tmp_file="$(mktemp "$(dirname "$claude_settings")/.claude-settings.XXXXXX")" || {
+        discard_claude_waypost_cli_manifest
+        rm -f "$settings_input_tmp"
+        rm -f "$settings_backup"
         log_error "Failed to create temporary file for Claude settings"
         return 1
     }
 
-    if ! jq --argjson perms "$claude_permissions_json" '
+    if ! jq --argjson mcp_perms "$claude_mcp_permissions_json" \
+        --argjson cli_perms "$claude_cli_permissions_json" \
+        --argjson prior_cli_perms "$CLAUDE_WAYPOST_CLI_MANIFEST_PERMISSIONS" \
+        --argjson include_mcp "$include_mcp" \
+        --argjson include_cli "$include_cli" \
+        --argjson migrate_mcp "$migrate_mcp" \
+        --argjson migrate_legacy_cli "$migrate_legacy_cli" '
         def migrate_permission:
             if type == "string" then
                 sub("^mcp__(workflow_mailbox|agent_mailbox|agent-mailbox|adwf_mailbox|adwf-mailbox)__"; "mcp__waypost__")
@@ -4640,28 +5473,130 @@ ensure_claude_waypost_permissions() {
             else
                 .
             end;
-        def is_waypost_permission:
-            type == "string" and startswith("mcp__waypost__");
+        def is_legacy_waypost_broad_permission:
+            . == "Bash(waypost)" or . == "Bash(waypost *)";
         .permissions.allow = (
             (.permissions.allow // [])
-            | map(migrate_permission)
-            | if any(.[]?; is_waypost_permission) then . else . + $perms end
+            | if $include_mcp == 1 then
+                (if $migrate_mcp == 1 then map(migrate_permission) else . end)
+                | . + $mcp_perms
+              else .
+              end
+            | if $include_cli == 1 then
+                map(select(. as $permission | ($prior_cli_perms | index($permission) | not)))
+                | if $migrate_legacy_cli == 1 then
+                    # Only the historical broad entries are identifiable
+                    # without an ownership manifest. Preserve lookalike
+                    # state-scoped rules rather than deleting user policy.
+                    map(select(is_legacy_waypost_broad_permission | not))
+                  else .
+                  end
+                | . + $cli_perms
+              else .
+              end
             | unique
         )
-    ' "$claude_settings" > "$tmp_file"; then
+    ' "$settings_input" > "$tmp_file"; then
         rm -f "$tmp_file"
-        log_error "Failed to migrate Claude MCP permissions: $claude_settings"
+        discard_claude_waypost_cli_manifest
+        rm -f "$settings_input_tmp"
+        rm -f "$settings_backup"
+        log_error "Failed to update Claude Waypost permissions: $claude_settings"
+        return 1
+    fi
+    rm -f "$settings_input_tmp"
+
+    if [[ -L "$claude_settings" || ( -e "$claude_settings" && ! -f "$claude_settings" ) ]]; then
+        rm -f "$tmp_file"
+        discard_claude_waypost_cli_manifest
+        rm -f "$settings_backup"
+        log_error "Refusing symlinked or non-file Claude settings path: $claude_settings"
         return 1
     fi
 
-    if mv "$tmp_file" "$claude_settings"; then
-        log_ok "Migrated Claude MCP permissions to waypost"
+    if waypost_rule_replace_file "$tmp_file" "$claude_settings"; then
+        if [[ $include_cli -eq 1 ]] && ! commit_claude_waypost_cli_manifest; then
+            if [[ $settings_existed -eq 1 ]]; then
+                if ! waypost_rule_replace_file "$settings_backup" "$claude_settings"; then
+                    rm -f "$settings_backup"
+                    log_error "Failed to restore Claude settings after manifest failure: $claude_settings"
+                fi
+            else
+                rm -f "$claude_settings"
+            fi
+            return 1
+        fi
+        rm -f "$settings_backup"
+        if [[ $include_mcp -eq 1 && $include_cli -eq 1 ]]; then
+            if [[ $migrate_mcp -eq 1 ]]; then
+                log_ok "Migrated Claude Waypost MCP and CLI permissions"
+            else
+                log_ok "Updated Claude Waypost MCP and CLI permissions (legacy approvals retained)"
+            fi
+        elif [[ $include_mcp -eq 1 ]]; then
+            if [[ $migrate_mcp -eq 1 ]]; then
+                log_ok "Migrated Claude Waypost MCP permissions"
+            else
+                log_ok "Updated Claude Waypost MCP permissions (legacy approvals retained)"
+            fi
+        else
+            log_ok "Updated Claude Waypost CLI permissions"
+        fi
         return 0
     fi
 
     rm -f "$tmp_file"
-    log_error "Failed to write Claude MCP permissions: $claude_settings"
+    discard_claude_waypost_cli_manifest
+    rm -f "$settings_backup"
+    log_error "Failed to write Claude Waypost permissions: $claude_settings"
     return 1
+}
+
+ensure_claude_waypost_cli_permissions() {
+    ensure_waypost_cli_command || return 1
+    ensure_claude_waypost_permissions 0 1
+}
+
+ensure_claude_waypost_mcp_permissions() {
+    ensure_claude_waypost_permissions 1 0
+}
+
+install_ai_permission_rules() {
+    local status=0
+
+    log_info "Installing global AI authorization rules..."
+    if [[ "$AI_RULES_WAYPOST_PREREQUISITES" == unknown ]]; then
+        if ensure_waypost_authorization_prerequisites; then
+            AI_RULES_WAYPOST_PREREQUISITES=ready
+        else
+            AI_RULES_WAYPOST_PREREQUISITES=failed
+        fi
+    fi
+    if [[ "$AI_RULES_WAYPOST_PREREQUISITES" != ready ]]; then
+        log_warn "Skipping AI authorization rule changes; Waypost prerequisites are unavailable"
+        return 1
+    fi
+
+    install_agent_deck_workflow_rules || status=1
+    if migrate_codex_legacy_waypost_tool_permissions; then
+        if [[ $CODEX_LEGACY_MCP_CLEANUP_PENDING -eq 1 ]]; then
+            if codex_waypost_mcp_uses_builtin_command; then
+                remove_codex_legacy_waypost_mcps || status=1
+                CODEX_LEGACY_MCP_CLEANUP_PENDING=0
+            else
+                log_warn "Retaining Codex legacy MCPs; the Waypost MCP is no longer configured"
+                status=1
+            fi
+        fi
+    else
+        status=1
+    fi
+    ensure_claude_waypost_mcp_permissions || status=1
+    ensure_gemini_permanent_tool_approval || status=1
+    ensure_antigravity_waypost_permissions || status=1
+    install_waypost_cli_rules 1 || status=1
+
+    return "$status"
 }
 
 rewrite_claude_waypost_config() {
@@ -4732,7 +5667,6 @@ remove_claude_stale_waypost_mcps() {
 install_claude_waypost_mcp() {
     if [[ -f "$HOME/.claude.json" ]]; then
         rewrite_claude_waypost_config || return 1
-        ensure_claude_waypost_permissions || return 1
         return 0
     fi
 
@@ -4750,7 +5684,6 @@ install_claude_waypost_mcp() {
     if claude mcp add -s user waypost -- waypost mcp; then
         log_ok "Configured Claude MCP: waypost"
         rewrite_claude_waypost_config || return 1
-        ensure_claude_waypost_permissions || return 1
         remove_claude_stale_waypost_mcps
         return 0
     fi
@@ -5512,21 +6445,11 @@ install_gemini_config() {
         install_gemini_skills
     fi
 
-    # Link shell policy rules for workflow automation approvals
-    if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
-        link_shared_ai_agent_item \
-            "gemini/policies/agent-deck-workflow.toml" \
-            "$gemini_dir/policies/agent-deck-workflow.toml" \
-            ".gemini/policies/agent-deck-workflow.toml"
-    else
-        log_warn "Skipping Gemini agent-deck workflow policy link (agent-deck not installed)"
-    fi
-
     if ! waypost_config_switch_is_ready "Gemini"; then
         return 0
     fi
 
-    install_gemini_waypost_mcp
+    install_gemini_waypost_mcp || return 1
 }
 
 install_codex_skills() {
@@ -5623,21 +6546,11 @@ install_codex_config() {
     fi
     # ensure_codex_tui_usage_limit_resume_prompt || return 1
 
-    # Link Codex escalation rules for workflow automation approvals
-    if [[ $AGENT_DECK_AVAILABLE -eq 1 ]]; then
-        link_shared_ai_agent_item \
-            "codex/rules/agent-deck-workflow.rules" \
-            "$codex_dir/rules/agent-deck-workflow.rules" \
-            ".codex/rules/agent-deck-workflow.rules"
-    else
-        log_warn "Skipping Codex agent-deck workflow rule link (agent-deck not installed)"
-    fi
-
     if ! waypost_config_switch_is_ready "Codex"; then
         return 0
     fi
 
-    install_codex_waypost_mcp
+    install_codex_waypost_mcp || return 1
 }
 
 install_opencode_waypost_mcp() {
@@ -5790,8 +6703,7 @@ install_selected_components() {
 
     log_info "Installing selected sections: $(selected_components_label)"
 
-    if component_is_selected "xdg" \
-        || component_is_selected "ai"; then
+    if component_is_selected "xdg" || component_is_selected "ai"; then
         run_best_effort "Waypost preparation" prepare_waypost_config_switch
     fi
 
@@ -5812,15 +6724,23 @@ install_selected_components() {
         run_best_effort "Local bin helpers" install_local_bin_helpers
     fi
 
-    if component_is_selected "ai" || component_is_selected "ai-skills"; then
+    if component_is_selected "ai" \
+        || component_is_selected "ai-skills"; then
         run_best_effort "Shared AI agent snapshot" \
             install_shared_ai_agent_snapshot
         if [[ $SHARED_AI_AGENT_READY -eq 1 ]]; then
             detect_installed_agent_deck
-            run_best_effort "AI skills" install_all_ai_skills
-        else
+            if component_is_selected "ai" || component_is_selected "ai-skills"; then
+                run_best_effort "AI skills" install_all_ai_skills
+            fi
+        elif component_is_selected "ai" || component_is_selected "ai-skills"; then
             log_warn "Skipping AI skills; the shared AI agent snapshot is unavailable"
         fi
+    fi
+
+    if component_is_selected "ai-rules"; then
+        prepare_ai_rules_waypost_prerequisites
+        run_best_effort "AI authorization rules" install_ai_permission_rules
     fi
 
     if component_is_selected "serena"; then
@@ -6235,6 +7155,10 @@ main() {
     fi
     if component_is_selected "ai"; then
         install_snapshot_dependent_ai_configs
+    fi
+    if component_is_selected "ai-rules"; then
+        prepare_ai_rules_waypost_prerequisites
+        run_best_effort "AI authorization rules" install_ai_permission_rules
     fi
     if component_is_selected "serena"; then
         run_best_effort "Serena config" install_serena_config

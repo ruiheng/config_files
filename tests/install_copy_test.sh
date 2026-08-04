@@ -48,6 +48,51 @@ assert_path_mode() {
         || fail_test "unexpected mode at $path: $actual (expected $expected)"
 }
 
+assert_gemini_policy_rule_syntax() {
+    local policy_file="$1"
+    local command_prefix
+    local rule_count=0
+
+    [[ -f "$policy_file" ]] || return 1
+
+    while IFS= read -r line; do
+        case "$line" in
+            '[[rule]]') rule_count=$((rule_count + 1)) ;;
+            '[[rule]') return 1 ;;
+        esac
+    done < "$policy_file"
+
+    (( rule_count > 0 )) || return 1
+
+    while IFS= read -r command_prefix; do
+        jq -e 'type == "array" and all(.[]; type == "string")' \
+            <<< "$command_prefix" >/dev/null || return 1
+    done < <(sed -n 's/^commandPrefix = //p' "$policy_file")
+}
+
+make_waypost_stub() {
+    local path="$1"
+
+    mkdir -p "$(dirname "$path")"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ -n "${WAYPOST_COMMANDS:-}" ]; then' \
+        '    printf "%s\\n" "$*" >> "$WAYPOST_COMMANDS"' \
+        'fi' \
+        'case "${1:-}" in' \
+        '    mcp)' \
+        '        [ "${2:-}" = "--help" ] && exit 0' \
+        '        ;;' \
+        '    --state-dir)' \
+        '        case "${3:-}" in' \
+        '            read|list) [ "${4:-}" = "--help" ] && exit 0 ;;' \
+        '        esac' \
+        '        ;;' \
+        'esac' \
+        'exit 64' > "$path"
+    chmod +x "$path"
+}
+
 test_best_effort_continues_and_counts_failures() {
     local case_dir="$TEST_ROOT/best-effort"
 
@@ -162,6 +207,1472 @@ test_waypost_preparation_requires_explicit_migration() {
             [[ -e "$MCP_SWITCHED" ]]
         ' _ "$REPO_ROOT" >/dev/null \
         || fail_test "Waypost prerequisites did not gate client configuration switching"
+}
+
+test_waypost_cli_permissions_are_harness_specific() {
+    local case_dir="$TEST_ROOT/waypost-cli-permissions"
+    local fake_bin="$case_dir/bin"
+    local old_bin="$case_dir/old-bin"
+    local new_bin="$case_dir/new-bin"
+
+    mkdir -p "$fake_bin" "$old_bin" "$new_bin"
+    make_waypost_stub "$fake_bin/waypost"
+    make_waypost_stub "$old_bin/waypost"
+    make_waypost_stub "$new_bin/waypost"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        WAYPOST_STATE_DIR="$case_dir/waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            WAYPOST_CONFIG_SWITCH_READY=1
+            AGENT_DECK_AVAILABLE=0
+            should_install_ai_skills() { return 1; }
+            link_shared_ai_agent_item() { :; }
+            install_codex_waypost_mcp() { :; }
+            install_gemini_waypost_mcp() { :; }
+            install_claude_waypost_mcp() { :; }
+            remove_obsolete_waypost_launchers() { :; }
+
+            install_codex_config
+            install_gemini_config
+            install_claude_config
+            install_waypost_cli_rules
+
+            codex_rules="$HOME/.codex/rules/waypost-readonly.rules"
+            gemini_policy="$HOME/.gemini/policies/waypost-readonly.toml"
+            claude_settings="$HOME/.claude/settings.json"
+            state_dir="$WAYPOST_STATE_DIR"
+            fallback_state_dir="$XDG_STATE_HOME/ai-agent/waypost"
+
+            [[ "$(waypost_rule_state_dir)" == "$state_dir" ]]
+            grep -Fq "pattern = [\"$2/bin/waypost\", \"--state-dir\", \"$state_dir\", \"read\"]" "$codex_rules"
+            grep -Fq "commandPrefix = [\"$2/bin/waypost\", \"--state-dir\", \"$state_dir\", \"read\"]" "$gemini_policy"
+            jq -e --arg permission "Bash($2/bin/waypost --state-dir $state_dir read *)" \
+                ".permissions.allow | index(\$permission) != null" "$claude_settings" >/dev/null
+            ! grep -Fq "pattern = [\"waypost\", \"--state-dir\"" "$codex_rules"
+            ! grep -Fq "commandPrefix = [\"waypost\", \"--state-dir\"" "$gemini_policy"
+            ! jq -e --arg permission "Bash(waypost --state-dir $state_dir list *)" \
+                ".permissions.allow | index(\$permission) != null" "$claude_settings" >/dev/null
+            jq -e ".version == 2 and (.permissions | type == \"array\") and (.rules | type == \"array\")" \
+                "$XDG_STATE_HOME/config_files/ai-rules/claude-waypost-cli.json" >/dev/null
+            ! grep -Fq "$fallback_state_dir" "$codex_rules"
+
+            user_narrow_rule="Bash($2/user-bin/waypost --state-dir $2/user-state read *)"
+            jq --arg user_narrow_rule "$user_narrow_rule" \
+                ".permissions.allow += [\$user_narrow_rule]" \
+                "$claude_settings" > "$claude_settings.tmp"
+            mv "$claude_settings.tmp" "$claude_settings"
+            rm -f "$(claude_waypost_cli_manifest_path)"
+            ensure_claude_waypost_cli_permissions
+            jq -e --arg user_narrow_rule "$user_narrow_rule" \
+                ".permissions.allow | index(\$user_narrow_rule) != null" "$claude_settings" >/dev/null
+
+            jq ".permissions.allow += [\"Bash(waypost)\", \"Bash(waypost *)\", \"Bash(waypost send *)\", \"Bash(git status)\"]" \
+                "$claude_settings" > "$claude_settings.tmp"
+            mv "$claude_settings.tmp" "$claude_settings"
+            next_state_dir="$2/next-waypost-state"
+            WAYPOST_STATE_DIR="$next_state_dir"
+            ensure_claude_waypost_cli_permissions
+            ! jq -e --arg state_dir "$state_dir" \
+                ".permissions.allow | any(.[]; type == \"string\" and contains(\"--state-dir \" + \$state_dir + \" \"))" \
+                "$claude_settings" >/dev/null
+            jq -e --arg permission "Bash($2/bin/waypost --state-dir $next_state_dir read *)" \
+                ".permissions.allow | index(\$permission) != null" "$claude_settings" >/dev/null
+            jq -e ".permissions.allow | index(\"Bash(waypost send *)\") != null" \
+                "$claude_settings" >/dev/null
+            jq -e ".permissions.allow | index(\"Bash(git status)\") != null" \
+                "$claude_settings" >/dev/null
+            jq -e ".permissions.allow | index(\"Bash(waypost)\") != null" \
+                "$claude_settings" >/dev/null
+            jq -e ".permissions.allow | index(\"Bash(waypost *)\") != null" \
+                "$claude_settings" >/dev/null
+
+            jq --arg old_rule "Bash($2/old-bin/waypost --state-dir $next_state_dir read *)" \
+                --arg preserved_rule "Bash($2/old-bin/waypost --state-dir $next_state_dir send *)" \
+                ".permissions.allow += [\$old_rule, \$preserved_rule]" \
+                "$claude_settings" > "$claude_settings.tmp"
+            mv "$claude_settings.tmp" "$claude_settings"
+            PATH="$2/new-bin:/usr/bin:/bin"
+            ensure_claude_waypost_cli_permissions
+            ! jq -e --arg previous_rule "Bash($2/bin/waypost --state-dir $next_state_dir read *)" \
+                ".permissions.allow | index(\$previous_rule) != null" "$claude_settings" >/dev/null
+            jq -e --arg new_rule "Bash($2/new-bin/waypost --state-dir $next_state_dir list *)" \
+                ".permissions.allow | index(\$new_rule) != null" "$claude_settings" >/dev/null
+            jq -e --arg old_rule "Bash($2/old-bin/waypost --state-dir $next_state_dir read *)" \
+                ".permissions.allow | index(\$old_rule) != null" "$claude_settings" >/dev/null
+            jq -e --arg preserved_rule "Bash($2/old-bin/waypost --state-dir $next_state_dir send *)" \
+                ".permissions.allow | index(\$preserved_rule) != null" "$claude_settings" >/dev/null
+
+            unset WAYPOST_STATE_DIR
+            [[ "$(waypost_rule_state_dir)" == "$fallback_state_dir" ]]
+
+            printf "%s\\n" "user managed" > "$codex_rules"
+            install_codex_waypost_cli_permissions
+            [[ "$(head -n 1 "$codex_rules")" == "user managed" ]]
+
+            corrupt_rule="Bash($2/new-bin/waypost --state-dir $next_state_dir; git commit list)"
+            jq --arg corrupt_rule "$corrupt_rule" \
+                ".permissions.allow += [\$corrupt_rule]" \
+                "$claude_settings" > "$claude_settings.tmp"
+            mv "$claude_settings.tmp" "$claude_settings"
+            jq -n --arg corrupt_rule "$corrupt_rule" \
+                "{version: 1, permissions: [\$corrupt_rule]}" \
+                > "$(claude_waypost_cli_manifest_path)"
+            if ensure_claude_waypost_cli_permissions; then exit 10; fi
+            jq -e --arg corrupt_rule "$corrupt_rule" \
+                ".permissions.allow | index(\$corrupt_rule) != null" \
+                "$claude_settings" >/dev/null
+        ' _ "$REPO_ROOT" "$case_dir" >/dev/null \
+        || fail_test "Waypost CLI permissions were not generated per harness"
+
+    ! grep -Fq 'commandPrefix = ["waypost"]' \
+        "$REPO_ROOT/ai-agent/gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "Gemini retained the broad Waypost CLI policy"
+}
+
+test_waypost_home_relative_forms_are_emitted() {
+    local case_dir="$TEST_ROOT/waypost-home-relative-forms"
+    local home_dir="$case_dir/home"
+    local state_dir="$home_dir/.local/state/ai-agent/waypost"
+    local project_dir="$case_dir/project"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$home_dir/.local/bin" "$state_dir" "$project_dir"
+    make_waypost_stub "$home_dir/.local/bin/waypost"
+
+    HOME="$home_dir" \
+        XDG_STATE_HOME="$home_dir/.local/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$home_dir/.local/bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            ensure_waypost_cli_command
+            prefixes="$(waypost_cli_readonly_prefixes_json)"
+            jq -e --arg command "~/.local/bin/waypost" \
+                --arg state "~/.local/state/ai-agent/waypost" \
+                "any(.[]; . == [\$command, \"--state-dir\", \$state, \"read\"])" \
+                <<< "$prefixes" >/dev/null
+            permissions="$(waypost_claude_cli_permissions_json)"
+            jq -e --arg permission "Bash(~/.local/bin/waypost --state-dir ~/.local/state/ai-agent/waypost list *)" \
+                ". | index(\$permission) != null" <<< "$permissions" >/dev/null
+        ' _ "$REPO_ROOT" \
+        || fail_test "global Waypost rules omitted HOME-relative forms"
+
+    HOME="$home_dir" \
+        XDG_STATE_HOME="$home_dir/.local/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$home_dir/.local/bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer omitted HOME-relative Waypost forms"
+
+    grep -Fq 'pattern = ["~/.local/bin/waypost", "--state-dir", "~/.local/state/ai-agent/waypost", "read"]' \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "initializer omitted tilde Codex Waypost rule"
+    grep -Fq 'commandPrefix = ["~/.local/bin/waypost", "--state-dir", "~/.local/state/ai-agent/waypost", "list"]' \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "initializer omitted tilde Gemini Waypost rule"
+    jq -e --arg permission "Bash(~/.local/bin/waypost --state-dir ~/.local/state/ai-agent/waypost read *)" \
+        '.permissions.allow | index($permission) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "initializer omitted tilde Claude Waypost rule"
+}
+
+test_waypost_rules_render_canonical_symlink_targets() {
+    local case_dir="$TEST_ROOT/waypost-canonical-symlink-target"
+    local launcher_dir="$case_dir/launcher-bin"
+    local target_dir="$case_dir/target-bin"
+    local retarget_dir="$case_dir/retarget-bin"
+    local project_dir="$case_dir/project"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$launcher_dir" "$target_dir" "$retarget_dir" "$project_dir"
+    make_waypost_stub "$target_dir/waypost-real"
+    make_waypost_stub "$retarget_dir/waypost-real"
+    ln -s "$target_dir/waypost-real" "$launcher_dir/waypost"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$case_dir/waypost-state" \
+        PATH="$launcher_dir:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            ensure_waypost_cli_command
+            [[ "$WAYPOST_RULE_COMMAND" == "$2/target-bin/waypost-real" ]]
+            install_waypost_cli_rules
+            grep -Fq "$2/target-bin/waypost-real" "$HOME/.codex/rules/waypost-readonly.rules"
+            grep -Fq "$2/target-bin/waypost-real" "$HOME/.gemini/policies/waypost-readonly.toml"
+            jq -e --arg command "$2/target-bin/waypost-real" \
+                ".permissions.allow | any(.[]; type == \"string\" and contains(\$command))" \
+                "$HOME/.claude/settings.json" >/dev/null
+            jq -e --arg command "$2/target-bin/waypost-real" \
+                ".version == 2 and all(.rules[]; .command == \$command)" \
+                "$(claude_waypost_cli_manifest_path)" >/dev/null
+        ' _ "$REPO_ROOT" "$case_dir" >/dev/null \
+        || fail_test "global Waypost rules did not use the canonical symlink target"
+
+    ln -sfn "$retarget_dir/waypost-real" "$launcher_dir/waypost"
+    ! grep -Fq "$launcher_dir/waypost" "$case_dir/home/.codex/rules/waypost-readonly.rules" \
+        || fail_test "global Codex rule retained a mutable Waypost launcher"
+    ! grep -Fq "$launcher_dir/waypost" "$case_dir/home/.gemini/policies/waypost-readonly.toml" \
+        || fail_test "global Gemini rule retained a mutable Waypost launcher"
+    ! jq -e --arg launcher "$launcher_dir/waypost" \
+        '.permissions.allow | any(.[]; type == "string" and contains($launcher))' \
+        "$case_dir/home/.claude/settings.json" >/dev/null \
+        || fail_test "global Claude rule retained a mutable Waypost launcher"
+
+    ln -sfn "$target_dir/waypost-real" "$launcher_dir/waypost"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$case_dir/waypost-state" \
+        PATH="$launcher_dir:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer did not accept a trusted Waypost launcher"
+
+    ln -sfn "$retarget_dir/waypost-real" "$launcher_dir/waypost"
+    grep -Fq "$target_dir/waypost-real" "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "project Codex rule omitted the canonical Waypost target"
+    grep -Fq "$target_dir/waypost-real" "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "project Gemini rule omitted the canonical Waypost target"
+    jq -e --arg command "$target_dir/waypost-real" \
+        '.permissions.allow | any(.[]; type == "string" and contains($command))' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "project Claude rule omitted the canonical Waypost target"
+    ! grep -RFq "$launcher_dir/waypost" \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        "$project_dir/.claude/settings.json" \
+        "$project_dir/.claude/.agent-deck-workflow-waypost-cli.json" \
+        || fail_test "project rule retained a mutable Waypost launcher"
+
+    make_waypost_stub "$retarget_dir/wp"
+    ln -sfn "$retarget_dir/wp" "$launcher_dir/waypost"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$case_dir/waypost-state" \
+        PATH="$launcher_dir:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            if ensure_waypost_cli_command; then exit 10; fi
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "Waypost resolver accepted a target its manifest cannot own"
+}
+
+test_waypost_claude_manifest_migrates_ansi_c_paths() {
+    local case_dir="$TEST_ROOT/waypost-claude-manifest-ansi-c"
+    local home_dir="${case_dir}/home"$'\n''dir'
+    local fake_bin="${home_dir}/bin"$'\n''dir'
+    local state_dir="${home_dir}/waypost-state"$'\n''first'
+    local next_state_dir="${home_dir}/waypost-state"$'\n''next'
+
+    mkdir -p "$fake_bin"
+    make_waypost_stub "$fake_bin/waypost"
+
+    HOME="$home_dir" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            ensure_claude_waypost_cli_permissions
+            manifest="$(claude_waypost_cli_manifest_path)"
+            old_permission="$(waypost_rule_claude_cli_permission "$2/waypost" "$WAYPOST_STATE_DIR" read true)"
+            jq -e --arg permission "$old_permission" \
+                ".version == 2 and (.permissions | index(\$permission) != null)" \
+                "$manifest" >/dev/null
+
+            jq "{version: 1, permissions: .permissions}" "$manifest" > "$manifest.tmp"
+            mv "$manifest.tmp" "$manifest"
+            ensure_claude_waypost_cli_permissions
+            jq -e ".version == 2 and (.rules | type == \"array\")" "$manifest" >/dev/null
+
+            WAYPOST_STATE_DIR="$3"
+            new_permission="$(waypost_rule_claude_cli_permission "$2/waypost" "$WAYPOST_STATE_DIR" read true)"
+            ensure_claude_waypost_cli_permissions
+            ! jq -e --arg permission "$old_permission" \
+                ".permissions.allow | index(\$permission) != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+            jq -e --arg permission "$new_permission" \
+                ".permissions.allow | index(\$permission) != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+        ' _ "$REPO_ROOT" "$fake_bin" "$next_state_dir" >/dev/null \
+        || fail_test "Claude Waypost manifest did not migrate ANSI-C quoted paths"
+}
+
+test_waypost_workflow_initializer_rejects_project_waypost() {
+    local case_dir="$TEST_ROOT/waypost-project-cli"
+    local project_dir="$case_dir/project"
+    local launcher_dir="$case_dir/launcher"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$project_dir/bin" "$project_dir/.claude" "$launcher_dir"
+    printf '%s\n' '#!/bin/sh' 'exit 0' > "$project_dir/bin/waypost"
+    chmod +x "$project_dir/bin/waypost"
+    ln -s "$project_dir/bin/waypost" "$launcher_dir/waypost"
+    printf '%s\n' \
+        '{"permissions":{"allow":["Bash(waypost --state-dir /stale read *)","Bash(waypost send *)"]}}' \
+        > "$project_dir/.claude/settings.json"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$case_dir/waypost-state" \
+        PATH="$launcher_dir:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null 2>&1 \
+        || fail_test "workflow initializer rejected a project-local Waypost check"
+
+    ! grep -Fq "$project_dir/bin/waypost" \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "initializer approved a project-local Waypost path for Codex"
+    ! grep -Fq 'pattern = ["waypost", "--state-dir"' \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "initializer retained a bare Waypost rule after resolving a project binary"
+    ! grep -Fq "$project_dir/bin/waypost" \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "initializer approved a project-local Waypost path for Gemini"
+    ! grep -Fq 'commandPrefix = ["waypost", "--state-dir"' \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "initializer retained a bare Gemini Waypost rule after resolving a project binary"
+    jq -e '.permissions.allow | index("Bash(waypost --state-dir /stale read *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "initializer removed a manifestless user-managed Waypost permission"
+    jq -e '.permissions.allow | index("Bash(waypost send *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "initializer removed a user-managed Waypost permission"
+}
+
+test_waypost_workflow_initializer_rejects_unsupported_cli() {
+    local case_dir="$TEST_ROOT/waypost-unsupported-cli"
+    local project_dir="$case_dir/project"
+    local fake_bin="$case_dir/bin"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$project_dir/.claude" "$fake_bin"
+    printf '%s\n' '#!/bin/sh' 'exit 64' > "$fake_bin/waypost"
+    chmod +x "$fake_bin/waypost"
+    printf '%s\n' \
+        '{"permissions":{"allow":["Bash(waypost)","Bash(waypost *)","Bash(waypost --state-dir /old read *)","Bash(waypost send *)"]}}' \
+        > "$project_dir/.claude/settings.json"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$case_dir/state/ai-agent/waypost" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer failed when an external Waypost lacks required capabilities"
+
+    ! grep -Fq 'pattern = ["waypost", "--state-dir"' \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "initializer approved an unsupported Waypost CLI for Codex"
+    ! grep -Fq 'commandPrefix = ["waypost", "--state-dir"' \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "initializer approved an unsupported Waypost CLI for Gemini"
+    jq -e '.permissions.allow | index("Bash(waypost --state-dir /old read *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "initializer removed a manifestless user-owned Waypost authorization"
+    ! jq -e '.permissions.allow | index("Bash(waypost)") != null or index("Bash(waypost *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "initializer retained broad Waypost authorization after capability failure"
+    jq -e '.permissions.allow | index("Bash(waypost send *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "initializer removed a user-owned Waypost authorization after capability failure"
+}
+
+test_waypost_workflow_initializer_rejects_invalid_manifest_before_settings() {
+    local case_dir="$TEST_ROOT/waypost-invalid-project-manifest"
+    local project_dir="$case_dir/project"
+    local fake_bin="$case_dir/bin"
+    local manifest_path="$project_dir/.claude/.agent-deck-workflow-waypost-cli.json"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$project_dir/.claude" "$fake_bin"
+    make_waypost_stub "$fake_bin/waypost"
+    printf '%s\n' '{}' > "$case_dir/manifest-target.json"
+    ln -s "$case_dir/manifest-target.json" "$manifest_path"
+
+    if HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$case_dir/waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null 2>&1; then
+        fail_test "workflow initializer accepted a symlinked Claude ownership manifest"
+    fi
+
+    [[ ! -e "$project_dir/.claude/settings.json" && ! -L "$project_dir/.claude/settings.json" ]] \
+        || fail_test "workflow initializer changed settings before rejecting its manifest"
+    [[ -L "$manifest_path" ]] \
+        || fail_test "workflow initializer replaced an invalid Claude ownership manifest"
+}
+
+test_waypost_manifest_commit_rolls_back_claude_settings() {
+    local case_dir="$TEST_ROOT/waypost-manifest-commit-rollback"
+    local fake_bin="$case_dir/bin"
+    local fail_bin="$case_dir/fail-bin"
+    local project_dir="$case_dir/project"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+    local real_perl
+
+    real_perl="$(command -v perl)" || fail_test "perl is required for atomic Waypost settings replacement"
+    mkdir -p "$fake_bin" "$fail_bin" "$project_dir"
+    make_waypost_stub "$fake_bin/waypost"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'for argument in "$@"; do last="$argument"; done' \
+        'if [ "$last" = "$WAYPOST_REPLACE_FAIL_DEST" ]; then exit 1; fi' \
+        'exec "$WAYPOST_REAL_PERL" "$@"' > "$fail_bin/perl"
+    chmod +x "$fail_bin/perl"
+
+    HOME="$case_dir/global-home" \
+        XDG_STATE_HOME="$case_dir/global-state" \
+        WAYPOST_STATE_DIR="$case_dir/global-waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        FAIL_BIN="$fail_bin" \
+        WAYPOST_REAL_PERL="$real_perl" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            ensure_claude_waypost_cli_permissions
+            settings="$HOME/.claude/settings.json"
+            manifest="$(claude_waypost_cli_manifest_path)"
+            settings_before="$(<"$settings")"
+            manifest_before="$(<"$manifest")"
+            WAYPOST_STATE_DIR="$2/global-waypost-state-next"
+            PATH="$FAIL_BIN:$PATH"
+            WAYPOST_REPLACE_FAIL_DEST="$manifest"
+            export WAYPOST_REPLACE_FAIL_DEST
+            if ensure_claude_waypost_cli_permissions; then exit 10; fi
+            [[ "$(<"$settings")" == "$settings_before" ]]
+            [[ "$(<"$manifest")" == "$manifest_before" ]]
+        ' _ "$REPO_ROOT" "$case_dir" >/dev/null \
+        || fail_test "global Claude settings were not rolled back after manifest failure"
+
+    HOME="$case_dir/project-home" \
+        XDG_STATE_HOME="$case_dir/project-state" \
+        WAYPOST_STATE_DIR="$case_dir/project-waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "could not initialize project Claude Waypost permissions"
+
+    local project_settings="$project_dir/.claude/settings.json"
+    local project_manifest="$project_dir/.claude/.agent-deck-workflow-waypost-cli.json"
+    local project_settings_before
+    local project_manifest_before
+    project_settings_before="$(<"$project_settings")"
+    project_manifest_before="$(<"$project_manifest")"
+
+    if HOME="$case_dir/project-home" \
+        XDG_STATE_HOME="$case_dir/project-state" \
+        WAYPOST_STATE_DIR="$case_dir/project-waypost-state-next" \
+        PATH="$fake_bin:$fail_bin:/usr/bin:/bin" \
+        WAYPOST_REPLACE_FAIL_DEST="$project_manifest" \
+        WAYPOST_REAL_PERL="$real_perl" \
+        PROJECT_MANIFEST="$project_manifest" \
+        INITIALIZER="$initializer" \
+        PROJECT_DIR="$project_dir" \
+        bash -c 'exec "$INITIALIZER" "$PROJECT_DIR"' >/dev/null 2>&1; then
+        fail_test "project initializer succeeded after injected manifest failure"
+    fi
+
+    [[ "$(<"$project_settings")" == "$project_settings_before" ]] \
+        || fail_test "project Claude settings were not rolled back after manifest failure"
+    [[ "$(<"$project_manifest")" == "$project_manifest_before" ]] \
+        || fail_test "project Claude manifest changed after failed commit"
+}
+
+test_waypost_claude_settings_symlinks_are_preserved() {
+    local case_dir="$TEST_ROOT/waypost-symlinked-claude-settings"
+    local fake_bin="$case_dir/bin"
+    local project_dir="$case_dir/project"
+    local temp_project_dir="$case_dir/temp-project"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+    local global_target="$case_dir/global-settings-target.json"
+    local project_target="$case_dir/project-settings-target.json"
+    local temporary_target="$case_dir/temporary-settings-target.json"
+
+    mkdir -p \
+        "$fake_bin" \
+        "$case_dir/global-home/.claude" \
+        "$project_dir/.claude" \
+        "$temp_project_dir/.claude"
+    make_waypost_stub "$fake_bin/waypost"
+    printf '%s\n' '{"permissions":{"allow":["Bash(git status)"]}}' > "$global_target"
+    printf '%s\n' '{"permissions":{"allow":["Bash(git status)"]}}' > "$project_target"
+    printf '%s\n' 'must stay unchanged' > "$temporary_target"
+    ln -s "$global_target" "$case_dir/global-home/.claude/settings.json"
+    ln -s "$project_target" "$project_dir/.claude/settings.json"
+    printf '%s\n' '{"permissions":{"allow":["Bash(git status)"]}}' \
+        > "$temp_project_dir/.claude/settings.json"
+    ln -s "$temporary_target" "$temp_project_dir/.claude/settings.json.tmp"
+
+    if HOME="$case_dir/global-home" \
+        XDG_STATE_HOME="$case_dir/global-state" \
+        WAYPOST_STATE_DIR="$case_dir/global-waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            ensure_claude_waypost_cli_permissions
+        ' _ "$REPO_ROOT" >/dev/null 2>&1; then
+        fail_test "global Claude updater accepted a symlinked settings path"
+    fi
+    [[ -L "$case_dir/global-home/.claude/settings.json" ]] \
+        || fail_test "global Claude updater replaced a settings symlink"
+    [[ "$(<"$global_target")" == '{"permissions":{"allow":["Bash(git status)"]}}' ]] \
+        || fail_test "global Claude updater changed a symlink target"
+
+    if HOME="$case_dir/project-home" \
+        XDG_STATE_HOME="$case_dir/project-state" \
+        WAYPOST_STATE_DIR="$case_dir/project-waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null 2>&1; then
+        fail_test "project initializer accepted a symlinked Claude settings path"
+    fi
+    [[ -L "$project_dir/.claude/settings.json" ]] \
+        || fail_test "project initializer replaced a settings symlink"
+    [[ "$(<"$project_target")" == '{"permissions":{"allow":["Bash(git status)"]}}' ]] \
+        || fail_test "project initializer changed a settings symlink target"
+
+    HOME="$case_dir/temp-project-home" \
+        XDG_STATE_HOME="$case_dir/temp-project-state" \
+        WAYPOST_STATE_DIR="$case_dir/temp-project-waypost-state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$temp_project_dir" >/dev/null \
+        || fail_test "project initializer failed with a pre-existing obsolete temporary path"
+    [[ "$(<"$temporary_target")" == 'must stay unchanged' ]] \
+        || fail_test "project initializer followed a pre-existing temporary-file symlink"
+    [[ -L "$temp_project_dir/.claude/settings.json.tmp" ]] \
+        || fail_test "project initializer replaced an unrelated temporary-file symlink"
+    ! compgen -G "$temp_project_dir/.claude/settings.json.backup.*" >/dev/null \
+        || fail_test "project initializer left a plaintext Claude settings backup"
+}
+
+test_gemini_and_antigravity_settings_symlinks_are_preserved() {
+    local case_dir="$TEST_ROOT/waypost-symlinked-gemini-settings"
+    local home_dir="$case_dir/home"
+    local gemini_target="$case_dir/gemini-settings-target.json"
+    local antigravity_target="$case_dir/antigravity-settings-target.json"
+
+    mkdir -p "$home_dir/.gemini/antigravity-cli"
+    printf '%s\n' '{"owner":"gemini"}' > "$gemini_target"
+    : > "$antigravity_target"
+    ln -s "$gemini_target" "$home_dir/.gemini/settings.json"
+    ln -s "$antigravity_target" "$home_dir/.gemini/antigravity-cli/settings.json"
+
+    HOME="$home_dir" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            if ensure_gemini_permanent_tool_approval; then exit 10; fi
+            if rewrite_gemini_waypost_config; then exit 11; fi
+            if ensure_antigravity_waypost_permissions; then exit 12; fi
+            if rewrite_antigravity_waypost_config; then exit 13; fi
+
+            [[ -L "$HOME/.gemini/settings.json" ]]
+            [[ -L "$HOME/.gemini/antigravity-cli/settings.json" ]]
+            [[ "$(<"$2")" == "{\"owner\":\"gemini\"}" ]]
+            [[ ! -s "$3" ]]
+            [[ ! -e "$HOME/.gemini/config/mcp_config.json" ]]
+        ' _ "$REPO_ROOT" "$gemini_target" "$antigravity_target" >/dev/null \
+        || fail_test "Gemini or Antigravity authorization updates changed a settings symlink"
+}
+
+test_global_waypost_rules_allow_home_local_bin() {
+    local case_dir="$TEST_ROOT/waypost-global-home-cli"
+    local home_dir="$case_dir/home"
+
+    make_waypost_stub "$home_dir/.local/bin/waypost"
+
+    HOME="$home_dir" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        WAYPOST_STATE_DIR="$case_dir/state/ai-agent/waypost" \
+        PATH="$home_dir/.local/bin:/usr/bin:/bin" \
+        bash -c '
+            cd "$HOME"
+            source "$1/install.sh"
+            set -e
+
+            ensure_waypost_authorization_prerequisites
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "global AI rules rejected Waypost installed under HOME/.local/bin"
+}
+
+test_global_waypost_rules_reject_project_commands() {
+    local case_dir="$TEST_ROOT/waypost-global-project-cli"
+    local project_dir="$case_dir/project"
+    local launcher_dir="$case_dir/launcher"
+    local trusted_dir="$case_dir/trusted"
+    local failing_git_dir="$case_dir/failing-git"
+
+    mkdir -p "$project_dir/bin" "$project_dir/nested" "$project_dir/symlink-bin" "$launcher_dir" "$trusted_dir" "$failing_git_dir"
+    git -C "$project_dir" init -q || fail_test "could not initialize Waypost trust-boundary fixture"
+    make_waypost_stub "$project_dir/bin/waypost"
+    make_waypost_stub "$project_dir/waypost"
+    make_waypost_stub "$trusted_dir/waypost"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ -n "${GIT_FAKE_ROOT:-}" ]; then' \
+        '    printf "%s\\n" "$GIT_FAKE_ROOT"' \
+        '    exit 0' \
+        'fi' \
+        'exit 1' > "$failing_git_dir/git"
+    chmod +x "$failing_git_dir/git"
+    ln -s "$project_dir/bin/waypost" "$launcher_dir/waypost"
+    ln -s "$trusted_dir/waypost" "$project_dir/symlink-bin/waypost"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            cd "$2/nested"
+            source "$1/install.sh"
+            set -e
+
+            if PATH="$2/bin:/usr/bin:/bin" ensure_waypost_authorization_prerequisites; then exit 10; fi
+            [[ -z "$WAYPOST_RULE_COMMAND" ]]
+            if PATH="$3:/usr/bin:/bin" ensure_waypost_authorization_prerequisites; then exit 11; fi
+            [[ -z "$WAYPOST_RULE_COMMAND" ]]
+            if PATH=".:/usr/bin:/bin" ensure_waypost_authorization_prerequisites; then exit 12; fi
+            [[ -z "$WAYPOST_RULE_COMMAND" ]]
+            if PATH="$2/symlink-bin:/usr/bin:/bin" ensure_waypost_authorization_prerequisites; then exit 13; fi
+            [[ -z "$WAYPOST_RULE_COMMAND" ]]
+            if PATH="$2/bin:$4:/usr/bin:/bin" ensure_waypost_authorization_prerequisites; then exit 14; fi
+            [[ -z "$WAYPOST_RULE_COMMAND" ]]
+            if GIT_FAKE_ROOT="$5" PATH="$2/bin:$4:/usr/bin:/bin" ensure_waypost_authorization_prerequisites; then exit 15; fi
+            [[ -z "$WAYPOST_RULE_COMMAND" ]]
+        ' _ "$REPO_ROOT" "$project_dir" "$launcher_dir" "$failing_git_dir" "$trusted_dir" >/dev/null \
+        || fail_test "global AI rules accepted a project-local Waypost command"
+}
+
+test_relative_waypost_state_dirs_fail_before_rules_are_written() {
+    local case_dir="$TEST_ROOT/waypost-relative-state-dir"
+    local fake_bin="$case_dir/bin"
+    local project_dir="$case_dir/project"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$fake_bin" "$project_dir"
+    make_waypost_stub "$fake_bin/waypost"
+
+    HOME="$case_dir/global-home" \
+        XDG_STATE_HOME="$case_dir/global-state" \
+        XDG_DATA_HOME="$case_dir/global-data" \
+        WAYPOST_STATE_DIR='relative-waypost-state' \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            if install_ai_permission_rules; then exit 10; fi
+            [[ ! -e "$HOME/.codex/rules/agent-deck-workflow.rules" ]]
+            [[ ! -e "$HOME/.codex/rules/waypost-readonly.rules" ]]
+            [[ ! -e "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            [[ ! -e "$HOME/.gemini/policies/waypost-readonly.toml" ]]
+            [[ ! -e "$HOME/.claude/settings.json" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "relative Waypost state wrote global authorization rules"
+
+    HOME="$case_dir/project-home" \
+        XDG_STATE_HOME="$case_dir/project-state" \
+        WAYPOST_STATE_DIR='relative-waypost-state' \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer failed instead of omitting a relative Waypost state"
+    [[ ! -e "$project_dir/.claude/.agent-deck-workflow-waypost-cli.json" ]] \
+        || fail_test "workflow initializer wrote a relative Waypost ownership manifest"
+    ! grep -RFq -- 'relative-waypost-state' \
+        "$project_dir/.claude" "$project_dir/.codex" "$project_dir/.gemini" \
+        || fail_test "workflow initializer wrote a relative Waypost authorization rule"
+
+    HOME="$case_dir/xdg-home" \
+        XDG_STATE_HOME='relative-xdg-state' \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            unset WAYPOST_STATE_DIR
+            if waypost_rule_state_dir >/dev/null; then exit 10; fi
+            if ensure_waypost_cli_command; then exit 11; fi
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "relative XDG_STATE_HOME was accepted for Waypost rules"
+}
+
+test_ai_rules_preflight_without_jq_preserves_all_authorizations() {
+    local case_dir="$TEST_ROOT/ai-rules-without-jq"
+    local fake_bin="$case_dir/bin"
+    local shared_policy="$case_dir/data/config_files/ai-agent/gemini/policies/agent-deck-workflow.toml"
+    local user_policy="$case_dir/home/.gemini/policies/agent-deck-workflow.toml"
+    local shared_codex="$case_dir/data/config_files/ai-agent/codex/rules/agent-deck-workflow.rules"
+    local user_codex="$case_dir/home/.codex/rules/agent-deck-workflow.rules"
+
+    make_waypost_stub "$fake_bin/waypost"
+    mkdir -p "$(dirname "$shared_policy")" "$(dirname "$shared_codex")" \
+        "$(dirname "$user_policy")" "$(dirname "$user_codex")" \
+        "$case_dir/home/.claude" "$case_dir/home/.gemini/antigravity-cli"
+    printf '%s\n' 'legacy Gemini policy' > "$shared_policy"
+    printf '%s\n' 'legacy Codex rule' > "$shared_codex"
+    ln -s "$shared_policy" "$user_policy"
+    ln -s "$shared_codex" "$user_codex"
+    printf '%s\n' '{"permissions":{"allow":["mcp__workflow_mailbox__mailbox_send"]}}' \
+        > "$case_dir/home/.claude/settings.json"
+    printf '%s\n' '{"permissions":{"allow":["mcp(workflow_mailbox/mailbox_send)"]}}' \
+        > "$case_dir/home/.gemini/antigravity-cli/settings.json"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "jq" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            jq() { return 127; }
+
+            if install_ai_permission_rules; then exit 10; fi
+            [[ -L "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            [[ -L "$HOME/.codex/rules/agent-deck-workflow.rules" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "ai-rules changed state before detecting missing jq"
+
+    symlink_points_to "$user_policy" "$shared_policy" \
+        || fail_test "missing jq changed the legacy Gemini authorization link"
+    symlink_points_to "$user_codex" "$shared_codex" \
+        || fail_test "missing jq changed the legacy Codex authorization link"
+    jq -e '.permissions.allow == ["mcp__workflow_mailbox__mailbox_send"]' \
+        "$case_dir/home/.claude/settings.json" >/dev/null \
+        || fail_test "missing jq changed Claude authorization"
+    jq -e '.permissions.allow == ["mcp(workflow_mailbox/mailbox_send)"]' \
+        "$case_dir/home/.gemini/antigravity-cli/settings.json" >/dev/null \
+        || fail_test "missing jq changed Antigravity authorization"
+    [[ ! -e "$case_dir/home/.gemini/settings.json" ]] \
+        || fail_test "missing jq created Gemini authorization settings"
+}
+
+test_unselected_ai_rules_remove_dangling_legacy_links() {
+    local case_dir="$TEST_ROOT/ai-rules-dangling-links"
+    local shared_root="$case_dir/data/config_files/ai-agent"
+    local gemini_link="$case_dir/home/.gemini/policies/agent-deck-workflow.toml"
+    local codex_link="$case_dir/home/.codex/rules/agent-deck-workflow.rules"
+
+    mkdir -p "$(dirname "$gemini_link")" "$(dirname "$codex_link")"
+    ln -s "$shared_root/gemini/policies/agent-deck-workflow.toml" "$gemini_link"
+    ln -s "$shared_root/codex/rules/agent-deck-workflow.rules" "$codex_link"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            parse_args --only ai
+            install_shared_ai_agent_snapshot
+            [[ ! -e "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            [[ ! -L "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            [[ ! -e "$HOME/.codex/rules/agent-deck-workflow.rules" ]]
+            [[ ! -L "$HOME/.codex/rules/agent-deck-workflow.rules" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "unselected ai-rules let a dangling legacy link reactivate"
+}
+
+test_ai_rules_only_installs_global_authorization_rules() {
+    local case_dir="$TEST_ROOT/ai-rules-only"
+    local fake_bin="$case_dir/bin"
+    local state_dir="$case_dir/state/ai-agent/waypost"
+    local output
+
+    mkdir -p "$fake_bin"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'printf "%s\\n" "$*" >> "$WAYPOST_COMMANDS"' \
+        'if [ "${1:-}" = "mcp" ]; then' \
+        '    if [ "${2:-}" = "--help" ]; then exit 0; fi' \
+        '    touch "$WAYPOST_MCP_CALLED"' \
+        '    exit 1' \
+        'fi' \
+        'exit 0' > "$fake_bin/waypost"
+    chmod +x "$fake_bin/waypost"
+
+    output="$(
+        HOME="$case_dir/home" \
+            XDG_STATE_HOME="$case_dir/state" \
+            XDG_DATA_HOME="$case_dir/data" \
+            WAYPOST_MCP_CALLED="$case_dir/mcp-called" \
+            WAYPOST_COMMANDS="$case_dir/waypost-commands" \
+            PATH="$fake_bin:/usr/bin:/bin" \
+            bash "$REPO_ROOT/install.sh" --no-color --ai-rules
+    )" || fail_test "--ai-rules install failed"
+
+    [[ "$output" == *"Sections: ai-rules"* ]] \
+        || fail_test "--ai-rules did not select only the rules section"
+    [[ "$output" != *"Installing shared agent assets..."* ]] \
+        || fail_test "--ai-rules unexpectedly refreshed the shared skills snapshot"
+    [[ "$output" == *"Installing global AI authorization rules..."* ]] \
+        || fail_test "--ai-rules did not install global authorization rules"
+    [[ "$output" == *"Installing Agent Deck authorization rules..."* ]] \
+        || fail_test "--ai-rules did not install static Agent Deck rules"
+    [[ "$output" == *"Checking Waypost CLI for read-only permissions..."* ]] \
+        || fail_test "--ai-rules did not check the Waypost CLI"
+    [[ "$output" == *"Installing read-only Waypost CLI permission rules..."* ]] \
+        || fail_test "--ai-rules did not install Waypost CLI permissions"
+    [[ "$output" == *"Checking built-in waypost MCP command..."* ]] \
+        || fail_test "--ai-rules did not preflight the Waypost MCP command"
+    [[ "$output" != *"Checking required CLI tools..."* ]] \
+        || fail_test "--ai-rules ran the general CLI bootstrap"
+    [[ "$output" != *"Initializing git submodules..."* ]] \
+        || fail_test "--ai-rules initialized git submodules"
+    [[ "$output" != *"Installing AI skills only..."* ]] \
+        || fail_test "--ai-rules installed skills"
+    [[ "$output" != *"Installing Codex config..."* ]] \
+        || fail_test "--ai-rules installed Codex config"
+    [[ "$output" != *"Installing Claude Code config..."* ]] \
+        || fail_test "--ai-rules installed Claude config"
+    [[ "$output" != *"Installing Gemini CLI config..."* ]] \
+        || fail_test "--ai-rules installed Gemini config"
+    [[ ! -e "$case_dir/mcp-called" ]] \
+        || fail_test "--ai-rules invoked the Waypost MCP command"
+    grep -Fqx -- "mcp --help" "$case_dir/waypost-commands" \
+        || fail_test "--ai-rules did not verify the Waypost MCP command"
+    grep -Fqx -- "--state-dir $state_dir read --help" "$case_dir/waypost-commands" \
+        || fail_test "--ai-rules did not verify the state-scoped read command"
+    grep -Fqx -- "--state-dir $state_dir list --help" "$case_dir/waypost-commands" \
+        || fail_test "--ai-rules did not verify the state-scoped list command"
+
+    [[ -f "$case_dir/home/.codex/rules/waypost-readonly.rules" ]] \
+        || fail_test "--ai-rules did not generate Codex Waypost permissions"
+    [[ -f "$case_dir/home/.codex/rules/agent-deck-workflow.rules" \
+        && ! -L "$case_dir/home/.codex/rules/agent-deck-workflow.rules" ]] \
+        || fail_test "--ai-rules did not install a managed Codex Agent Deck rule copy"
+    [[ -f "$case_dir/home/.claude/settings.json" ]] \
+        || fail_test "--ai-rules did not generate Claude permissions"
+    [[ -f "$case_dir/home/.gemini/policies/waypost-readonly.toml" ]] \
+        || fail_test "--ai-rules did not generate Gemini Waypost permissions"
+    [[ -f "$case_dir/home/.gemini/policies/agent-deck-workflow.toml" \
+        && ! -L "$case_dir/home/.gemini/policies/agent-deck-workflow.toml" ]] \
+        || fail_test "--ai-rules did not install a managed Gemini Agent Deck policy copy"
+    [[ ! -e "$case_dir/home/.codex/config.toml" ]] \
+        || fail_test "--ai-rules wrote a Codex MCP config"
+    [[ ! -e "$case_dir/home/.claude.json" ]] \
+        || fail_test "--ai-rules wrote a Claude MCP config"
+    [[ -f "$case_dir/home/.gemini/settings.json" ]] \
+        || fail_test "--ai-rules did not write Gemini authorization settings"
+    jq -e '.security.enablePermanentToolApproval == true and .security.disableAlwaysAllow == false' \
+        "$case_dir/home/.gemini/settings.json" >/dev/null \
+        || fail_test "--ai-rules did not enable Gemini permanent tool approval"
+    jq -e '(.mcpServers // {}) | has("waypost") | not' \
+        "$case_dir/home/.gemini/settings.json" >/dev/null \
+        || fail_test "--ai-rules wrote a Gemini MCP server"
+    [[ -f "$case_dir/home/.gemini/antigravity-cli/settings.json" ]] \
+        || fail_test "--ai-rules did not write Antigravity authorization settings"
+    jq -e '.permissions.allow | index("mcp(waypost/waypost_read)") != null' \
+        "$case_dir/home/.gemini/antigravity-cli/settings.json" >/dev/null \
+        || fail_test "--ai-rules omitted Antigravity Waypost permissions"
+    jq -e '(.mcpServers // {}) | has("waypost") | not' \
+        "$case_dir/home/.gemini/antigravity-cli/settings.json" >/dev/null \
+        || fail_test "--ai-rules wrote an Antigravity MCP server"
+    [[ ! -e "$case_dir/home/.gemini/config/mcp_config.json" ]] \
+        || fail_test "--ai-rules wrote an Antigravity MCP config"
+    jq -e '.permissions.allow | index("mcp__waypost__waypost_read") != null' \
+        "$case_dir/home/.claude/settings.json" >/dev/null \
+        || fail_test "--ai-rules omitted Claude Waypost MCP permissions"
+}
+
+test_mcp_setup_leaves_ai_authorization_rules_to_ai_rules() {
+    local case_dir="$TEST_ROOT/ai-rules-boundary"
+
+    mkdir -p \
+        "$case_dir/home/.codex" \
+        "$case_dir/home/.claude" \
+        "$case_dir/home/.gemini/antigravity-cli"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            printf "%s\n" \
+                "[mcp_servers.waypost]" \
+                "command = \"waypost\"" \
+                "args = [\"mcp\"]" \
+                "" \
+                "[mcp_servers.workflow_mailbox.tools.mailbox_send]" \
+                "enabled = true" > "$HOME/.codex/config.toml"
+            printf "%s\n" "{\"permissions\":{\"allow\":[\"user\"]}}" \
+                > "$HOME/.gemini/antigravity-cli/settings.json"
+
+            CODEX_CLI_AVAILABLE=1
+            codex_waypost_uses_builtin_command() { return 0; }
+            remove_codex_legacy_waypost_mcps() { :; }
+            install_codex_waypost_mcp
+            grep -Fq "[mcp_servers.workflow_mailbox.tools.mailbox_send]" \
+                "$HOME/.codex/config.toml"
+            ! grep -Fq "[mcp_servers.waypost.tools.waypost_send]" \
+                "$HOME/.codex/config.toml"
+
+            install_gemini_waypost_mcp
+            jq -e "has(\"security\") | not" "$HOME/.gemini/settings.json" >/dev/null
+
+            install_antigravity_waypost_mcp
+            jq -e ".permissions.allow == [\"user\"]" \
+                "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null
+
+            printf "%s\n" "{\"mcpServers\":{\"waypost\":{\"command\":\"waypost\",\"args\":[\"mcp\"]}}}" \
+                > "$HOME/.claude.json"
+            printf "%s\n" "{\"permissions\":{\"allow\":[\"mcp__workflow_mailbox__mailbox_send\"]}}" \
+                > "$HOME/.claude/settings.json"
+            jq ".permissions.allow += [\"mcp(workflow_mailbox/mailbox_send)\"]" \
+                "$HOME/.gemini/antigravity-cli/settings.json" \
+                > "$HOME/.gemini/antigravity-cli/settings.json.tmp"
+            mv "$HOME/.gemini/antigravity-cli/settings.json.tmp" \
+                "$HOME/.gemini/antigravity-cli/settings.json"
+
+            ensure_waypost_authorization_prerequisites() { :; }
+            install_waypost_cli_rules() { :; }
+            install_ai_permission_rules
+            grep -Fq "[mcp_servers.waypost.tools.waypost_send]" \
+                "$HOME/.codex/config.toml"
+            ! jq -e ".permissions.allow | index(\"mcp__workflow_mailbox__mailbox_send\") != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+            jq -e ".permissions.allow | index(\"mcp__waypost__waypost_send\") != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+            jq -e ".security.enablePermanentToolApproval == true and .security.disableAlwaysAllow == false" \
+                "$HOME/.gemini/settings.json" >/dev/null
+            ! jq -e ".permissions.allow | index(\"mcp(workflow_mailbox/mailbox_send)\") != null" \
+                "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null
+            jq -e ".permissions.allow | index(\"mcp(waypost/waypost_read)\") != null" \
+                "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "MCP setup wrote authorization rules outside ai-rules"
+}
+
+test_codex_legacy_tools_migrate_before_mcp_cleanup() {
+    local case_dir="$TEST_ROOT/codex-legacy-tool-migration"
+    local fake_bin="$case_dir/bin"
+    local full_home="$case_dir/full-home"
+    local skipped_home="$case_dir/skipped-home"
+    local full_config="$full_home/.codex/config.toml"
+    local skipped_config="$skipped_home/.codex/config.toml"
+
+    mkdir -p "$fake_bin" "$(dirname "$full_config")" "$(dirname "$skipped_config")"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'config=${CODEX_CONFIG:?}' \
+        'case "${1:-}:${2:-}" in' \
+        '    mcp:get)' \
+        '        if [ "${3:-}" = "waypost" ] && grep -Fqx "[mcp_servers.waypost]" "$config"; then' \
+        '            printf "%s\\n" "command: waypost" "args: mcp"' \
+        '            exit 0' \
+        '        fi' \
+        '        exit 1' \
+        '        ;;' \
+        '    mcp:add)' \
+        '        [ "${3:-}" = "waypost" ] || exit 1' \
+        '        printf "%s\\n" "" "[mcp_servers.waypost]" "command = \"waypost\"" "args = [\"mcp\"]" >> "$config"' \
+        '        exit 0' \
+        '        ;;' \
+        '    mcp:remove)' \
+        '        printf "remove:%s\\n" "${3:-}" >> "$CODEX_LOG"' \
+        '        sed -i "/mcp_servers\\.workflow_mailbox/d" "$config"' \
+        '        exit 0' \
+        '        ;;' \
+        'esac' \
+        'exit 1' > "$fake_bin/codex"
+    chmod +x "$fake_bin/codex"
+    printf '%s\n' \
+        '[mcp_servers.workflow_mailbox]' \
+        'command = "legacy-mailbox"' \
+        '' \
+        '[mcp_servers.workflow_mailbox.tools.mailbox_send]' \
+        'enabled = true' > "$full_config"
+    cp "$full_config" "$skipped_config"
+
+    HOME="$full_home" \
+        XDG_STATE_HOME="$case_dir/full-state" \
+        XDG_DATA_HOME="$case_dir/full-data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        CODEX_CONFIG="$full_config" \
+        CODEX_LOG="$case_dir/full-codex.log" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            install_codex_waypost_mcp
+            grep -Fq "[mcp_servers.workflow_mailbox.tools.mailbox_send]" "$CODEX_CONFIG"
+
+            ensure_waypost_authorization_prerequisites() { :; }
+            install_agent_deck_workflow_rules() { :; }
+            ensure_claude_waypost_mcp_permissions() { :; }
+            ensure_gemini_permanent_tool_approval() { :; }
+            ensure_antigravity_waypost_permissions() { :; }
+            install_waypost_cli_rules() { :; }
+            install_ai_permission_rules
+
+            grep -Fq "[mcp_servers.waypost.tools.waypost_send]" "$CODEX_CONFIG"
+            ! grep -Fq "[mcp_servers.workflow_mailbox.tools.mailbox_send]" "$CODEX_CONFIG"
+            grep -Fqx "remove:workflow_mailbox" "$CODEX_LOG"
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "Codex legacy tools were not migrated before MCP cleanup"
+
+    HOME="$skipped_home" \
+        XDG_STATE_HOME="$case_dir/skipped-state" \
+        XDG_DATA_HOME="$case_dir/skipped-data" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        CODEX_CONFIG="$skipped_config" \
+        CODEX_LOG="$case_dir/skipped-codex.log" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            parse_args --skip ai-rules
+            install_codex_waypost_mcp
+            grep -Fq "[mcp_servers.workflow_mailbox.tools.mailbox_send]" "$CODEX_CONFIG"
+            [[ ! -e "$CODEX_LOG" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "skipping ai-rules removed Codex legacy tool approvals"
+}
+
+test_ai_rules_retains_legacy_approvals_without_waypost_mcp() {
+    local case_dir="$TEST_ROOT/ai-rules-legacy-mcp-gate"
+
+    mkdir -p \
+        "$case_dir/home/.codex" \
+        "$case_dir/home/.claude" \
+        "$case_dir/home/.gemini/config" \
+        "$case_dir/home/.gemini/antigravity-cli"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            printf "%s\n" \
+                "[mcp_servers.workflow_mailbox]" \
+                "command = \"legacy-mailbox\"" \
+                "" \
+                "[mcp_servers.workflow_mailbox.tools.mailbox_send]" \
+                "enabled = true" > "$HOME/.codex/config.toml"
+            printf "%s\n" \
+                "{\"mcpServers\":{\"workflow_mailbox\":{\"command\":\"legacy-mailbox\"}}}" \
+                > "$HOME/.claude.json"
+            printf "%s\n" \
+                "{\"permissions\":{\"allow\":[\"mcp__workflow_mailbox__mailbox_send\"]}}" \
+                > "$HOME/.claude/settings.json"
+            printf "%s\n" \
+                "{\"mcpServers\":{\"workflow_mailbox\":{\"command\":\"legacy-mailbox\"}}}" \
+                > "$HOME/.gemini/config/mcp_config.json"
+            printf "%s\n" \
+                "{\"permissions\":{\"allow\":[\"mcp(workflow_mailbox/mailbox_send)\"]}}" \
+                > "$HOME/.gemini/antigravity-cli/settings.json"
+
+            ensure_waypost_authorization_prerequisites() { :; }
+            install_agent_deck_workflow_rules() { :; }
+            install_waypost_cli_rules() { :; }
+            install_ai_permission_rules
+
+            grep -Fq "[mcp_servers.workflow_mailbox.tools.mailbox_send]" \
+                "$HOME/.codex/config.toml"
+            ! grep -Fq "[mcp_servers.waypost.tools.waypost_send]" \
+                "$HOME/.codex/config.toml"
+            jq -e ".permissions.allow | index(\"mcp__workflow_mailbox__mailbox_send\") != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+            jq -e ".permissions.allow | index(\"mcp(workflow_mailbox/mailbox_send)\") != null" \
+                "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "ai-rules migrated legacy approvals without a Waypost MCP"
+}
+
+test_ai_rules_freezes_legacy_policy_links_when_unselected() {
+    local case_dir="$TEST_ROOT/ai-rules-legacy-gemini-policy"
+    local shared_policy="$case_dir/data/config_files/ai-agent/gemini/policies/agent-deck-workflow.toml"
+    local user_policy="$case_dir/home/.gemini/policies/agent-deck-workflow.toml"
+
+    mkdir -p "$(dirname "$shared_policy")" "$(dirname "$user_policy")"
+    printf '%s\n' \
+        '[[rule]]' \
+        'name = "allow_waypost_cli"' \
+        'commandPrefix = ["waypost"]' > "$shared_policy"
+    ln -s "$shared_policy" "$user_policy"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            parse_args --only ai
+            FORCE=1
+            install_shared_ai_agent_snapshot
+            FORCE=0
+
+            [[ -f "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            [[ ! -L "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            grep -Fq "commandPrefix = [\"waypost\"]" \
+                "$HOME/.gemini/policies/agent-deck-workflow.toml"
+            ! grep -Fq "commandPrefix = [\"waypost\"]" \
+                "$SHARED_AI_AGENT_DIR/gemini/policies/agent-deck-workflow.toml"
+
+            parse_args --ai-rules
+            install_agent_deck_workflow_rules
+            [[ -f "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            [[ ! -L "$HOME/.gemini/policies/agent-deck-workflow.toml" ]]
+            ! grep -Fq "commandPrefix = [\"waypost\"]" \
+                "$HOME/.gemini/policies/agent-deck-workflow.toml"
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "unselected ai-rules did not freeze the legacy Gemini policy"
+}
+
+test_ai_rules_preflight_preserves_legacy_approvals() {
+    local case_dir="$TEST_ROOT/ai-rules-preflight"
+
+    mkdir -p \
+        "$case_dir/home/.codex" \
+        "$case_dir/home/.claude" \
+        "$case_dir/home/.gemini/config" \
+        "$case_dir/home/.gemini/antigravity-cli"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        XDG_DATA_HOME="$case_dir/data" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+            USE_COLOR=0
+            RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""
+
+            printf "%s\n" \
+                "[mcp_servers.waypost]" \
+                "command = \"waypost\"" \
+                "args = [\"mcp\"]" \
+                "" \
+                "[mcp_servers.workflow_mailbox.tools.mailbox_send]" \
+                "enabled = true" > "$HOME/.codex/config.toml"
+            printf "%s\n" \
+                "{\"mcpServers\":{\"waypost\":{\"command\":\"waypost\",\"args\":[\"mcp\"]}}}" \
+                > "$HOME/.claude.json"
+            printf "%s\n" \
+                "{\"permissions\":{\"allow\":[\"mcp__workflow_mailbox__mailbox_send\"]}}" \
+                > "$HOME/.claude/settings.json"
+            printf "%s\n" \
+                "{\"mcpServers\":{\"waypost\":{\"command\":\"waypost\",\"args\":[\"mcp\"]}}}" \
+                > "$HOME/.gemini/config/mcp_config.json"
+            printf "%s\n" \
+                "{\"permissions\":{\"allow\":[\"mcp(workflow_mailbox/mailbox_send)\"]}}" \
+                > "$HOME/.gemini/antigravity-cli/settings.json"
+
+            command() {
+                if [[ "$1" == "-v" && "$2" == "waypost" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+
+            if install_ai_permission_rules; then
+                exit 1
+            fi
+
+            grep -Fq "[mcp_servers.workflow_mailbox.tools.mailbox_send]" \
+                "$HOME/.codex/config.toml"
+            ! grep -Fq "[mcp_servers.waypost.tools.waypost_send]" \
+                "$HOME/.codex/config.toml"
+            jq -e ".permissions.allow | index(\"mcp__workflow_mailbox__mailbox_send\") != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+            ! jq -e ".permissions.allow | index(\"mcp__waypost__waypost_send\") != null" \
+                "$HOME/.claude/settings.json" >/dev/null
+            jq -e ".permissions.allow | index(\"mcp(workflow_mailbox/mailbox_send)\") != null" \
+                "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null
+            ! jq -e ".permissions.allow | index(\"mcp(waypost/waypost_send)\") != null" \
+                "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null
+            [[ ! -e "$HOME/.gemini/settings.json" ]]
+        ' _ "$REPO_ROOT" >/dev/null \
+        || fail_test "Waypost preflight changed legacy approvals"
+}
+
+test_waypost_workflow_initializer_uses_readonly_rules() {
+    local case_dir="$TEST_ROOT/waypost-workflow-initializer"
+    local fake_bin="$case_dir/bin"
+    local next_fake_bin="$case_dir/next-bin"
+    local project_dir="$case_dir/project"
+    local state_dir="$case_dir/waypost-state"
+    local next_state_dir="$case_dir/next-waypost-state"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$fake_bin" "$next_fake_bin" "$project_dir/.claude"
+    make_waypost_stub "$fake_bin/waypost"
+    make_waypost_stub "$next_fake_bin/waypost"
+    printf '%s\n' '{"permissions":{"allow":["Bash(waypost)","Bash(waypost *)","Bash(waypost send *)","Bash(git status)"]}}' \
+        > "$project_dir/.claude/settings.json"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer did not configure narrow Waypost permissions"
+
+    grep -Fq "pattern = [\"$fake_bin/waypost\", \"--state-dir\", \"$state_dir\", \"read\"]" \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "workflow initializer omitted Codex Waypost read permission"
+    ! grep -Fq 'pattern = ["waypost"],' \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "workflow initializer retained broad Codex Waypost permission"
+    jq -e --arg permission "Bash($fake_bin/waypost --state-dir $state_dir list *)" \
+        '.permissions.allow | index($permission) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer omitted Claude Waypost list permission"
+    ! jq -e '.permissions.allow | index("Bash(waypost)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer retained legacy bare Claude Waypost permission"
+    ! jq -e '.permissions.allow | index("Bash(waypost *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer retained broad Claude Waypost permission"
+    jq -e '.permissions.allow | index("Bash(waypost send *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer removed user-managed Claude Waypost permission"
+    jq -e '.permissions.allow | index("Bash(git status)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer removed unrelated Claude permission"
+    grep -Fq "commandPrefix = [\"$fake_bin/waypost\", \"--state-dir\", \"$state_dir\", \"read\"]" \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "workflow initializer omitted Gemini Waypost read permission"
+    ! grep -Fq '"][[rule]]' "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "workflow initializer wrote adjacent Gemini TOML rules"
+    ! grep -Fq 'commandPrefix = ["waypost"]' \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "workflow initializer retained broad Gemini Waypost permission"
+
+    jq --arg user_rule "Bash($case_dir/user-bin/waypost --state-dir $state_dir read *)" \
+        --arg broad_rule "Bash(waypost *)" \
+        '.permissions.allow += [$user_rule, $broad_rule]' \
+        "$project_dir/.claude/settings.json" > "$project_dir/.claude/settings.json.tmp"
+    mv "$project_dir/.claude/settings.json.tmp" "$project_dir/.claude/settings.json"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$next_state_dir" \
+        PATH="$next_fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer did not update Waypost state permissions"
+    ! jq -e --arg old_rule "Bash($fake_bin/waypost --state-dir $state_dir read *)" \
+        '.permissions.allow | index($old_rule) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer retained an owned old Waypost state permission"
+    jq -e --arg permission "Bash($next_fake_bin/waypost --state-dir $next_state_dir read *)" \
+        '.permissions.allow | index($permission) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer omitted updated Claude Waypost permission"
+    jq -e '.permissions.allow | index("Bash(waypost send *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer removed user-managed Claude Waypost permission during state update"
+    jq -e '.permissions.allow | index("Bash(waypost *)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer removed a later user-managed broad Claude Waypost permission"
+    ! jq -e --arg old_command "$fake_bin/waypost" \
+        '.permissions.allow | any(.[]; type == "string" and contains($old_command))' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer retained a relocated Waypost binary approval"
+    jq -e --arg user_rule "Bash($case_dir/user-bin/waypost --state-dir $state_dir read *)" \
+        '.permissions.allow | index($user_rule) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer removed a user-owned narrow Waypost permission"
+    ! grep -Fq "$state_dir" "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "workflow initializer retained old Codex Waypost state permission"
+    ! grep -Fq "$state_dir" "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "workflow initializer retained old Gemini Waypost state permission"
+}
+
+test_waypost_workflow_initializer_follows_launcher_symlink() {
+    local case_dir="$TEST_ROOT/waypost-workflow-launcher-symlink"
+    local home_dir="$case_dir/home"
+    local fake_bin="$case_dir/bin"
+    local project_dir="$case_dir/project"
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+    local launcher="$home_dir/.local/bin/agent-deck-workflow-init-permissions"
+
+    mkdir -p "$home_dir/.local/bin" "$fake_bin" "$project_dir"
+    make_waypost_stub "$fake_bin/waypost"
+    ln -s "$initializer" "$launcher"
+
+    HOME="$home_dir" \
+        XDG_STATE_HOME="$case_dir/state" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$launcher" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer did not resolve its launcher symlink"
+
+    grep -Fq "pattern = [\"$fake_bin/waypost\", \"--state-dir\", \"$case_dir/state/ai-agent/waypost\", \"read\"]" \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "launcher symlink did not initialize Waypost permissions"
+}
+
+test_waypost_workflow_initializer_serializes_special_state_dir() {
+    local case_dir="$TEST_ROOT/waypost-workflow-initializer-special-state-dir"
+    local fake_bin="$case_dir/bin"
+    local project_dir="$case_dir/project"
+    local state_dir="${case_dir}/waypost-state-with-newline"$'\n''quote"'
+    local state_dir_literal
+    local waypost_command_literal
+    local escaped_state_dir
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$fake_bin" "$project_dir/.claude" "$state_dir"
+    make_waypost_stub "$fake_bin/waypost"
+    printf '%s\n' '{"permissions":{"allow":["Bash(git status)"]}}' \
+        > "$project_dir/.claude/settings.json"
+    state_dir_literal="$(jq -cn --arg value "$state_dir" '$value')" \
+        || fail_test "could not serialize special Waypost state directory"
+    waypost_command_literal="$(jq -cn --arg value "$fake_bin/waypost" '$value')" \
+        || fail_test "could not serialize special Waypost command"
+    printf -v escaped_state_dir '%q' "$state_dir"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer rejected a serializable Waypost state directory"
+
+    jq empty "$project_dir/.claude/settings.json" \
+        || fail_test "workflow initializer wrote invalid Claude JSON for special Waypost state directory"
+    assert_gemini_policy_rule_syntax "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "workflow initializer wrote invalid Gemini rule syntax for special Waypost state directory"
+    jq -e --arg permission "Bash($fake_bin/waypost --state-dir $escaped_state_dir read *)" \
+        '.permissions.allow | index($permission) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer omitted escaped Claude Waypost permission"
+    jq -e '.permissions.allow | index("Bash(git status)") != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "workflow initializer did not merge special-state Claude permission"
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer rejected its special-state ownership manifest"
+    grep -Fq "pattern = [$waypost_command_literal, \"--state-dir\", $state_dir_literal, \"read\"]" \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "workflow initializer did not serialize Codex Waypost state directory"
+    grep -Fq "commandPrefix = [$waypost_command_literal, \"--state-dir\", $state_dir_literal, \"read\"]" \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "workflow initializer did not serialize Gemini Waypost state directory"
+}
+
+test_waypost_workflow_initializer_without_jq_creates_new_configs() {
+    local case_dir="$TEST_ROOT/waypost-workflow-initializer-without-jq"
+    local fake_bin="$case_dir/bin with space"
+    local project_dir="$case_dir/project"
+    local state_dir="$case_dir/state with quote\" and backslash\\"
+    local state_dir_literal
+    local waypost_command_literal
+    local escaped_state_dir
+    local escaped_waypost_command
+    local initializer="$REPO_ROOT/ai-agent/skills/agent-deck-workflow/scripts/agent-deck-workflow-init-permissions.sh"
+
+    mkdir -p "$fake_bin" "$project_dir"
+    make_waypost_stub "$fake_bin/waypost"
+    state_dir_literal="$(jq -cn --arg value "$state_dir" '$value')" \
+        || fail_test "could not serialize no-jq Waypost state directory"
+    waypost_command_literal="$(jq -cn --arg value "$fake_bin/waypost" '$value')" \
+        || fail_test "could not serialize no-jq Waypost command"
+    printf -v escaped_state_dir '%q' "$state_dir"
+    printf -v escaped_waypost_command '%q' "$fake_bin/waypost"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            command() {
+                if [[ "$1" == "-v" && "${2:-}" == "jq" ]]; then
+                    return 1
+                fi
+                builtin command "$@"
+            }
+            jq() { return 127; }
+            export -f command jq
+            exec "$1" "$2"
+        ' _ "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer could not create new configs without jq"
+
+    jq empty "$project_dir/.claude/settings.json" \
+        || fail_test "no-jq workflow initializer wrote invalid Claude JSON"
+    jq -e '.version == 2 and (.permissions | type == "array") and (.rules | type == "array")' \
+        "$project_dir/.claude/.agent-deck-workflow-waypost-cli.json" >/dev/null \
+        || fail_test "no-jq workflow initializer wrote an invalid Claude ownership manifest"
+    assert_gemini_policy_rule_syntax "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "no-jq workflow initializer wrote invalid Gemini rule syntax"
+    jq -e --arg permission "Bash($escaped_waypost_command --state-dir $escaped_state_dir read *)" \
+        '.permissions.allow | index($permission) != null' \
+        "$project_dir/.claude/settings.json" >/dev/null \
+        || fail_test "no-jq workflow initializer omitted escaped Claude Waypost permission"
+    grep -Fq "pattern = [$waypost_command_literal, \"--state-dir\", $state_dir_literal, \"read\"]" \
+        "$project_dir/.codex/rules/agent-deck-workflow.rules" \
+        || fail_test "no-jq workflow initializer omitted Codex Waypost permission"
+    grep -Fq "commandPrefix = [$waypost_command_literal, \"--state-dir\", $state_dir_literal, \"read\"]" \
+        "$project_dir/.gemini/policies/agent-deck-workflow.toml" \
+        || fail_test "no-jq workflow initializer omitted Gemini Waypost permission"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        "$initializer" "$project_dir" >/dev/null \
+        || fail_test "workflow initializer could not reload its no-jq Claude ownership manifest"
+}
+
+test_waypost_claude_permissions_shell_quote_arguments() {
+    local case_dir="$TEST_ROOT/waypost-claude-shell-quoting"
+    local fake_bin="$case_dir/bin with space"
+    local state_dir="$case_dir/state with quote\""
+
+    mkdir -p "$fake_bin"
+    make_waypost_stub "$fake_bin/waypost"
+
+    HOME="$case_dir/home" \
+        XDG_STATE_HOME="$case_dir/state" \
+        WAYPOST_STATE_DIR="$state_dir" \
+        PATH="$fake_bin:/usr/bin:/bin" \
+        bash -c '
+            source "$1/install.sh"
+            set -e
+
+            ensure_waypost_cli_command
+            permissions_json="$(waypost_claude_cli_permissions_json)"
+            printf -v quoted_path "%q" "$2/waypost"
+            printf -v quoted_state_dir "%q" "$3"
+
+            jq empty <<< "$permissions_json"
+            jq -e --arg permission "Bash($quoted_path --state-dir $quoted_state_dir read *)" \
+                ". | index(\$permission) != null" <<< "$permissions_json" >/dev/null
+            ! jq -e --arg permission "Bash(waypost --state-dir $quoted_state_dir list)" \
+                ". | index(\$permission) != null" <<< "$permissions_json" >/dev/null
+            ensure_claude_waypost_cli_permissions
+            ensure_claude_waypost_cli_permissions
+        ' _ "$REPO_ROOT" "$fake_bin" "$state_dir" \
+        || fail_test "Claude Waypost permissions did not shell-quote command arguments"
 }
 
 test_waypost_is_optional_for_ai_skills() {
@@ -600,6 +2111,22 @@ test_component_selection_parsing() {
     ! component_is_selected "xdg" \
         || fail_test "unselected component was treated as selected"
 
+    parse_args --ai-rules
+    [[ $INSTALL_ALL -eq 0 ]] \
+        || fail_test "--ai-rules did not enable selective installation"
+    component_is_selected "ai-rules" \
+        || fail_test "--ai-rules did not select global AI authorization rules"
+    ! component_is_selected "ai" \
+        || fail_test "--ai-rules unexpectedly selected AI config"
+
+    parse_args --only agent_rules
+    component_is_selected "ai-rules" \
+        || fail_test "--only did not normalize the AI rules alias"
+
+    parse_args --waypost-rules
+    component_is_selected "ai-rules" \
+        || fail_test "--waypost-rules compatibility alias did not select AI rules"
+
     parse_args --only all
     [[ $INSTALL_ALL -eq 1 ]] \
         || fail_test "--only all did not restore full installation"
@@ -608,7 +2135,7 @@ test_component_selection_parsing() {
 }
 
 test_component_skip_parsing() {
-    parse_args --skip "xdg, ai-skills" --skip serena
+    parse_args --skip "xdg, ai-skills, ai_rules" --skip serena
 
     [[ $INSTALL_ALL -eq 1 ]] \
         || fail_test "--skip unexpectedly changed full-install mode"
@@ -622,9 +2149,11 @@ test_component_skip_parsing() {
         || fail_test "--skip ai-skills disabled AI config"
     ! component_is_selected "ai-skills" \
         || fail_test "--skip did not disable AI skills"
+    ! component_is_selected "ai-rules" \
+        || fail_test "--skip did not disable global AI authorization rules"
     ! component_is_selected "serena" \
         || fail_test "repeated --skip did not disable serena"
-    [[ "$(skipped_components_label)" == "xdg,ai-skills,serena" ]] \
+    [[ "$(skipped_components_label)" == "xdg,ai-skills,ai-rules,serena" ]] \
         || fail_test "--skip label was incorrect"
 
     parse_args --skip ai
@@ -632,6 +2161,8 @@ test_component_skip_parsing() {
         || fail_test "--skip ai did not disable AI config"
     ! component_is_selected "ai-skills" \
         || fail_test "--skip ai did not disable AI skills"
+    component_is_selected "ai-rules" \
+        || fail_test "--skip ai unexpectedly disabled independent AI authorization rules"
 
     parse_args
 }
@@ -677,16 +2208,68 @@ test_full_skip_omits_selected_sections() {
             install_local_bin_helpers() { events="${events}bin "; }
             install_shared_ai_agent_snapshot() { events="${events}snapshot "; }
             install_claude_config() { events="${events}claude "; }
+            install_ai_permission_rules() { events="${events}rules "; }
             install_serena_config() { events="${events}serena "; }
             install_linux_specific() { events="${events}linux "; }
             setup_nvim() { events="${events}nvim "; }
-            main --skip xdg,bin,ai,serena >/dev/null
+            main --skip xdg,bin,ai,ai-rules,serena >/dev/null
             printf "%s\\n" "$events"
         ' _ "$REPO_ROOT"
     )" || fail_test "full installation with --skip failed"
 
     [[ "$events" == "submodules home " ]] \
         || fail_test "--skip ran disabled sections: $events"
+}
+
+test_full_skip_ai_keeps_ai_rules() {
+    local events
+
+    events="$(
+        bash -c '
+            source "$1/install.sh"
+            events=""
+            print_banner() { :; }
+            print_summary() { :; }
+            install_required_tools() { :; }
+            ensure_path_contains_local_bin() { :; }
+            install_fd() { :; }
+            install_lazygit() { :; }
+            install_uv() { :; }
+            install_mq() { :; }
+            install_zsh_stack() { :; }
+            install_nodejs_with_nvm() { :; }
+            install_bun() { :; }
+            install_codex_cli() { :; }
+            install_remote_cli() { :; }
+            install_agent_browser() { :; }
+            install_ast_grep() { :; }
+            install_codegraph() { :; }
+            install_tree_sitter_cli() { :; }
+            prepare_waypost_config_switch() { events="${events}mcp-prep "; }
+            setup_agent_deck_integration() { events="${events}agent-deck "; }
+            init_selected_submodules() { events="${events}submodules "; }
+            install_home_configs() { events="${events}home "; }
+            install_xdg_configs() { events="${events}xdg "; }
+            install_local_bin_helpers() { events="${events}bin "; }
+            install_shared_ai_agent_snapshot() { events="${events}snapshot "; }
+            install_ai_agent_config() { events="${events}ai-agent "; }
+            install_snapshot_dependent_ai_configs() { events="${events}clients "; }
+            install_ai_permission_rules() { events="${events}rules "; }
+            install_serena_config() { events="${events}serena "; }
+            install_linux_specific() { events="${events}linux "; }
+            setup_nvim() { events="${events}nvim "; }
+            main --skip ai >/dev/null
+            printf "%s\\n" "$events"
+        ' _ "$REPO_ROOT"
+    )" || fail_test "full installation with --skip ai failed"
+
+    [[ "$events" == *"rules "* && "$events" != *"snapshot "* ]] \
+        || fail_test "--skip ai did not keep rules independent from the shared snapshot: $events"
+    [[ "$events" != *"mcp-prep "* ]] \
+        || fail_test "--skip ai prepared the Waypost MCP switch: $events"
+    [[ "$events" != *"agent-deck "* && "$events" != *"ai-agent "* \
+        && "$events" != *"clients "* ]] \
+        || fail_test "--skip ai ran an AI configuration path: $events"
 }
 
 test_full_skip_xdg_keeps_ai_agent_config() {
@@ -723,6 +2306,7 @@ test_full_skip_xdg_keeps_ai_agent_config() {
             }
             install_ai_agent_config() { events="${events}ai-agent "; }
             install_snapshot_dependent_ai_configs() { events="${events}clients "; }
+            install_ai_permission_rules() { events="${events}rules "; }
             main --skip home,xdg,bin,serena >/dev/null
             printf "%s\\n" "$events"
         ' _ "$REPO_ROOT"
@@ -3043,6 +4627,32 @@ test_libclang_is_installed_when_missing() {
 test_best_effort_continues_and_counts_failures
 test_dry_run_summary_propagates_best_effort_failure
 test_waypost_preparation_requires_explicit_migration
+test_waypost_cli_permissions_are_harness_specific
+test_waypost_home_relative_forms_are_emitted
+test_waypost_rules_render_canonical_symlink_targets
+test_waypost_claude_manifest_migrates_ansi_c_paths
+test_waypost_workflow_initializer_rejects_project_waypost
+test_waypost_workflow_initializer_rejects_unsupported_cli
+test_waypost_workflow_initializer_rejects_invalid_manifest_before_settings
+test_waypost_manifest_commit_rolls_back_claude_settings
+test_waypost_claude_settings_symlinks_are_preserved
+test_gemini_and_antigravity_settings_symlinks_are_preserved
+test_global_waypost_rules_allow_home_local_bin
+test_global_waypost_rules_reject_project_commands
+test_relative_waypost_state_dirs_fail_before_rules_are_written
+test_ai_rules_preflight_without_jq_preserves_all_authorizations
+test_unselected_ai_rules_remove_dangling_legacy_links
+test_ai_rules_only_installs_global_authorization_rules
+test_mcp_setup_leaves_ai_authorization_rules_to_ai_rules
+test_codex_legacy_tools_migrate_before_mcp_cleanup
+test_ai_rules_retains_legacy_approvals_without_waypost_mcp
+test_ai_rules_freezes_legacy_policy_links_when_unselected
+test_ai_rules_preflight_preserves_legacy_approvals
+test_waypost_workflow_initializer_uses_readonly_rules
+test_waypost_workflow_initializer_follows_launcher_symlink
+test_waypost_workflow_initializer_serializes_special_state_dir
+test_waypost_workflow_initializer_without_jq_creates_new_configs
+test_waypost_claude_permissions_shell_quote_arguments
 test_waypost_is_optional_for_ai_skills
 test_zsh_stack_gates_dependencies_after_core_failure
 test_zsh_stack_readiness_gates_only_zshrc
@@ -3061,6 +4671,7 @@ test_component_selection_parsing
 test_component_skip_parsing
 test_skip_rejects_only_and_all
 test_full_skip_omits_selected_sections
+test_full_skip_ai_keeps_ai_rules
 test_full_skip_xdg_keeps_ai_agent_config
 test_skip_ai_skills_omits_skill_links
 test_selected_submodule_paths_follow_components
