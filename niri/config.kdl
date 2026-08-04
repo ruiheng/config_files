@@ -3,6 +3,12 @@
 // Check the wiki for a full description of the configuration:
 // https://yalter.github.io/niri/Configuration:-Introduction
 
+// Cursor appearance.
+cursor {
+    xcursor-theme "Adwaita"
+    xcursor-size 48
+}
+
 // Input device configuration.
 // Find the full list of options on the wiki: https://yalter.github.io/niri/Configuration:-Input
 input {
