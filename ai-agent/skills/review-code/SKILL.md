@@ -46,11 +46,15 @@ Before enumerating issues, build a short frame:
 - invariants and existing behavior that must remain stable
 - declared non-goals or out-of-scope areas
 
+Before listing findings, assess whether the overall approach is coherent and converging. When multiple defects share a cause or fixes only move symptoms, report the root design issue instead of another set of local fixes.
+
 Use this frame to filter findings.
 Promote only findings that are:
 - supported by concrete evidence in code, tests, or behavior
 - relevant to the intended change, preserved invariants, or material future maintenance risk
 - specific enough that the implementer can act on it
+
+Treat a design issue as must-fix when it explains multiple concrete defects or makes local fixes unlikely to converge.
 
 Demote or drop findings that are:
 - mostly style or taste
