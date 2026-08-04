@@ -14,7 +14,39 @@ const {
   resolveCwdLocalConfigPath,
   resolveDefaultLocalConfigPaths,
   resolveToolCommand,
+  runCli,
 } = require("./resolve-tool-command");
+
+test("CLI prints help without loading the default config", () => {
+  const missingConfig = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-help-")),
+    "missing.toml"
+  );
+  const results = ["--help", "-h"].map((argument) => {
+    let output = "";
+    const originalWrite = process.stdout.write;
+    process.stdout.write = (chunk) => {
+      output += chunk;
+      return true;
+    };
+
+    try {
+      runCli(["--config", missingConfig, argument]);
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+
+    return output;
+  });
+
+  for (const result of results) {
+    assert.match(result, /Usage: resolve-tool-command\.js/);
+    assert.match(result, /--profile <profile>/);
+    assert.match(result, /-h, --help/);
+  }
+
+  assert.equal(results[0], results[1]);
+});
 
 function availableInspection(toolCmd) {
   return {
