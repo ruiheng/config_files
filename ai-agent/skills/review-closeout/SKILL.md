@@ -93,6 +93,7 @@ Inclusion-first policy:
 - `Minor Suggestions`
 - `Verification Questions`
 - `UI Manual Confirmation Package`
+- `User Decision Summary`
 - with Handoff: `Recorded Branch Plan`, `Workspace Handoff`
 
 Planner handoff rule:
@@ -120,8 +121,9 @@ Bucket order:
 3. `Residual Follow-up For Planner`
 4. `Minor Suggestions`
 5. `Verification Questions`
-6. `UI Manual Confirmation Package`
-7. `Remaining Check Alerts (FAIL/UNKNOWN Only)`
+6. `User Decision Summary`
+7. `UI Manual Confirmation Package`
+8. `Remaining Check Alerts (FAIL/UNKNOWN Only)`
 
 Rules:
 - render section only when it has at least one item
@@ -170,6 +172,9 @@ Append only relevant non-empty sections:
 - Track in progress/todo: [items worth recording for later follow-up, or `None`]
 - Consider as next task/subtask: [items worth queueing, or `None`]
 - No extra tracking needed: [items intentionally left as informational only, or `None`]
+
+#### User Decision Summary
+[all task-scope user decisions from the accepted review; only when present]
 
 #### UI Manual Confirmation Package
 - UI impact: [detected | none detected]

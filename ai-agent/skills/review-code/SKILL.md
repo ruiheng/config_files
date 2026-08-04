@@ -41,6 +41,13 @@ Treat `Author Intent`, `Optional Review Focus`, and `Author-Noted Issues or Limi
 - never a reason to skip independent risk discovery
 - optional focus may set emphasis but must not constrain the review; its absence is not missing context
 
+Before quality review, compare the full change scope with the original task and recorded User Decisions. If a material change widens the task, changes an explicit constraint, or adds unrelated behavior without a recorded user decision:
+- ask the user immediately with the concrete change and impact
+- do not send `rework_required`, `stop_recommended`, or closeout until the user replies
+- add the reply to the task's user-decision record and carry it in `### User Decision Summary`
+
+Treat a recorded User Decision as task-specific scope authority, not a general license for adjacent changes. If the user rejects the change, require its removal or exclusion through the normal rework path.
+
 Before enumerating issues, build a short frame:
 - intended change
 - invariants and existing behavior that must remain stable
@@ -135,6 +142,7 @@ Policy rules:
 ## Output Format
 
 Use this structure as the full review report. When reviewer sends follow-up message, the `Action:` line must match the outbound workflow action.
+Omit `### User Decision Summary` when no user scope decision exists.
 
 ```markdown
 Task: <task_id>
@@ -159,6 +167,9 @@ If any FAIL, explain why in `Critical Issues`.
 - Intended change: [summary]
 - Must-preserve behavior: [summary]
 - Non-goals / out-of-scope: [summary or `None`]
+
+### User Decision Summary
+[all user scope decisions known at this round; the final task report summarizes the complete list for planner]
 
 ### Critical Issues
 Must fix before merge:
@@ -271,6 +282,7 @@ For non-browser inputs:
 - `integration_branch`, `review_base` (`integration_final`): explicit -> message Scope target/base -> matching delta context -> ask; otherwise omit
 - `workflow_policy` (optional): explicit -> message body -> matching delta context -> unattended defaults
 - `special_requirements` (optional fallback): explicit -> message body -> matching delta context -> omit
+- `user_decisions` (optional): explicit -> message body -> matching delta context -> omit
 - `checks_already_run` (optional): explicit -> message body -> matching delta context -> use for rerun decisions
 
 Task branch-plan guard:
@@ -290,6 +302,7 @@ Execution flow in Agent Deck mode:
 1. Produce the full review report in the format above
    - for task, preserve supplied Branch Plan and Workspace Handoff unchanged
    - for `integration_final`, preserve Final Review Scope in every report
+   - preserve known User Decisions; the final task `stop_recommended` report summarizes all of them under `### User Decision Summary`
 2. Choose action:
    - `rework_required` if `NEEDS_REVISION`, must-fix exists, completeness FAIL, or a browser report says `Code changed: yes`, unless the non-convergence stop rule below applies
    - `browser_check_requested` if code review is acceptable so far but runtime browser evidence is still required
@@ -300,6 +313,7 @@ Execution flow in Agent Deck mode:
 4. For `browser_check_requested`, generate one opaque `browser_check_id`, pass it to `browser-test-request` with this reviewer as report requester, and retain it with the review frame; pass original `requester_role` / `requester_session_id` and `setup_contact_workspace` as Setup Contact; on `browser_check_report`, resume with its evidence and matched review frame
    - `Code changed: yes` is a must-fix delivery boundary: carry its branch/commit/files in `rework_required`, not acceptance. Requester must own, commit/verify, and resubmit the changed scope; do not closeout this round
 5. For `stop_recommended`:
+   - never accept or close out while a material scope decision is awaiting the user
    - for `integration_final` / `standalone`, after automatic or explicit acceptance, send the full `stop_recommended` report to requester; do not run `review-closeout`
    - for task with `auto_accept_if_no_must_fix=true`, proceed to `review-closeout`
    - if the same final no-must-fix task-lane report is delivered to requester in unattended flow, requester may run `review-closeout` from that report instead of treating it as another rework round

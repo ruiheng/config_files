@@ -44,6 +44,7 @@ For a task review with a complete Workspace Handoff:
   - `review_focus` (explicit optional emphasis; do not infer)
   - `author_intent`
   - `author_noted_issues`
+  - `user_decisions` (all prior task-scope decisions made by the user)
   - `coder_tool`
   - `coder_tool_profile`
   - `reviewer_tool`
@@ -87,7 +88,8 @@ Rules:
 1. `Changed Paths Summary` includes in-scope files only
 2. summarize unrelated noise with count + up to 3 examples
 3. for committed scope, omit unrelated noise unless it materially affects review framing
-4. ask one short clarification question if relevance is uncertain
+4. if a material change is outside the original task and no User Decision covers it, ask the user before sending; never hide it as noise
+5. ask one short clarification question if relevance is uncertain
 
 ## Review Independence
 
@@ -111,6 +113,7 @@ Skill-specific context resolution:
 - `reviewer_session_id`: explicit actual id -> delegated context actual id -> created on demand when missing
 - `workflow_policy` (optional): explicit -> delegated context -> default unattended policy
 - `special_requirements` (optional fallback): explicit -> delegated context -> omit
+- `user_decisions` (optional): explicit -> delegated context -> omit
 - `coder_tool_profile`: explicit -> delegated context -> omit when `coder_tool` is already a full command -> default current-tool continuity or resolver role default `coder`
 - `coder_tool_cmd`: explicit full command -> delegated context resolved command -> current AI tool when continuity is intended -> shared tool-resolution contract for role `coder`
 - `reviewer_tool_profile`: explicit -> delegated context -> omit when `reviewer_tool` is already a full command -> default resolver role default `reviewer`
@@ -134,7 +137,7 @@ Review-request continuity rule:
 - round `>1` to the same reviewer session uses a delta-only body
 - if the reviewer session changed or reviewer continuity is unknown, fall back to the full review-request body
 - a task review remains `task` through every round
-- task repeats its complete Handoff and Branch Plan every round
+- task repeats its complete Handoff and Branch Plan every round; a full request includes all User Decisions and a delta includes decisions made since the prior review
 - every delta retains `Task`, `Action`, `From`, `To`, `Round`, and Lane; task / `integration_final` also retain Planner fields
 - delta-only means terse:
   - do not repeat the original task, file list, or unchanged verification; task always repeats Branch Plan and Handoff
@@ -160,6 +163,7 @@ Commit reference rule:
 ## Output Template
 
 Round `1` or new reviewer session: use the full body below.
+Omit `## User Decisions` when no temporary scope decision exists.
 
 Use this structure as the message body. Omit task Branch Plan and Handoff for `integration_final` / `standalone`; task includes both. `standalone` also omits planner headers. Keep tool routing internal.
 
@@ -180,6 +184,9 @@ Round: <round>
 
 ## Original Task
 [Original task text from explicit input or active session context. Use `Not provided` only after explicit clarification that no task text is available.]
+
+## User Decisions
+[all user scope decisions known for this task; only when present]
 
 ## Review Context
 - Lane: [task | integration_final | standalone]
@@ -258,6 +265,9 @@ Round: <round>
 - Findings addressed: [adopted items]
 - Findings rejected: [rejected items + rationale]
 - Author-noted new risks or open questions: [only if changed]
+
+## User Decisions
+[user scope decisions made since the last review; only when present]
 
 ## Review Context
 - Lane: [task | integration_final | standalone]
@@ -344,3 +354,4 @@ Rules:
 6. Always include `Checks Already Run`; include `Optional Review Focus` only when the requester explicitly provides useful emphasis
 7. Preserve `workflow_policy` unchanged when present
 8. Preserve `special_requirements` unchanged when present
+9. Preserve User Decisions unchanged when present

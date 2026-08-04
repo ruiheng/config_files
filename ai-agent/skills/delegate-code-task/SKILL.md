@@ -100,9 +100,9 @@ Round: 1
 - Work on the recorded task branch; create or attach it from the integration branch if needed. Never commit detached HEAD.
 - Own investigation, local decomposition, implementation choices, and validation within this scope
 - Make the smallest complete change; keep unrelated work out
-- Keep the recorded branch plan. Escalate a proposed change; apply it only after an explicit user decision.
-- Ask planner only if the objective, a hard boundary, or the branch plan must change
-- If a user steers this session, follow that direction within scope; notify planner before changing the recorded task boundary or branch plan.
+- Keep the recorded branch plan
+- If work would materially change the objective, a boundary, acceptance criteria, external behavior/contract, or add unrelated scope, ask the user before applying or committing it
+- Keep every user scope decision for this task. Include the accumulated decisions in the next message to reviewer or coder under `## User Decisions`
 
 ## Acceptance Criteria
 - [testable outcome]
@@ -110,7 +110,7 @@ Round: 1
 ## Review & Handoff
 - Per-task review: [required | skip]
 - Coder git writes and the delivery commit are pre-authorized
-- If required: after commit and validation, run `review-request` with `review_lane = task`; preserve the recorded Branch Plan and Workspace Handoff
+- If required: after commit and validation, run `review-request` with `review_lane = task`; preserve any User Decisions, the recorded Branch Plan, and Workspace Handoff
 - If skipped: after commit and validation, send `code_delivery_complete` to planner
 - On a blocker before an accepted task review: send `code_delivery_complete` to planner under either policy
 - After any successful review request or terminal handoff above, end this turn. Do nothing until the next instruction.
@@ -183,6 +183,8 @@ On `Action: execute_delegate_task`, treat the body as the code-task contract. Ow
 
 The contract must include `Worker workspace`, `Task dir`, and `Workspace lifecycle`; if any is missing, report a blocker instead of inferring it.
 
+- If a material scope change or uncertainty appears, ask the user immediately and wait before applying or committing it. A user instruction that resolves it is the decision.
+- Keep all such decisions and copy the accumulated list into the next review request or terminal handoff under `## User Decisions`; omit the section when no decision exists.
 - After a delivery commit, run `review-request` when per-task review is required.
 - Send this terminal handoff after commit and validation when review is skipped, or on a blocker before an accepted task review:
 
@@ -205,6 +207,9 @@ Round: final
 - Integration branch: <integration_branch>
 - Task branch: <task_branch>
 
+## User Decisions
+[all temporary user scope decisions for this task; only when present]
+
 ## Outcome
 [completed | blocked summary]
 
@@ -212,6 +217,7 @@ Round: final
 - [command/result or `None`]
 ```
 
+- Omit `## User Decisions` when no temporary scope decision exists.
 - For `Outcome: completed`, send only when review is skipped. For `Outcome: blocked`, send under either policy; include any existing delivery commit. Send from `agent-deck/<coder_session_id>` to `agent-deck/<planner_session_id>`, subject `code delivery complete: <task_id>`; ack the claimed instruction only after send succeeds. The planner reports the blocker or runs closeout; do not run `review-closeout` or claim an accepted review.
 
 ## User-Facing Result
