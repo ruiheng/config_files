@@ -34,6 +34,8 @@ Continue resumes the existing lane; do not restart review.
 
 ## Review
 
+Before hardening any component, apply a deletion test: if removing it still satisfies the explicit user goal and required compatibility, require its removal or a user decision. Treat avoidable cross-domain expansion as scope evidence, not merely an engineering problem. Do not spend review rounds making unapproved scope safer or more complete.
+
 Review as a skeptical senior engineer. Prioritize:
 
 - problem framing, constraints, and success criteria
@@ -119,7 +121,7 @@ SOUND | SOUND_WITH_CAVEATS | NEEDS_REVISION | NEEDS_INPUT
 
 Decision guidance:
 
-- SOUND: coherent and implementation-ready with no unresolved design findings or caveats
+- SOUND: coherent and implementation-ready with no unresolved design findings, unapproved product capability, avoidable cross-domain expansion, or caveats
 - SOUND_WITH_CAVEATS: deliverable, with only non-blocking caveats already recorded in the reviewed target
 - NEEDS_REVISION: design changes and another reviewed snapshot are required before handoff
 - NEEDS_INPUT: message mode only; the requester must correct critical review input and may resend the same target

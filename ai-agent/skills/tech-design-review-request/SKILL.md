@@ -60,6 +60,10 @@ As architect-author, record material conclusions in the artifact for:
 - material benefits, risks, failure handling, alternatives, and tradeoffs
 - unresolved user-owned decisions: options and consequences
 
+Treat unrequested product capabilities as out of scope. Existing support, completeness, or future value does not justify inclusion. Exclude any capability that materially expands product scope or crosses ownership domains unless the stated goal requires it or the user explicitly approves it.
+
+Use `Open Questions` only for architect-owned technical decisions. Resolve user-owned product scope before dispatch; if such a decision emerges later, keep it out of the base design and use Decision Request.
+
 Keep treatment proportional. Cover data, configuration, and compatibility only when relevant; state a no-impact conclusion only when omission would be ambiguous. Do not invent machinery merely to satisfy this gate.
 
 ## Start Inputs
@@ -163,6 +167,7 @@ On tech_design_draft_requested:
 7. after acceptance, send the terse final notification; do not archive or commit the design
 
 Do not ask the requester to supply technical design content that repository inspection and engineering judgment can resolve.
+Do not resolve user-owned product scope through engineering judgment; exclude optional capability or use Decision Request.
 
 Treat a later tech_design_draft_requested as a decision or constraint delta: reuse the lane and create the next numbered round. A continued review arrives as a normal report with its updated maximum.
 
