@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const {
   inspectToolCommand,
+  listConfiguredRoles,
   loadToolConfig,
   parseTomlValue,
   parseToolProfilesToml,
@@ -17,27 +18,31 @@ const {
   runCli,
 } = require("./resolve-tool-command");
 
+function captureStdout(callback) {
+  let output = "";
+  const originalWrite = process.stdout.write;
+  process.stdout.write = (chunk) => {
+    output += chunk;
+    return true;
+  };
+
+  try {
+    callback();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  return output;
+}
+
 test("CLI prints help without loading the default config", () => {
   const missingConfig = path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-help-")),
     "missing.toml"
   );
-  const results = ["--help", "-h"].map((argument) => {
-    let output = "";
-    const originalWrite = process.stdout.write;
-    process.stdout.write = (chunk) => {
-      output += chunk;
-      return true;
-    };
-
-    try {
-      runCli(["--config", missingConfig, argument]);
-    } finally {
-      process.stdout.write = originalWrite;
-    }
-
-    return output;
-  });
+  const results = ["--help", "-h"].map((argument) =>
+    captureStdout(() => runCli(["--config", missingConfig, argument]))
+  );
 
   for (const result of results) {
     assert.match(result, /Usage: resolve-tool-command\.js/);
@@ -46,6 +51,64 @@ test("CLI prints help without loading the default config", () => {
   }
 
   assert.equal(results[0], results[1]);
+});
+
+test("listConfiguredRoles returns sorted configured role names", () => {
+  assert.deepEqual(
+    listConfiguredRoles({
+      roles: { reviewer: "reviewer_default", coder: "coder_default" },
+    }),
+    ["coder", "reviewer"]
+  );
+});
+
+test("CLI lists merged configured roles independently", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-roles-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  const localConfigPath = path.join(tmpDir, "tool-profiles.local.toml");
+  fs.writeFileSync(
+    configPath,
+    `version = 1
+
+[roles]
+worker = "coder_default"
+reviewer = "reviewer_default"
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    localConfigPath,
+    `[roles]
+coder = "coder_default"
+`,
+    "utf8"
+  );
+
+  const jsonOutput = captureStdout(() =>
+    runCli([
+      "--config",
+      configPath,
+      "--local-config",
+      localConfigPath,
+      "--list-roles",
+    ])
+  );
+  assert.deepEqual(JSON.parse(jsonOutput), {
+    roles: ["coder", "reviewer", "worker"],
+  });
+
+  const textOutput = captureStdout(() =>
+    runCli([
+      "--config",
+      configPath,
+      "--local-config",
+      localConfigPath,
+      "--list-roles",
+      "--format",
+      "text",
+    ])
+  );
+  assert.equal(textOutput, "coder\nreviewer\nworker\n");
 });
 
 function availableInspection(toolCmd) {

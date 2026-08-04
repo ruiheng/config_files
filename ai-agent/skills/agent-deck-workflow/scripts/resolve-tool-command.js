@@ -48,6 +48,7 @@ Options:
   --command <command>            Use an explicit tool command
   --inherit-command <command>    Use an existing inherited tool command
   --show-list                    Include all usable tool candidates
+  --list-roles                   List configured role names
   --workdir <path>               Inspect commands in the target workdir
   --target-path <PATH>           Inspect commands with the target PATH
   --config <path>                Use a specific tool-profiles.toml
@@ -884,6 +885,10 @@ function resolveToolCommand(options = {}) {
   throw new Error("tool resolution requires an explicit command, profile, inherited command, or role default");
 }
 
+function listConfiguredRoles(config) {
+  return Object.keys(config.roles).sort();
+}
+
 function parseArgs(argv) {
   const options = {
     role: "",
@@ -891,6 +896,7 @@ function parseArgs(argv) {
     command: "",
     inheritCommand: "",
     showList: false,
+    listRoles: false,
     workdir: "",
     targetPath: "",
     configPath: DEFAULT_CONFIG_PATH,
@@ -911,6 +917,8 @@ function parseArgs(argv) {
       options.inheritCommand = argv[++i] || "";
     } else if (arg === "--show-list") {
       options.showList = true;
+    } else if (arg === "--list-roles") {
+      options.listRoles = true;
     } else if (arg === "--workdir") {
       options.workdir = argv[++i] || "";
     } else if (arg === "--target-path") {
@@ -941,6 +949,19 @@ function runCli(argv) {
   }
 
   const config = loadToolConfig(options.configPath, options.localConfigPaths);
+  if (options.listRoles) {
+    const roles = listConfiguredRoles(config);
+    if (options.format === "text") {
+      process.stdout.write(roles.length ? `${roles.join("\n")}\n` : "");
+      return;
+    }
+    if (options.format !== "json") {
+      throw new Error(`unsupported output format: ${options.format}`);
+    }
+    process.stdout.write(`${JSON.stringify({ roles }, null, 2)}\n`);
+    return;
+  }
+
   const inspectionOptions = {
     cwd: options.workdir || process.cwd(),
     cwdTrusted: Boolean(options.workdir),
@@ -986,6 +1007,7 @@ module.exports = {
   DEFAULT_LOCAL_CONFIG_PATH,
   DEFAULT_LOCAL_CONFIG_PATHS,
   inspectToolCommand,
+  listConfiguredRoles,
   loadToolConfig,
   mergeToolConfigs,
   parseToolProfilesToml,

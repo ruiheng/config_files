@@ -12,6 +12,13 @@ Use this reference only before creating a new Agent Deck session.
   ```
 
   Omit `--profile` when none is set.
+- List configured roles with:
+
+  ```bash
+  node ~/.config/ai-agent/skills/agent-deck-workflow/scripts/resolve-tool-command.js --list-roles --format text
+  ```
+
+  JSON output is an object with a `roles` array.
 - `<target_workdir>` is the same workdir passed to `agent_deck_create_session`.
 - JSON includes ordered `tool_candidates`. Each has `command` and its configured fields; `startup_message` is absent when not configured.
 - Record the chosen profile as `*_tool_profile`, command as `*_tool_cmd`, and optional candidate `startup_message` as `*_tool_startup_message`.
