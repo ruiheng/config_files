@@ -739,8 +739,9 @@ function resolveProfileCommand(
   if (!profileConfig) {
     throw new Error(`unknown tool profile: ${profileName}`);
   }
-  if (profileConfig.strategy !== "ordered") {
-    throw new Error(`unsupported tool profile strategy: ${profileConfig.strategy}`);
+  const strategy = profileConfig.strategy ?? "ordered";
+  if (strategy !== "ordered") {
+    throw new Error(`unsupported tool profile strategy: ${strategy}`);
   }
   const candidates = Array.isArray(profileConfig.candidates)
     ? profileConfig.candidates

@@ -26,5 +26,6 @@ Use this reference only before creating a new Agent Deck session.
 - Use candidates in order. If creation rejects the first profile-resolved candidate and another exists, retry once with the next candidate and its optional startup message; otherwise surface the error.
 - Pass `--workdir` for the target session. Pass `--target-path <PATH>` only when its PATH is known.
 - Static checking does not run commands. Filter only trusted-context misses; retain dispatcher-/command-path misses in `tool_candidates` as `unverified_tool_cmds`, and preserve `unavailable_tool_cmds` as diagnostics.
+- `strategy` defaults to `ordered`, the only supported strategy; omit it unless a future strategy requires an explicit choice.
 - Local profile candidates replace by default. Set `merge = "prepend"` or `merge = "append"` with `candidates` to extend the prior list.
 - The action skill owns the role, parent, workspace, reuse policy, and create/require choice.

@@ -543,6 +543,49 @@ test("resolveToolCommand uses the role default profile", () => {
   assert.equal(resolved.candidate_count, 2);
 });
 
+test("resolveToolCommand defaults an omitted profile strategy to ordered", () => {
+  const resolved = resolveToolCommand({
+    role: "coder",
+    inspectCommand: availableInspection,
+    config: {
+      version: 2,
+      roles: { coder: "coder_local" },
+      profiles: {
+        coder_local: {
+          candidates: ["claude --model sonnet --permission-mode acceptEdits"],
+        },
+      },
+    },
+  });
+
+  assert.equal(resolved.tool_profile, "coder_local");
+  assert.equal(
+    resolved.resolved_tool_cmd,
+    "claude --model sonnet --permission-mode acceptEdits"
+  );
+});
+
+test("resolveToolCommand still rejects an unsupported explicit strategy", () => {
+  assert.throws(
+    () =>
+      resolveToolCommand({
+        profile: "coder_local",
+        inspectCommand: availableInspection,
+        config: {
+          version: 2,
+          roles: {},
+          profiles: {
+            coder_local: {
+              strategy: "random",
+              candidates: ["claude --model sonnet --permission-mode acceptEdits"],
+            },
+          },
+        },
+      }),
+    /unsupported tool profile strategy: random/
+  );
+});
+
 test("resolveToolCommand returns ordered candidates with startup messages", () => {
   const firstCommand = "codex --model gpt-5.6-luna";
   const secondCommand = "claude --model sonnet";
