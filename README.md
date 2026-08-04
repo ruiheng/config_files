@@ -59,27 +59,38 @@ Options:
   --only PARTS      Install only selected comma-separated sections
   --skip PARTS      Skip selected comma-separated sections
   --ai-skills       Install/update AI skills only
+  --ai-rules        Install/update global AI authorization rules only
   --no-color        Disable colored output
   --help, -h        Show help message
 ```
 
 `--only` can be repeated and accepts `home`, `xdg`, `bin`, `ai`, `ai-skills`,
-`serena`, or `all`. Partial selections skip unrelated tool/CLI bootstrap, OS
-setup, and Neovim checks. Selections containing `home` or `xdg` initialize
-their required Git submodules before copying. If initialization fails, only
+`ai-rules`, `serena`, or `all`. Partial selections skip unrelated tool/CLI
+bootstrap, OS setup, and Neovim checks. Selections containing `home` or `xdg`
+initialize their required Git submodules before copying. If initialization fails, only
 the submodule-backed TPM and Neovim configs are skipped; independent selected
 items continue.
+
 `ai` updates
 `$XDG_CONFIG_HOME/ai-agent` (or `$HOME/.config/ai-agent`) and all AI skills;
 `ai-skills` only updates the shared snapshot at
 `$XDG_DATA_HOME/config_files/ai-agent` (or
 `$HOME/.local/share/config_files/ai-agent`) and per-agent skill links.
+`ai-rules` updates all installer-managed authorization rules for Codex,
+Claude Code, Gemini CLI, and Antigravity, including Agent Deck workflow policy
+and state-scoped Waypost permissions. It does not register MCP servers, install
+skills, refresh the shared AI snapshot, or migrate Waypost state.
+`--waypost-rules` remains a compatibility alias.
+For legacy live rule links, `ai`/`ai-skills` materializes the current content
+once before refreshing the snapshot; this prevents a snapshot update from
+silently changing approvals.
+
 `ai-skills` does not require Waypost; Waypost setup only controls optional MCP
 configuration changes.
 
 `--skip` can also be repeated and accepts `home`, `xdg`, `bin`, `ai`,
-`ai-skills`, or `serena`. It keeps the full-install tool/CLI bootstrap while
-omitting those sections. It cannot be combined with `--only`; skipping `ai`
+`ai-skills`, `ai-rules`, or `serena`. It keeps the full-install tool/CLI
+bootstrap while omitting those sections. It cannot be combined with `--only`; skipping `ai`
 also skips `ai-skills`.
 
 `install.sh` checks required CLI tools before installing configs and installs missing ones through the detected package manager when supported. Required system tools include `fd`, `fzf`, `git`, `tmux`, `lsof`, `jq`, `sqlite3`, `yq`, and `zsh`. Debian/Ubuntu installs the `fd-find` package and creates a `~/.local/bin/fd` compatibility link. It installs Oh My Zsh with the configured Spaceship theme, `spaceship-vi-mode`, and `zsh-autocomplete`. It also installs `lazygit` from Homebrew or a checksum-verified official release, `uv` from Astral's official installer, Bun from its official npm package, and [`mq`](https://mqlang.org), a jq-like Markdown processor. Unsupported lazygit architectures are reported and skipped without blocking config deployment. If `agent-browser` is missing, it installs it with `npm install -g agent-browser` and runs `agent-browser install` once to download Chrome. Existing `agent-browser` installs are left alone. When the official Tree-sitter CLI binary is unusable, it ensures the current Rust stable toolchain and libclang before building from source.
@@ -115,6 +126,9 @@ Options:
 
 # Update repository-managed AI skills only
 ./install.sh --ai-skills
+
+# Install only global AI authorization rules
+./install.sh --ai-rules
 
 # Install selected configuration sections
 ./install.sh --only home,xdg
