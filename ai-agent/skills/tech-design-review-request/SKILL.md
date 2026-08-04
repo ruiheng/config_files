@@ -40,7 +40,7 @@ Write rounds under .agent-artifacts/tech-design/<author_session_id>/rNNN.md.
 - number revisions monotonically; the named artifact path identifies the round under review
 - drafting must not change Git state or workspace ownership
 
-.agent-artifacts/ must remain ignored. Stop if it is tracked or the artifact path is outside the shared workspace.
+`.agent-artifacts/` is temporary; never add it to Git or write outside the shared workspace.
 
 ## Review Limit and User Continuation
 

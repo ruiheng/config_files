@@ -64,6 +64,7 @@ For draft-round:
 - do not edit it or switch to a newer round
 - require it to contain the full current design; use prior rounds only to compare changes, never to supply missing design content
 - repository inspection may validate claims, but must not change the reviewed target
+- compare draft rounds as files, not Git revisions
 - on later rounds, compare against the prior artifact from this session's report or Waypost history when useful
 
 For committed-docs:
