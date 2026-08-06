@@ -147,15 +147,10 @@ Review-request continuity rule:
 Identity rules:
 - `review_requested` sender must be the active requester session id for this review lane
 - use the bound Waypost sender context for sender validation
-- Reuse an existing reviewer/tool unless an explicit requested command or profile conflicts; inferred/default differences do not.
-- For an explicit conflict, ask whether to keep the reviewer or reassign it.
 
-Reviewer reuse gate:
-- expected parent = owner; expected group = owner's group. Owner is planner for `task` / `integration_final`, requester for `standalone`
-- inspect candidate: `agent-deck session show <candidate_id_or_ref> --json`; check `path`, `parent_session_id`, `group`, `command`, `profile`
-- reuse only when path, parent, and group match expected ownership
-- compare explicit `reviewer_tool` / `reviewer_tool_profile` with candidate command/profile; on conflict ask keep or reassign, never silently require
-- if a default ref resolves to an ineligible session, derive a fresh lane-scoped ref before create; for an input/context ID/ref mismatch, ask and do not create
+Reviewer continuity:
+- treat a known real `reviewer_session_id` as authoritative and reuse it with `agent_deck_require_session`
+- otherwise resolve `reviewer_session_ref`; create a reviewer only when no real id resolves
 
 Commit reference rule:
 - in message content, use a short commit ref, not a full 40-char hash
@@ -316,8 +311,8 @@ Workflow send sequence:
 1. use `waypost`
 2. compose the body with `{{TO_SESSION_ID}}` where the real reviewer session id must appear
 3. choose candidate: known `reviewer_session_id`, otherwise resolve `reviewer_session_ref`
-4. apply Reviewer reuse gate; if it asks, stop. If eligible, call `agent_deck_require_session` with its `session_id` and `workdir = <current workspace>`
-5. if no eligible candidate, resolve reviewer tool metadata by the shared tool-resolution contract for role `reviewer`, then call `agent_deck_create_session` with:
+4. if a candidate resolves, call `agent_deck_require_session` with its real id and `workdir = <current workspace>`
+5. otherwise resolve reviewer tool metadata by the shared tool-resolution contract for role `reviewer`, then call `agent_deck_create_session` with:
      - `ensure_title = <reviewer_session_ref>`
      - `ensure_cmd = <reviewer_tool_cmd>`
      - `workdir = <current workspace>`
@@ -339,7 +334,6 @@ Rules:
 - for each recorded check, include enough command/result detail to show scope and outcome
 - keep tool/model routing internal; use shared tool-resolution policy
 - do not duplicate `Checks Already Run` in a separate verification section; record coverage gaps inside `Checks Already Run`
-- reuse only an ownership- and tool-compatible reviewer resolved by ID/ref; otherwise create a fresh lane-scoped reviewer
 - create reviewers only from `review-request`: parent task/integration to planner; parent standalone to requester
 - `waypost_send` may trigger a best-effort non-local reviewer nudge; correctness relies on Waypost message delivery
 - follow the shared Async sender rule for the review reply
