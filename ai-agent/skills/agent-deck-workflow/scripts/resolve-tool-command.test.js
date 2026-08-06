@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const {
   inspectToolCommand,
+  expandCommandTemplate,
   listConfiguredRoles,
   loadToolConfig,
   parseTomlValue,
@@ -197,6 +198,44 @@ command = "claude --model sonnet"
   ]);
 });
 
+test("parseToolProfilesToml reads command templates", () => {
+  const config = parseToolProfilesToml(`
+[templates]
+codex_approval = "--ask-for-approval on-request"
+`);
+
+  assert.deepEqual(config.templates, {
+    codex_approval: "--ask-for-approval on-request",
+  });
+});
+
+test("expandCommandTemplate expands configured values and rejects invalid references", () => {
+  const templates = { codex_approval: "--ask-for-approval on-request" };
+
+  assert.equal(
+    expandCommandTemplate(
+      "codex --model gpt-5.6 ${templates.codex_approval}",
+      templates
+    ),
+    "codex --model gpt-5.6 --ask-for-approval on-request"
+  );
+  assert.throws(
+    () => expandCommandTemplate("codex ${templates.missing}", templates),
+    /unknown command template: missing/
+  );
+  assert.throws(
+    () => expandCommandTemplate("codex ${templates.not-valid}", templates),
+    /invalid command template: \$\{templates\.not-valid\}/
+  );
+  assert.equal(
+    expandCommandTemplate(
+      'PATH="${HOME}/.local/bin:$PATH" codex --token "${TOKEN:-default}"',
+      templates
+    ),
+    'PATH="${HOME}/.local/bin:$PATH" codex --token "${TOKEN:-default}"'
+  );
+});
+
 test("parseTomlValue accepts TOML literal strings and arrays", () => {
   assert.equal(parseTomlValue("'reviewer_local'"), "reviewer_local");
   assert.deepEqual(
@@ -328,6 +367,34 @@ candidates = ['claude --model sonnet --permission-mode acceptEdits']
   assert.deepEqual(config.profiles.reviewer_local.candidates, [
     "claude --model sonnet --permission-mode acceptEdits",
   ]);
+});
+
+test("loadToolConfig merges local command template overrides", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-templates-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  const localConfigPath = path.join(tmpDir, "tool-profiles.local.toml");
+
+  fs.writeFileSync(
+    configPath,
+    `[templates]
+codex_approval = "--ask-for-approval on-request"
+claude_edits = "--permission-mode acceptEdits"
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    localConfigPath,
+    `[templates]
+codex_approval = "--ask-for-approval never"
+`,
+    "utf8"
+  );
+
+  const config = loadToolConfig(configPath, localConfigPath);
+  assert.deepEqual(config.templates, {
+    codex_approval: "--ask-for-approval never",
+    claude_edits: "--permission-mode acceptEdits",
+  });
 });
 
 test("mergeToolConfigs supports replace, prepend, and append candidates", () => {
@@ -563,6 +630,57 @@ test("resolveToolCommand defaults an omitted profile strategy to ordered", () =>
     resolved.resolved_tool_cmd,
     "claude --model sonnet --permission-mode acceptEdits"
   );
+});
+
+test("resolveToolCommand expands command templates before inspection", () => {
+  const resolved = resolveToolCommand({
+    profile: "coder_default",
+    showList: true,
+    inspectCommand: availableInspection,
+    config: {
+      version: 2,
+      roles: {},
+      templates: { claude_edits: "--permission-mode acceptEdits" },
+      profiles: {
+        coder_default: {
+          candidates: [
+            {
+              command: "claude --model sonnet ${templates.claude_edits}",
+              startup_message: "Start the coding workflow.",
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  assert.equal(
+    resolved.resolved_tool_cmd,
+    "claude --model sonnet --permission-mode acceptEdits"
+  );
+  assert.deepEqual(resolved.tool_candidates, [
+    {
+      command: "claude --model sonnet --permission-mode acceptEdits",
+      startup_message: "Start the coding workflow.",
+    },
+  ]);
+});
+
+test("resolveToolCommand preserves POSIX parameter expansions in profile candidates", () => {
+  const command = 'PATH="${HOME}/.local/bin:$PATH" codex --token "${TOKEN:-default}"';
+  const resolved = resolveToolCommand({
+    profile: "coder_default",
+    config: {
+      version: 2,
+      roles: {},
+      templates: { codex_approval: "--ask-for-approval on-request" },
+      profiles: {
+        coder_default: { candidates: [command] },
+      },
+    },
+  });
+
+  assert.equal(resolved.resolved_tool_cmd, command);
 });
 
 test("resolveToolCommand still rejects an unsupported explicit strategy", () => {

@@ -231,6 +231,10 @@ function ensureSectionTarget(config, sectionName) {
     config.roles ||= {};
     return config.roles;
   }
+  if (sectionName === "templates") {
+    config.templates ||= {};
+    return config.templates;
+  }
   if (sectionName.startsWith("profiles.")) {
     const profileName = sectionName.slice("profiles.".length).trim();
     if (!profileName) {
@@ -273,6 +277,7 @@ function parseToolProfilesToml(text) {
   const config = {
     version: null,
     roles: {},
+    templates: {},
     profiles: {},
   };
   const lines = text.split(/\r?\n/);
@@ -376,6 +381,7 @@ function mergeToolConfigs(baseConfig, overrideConfig) {
     return {
       version: baseConfig.version,
       roles: { ...baseConfig.roles },
+      templates: { ...baseConfig.templates },
       profiles: Object.fromEntries(
         Object.entries(baseConfig.profiles).map(([name, profile]) => [
           name,
@@ -390,6 +396,10 @@ function mergeToolConfigs(baseConfig, overrideConfig) {
     roles: {
       ...baseConfig.roles,
       ...overrideConfig.roles,
+    },
+    templates: {
+      ...baseConfig.templates,
+      ...overrideConfig.templates,
     },
     profiles: Object.fromEntries(
       Object.entries(baseConfig.profiles).map(([name, profile]) => [
@@ -681,7 +691,23 @@ function resolveProfileName(config, role, explicitProfile) {
   return "";
 }
 
-function normalizeToolCandidate(candidate, profileName, candidateIndex) {
+function expandCommandTemplate(command, templates = {}) {
+  return command.replace(/\$\{templates\.([^}]*)\}/g, (placeholder, name) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new Error(`invalid command template: ${placeholder}`);
+    }
+    if (!Object.prototype.hasOwnProperty.call(templates, name)) {
+      throw new Error(`unknown command template: ${name}`);
+    }
+    const value = templates[name];
+    if (typeof value !== "string" || !value.trim()) {
+      throw new Error(`command template must be a non-empty string: ${name}`);
+    }
+    return value;
+  });
+}
+
+function normalizeToolCandidate(candidate, profileName, candidateIndex, templates) {
   if (typeof candidate === "string") {
     if (!candidate.trim()) {
       throw new Error(
@@ -691,7 +717,7 @@ function normalizeToolCandidate(candidate, profileName, candidateIndex) {
           candidateIndex
       );
     }
-    return { command: candidate };
+    return { command: expandCommandTemplate(candidate, templates) };
   }
 
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
@@ -724,7 +750,10 @@ function normalizeToolCandidate(candidate, profileName, candidateIndex) {
     );
   }
 
-  return { ...candidate };
+  return {
+    ...candidate,
+    command: expandCommandTemplate(candidate.command, templates),
+  };
 }
 
 function resolveProfileCommand(
@@ -753,7 +782,8 @@ function resolveProfileCommand(
     const candidate = normalizeToolCandidate(
       candidates[candidateIndex],
       profileName,
-      candidateIndex
+      candidateIndex,
+      config.templates
     );
     const toolCmd = candidate.command;
     const inspection = inspectCommand(toolCmd, inspectionOptions);
@@ -1008,6 +1038,7 @@ module.exports = {
   DEFAULT_LOCAL_CONFIG_PATH,
   DEFAULT_LOCAL_CONFIG_PATHS,
   inspectToolCommand,
+  expandCommandTemplate,
   listConfiguredRoles,
   loadToolConfig,
   mergeToolConfigs,
