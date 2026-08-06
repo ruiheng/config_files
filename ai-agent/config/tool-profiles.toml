@@ -14,6 +14,9 @@ explainer = "explainer_default"
 coder = "coder_default"
 reviewer = "reviewer_default"
 architect = "architect_default"
+# An architect override also applies to these compatibility roles.
+architect_author = "architect_default"
+architect_reviewer = "architect_default"
 browser_tester = "browser_tester_default"
 roundtable_participant = "roundtable_participant_default"
 

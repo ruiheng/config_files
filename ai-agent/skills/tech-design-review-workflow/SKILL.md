@@ -80,7 +80,8 @@ New architect sessions:
 - optional shared architect_tool / architect_tool_profile
 - optional architect_author_tool / architect_author_tool_profile
 - optional architect_reviewer_tool / architect_reviewer_tool_profile
-- resolve each target independently: target-specific -> shared -> role architect defaults
+- resolver roles: architect_author and architect_reviewer
+- resolve each target independently: <target>_tool -> architect_tool -> <target>_tool_profile -> architect_tool_profile -> its resolver-role default
 
 draft-review additionally uses:
 
@@ -92,6 +93,15 @@ review-existing additionally requires:
 
 - tech_design_branch, tech_design_base_branch, committed design_docs_in_scope listing every reviewed doc and design asset
 - existing architect_session_id, or optional new architect_session_ref defaulting to architect-<task_id>
+
+## Architect Tool Resolution
+
+Pass the target workdir when resolving:
+
+- author: `--role architect_author`
+- reviewer: `--role architect_reviewer`
+
+Do not substitute either role. Record each selected `*_tool_profile`, `*_tool_cmd`, and optional startup message under the shared tool-resolution contract.
 
 ## Round Resolution
 
@@ -109,9 +119,9 @@ Resolve requester identity from explicit input, then current session context. Re
 Resolve both deterministic refs with agent_deck_resolve_session. For each target:
 
 - found: verify its workdir and group, then call agent_deck_require_session with its real id and expected workdir
-- not found: resolve its command by the input order above as <target_architect_tool_cmd>, then call agent_deck_create_session with:
+- not found: resolve its command with its resolver role above as <target_tool_cmd>, then call agent_deck_create_session with:
   - ensure_title = <deterministic ref for this target>
-  - ensure_cmd = <target_architect_tool_cmd>
+  - ensure_cmd = <target_tool_cmd>
   - workdir = <current workspace>
   - parent_session_id = <requester_session_id>
   - group_path = <requester session group; empty string for root>
@@ -175,7 +185,7 @@ Treat a later tech_design_draft_requested as a decision or constraint delta: reu
 
 Require committed docs, their design branch, and the recorded base branch. Never guess the base.
 
-Resolve the reviewer id from explicit input, workflow context, then persisted Waypost history. If prior-review context exists but the real id remains missing, stop; do not create a context-free replacement. Create a reviewer only for a clearly new lane, using the shared role architect resolver and the same parent/workdir settings as above.
+Resolve the reviewer id from explicit input, workflow context, then persisted Waypost history. If prior-review context exists but the real id remains missing, stop; do not create a context-free replacement. Create a reviewer only for a clearly new lane, using resolver role `architect_reviewer` and the same parent/workdir settings as above.
 
 Before each review request, resolve <reviewed_commit> = git rev-parse <tech_design_branch>, then apply the review-existing path gate:
 

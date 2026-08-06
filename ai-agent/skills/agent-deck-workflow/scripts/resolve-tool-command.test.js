@@ -820,6 +820,168 @@ test("explainer role prefers the configured agy command", () => {
   );
 });
 
+test("architect author and reviewer roles use the architect default profile", () => {
+  const config = loadToolConfig(
+    path.resolve(__dirname, "../../../config/tool-profiles.toml"),
+    []
+  );
+
+  for (const role of ["architect_author", "architect_reviewer"]) {
+    const resolved = resolveToolCommand({
+      role,
+      showList: true,
+      inspectCommand: availableInspection,
+      config,
+    });
+
+    assert.equal(resolved.tool_profile, "architect_default");
+    assert.equal(resolved.resolution_source, "role_default_profile");
+    assert.equal(resolved.tool_candidates.length, 2);
+  }
+});
+
+test("old base architect role supports child roles without local configs", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-old-base-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  fs.writeFileSync(
+    configPath,
+    `version = 2
+
+[roles]
+architect = "architect_legacy"
+
+[profiles.architect_legacy]
+candidates = ["node --legacy"]
+`,
+    "utf8"
+  );
+
+  const config = loadToolConfig(configPath, []);
+
+  for (const role of ["architect_author", "architect_reviewer"]) {
+    const resolved = resolveToolCommand({
+      role,
+      inspectCommand: availableInspection,
+      config,
+    });
+
+    assert.equal(resolved.tool_profile, "architect_legacy");
+    assert.equal(resolved.resolved_tool_cmd, "node --legacy");
+  }
+});
+
+test("base role compatibility preserves explicit child roles", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-base-roles-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  fs.writeFileSync(
+    configPath,
+    `version = 2
+
+[roles]
+architect = "architect_legacy"
+architect_author = "architect_author_explicit"
+
+[profiles.architect_legacy]
+candidates = ["node --legacy"]
+
+[profiles.architect_author_explicit]
+candidates = ["node --author"]
+`,
+    "utf8"
+  );
+
+  const config = loadToolConfig(configPath, []);
+
+  assert.equal(config.roles.architect_author, "architect_author_explicit");
+  assert.equal(config.roles.architect_reviewer, "architect_legacy");
+});
+
+test("CLI propagates a local architect override to architect child roles", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-architect-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  const localConfigPath = path.join(tmpDir, "tool-profiles.local.toml");
+  fs.writeFileSync(
+    configPath,
+    `version = 2
+
+[roles]
+architect = "architect_default"
+architect_author = "architect_default"
+architect_reviewer = "architect_default"
+
+[profiles.architect_default]
+candidates = ["node --default"]
+
+[profiles.architect_local]
+candidates = ["node --local"]
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    localConfigPath,
+    `[roles]
+architect = "architect_local"
+`,
+    "utf8"
+  );
+
+  for (const role of ["architect_author", "architect_reviewer"]) {
+    const output = captureStdout(() =>
+      runCli([
+        "--config",
+        configPath,
+        "--local-config",
+        localConfigPath,
+        "--role",
+        role,
+      ])
+    );
+    const resolved = JSON.parse(output);
+
+    assert.equal(resolved.tool_profile, "architect_local");
+    assert.equal(resolved.resolved_tool_cmd, "node --local");
+  }
+});
+
+test("role compatibility respects layer and child-role precedence", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tool-command-role-layers-"));
+  const configPath = path.join(tmpDir, "tool-profiles.toml");
+  const firstLocalPath = path.join(tmpDir, "first.toml");
+  const secondLocalPath = path.join(tmpDir, "second.toml");
+  fs.writeFileSync(
+    configPath,
+    `version = 2
+
+[roles]
+architect = "architect_default"
+architect_author = "architect_default"
+architect_reviewer = "architect_default"
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    firstLocalPath,
+    `[roles]
+architect = "architect_first"
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    secondLocalPath,
+    `[roles]
+architect = "architect_second"
+architect_author = "architect_author_second"
+`,
+    "utf8"
+  );
+
+  const config = loadToolConfig(configPath, [firstLocalPath, secondLocalPath]);
+
+  assert.equal(config.roles.architect, "architect_second");
+  assert.equal(config.roles.architect_author, "architect_author_second");
+  assert.equal(config.roles.architect_reviewer, "architect_second");
+});
+
 test("resolveToolCommand prefers inherited command over role default profile", () => {
   const resolved = resolveToolCommand({
     role: "planner",

@@ -8,6 +8,8 @@
 # Point a role at a local profile.
 # [roles]
 # reviewer = "reviewer_local"
+# architect = "architect_local"
+# This also applies to architect_author and architect_reviewer unless this file overrides either.
 
 # [profiles.reviewer_local]
 # candidates = [

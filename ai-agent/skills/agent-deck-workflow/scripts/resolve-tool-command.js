@@ -38,6 +38,11 @@ const DEFAULT_LOCAL_CONFIG_PATH = path.join(
 );
 const DEFAULT_LOCAL_CONFIG_PATHS = resolveDefaultLocalConfigPaths();
 
+const ROLE_COMPATIBILITY_ALIASES = Object.freeze({
+  architect_author: "architect",
+  architect_reviewer: "architect",
+});
+
 const HELP_TEXT = `Usage: resolve-tool-command.js [options]
 
 Resolve a tool command from an explicit command, profile, inherited command, or role default.
@@ -423,7 +428,9 @@ function loadToolConfig(
   if (!fs.existsSync(configPath)) {
     throw new Error(`tool profile config not found: ${configPath}`);
   }
-  const baseConfig = parseToolProfilesToml(fs.readFileSync(configPath, "utf8"));
+  const baseConfig = applyRoleCompatibility(
+    parseToolProfilesToml(fs.readFileSync(configPath, "utf8"))
+  );
   let mergedConfig = mergeToolConfigs(baseConfig, null);
 
   for (const localConfigPath of uniquePaths(
@@ -432,11 +439,31 @@ function loadToolConfig(
     if (!fs.existsSync(localConfigPath)) {
       continue;
     }
-    const localConfig = parseToolProfilesToml(fs.readFileSync(localConfigPath, "utf8"));
+    const localConfig = applyRoleCompatibility(
+      parseToolProfilesToml(fs.readFileSync(localConfigPath, "utf8"))
+    );
     mergedConfig = mergeToolConfigs(mergedConfig, localConfig);
   }
 
   return mergedConfig;
+}
+
+function applyRoleCompatibility(config) {
+  const sourceRoles = config.roles || {};
+  const roles = { ...sourceRoles };
+
+  for (const [childRole, parentRole] of Object.entries(
+    ROLE_COMPATIBILITY_ALIASES
+  )) {
+    if (
+      Object.prototype.hasOwnProperty.call(sourceRoles, parentRole) &&
+      !Object.prototype.hasOwnProperty.call(sourceRoles, childRole)
+    ) {
+      roles[childRole] = sourceRoles[parentRole];
+    }
+  }
+
+  return { ...config, roles };
 }
 
 function splitCommandLine(commandLine) {
@@ -1040,6 +1067,7 @@ module.exports = {
   inspectToolCommand,
   expandCommandTemplate,
   listConfiguredRoles,
+  applyRoleCompatibility,
   loadToolConfig,
   mergeToolConfigs,
   parseToolProfilesToml,
