@@ -160,7 +160,8 @@ flowchart TD
 
 - `review-code` remains the authoritative full review output
 - `tech-design-review` is a separate advisory lane for immutable draft artifacts or committed design docs; it does not replace code review
-- `tech-design-review-request` selects by design maturity: vague or undrafted work uses separate architect-author and architect-reviewer sessions; mature committed proposals may go directly to one reviewer
+- `tech-design-review-workflow` selects by design maturity: vague or undrafted work uses separate architect-author and architect-reviewer sessions; mature committed proposals may go directly to one reviewer
+- `tech-design-review-request` is a transition alias; use `tech-design-review-workflow` for new work
 - in the two-architect lane, the author writes immutable rounds under `.agent-artifacts/tech-design/<author_session_id>/`; each reviewed file stays unchanged and the reviewer is read-only
 - the author sends only the accepted artifact pointer and review decision; the original requester archives that artifact to the formal docs path and commits it
 - draft-review does not transfer workspace ownership, switch branches, or commit intermediate rounds
@@ -213,7 +214,7 @@ Use skills:
 - Plan dispatch: `dispatch-plan`
 - Plan execution: `execute-plan`
 - Plan report: `plan-report`
-- Tech-design review request: `tech-design-review-request`
+- Tech-design review workflow: `tech-design-review-workflow`
 - Architect review: `tech-design-review`
 - Browser check request: `browser-test-request`
 - Browser tester: `browser-test`
